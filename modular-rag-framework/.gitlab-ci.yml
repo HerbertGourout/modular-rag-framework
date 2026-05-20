@@ -1,0 +1,56 @@
+image: python:3.11-slim
+
+stages:
+  - lint
+  - test
+  - coverage
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONUNBUFFERED: "1"
+
+cache:
+  key: "$CI_COMMIT_REF_SLUG"
+  paths:
+    - .cache/pip
+
+before_script:
+  - python --version
+  - pip install --upgrade pip
+  - pip install -e .[dev] || pip install -e .
+  - pip install pytest pytest-cov black flake8
+
+lint:
+  stage: lint
+  script:
+    - black --check src tests
+    - flake8 src tests
+  allow_failure: false
+
+test:
+  stage: test
+  script:
+    - pytest tests -q
+  artifacts:
+    when: always
+    reports:
+      junit: junit.xml
+  after_script:
+    - echo "Tests finished"
+
+coverage:
+  stage: coverage
+  script:
+    - pytest --cov=src --cov-report=term-missing --cov-report=xml
+  coverage: '/TOTAL\s+(\d+\%)$/'
+  artifacts:
+    when: always
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+    paths:
+      - coverage.xml
+  needs:
+    - test
