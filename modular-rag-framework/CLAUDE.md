@@ -4,15 +4,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project state — read this first
 
-This repository is a **pre-alpha scaffold**. As of the last initial review (`docs/reviews/2026-05-20-initial-review.md`):
+This repository is a **pre-alpha scaffold** with a full V1→V5 implementation skeleton as of 2026-05-21.
 
-- All `.py` files under `src/modular_rag/` are **0 lines** — interfaces are not yet implemented.
-- All YAML manifests under `manifests/presets/` are **0 lines** — only the filenames exist.
-- All docs under `docs/architecture/`, `docs/adr/`, `docs/guides/`, `docs/api/` are **0 lines**.
-- `pyproject.toml` is empty — `pip install -e .` will not work yet.
-- The only file with real content is `README.md`, which describes the **target API for v0.1**, not what runs today.
+### What exists and works
 
-**Implication for Claude**: do not assume any module, function, or contract already exists. When asked to implement something, treat the directory tree as the architecture contract, but write the code from scratch. Do not invent imports from modules that have no content.
+- **All `.py` files under `src/modular_rag/`** are fully implemented (contracts, core models, ingestion, retrieval, generation, security, eval, agents, memory, orchestration, CLI, API, observability).
+- **All 5 YAML manifests** under `manifests/presets/` are populated with real configuration.
+- **All 3 ADRs** under `docs/adr/` are written.
+- **All architecture docs** under `docs/architecture/` are filled.
+- **All guides** under `docs/guides/` are written.
+- **`pyproject.toml`** — complete with all dependency groups (`v1`, `v3`, `v4`, `v5`, `dev`, `all`) and entry point `mrag`.
+- **`LICENSE`** — Apache 2.0 full text.
+- **`examples/simple_qa/`** — `main.py` + `README.md` + sample docs.
+- **Adapter implementations**: `adapters/embeddings/openai_embedder.py`, `adapters/embeddings/hf_embedder.py`, `adapters/vectorstores/qdrant_store.py`.
+- **Unit tests**: `tests/unit/core/`, `tests/unit/ingestion/chunkers/`, `tests/unit/security/`, `tests/unit/retrieval/`, `tests/unit/eval/`, `tests/unit/memory/`.
+- **Contract tests**: `tests/contract/test_chunker_conformance.py`, `tests/contract/test_retrieval_conformance.py`, `tests/contract/test_security_conformance.py`, `tests/contract/test_eval_conformance.py`.
+
+### What still needs work (to run end-to-end)
+
+- **`VectorRetriever.retrieve()`** — raises `NotImplementedError`; needs embedder wired to `QdrantStore.retrieve_by_vector()`.
+- **`pip install -e ".[v1]"` and `pytest tests/unit`** — should work once dependencies are installed, but has not been tested in CI yet.
+- **`examples/simple_qa/` end-to-end** — requires Qdrant running locally + OpenAI API key.
+- **`adapters/auth/`, `adapters/graphstores/`, `adapters/llms/`, `adapters/search/`** — still have only `.gitkeep` placeholders.
+- **`tests/integration/`, `tests/e2e/`, `tests/benchmark/`** — no test files yet.
+- **`docs/guides/_index.md`, `docs/api/_index.md`, `docs/_index.md`** — index stubs, not filled.
+
+**Implication for Claude**: all core modules now exist and are importable. When adding new code, extend existing modules rather than rewriting them. Verify imports resolve before assuming they work.
 
 ## Architectural intent
 
@@ -66,26 +83,35 @@ These rules are derived from the architecture review and the cahier technique. T
 
 ## Commands
 
-The build/test/run commands described in the README are **target commands** for v0.1 — they do not work yet (empty `pyproject.toml`, no entry points). When implementation starts, the intended commands are:
-
 ```powershell
-# Install (target — not functional yet)
-pip install -e .
+# Install (all V1 deps + dev tools)
+pip install -e ".[v1,dev]"
 
-# Run tests (target — pytest is the intended runner per docs/architecture)
+# Run unit tests (no external services required)
 pytest tests/unit
+
+# Run contract conformance tests (no external services required)
+pytest tests/contract
+
+# Run integration tests (requires Qdrant on localhost:6333)
 pytest tests/integration
-pytest tests/contract            # contract conformance tests
-pytest tests/e2e
 
-# Single test (target convention)
-pytest tests/unit/<path>/test_<name>.py::test_<case>
+# Run a single test
+pytest tests/unit/ingestion/chunkers/test_fixed.py::test_short_text_single_chunk
 
-# Load a pipeline from a manifest (target API)
-python -c "from modular_rag.app.bootstrap import load_pipeline; p = load_pipeline('manifests/presets/local-hybrid-rag.yaml'); print(p.answer('hello'))"
+# Start the REST API
+uvicorn modular_rag.api:create_app --factory --reload
+
+# CLI — ingest documents
+mrag ingest ./my_docs --manifest manifests/presets/local-hybrid-rag.yaml
+
+# CLI — ask a question
+mrag ask "What is hybrid retrieval?" --manifest manifests/presets/local-hybrid-rag.yaml
+
+# Run the simple_qa example end-to-end
+python examples/simple_qa/main.py ingest examples/simple_qa/docs/
+python examples/simple_qa/main.py ask "What is RAG?"
 ```
-
-**Before claiming any of these work**, verify by actually running them. Until `pyproject.toml` is populated and at least one contract + one implementation exist, none of them will.
 
 ## Repository hosting
 
@@ -95,5 +121,11 @@ The remote is on a private GitLab instance (`pscode.lioncloud.net`, Publicis). T
 
 - `README.md` — project pitch, target API, V1→V5 roadmap. Already updated to reflect pre-alpha status.
 - `docs/reviews/2026-05-20-initial-review.md` — full structural and editorial review, with P0/P1/P2 action items and progress checkboxes. **Read this before doing any large change** — it captures decisions (e.g. Apache 2.0 license choice) and known issues.
-- `ROADMAP.md`, `CHANGELOG.md` — currently empty, to be filled when implementation starts.
-- The full technical specification (cahier technique) belongs in `docs/architecture/overview.md` — currently empty. If asked to "explain the architecture", warn the user that this file is empty and refer to the README + this CLAUDE.md instead.
+- `ROADMAP.md` — V1→V5 checkboxes with milestone criteria.
+- `CHANGELOG.md` — [Unreleased] section with all current additions.
+- `docs/architecture/overview.md` — full V1→V5 technical specification.
+- `docs/architecture/roadmap-mermaid.md` — Mermaid diagrams for all versions.
+- `docs/guides/getting-started.md` — first-run walkthrough.
+- `docs/guides/plugin-development.md` — how to add a new component.
+- `docs/api/rest.md` — REST API endpoint reference.
+- `examples/simple_qa/` — runnable end-to-end example with sample docs.

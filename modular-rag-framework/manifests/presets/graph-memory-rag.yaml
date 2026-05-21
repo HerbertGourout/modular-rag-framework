@@ -1,0 +1,76 @@
+version: "1.0"
+id: graph-memory-rag
+description: "V3 GraphRAG pipeline — knowledge graph extraction, multi-hop reasoning, EvoRAG feedback."
+tenant: default
+environment: dev
+
+chunker:
+  type: adaptive
+  config:
+    chunk_size: 512
+    chunk_overlap: 64
+
+embedder:
+  type: sentence-transformers
+  config:
+    model: "BAAI/bge-base-en-v1.5"
+
+indexer:
+  type: qdrant
+  config:
+    collection: documents
+    url: "http://localhost:6333"
+
+retriever:
+  type: hybrid
+  config:
+    vector_weight: 0.6
+    bm25_weight: 0.4
+    k: 30
+    reranker_k: 10
+
+reranker:
+  type: cross-encoder
+  config:
+    model: "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
+generator:
+  type: openai
+  config:
+    model: "gpt-4o"
+    temperature: 0.1
+    max_tokens: 4096
+
+# V3 — graph memory
+graph_store:
+  type: networkx
+  config:
+    entity_types:
+      - Person
+      - Organization
+      - Product
+      - Concept
+    relation_types:
+      - depends_on
+      - causes
+      - is_part_of
+    community_detection: true
+    evo_rag_feedback: true
+
+# V2 — planner for multi-hop
+planner:
+  type: graph
+  config: {}
+
+agents:
+  - type: extractor
+    config: {}
+  - type: retriever
+    config: {}
+  - type: synthesizer
+    config: {}
+  - type: validator
+    config: {}
+
+modalities:
+  - text

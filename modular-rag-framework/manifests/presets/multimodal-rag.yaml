@@ -1,0 +1,77 @@
+version: "1.0"
+id: multimodal-rag
+description: "V5 multimodal pipeline — text + images + tables + audio/video ingestion and retrieval."
+tenant: default
+environment: dev
+
+chunker:
+  type: adaptive
+  config:
+    chunk_size: 512
+    chunk_overlap: 64
+
+embedder:
+  type: multimodal
+  config:
+    # Requires V5 extras: colpali or CLIP for image embeddings
+    text_model: "BAAI/bge-base-en-v1.5"
+    image_model: "openai/clip-vit-base-patch32"
+
+indexer:
+  type: qdrant
+  config:
+    collection: multimodal_docs
+    url: "http://localhost:6333"
+    # Multiple named vectors per point (text, image, table)
+    multi_vector: true
+
+retriever:
+  type: hybrid
+  config:
+    vector_weight: 0.7
+    bm25_weight: 0.3
+    k: 30
+    reranker_k: 10
+
+reranker:
+  type: cross-encoder
+  config:
+    model: "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
+generator:
+  # Vision-language model for multimodal generation
+  type: anthropic
+  config:
+    model: "claude-opus-4-7"
+    max_tokens: 4096
+
+# V5 — multimodal parsers and agents
+agents:
+  - type: text_agent
+    config: {}
+  - type: vision_agent
+    config:
+      vlm_model: "claude-opus-4-7"
+  - type: table_agent
+    config: {}
+  - type: video_agent
+    config:
+      transcription_model: "whisper-1"
+  - type: coordinator
+    config: {}
+
+graph_store:
+  type: networkx
+  config:
+    # Multi-granularity graph: text nodes, image nodes, video segments
+    multi_modal_nodes: true
+
+modalities:
+  - text
+  - image
+  - table
+  - audio
+  - video
+
+# NOTE: V5 modules (ingestion/parsers/vision/, agents/vision_agent/, etc.)
+# are declared here but require implementation in V5 sprint.
