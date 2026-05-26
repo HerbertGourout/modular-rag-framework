@@ -2,130 +2,135 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project state — read this first
+<!-- Mis à jour : 2026-05-22 — structure en 9 blocs selon recommandations officielles Claude Code -->
+<!-- Revoir le bloc 09 quand VectorRetriever.retrieve() sera fixé (V1 sprint en cours) -->
+<!-- Pour ajouter des préférences personnelles (URL Qdrant, clé API, etc.) : créer CLAUDE.local.md (gitignored) -->
 
-This repository is a **pre-alpha scaffold** with a full V1→V5 implementation skeleton as of 2026-05-21.
+---
 
-### What exists and works
+## 01 — Project purpose
 
-- **All `.py` files under `src/modular_rag/`** are fully implemented (contracts, core models, ingestion, retrieval, generation, security, eval, agents, memory, orchestration, CLI, API, observability).
-- **All 5 YAML manifests** under `manifests/presets/` are populated with real configuration.
-- **All 3 ADRs** under `docs/adr/` are written.
-- **All architecture docs** under `docs/architecture/` are filled.
-- **All guides** under `docs/guides/` are written.
-- **`pyproject.toml`** — complete with all dependency groups (`v1`, `v3`, `v4`, `v5`, `dev`, `all`) and entry point `mrag`.
-- **`LICENSE`** — Apache 2.0 full text.
-- **`examples/simple_qa/`** — `main.py` + `README.md` + sample docs.
-- **Adapter implementations**: `adapters/embeddings/openai_embedder.py`, `adapters/embeddings/hf_embedder.py`, `adapters/vectorstores/qdrant_store.py`.
-- **Unit tests**: `tests/unit/core/`, `tests/unit/ingestion/chunkers/`, `tests/unit/security/`, `tests/unit/retrieval/`, `tests/unit/eval/`, `tests/unit/memory/`.
-- **Contract tests**: `tests/contract/test_chunker_conformance.py`, `tests/contract/test_retrieval_conformance.py`, `tests/contract/test_security_conformance.py`, `tests/contract/test_eval_conformance.py`.
+Production-grade modular RAG + agentic orchestration framework for Publicis enterprise use cases. Five-version progression: V1 (Core RAG) → V2 (Agentic) → V3 (Graph Memory) → V4 (Governance) → V5 (Multimodal).
 
-### What still needs work (to run end-to-end)
+**Non-negotiable priority**: do not implement V3+ features until `examples/simple_qa/` runs end-to-end. V1 is the current target.
 
-- **`VectorRetriever.retrieve()`** — raises `NotImplementedError`; needs embedder wired to `QdrantStore.retrieve_by_vector()`.
-- **`pip install -e ".[v1]"` and `pytest tests/unit`** — should work once dependencies are installed, but has not been tested in CI yet.
-- **`examples/simple_qa/` end-to-end** — requires Qdrant running locally + OpenAI API key.
-- **`adapters/auth/`, `adapters/graphstores/`, `adapters/llms/`, `adapters/search/`** — still have only `.gitkeep` placeholders.
-- **`tests/integration/`, `tests/e2e/`, `tests/benchmark/`** — no test files yet.
-- **`docs/guides/_index.md`, `docs/api/_index.md`, `docs/_index.md`** — index stubs, not filled.
+---
 
-**Implication for Claude**: all core modules now exist and are importable. When adding new code, extend existing modules rather than rewriting them. Verify imports resolve before assuming they work.
+## 02 — Architecture rules
 
-## Architectural intent
+Strict hexagonal layering. Dependencies flow in one direction only:
 
-The framework is being built around three pillars (see `README.md` → *Vision*):
+```
+cli/ + api/  →  app/  →  orchestration/  →  contracts/ + core/
+                                              ↑
+                         domain modules  ────┘
+                         (ingestion, retrieval, generation,
+                          security, agents, memory, eval)
+                                              ↑
+                         adapters/  ──────────┘
+```
 
-1. **Declarative orchestration** — pipelines are described in YAML manifests under `manifests/`, not in Python code.
-2. **Composable retrieval & generation** — every capability has a contract under `src/modular_rag/contracts/`, and implementations sit elsewhere.
-3. **Agentic, verifiable reasoning** — multiple specialized agents (planner, retriever, synthesizer, validator, coordinator) replace the monolithic LLM call.
+**Hard rules:**
+- `core/` imports nothing from this project.
+- `contracts/` imports only `core/`.
+- Domain modules import only `contracts/` + `core/models/`. **Never from each other.**
+- `adapters/` imports `contracts/` + `core/` + external libs. Never from domain modules.
+- A new component is wired only through `orchestration/registry.py` + a YAML manifest. No Python-level wiring inside other modules.
 
-### Layered module model
+---
 
-The `src/modular_rag/` tree encodes a strict hexagonal-style separation. **Code must respect these layers** when implemented:
+## 03 — Project structure
 
-| Layer | Path | Role |
-|---|---|---|
-| **Contracts** (interfaces) | `contracts/` | Protocols / ABCs. Everything else depends on these, never the other way around. |
-| **Core models** (data) | `core/models/` | Pydantic-style domain entities: `document`, `chunk`, `query`, `retrieved`, `answer`, `trace`, `policy`, `metrics`. Shared by all layers. |
-| **Adapters** (integrations) | `adapters/` | External-system bindings: `llms/`, `embeddings/`, `vectorstores/`, `graphstores/`, `search/`, `auth/`. Implements `contracts/`. |
-| **Orchestration** | `orchestration/` | `engine`, `router`, `flow_compiler`, `state_machine`, `registry`. Compiles manifests into runnable flows. |
-| **App** | `app/` | Process-level wiring: `bootstrap`, `container` (DI), `settings`, `lifecycle`. |
-| **Domain modules** | `ingestion/`, `retrieval/`, `generation/`, `agents/`, `security/`, `memory/`, `eval/`, `observability/` | Concrete implementations of `contracts/`, organized by domain. |
-| **Edges** | `cli/`, `api/` | User-facing entry points. |
+@.claude/project-structure.md
 
-**Dependency rule**: `domain modules` → `contracts` + `core/models`. They must **not** import from each other directly — they communicate through contracts wired by the `container`/`registry`.
+---
 
-### Five-version roadmap
-
-The directory layout already anticipates V1 → V5. When implementing, respect which version a feature belongs to:
-
-| Version | Theme | Modules involved |
-|---|---|---|
-| V1 | Core RAG | `ingestion/`, `retrieval/` (vector + BM25 + fusion), `generation/`, basic `security/`, `eval/`, `observability/`, `manifests/presets/local-hybrid-rag.yaml`, `manifests/presets/secure-enterprise-rag.yaml` |
-| V2 | Agentic + Security | `agents/` (planner/coordinator/extractor/synthesizer/validator), `orchestration/router`, advanced `security/policies` and `security/detectors`, `manifests/presets/agentic-rag.yaml` |
-| V3 | Graph Memory | `memory/graph/`, `memory/versioning/`, retrieval planners for multi-hop, `manifests/presets/graph-memory-rag.yaml` |
-| V4 | Governance | `security/policies/`, `manifests/{dev,staging,production}/`, audit hooks in `observability/`, policy-as-code in `contracts/security.py` |
-| V5 | Multimodal | New modules to create (`multimodal/`, `vision/`, `tables/`, `audio/`) + multimodal agents, `manifests/presets/multimodal-rag.yaml` |
-
-Do not implement V3+ capabilities until V1 has a working `examples/simple_qa/` end-to-end.
-
-## Conventions to apply when implementing
-
-These rules are derived from the architecture review and the cahier technique. They are **not yet enforced by code** because no code exists — apply them by hand.
-
-1. **Contracts first.** Before adding any concrete class under `ingestion/`, `retrieval/`, `generation/`, etc., the matching protocol in `contracts/` must already exist and be referenced.
-2. **No cross-domain imports.** A retriever must not import from `generation/`. They meet only through `core/models/` types and `contracts/` protocols.
-3. **Manifests are the source of truth.** A new component is wired by adding it to the registry and selectable by name in a YAML manifest — not by Python wiring inside another module.
-4. **Tests mirror `src/`.** When writing the first tests, create `tests/unit/<same_path_as_src>/test_<name>.py`. There is also a dedicated `tests/contract/` folder for tests that verify a concrete implementation satisfies the protocol it claims to implement.
-5. **ADR before structural changes.** Anything that affects the layering (new top-level module, new edge between layers, change to a contract) requires a new ADR under `docs/adr/`. The first three ADR filenames are reserved (`0001-modular-architecture`, `0002-contracts-and-plugins`, `0003-security-and-governance`).
-6. **Observability is mandatory, not optional.** Any new contract method that does retrieval, generation, or agent decisions must emit a `Trace` (see `core/models/trace.py`). The framework's value proposition depends on this.
-7. **Safety vs. Security are distinct.** `security/` currently mixes both. When implementing, treat *safety* (prompt injection, data poisoning, output toxicity) as a sub-concern separate from *security* (RBAC, ACL, tenant isolation). The review (`docs/reviews/2026-05-20-initial-review.md` §3.8) flagged this for a future split.
-
-## Commands
+## 04 — Development commands
 
 ```powershell
-# Install (all V1 deps + dev tools)
+# Install V1 deps + dev tools
 pip install -e ".[v1,dev]"
 
-# Run unit tests (no external services required)
+# Unit tests (no external services)
 pytest tests/unit
 
-# Run contract conformance tests (no external services required)
+# Contract conformance tests (no external services)
 pytest tests/contract
 
-# Run integration tests (requires Qdrant on localhost:6333)
-pytest tests/integration
-
-# Run a single test
+# Single test
 pytest tests/unit/ingestion/chunkers/test_fixed.py::test_short_text_single_chunk
 
-# Start the REST API
+# Integration tests (Qdrant required on localhost:6333)
+pytest tests/integration
+
+# REST API
 uvicorn modular_rag.api:create_app --factory --reload
 
-# CLI — ingest documents
+# CLI
 mrag ingest ./my_docs --manifest manifests/presets/local-hybrid-rag.yaml
-
-# CLI — ask a question
 mrag ask "What is hybrid retrieval?" --manifest manifests/presets/local-hybrid-rag.yaml
 
-# Run the simple_qa example end-to-end
+# End-to-end example
 python examples/simple_qa/main.py ingest examples/simple_qa/docs/
 python examples/simple_qa/main.py ask "What is RAG?"
 ```
 
-## Repository hosting
+---
 
-The remote is on a private GitLab instance (`pscode.lioncloud.net`, Publicis). The README labels the project "open-source" but it currently has no public mirror. **Do not push assumptions about GitHub workflows or public visibility** — CI templates and issue templates live under `.gitlab/`, not `.github/`.
+## 05 — Coding rules
 
-## Reference documents
+<!-- Ces règles sont les plus critiques. Les règles path-spécifiques vivent dans .claude/rules/ -->
 
-- `README.md` — project pitch, target API, V1→V5 roadmap. Already updated to reflect pre-alpha status.
-- `docs/reviews/2026-05-20-initial-review.md` — full structural and editorial review, with P0/P1/P2 action items and progress checkboxes. **Read this before doing any large change** — it captures decisions (e.g. Apache 2.0 license choice) and known issues.
-- `ROADMAP.md` — V1→V5 checkboxes with milestone criteria.
-- `CHANGELOG.md` — [Unreleased] section with all current additions.
-- `docs/architecture/overview.md` — full V1→V5 technical specification.
-- `docs/architecture/roadmap-mermaid.md` — Mermaid diagrams for all versions.
-- `docs/guides/getting-started.md` — first-run walkthrough.
-- `docs/guides/plugin-development.md` — how to add a new component.
-- `docs/api/rest.md` — REST API endpoint reference.
-- `examples/simple_qa/` — runnable end-to-end example with sample docs.
+1. **Contracts first.** The `contracts/` Protocol must exist before any concrete implementation.
+2. **No cross-domain imports.** Retrievers never import from `generation/`; guards never import from `ingestion/`. They share only `core/models/` types.
+3. **Manifests are the source of truth.** Register the component in `orchestration/_default_factories.py`, then select it by name in YAML. Never wire it in Python elsewhere.
+4. **Tests mirror `src/`.** `tests/unit/ingestion/chunkers/test_fixed.py` for `src/modular_rag/ingestion/chunkers/fixed.py`. Add a contract test in `tests/contract/` for every new Protocol implementation.
+5. **Observability is mandatory.** Every retrieval, generation, and agent method must emit a `TraceStep` via `Trace.add_step()`.
+6. **Extend, don't rewrite.** All core modules exist. Add to them rather than recreating.
+7. **Lazy imports for heavy deps.** All optional libraries (qdrant-client, rank-bm25, sentence-transformers, openai, anthropic, fitz) must be imported inside the method that uses them, not at module level.
+
+---
+
+## 06 — Testing and validation
+
+After any change, run the appropriate scope:
+
+| Scope | Command | Requires |
+|---|---|---|
+| Core logic | `pytest tests/unit` | nothing |
+| Protocol conformance | `pytest tests/contract` | nothing |
+| Vector store | `pytest tests/integration` | Qdrant on :6333 |
+| Full pipeline | `pytest tests/e2e` | Qdrant + LLM API key |
+
+A change to a contract (`contracts/`) requires updating the matching `tests/contract/test_*_conformance.py`. A new domain implementation requires a unit test in `tests/unit/<same_path>/`.
+
+---
+
+## 07 — Security rules
+
+- **Never import** a domain module from another domain module — this is the most common violation to watch for.
+- **Safety ≠ Security.** Safety (prompt injection, PII, toxicity) lives in `security/filters/` and `security/redaction/`. Security (RBAC, tenant isolation, policy enforcement) lives in `security/policies/`. Do not mix them.
+- **ADR before structural changes.** Any new top-level module, new layer boundary, or contract modification requires a new ADR under `docs/adr/`. ADRs 0001–0003 are reserved.
+- **No V3+ code until V1 is end-to-end.** Graph, governance, and multimodal features must wait.
+
+---
+
+## 08 — Git and PR workflow
+
+- Remote: **private GitLab** at `pscode.lioncloud.net` (Publicis). No public GitHub mirror.
+- CI templates and issue templates are under **`.gitlab/`**, not `.github/`.
+- Do not reference GitHub Actions, GitHub Issues, or GitHub PRs — use GitLab MR terminology.
+- Branch from `main`. One feature per branch. MR checklist is in `CONTRIBUTING.md`.
+
+---
+
+## 09 — Compact instructions (known stubs)
+
+<!-- Mettre à jour ce bloc après chaque sprint V1 -->
+
+Current V1 gaps to be aware of before touching retrieval or wiring:
+
+- `retrieval/retrievers/vector.py` → `VectorRetriever.retrieve()` raises `NotImplementedError`. Fix: embed query with `self.embedder`, call `self.store.retrieve_by_vector()`.
+- `adapters/llms/`, `adapters/auth/`, `adapters/graphstores/`, `adapters/search/` → `.gitkeep` only.
+- `tests/integration/`, `tests/e2e/`, `tests/benchmark/` → no test files yet.
+- `manifests/dev/`, `manifests/staging/`, `manifests/production/` → empty stubs (V4 scope).

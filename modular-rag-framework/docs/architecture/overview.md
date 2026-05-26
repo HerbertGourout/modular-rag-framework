@@ -155,3 +155,150 @@ Voir les ADR dans `docs/adr/` :
 - [ADR-0001](../adr/0001-modular-architecture.md) — Six planes, séparation contracts/implémentations
 - [ADR-0002](../adr/0002-contracts-and-plugins.md) — Protocols + Factory Registry
 - [ADR-0003](../adr/0003-security-and-governance.md) — Safety vs Security, policy-as-code
+
+---
+
+## 8. Modèles de données
+
+Les modèles du domaine sont définis dans `src/modular_rag/core/models/`. Ce sont des objets Pydantic v2 — pas d'ORM, pas de base de données. Voir `data-model.md` pour la documentation complète.
+
+| Modèle | Fichier | Frozen | Usage |
+|---|---|---|---|
+| `Document` | `document.py` | ✓ | Unité d'ingestion : source, contenu brut, métadonnées |
+| `Chunk` | `chunk.py` | ✗ | Sous-segment d'un Document, avec embedding optionnel |
+| `Query` | `query.py` | ✓ | Requête utilisateur + hint de routing |
+| `RetrievedChunk` | `retrieved.py` | ✓ | Chunk + score + rank + méthode de retrieval |
+| `Citation` | `answer.py` | ✗ | Pointeur d'une réponse vers un chunk source |
+| `Answer` | `answer.py` | ✗ | Texte généré + citations + trace_id |
+| `TraceStep` | `trace.py` | ✗ | Latence + tokens d'une étape du pipeline |
+| `Trace` | `trace.py` | ✗ | Audit complet d'une exécution (accumulé via `add_step()`) |
+| `PolicyRule` | `policy.py` | ✗ | Condition + action (allow/deny/redact/warn) |
+| `Policy` | `policy.py` | ✗ | Ensemble de règles scopées à un tenant |
+| `Metrics` | `metrics.py` | ✗ | Scores d'évaluation (recall@k, MRR, groundedness…) |
+
+**Invariants clés :**
+- `Document` et `Query` sont immutables (`frozen=True`). Toute modification produit une nouvelle instance.
+- `Chunk.token_estimate` est une propriété calculée (`len(content.split())`), pas stockée.
+- `Trace.add_step()` est la seule façon d'ajouter une étape — elle met à jour atomiquement les totaux `total_latency_ms`, `total_input_tokens`, `total_output_tokens`.
+- `Policy.sorted_rules()` retourne les règles triées par priorité décroissante.
+- `Metrics.summary()` retourne uniquement les champs non-None.
+
+---
+
+## 9. Wiring manifest → pipeline
+
+Le chemin complet entre un fichier YAML et un pipeline opérationnel :
+
+```
+manifests/presets/local-hybrid-rag.yaml
+  │
+  ▼ app/bootstrap.py → load_manifest(path) → PipelineManifest
+  │
+  ▼ orchestration/registry.py → ComponentRegistry.default()
+  │   # _default_factories maps "fixed" → FixedSizeChunker, "bm25" → BM25Retriever, etc.
+  │
+  ▼ registry.wire(manifest) → Container
+  │   # Reads manifest.chunker.type, manifest.retriever.type …
+  │   # Calls factory(config) for each component
+  │   # Stores wired instances in Container.components dict
+  │
+  ▼ app/container.py → Container (holds all wired instances)
+  │
+  ▼ orchestration/engine.py → RAGEngine(container)
+  │   # engine.ingest() / engine.answer() use container.get(Chunker), etc.
+  │
+  ▼ cli/main.py or api/routes.py → calls engine methods
+```
+
+Pour câbler un nouveau composant :
+1. Implémenter le contrat correspondant dans `contracts/`.
+2. Ajouter la factory dans `orchestration/registry.py → _default_factories`.
+3. Référencer le type dans le manifest YAML : `chunker: {type: my_chunker, ...}`.
+
+---
+
+## 10. Pipeline d'ingestion (V1 détail)
+
+```
+Fichier (PDF / Markdown / texte brut)
+  │
+  ▼ ingestion/parsers/
+  │   TextParser → Document  (pour .txt, .md, .html)
+  │   PDFParser  → Document  (pour .pdf, via PyMuPDF)
+  │
+  ▼ ingestion/normalizers/TextNormalizer.normalize(doc)
+  │   • Collapse excessive newlines (3+ → 2)
+  │   • Collapse excessive spaces (2+ → 1)
+  │   • Strip leading/trailing whitespace
+  │   → nouveau Document (frozen → nouvelle instance)
+  │
+  ▼ ingestion/enrichers/MetadataEnricher.enrich(doc)
+  │   • Calcule word_count, lang, reading_level
+  │   • Fusionne avec metadata existante
+  │   → nouveau Document
+  │
+  ▼ contracts/chunking.Chunker.chunk(doc) → list[Chunk]
+  │   FixedSizeChunker  : fenêtres de N tokens avec overlap
+  │   AdaptiveChunker   : coupe sur les titres Markdown (##, ###)
+  │
+  ▼ Embedder.embed([c.content for c in chunks]) → list[list[float]]
+  │   → écrit embedding dans chaque Chunk en place
+  │
+  ▼ Indexer.index(chunks) → int
+      QdrantStore : upsert en tant que PointStruct (vector + payload)
+      BM25Retriever : reconstruit l'index BM25 sur le corpus
+```
+
+Note : L'embedding et l'indexation se font dans `RAGEngine.ingest()`, pas dans `ingest_path()`. La séparation est intentionnelle — `ingest_path()` est testable sans service externe.
+
+---
+
+## 11. Algorithme de retrieval hybride (RRF)
+
+Le retrieval hybride combine deux listes de résultats classées (vecteur dense + BM25 lexical) en une liste fusionnée via **Reciprocal Rank Fusion** :
+
+```
+RRF_score(d) = Σᵢ  1 / (rrf_k + rankᵢ(d))
+
+  où :
+    rrf_k  = 60  (constante de lissage, standard de la littérature)
+    rankᵢ  = rang du document d dans la liste i (1-based)
+    Σ      = somme sur toutes les listes de résultats (vector, BM25)
+```
+
+Exemple avec 2 listes :
+```
+document "Q4 revenue"
+  rank_vector = 3  → 1 / (60 + 3) = 0.0159
+  rank_bm25   = 1  → 1 / (60 + 1) = 0.0164
+  RRF_score   = 0.0159 + 0.0164 = 0.0323
+```
+
+Le ratio vecteur/BM25 dans le preset `local-hybrid-rag.yaml` est **0.7 / 0.3** : les résultats vectoriels ont plus de poids car ils capturent la sémantique, tandis que BM25 booste les correspondances exactes de termes techniques.
+
+Après fusion, les chunks sont re-classés par `RRF_score` décroissant. Un reranker cross-encoder affine ensuite ce classement sur les top-k (défaut : 5).
+
+---
+
+## 12. Hiérarchie des erreurs
+
+Toutes les exceptions du framework héritent de `ModularRAGError` (défini dans `core/errors.py`). L'arborescence complète :
+
+```
+ModularRAGError                     ← base de toutes les erreurs du framework
+├── ConfigurationError              ← manifest ou settings invalide
+│   └── ManifestError               ← YAML non chargeable ou non validable
+├── RegistryError                   ← composant introuvable dans le registre
+├── IngestionError                  ← parsing ou chunking échoué
+├── IndexingError                   ← écriture dans le vector/lexical store échouée
+├── RetrievalError                  ← opération de retrieval échouée
+├── GenerationError                 ← appel LLM échoué ou réponse inutilisable
+├── SecurityError                   ← guard bloque une requête ou une réponse
+│   └── PolicyViolationError        ← action pipeline viole une policy déclarée
+├── EvaluationError                 ← scoring ou benchmark échoué
+├── GraphError                      ← construction ou traversée du graphe échouée (V3)
+├── AgentError                      ← tâche agent échouée (V2)
+└── StorageError                    ← opération backend de stockage échouée
+```
+
+**Règle de gestion :** attraper l'exception la plus spécifique possible. N'attraper `ModularRAGError` qu'au niveau des handlers HTTP/CLI pour renvoyer une réponse d'erreur générique. Ne jamais avaler silencieusement une `SecurityError` — elle doit toujours être loggée.

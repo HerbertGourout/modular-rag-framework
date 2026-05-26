@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ruff check src/modular_rag/ --select E,F,I --quiet"
+          }
+        ]
+      }
+    ]
+  }
+}
