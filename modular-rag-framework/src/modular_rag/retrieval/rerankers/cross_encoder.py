@@ -33,5 +33,5 @@ class CrossEncoderReranker:
         ranked = sorted(zip(scores, chunks), key=lambda x: x[0], reverse=True)[:k]
         return [
             chunk.model_copy(update={"score": float(score), "rank": i})
-            for i, (score, chunk) in enumerate(ranked)
+            for i, (score, chunk) in enumerate(ranked, 1)
         ]

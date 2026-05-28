@@ -21,8 +21,8 @@ def ingest(
         chunks = ingest_directory(path, pipeline._c.chunker)
     else:
         chunks = ingest_path(path, pipeline._c.chunker)
-    pipeline._c.indexer.index(chunks)
-    typer.echo(f"Indexed {len(chunks)} chunks from {path}.")
+    n = pipeline.ingest_chunks(chunks)
+    typer.echo(f"Indexed {n} chunks from {path}.")
 
 
 @app.command()

@@ -39,7 +39,7 @@ class HybridRetriever:
         vector_hits = self._vector.retrieve(query, k=k * 2)
         bm25_hits = self._bm25.retrieve(query, k=k * 2)
         fused = reciprocal_rank_fusion([vector_hits, bm25_hits], k=k)
-        for rank, chunk in enumerate(fused):
+        for rank, chunk in enumerate(fused, 1):
             object.__setattr__(chunk, "rank", rank)
             object.__setattr__(chunk, "retrieval_method", RetrievalMethod.HYBRID)
         log.debug("hybrid.retrieved", chunks=len(fused), query_id=query.id)
