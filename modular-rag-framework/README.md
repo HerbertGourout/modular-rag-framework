@@ -11,10 +11,13 @@
 ![Status](https://img.shields.io/badge/status-pre--alpha-orange)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![License](https://img.shields.io/badge/license-Apache%202.0-green)
+![Built by Publicis Sapient](https://img.shields.io/badge/built%20by-Publicis%20Sapient-4a154b)
 
-A modular framework for building production-grade RAG and agentic systems:
-declarative orchestration, composable retrieval, structured memory,
-native security, and progressive multimodal support.
+A **reusable delivery accelerator** built at Publicis Sapient for production-grade RAG
+and agentic systems: declarative orchestration, composable retrieval, structured memory,
+native enterprise governance, and progressive multimodal support.
+Built once, deployed across client projects — every adapter, manifest, and governance
+policy is an asset that compounds over time.
 
 ---
 
@@ -33,6 +36,18 @@ native security, and progressive multimodal support.
 ---
 
 ## Why this framework?
+
+**Context.** Publicis Sapient's AI practice repeatedly builds RAG systems for enterprise
+clients — each time re-solving the same problems: governance, multi-tenant data isolation,
+vendor lock-in, auditability, security. This framework is the answer: a proprietary
+control plane that wraps the best available OSS components (LlamaIndex chunkers,
+Ragas evaluators, LiteLLM gateway, Qdrant…) behind stable contracts, so that what one
+project builds, every subsequent project inherits. The result is faster delivery,
+higher margins, and a demonstrable technical differentiator on regulated-industry pitches.
+
+→ [Full business case](docs/business-case.md)
+
+---
 
 Most RAG stacks today force you to choose between:
 
