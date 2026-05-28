@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import structlog
 
@@ -8,7 +9,9 @@ from modular_rag.contracts.evaluation import Evaluator
 from modular_rag.core.models.answer import Answer
 from modular_rag.core.models.metrics import Metrics
 from modular_rag.core.models.query import Query
-from modular_rag.orchestration.engine import RAGEngine
+
+if TYPE_CHECKING:
+    from modular_rag.orchestration.engine import RAGEngine
 
 log = structlog.get_logger(__name__)
 

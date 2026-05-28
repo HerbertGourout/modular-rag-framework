@@ -27,6 +27,14 @@ class Trace(BaseModel):
     routing_strategy: str = ""
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+    @property
+    def totals(self) -> dict[str, float | int]:
+        return {
+            "input_tokens": self.total_input_tokens,
+            "output_tokens": self.total_output_tokens,
+            "latency_ms": self.total_latency_ms,
+        }
+
     def add_step(self, step: TraceStep) -> None:
         self.steps.append(step)
         self.total_latency_ms += step.latency_ms

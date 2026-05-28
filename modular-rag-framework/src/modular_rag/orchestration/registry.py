@@ -61,6 +61,22 @@ class ComponentRegistry:
             container.register("guard", self._build("guard", manifest.security))
         if manifest.evaluation:
             container.register("evaluator", self._build("evaluator", manifest.evaluation))
+
+        # Post-wiring: inject embedder and store into vector/hybrid retriever.
+        # VectorRetriever needs an Embedder to embed queries and a QdrantStore to
+        # call retrieve_by_vector() — both are separate components in the manifest.
+        retriever = container.retriever
+        embedder = container.embedder
+        store = container.indexer
+        if retriever is not None:
+            for target in [retriever, getattr(retriever, "_vector", None)]:
+                if target is None:
+                    continue
+                if embedder is not None and hasattr(target, "_embedder"):
+                    target._embedder = embedder
+                if store is not None and hasattr(target, "_store"):
+                    target._store = store
+
         log.info("registry.wired", pipeline_id=manifest.id)
         return container
 

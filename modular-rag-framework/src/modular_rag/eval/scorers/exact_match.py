@@ -16,13 +16,14 @@ class ExactMatchEvaluator:
         self,
         query: Query,
         answer: Answer,
-        expected: Answer | None = None,
+        expected: "str | Answer | None" = None,
         context: list[RetrievedChunk] | None = None,
     ) -> Metrics:
         if expected is None:
             return Metrics()
+        gold_text = expected if isinstance(expected, str) else expected.text
         pred_tokens = set(answer.text.lower().split())
-        gold_tokens = set(expected.text.lower().split())
+        gold_tokens = set(gold_text.lower().split())
         tp = pred_tokens & gold_tokens
         precision = len(tp) / len(pred_tokens) if pred_tokens else 0.0
         recall = len(tp) / len(gold_tokens) if gold_tokens else 0.0

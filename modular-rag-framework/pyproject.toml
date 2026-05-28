@@ -85,6 +85,10 @@ packages = ["src/modular_rag"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "integration: requires Qdrant on localhost:6333 (deselect with '-m not integration')",
+    "e2e: requires Qdrant + LLM API key (deselect with '-m not e2e')",
+]
 
 [tool.mypy]
 python_version = "3.11"

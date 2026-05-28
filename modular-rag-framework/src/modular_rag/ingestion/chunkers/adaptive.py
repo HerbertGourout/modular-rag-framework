@@ -11,8 +11,8 @@ _SECTION_RE = re.compile(r"\n#{1,6}\s+|(?:\n\n){2,}")
 class AdaptiveChunker:
     """Split on natural boundaries (headings, paragraphs) then enforce a max size."""
 
-    def __init__(self, chunk_size: int = 512, chunk_overlap: int = 64) -> None:
-        self.chunk_size = chunk_size
+    def __init__(self, chunk_size: int = 512, chunk_overlap: int = 64, max_chunk_size: int | None = None) -> None:
+        self.chunk_size = max_chunk_size if max_chunk_size is not None else chunk_size
         self.chunk_overlap = chunk_overlap
 
     def name(self) -> str:

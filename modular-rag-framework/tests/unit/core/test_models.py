@@ -83,9 +83,7 @@ def test_document_is_frozen():
 def test_chunk_token_estimate():
     doc_id = new_id()
     chunk = Chunk(doc_id=doc_id, content="word " * 20)
-    assert chunk.token_estimate == 5  # 100 chars / 4 chars-per-token truncated → 25 tokens, but content is 100 chars
-    # Actually: len("word " * 20) = 100, 100 // 4 = 25
-    assert chunk.token_estimate == 25
+    assert chunk.token_estimate == 20  # word count: 20 words
 
 
 def test_chunk_defaults():

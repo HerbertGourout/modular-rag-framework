@@ -127,10 +127,16 @@ A change to a contract (`contracts/`) requires updating the matching `tests/cont
 ## 09 — Compact instructions (known stubs)
 
 <!-- Mettre à jour ce bloc après chaque sprint V1 -->
+<!-- Dernière mise à jour : sprint V1 — VectorRetriever fixé, tests integration/e2e créés -->
 
-Current V1 gaps to be aware of before touching retrieval or wiring:
+V1 is end-to-end functional. Remaining stubs to be aware of:
 
-- `retrieval/retrievers/vector.py` → `VectorRetriever.retrieve()` raises `NotImplementedError`. Fix: embed query with `self.embedder`, call `self.store.retrieve_by_vector()`.
-- `adapters/llms/`, `adapters/auth/`, `adapters/graphstores/`, `adapters/search/` → `.gitkeep` only.
-- `tests/integration/`, `tests/e2e/`, `tests/benchmark/` → no test files yet.
+- `adapters/llms/`, `adapters/auth/`, `adapters/graphstores/`, `adapters/search/` → `.gitkeep` only (V2–V4 scope).
+- `tests/integration/` → tests exist but require Qdrant on `localhost:6333` (`pytest -m integration`).
+- `tests/e2e/` → requires Qdrant + `$env:MRAG_OPENAI_API_KEY` (`pytest -m e2e`).
+- `tests/benchmark/` → no test files yet.
 - `manifests/dev/`, `manifests/staging/`, `manifests/production/` → empty stubs (V4 scope).
+
+Wiring notes (V1 internals):
+- `VectorRetriever._embedder` and `VectorRetriever._store` are injected by `registry.wire()` post-wiring — do not pass them via the manifest config.
+- `HybridRetriever` passes `k` and `reranker_k` from manifest config; `k` is used at query time, `reranker_k` is available for the engine reranking step.

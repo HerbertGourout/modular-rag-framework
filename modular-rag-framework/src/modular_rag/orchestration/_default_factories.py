@@ -6,19 +6,29 @@ from modular_rag.orchestration.registry import ComponentRegistry
 
 
 def register_defaults(reg: ComponentRegistry) -> None:
+    from modular_rag.adapters.embeddings.hf_embedder import HuggingFaceEmbedder
+    from modular_rag.adapters.embeddings.openai_embedder import OpenAIEmbedder
+    from modular_rag.adapters.vectorstores.qdrant_store import QdrantStore
+    from modular_rag.eval.scorers.exact_match import ExactMatchEvaluator
+    from modular_rag.generation.synthesizers.anthropic_gen import AnthropicGenerator
+    from modular_rag.generation.synthesizers.openai_gen import OpenAIGenerator
     from modular_rag.ingestion.chunkers.adaptive import AdaptiveChunker
     from modular_rag.ingestion.chunkers.fixed import FixedSizeChunker
+    from modular_rag.retrieval.rerankers.cross_encoder import CrossEncoderReranker
     from modular_rag.retrieval.retrievers.hybrid import HybridRetriever
     from modular_rag.retrieval.retrievers.vector import VectorRetriever
-    from modular_rag.retrieval.rerankers.cross_encoder import CrossEncoderReranker
-    from modular_rag.generation.synthesizers.openai_gen import OpenAIGenerator
-    from modular_rag.generation.synthesizers.anthropic_gen import AnthropicGenerator
     from modular_rag.security.filters.basic_guard import BasicSecurityGuard
-    from modular_rag.eval.scorers.exact_match import ExactMatchEvaluator
 
     # chunkers
     reg.register("chunker", "fixed", lambda cfg: FixedSizeChunker(**cfg.config))
     reg.register("chunker", "adaptive", lambda cfg: AdaptiveChunker(**cfg.config))
+
+    # embedders
+    reg.register("embedder", "sentence-transformers", lambda cfg: HuggingFaceEmbedder(**cfg.config))
+    reg.register("embedder", "openai-embeddings", lambda cfg: OpenAIEmbedder(**cfg.config))
+
+    # indexers
+    reg.register("indexer", "qdrant", lambda cfg: QdrantStore(**cfg.config))
 
     # retrievers
     reg.register("retriever", "vector", lambda cfg: VectorRetriever(**cfg.config))

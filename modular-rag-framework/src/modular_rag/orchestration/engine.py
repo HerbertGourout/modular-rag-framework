@@ -31,14 +31,26 @@ class RAGEngine:
         all_chunks = []
         for doc in documents:
             chunks = self._c.chunker.chunk(doc)
-            for chunk in chunks:
-                if chunk.embedding is None:
-                    embeddings = self._c.embedder.embed([chunk.content])
-                    chunk.embedding = embeddings[0]
             all_chunks.extend(chunks)
-        self._c.indexer.index(all_chunks)
-        log.info("engine.ingested", docs=len(documents), chunks=len(all_chunks))
-        return len(all_chunks)
+        return self.ingest_chunks(all_chunks)
+
+    def ingest_chunks(self, chunks: list) -> int:
+        """Embed and index pre-chunked content. Use when chunks are produced externally.
+
+        Also feeds the BM25 index inside HybridRetriever so lexical retrieval works.
+        """
+        for chunk in chunks:
+            if chunk.embedding is None:
+                chunk.embedding = self._c.embedder.embed([chunk.content])[0]
+        self._c.indexer.index(chunks)
+        # Feed BM25 — covers standalone BM25Retriever and HybridRetriever._bm25
+        retriever = self._c.retriever
+        for target in [retriever, getattr(retriever, "_bm25", None)]:
+            if target is not None and hasattr(target, "index"):
+                target.index(chunks)
+                break
+        log.info("engine.ingested", chunks=len(chunks))
+        return len(chunks)
 
     def answer(self, question: str, **query_kwargs: object) -> Answer:
         """Answer a natural-language question and return a sourced Answer."""

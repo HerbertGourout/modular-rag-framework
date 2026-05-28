@@ -9,7 +9,8 @@ from modular_rag.core.models.document import Document
 class TextNormalizer:
     """Normalize whitespace and unicode in Document content."""
 
-    def normalize(self, document: Document) -> Document:
+    @staticmethod
+    def normalize(document: Document) -> Document:
         text = document.content
         text = unicodedata.normalize("NFKC", text)
         text = re.sub(r"[ \t]+", " ", text)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import structlog
 
-from modular_rag.core.enums import RetrievalMethod
+from modular_rag.core.errors import RetrievalError
 from modular_rag.core.models.query import Query
 from modular_rag.core.models.retrieved import RetrievedChunk
 
@@ -23,25 +23,31 @@ class VectorRetriever:
         self.url = url
         self.api_key = api_key
         self._embedder = embedder
-        self._client: object | None = None
+        self._store: object | None = None  # injected by registry post-wiring
 
     def name(self) -> str:
         return "vector"
 
-    def _get_client(self) -> object:
-        if self._client is None:
-            try:
-                from qdrant_client import QdrantClient
-
-                self._client = QdrantClient(url=self.url, api_key=self.api_key or None)
-            except ImportError as exc:
-                raise ImportError("Install 'qdrant-client' (pip install modular-rag[v1]).") from exc
-        return self._client
+    def _get_store(self) -> object:
+        """Return the QdrantStore, creating one lazily if not injected."""
+        if self._store is None:
+            from modular_rag.adapters.vectorstores.qdrant_store import QdrantStore
+            self._store = QdrantStore(
+                url=self.url,
+                collection=self.collection,
+                api_key=self.api_key or None,
+            )
+        return self._store
 
     def retrieve(self, query: Query, k: int = 10) -> list[RetrievedChunk]:
-        raise NotImplementedError(
-            "VectorRetriever.retrieve — wire an Embedder and a Qdrant collection first."
-        )
+        if self._embedder is None:
+            raise RetrievalError(
+                "VectorRetriever requires an embedder — wire one via the manifest embedder field."
+            )
+        query_vec: list[float] = self._embedder.embed([query.text])[0]  # type: ignore[union-attr]
+        chunks = self._get_store().retrieve_by_vector(query_vec, k=k)  # type: ignore[union-attr]
+        log.debug("vector.retrieved", chunks=len(chunks), query_id=query.id)
+        return chunks
 
     async def aretrieve(self, query: Query, k: int = 10) -> list[RetrievedChunk]:
         return self.retrieve(query, k)

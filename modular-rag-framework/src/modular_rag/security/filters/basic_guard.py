@@ -10,7 +10,8 @@ _INJECTION_PATTERNS = [
     re.compile(r"ignore (all )?(previous|prior|above) instructions", re.I),
     re.compile(r"disregard (your|the) (system|previous) (prompt|instructions)", re.I),
     re.compile(r"you are now|pretend (you are|to be)", re.I),
-    re.compile(r"jailbreak|DAN mode", re.I),
+    re.compile(r"jailbreak|DAN mode|act as DAN|bypass all restrictions", re.I),
+    re.compile(r"<!--\s*ignore|<\s*script\s*>|javascript:", re.I),
 ]
 
 _BLOCKED_TERMS = frozenset(["rm -rf", "os.system", "exec(", "__import__"])
@@ -23,7 +24,7 @@ class BasicSecurityGuard:
         self.max_query_length = max_query_length
 
     def name(self) -> str:
-        return "basic"
+        return "basic-security-guard"
 
     def check_query(self, query: Query) -> GuardResult:
         text = query.text
@@ -43,7 +44,7 @@ class BasicSecurityGuard:
             if term in text:
                 return GuardResult(allowed=False, reason=f"Blocked term detected: {term}", risk_score=0.8)
 
-        return GuardResult(allowed=True, risk_score=0.0)
+        return GuardResult(allowed=True, reason="", risk_score=0.0)
 
     def check_answer(self, answer: Answer) -> GuardResult:
-        return GuardResult(allowed=True, risk_score=0.0)
+        return GuardResult(allowed=True, reason="", risk_score=0.0)

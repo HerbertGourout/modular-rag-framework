@@ -22,9 +22,13 @@ class HybridRetriever:
         collection: str = "documents",
         url: str = "http://localhost:6333",
         api_key: str = "",
+        k: int = 20,
+        reranker_k: int = 5,
     ) -> None:
         self.vector_weight = vector_weight
         self.bm25_weight = bm25_weight
+        self.k = k
+        self.reranker_k = reranker_k
         self._vector = VectorRetriever(collection=collection, url=url, api_key=api_key)
         self._bm25 = BM25Retriever()
 

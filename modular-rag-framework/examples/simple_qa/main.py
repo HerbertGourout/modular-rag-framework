@@ -52,7 +52,7 @@ def cmd_ingest(docs_path: str) -> None:
         chunker = AdaptiveChunker()
         chunks = ingest_path(path, chunker)
 
-    n = pipeline.ingest([c for c in chunks])
+    n = pipeline.ingest_chunks(chunks)
     print(f"Indexed {n} chunks from {path}")
 
 

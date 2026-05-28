@@ -12,7 +12,7 @@ class FixedSizeChunker:
         self.chunk_overlap = chunk_overlap
 
     def name(self) -> str:
-        return "fixed"
+        return "fixed-size"
 
     def chunk(self, document: Document) -> list[Chunk]:
         text = document.content

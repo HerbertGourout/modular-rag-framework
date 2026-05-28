@@ -39,7 +39,7 @@ class BM25Retriever:
                 rank=rank,
                 retrieval_method=RetrievalMethod.BM25,
             )
-            for rank, (idx, score) in enumerate(ranked)
+            for rank, (idx, score) in enumerate(ranked, 1)
             if score > 0
         ]
 
