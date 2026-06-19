@@ -1,15 +1,63 @@
 {
+  "description": "VS Code settings for Claude customization on Modular RAG Framework.",
+  "version": "1.0",
+  "lastUpdated": "2026-06-19",
   "hooks": {
     "PostToolUse": [
       {
+        "description": "Lint Python code after any file write. Checks for syntax (E), undefined names (F), and import order (I).",
         "matcher": "Edit|Write",
+        "filePattern": "src/modular_rag/**/*.py|tests/**/*.py",
         "hooks": [
           {
             "type": "command",
-            "command": "ruff check src/modular_rag/ --select E,F,I --quiet"
+            "command": "ruff check src/modular_rag/ tests/ --select E,F,I --quiet"
           }
         ]
       }
     ]
+  },
+  "futureHooks": {
+    "description": "Reserved for V2+ validation patterns. Uncomment when ready to enable.",
+    "PostToolUse": [
+      {
+        "description": "RESERVED: Detect cross-domain imports (e.g., retrieval/ importing from generation/)",
+        "filePattern": "src/modular_rag/ingestion/**/*.py|src/modular_rag/retrieval/**/*.py|src/modular_rag/generation/**/*.py",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python scripts/validate_imports.py",
+            "enabled": false
+          }
+        ]
+      },
+      {
+        "description": "RESERVED: Verify Protocol implementations have conformance tests",
+        "filePattern": "src/modular_rag/contracts/**/*.py",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python scripts/validate_conformance.py",
+            "enabled": false
+          }
+        ]
+      },
+      {
+        "description": "RESERVED: Check that lazy imports are used for heavy deps",
+        "filePattern": "src/modular_rag/adapters/**/*.py",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python scripts/validate_lazy_imports.py",
+            "enabled": false
+          }
+        ]
+      }
+    ]
+  },
+  "notes": {
+    "ruffConfig": "Ruff settings use defaults (see pyproject.toml for customization).",
+    "futureValidation": "To enable import cross-domain detection in V2+, set 'enabled': true in futureHooks and ensure scripts/ directory exists.",
+    "moreInfo": "See .claude/.instructions.md and .claude/rules/*.md for full guidelines."
   }
 }

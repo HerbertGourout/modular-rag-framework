@@ -124,19 +124,73 @@ A change to a contract (`contracts/`) requires updating the matching `tests/cont
 
 ---
 
-## 09 — Compact instructions (known stubs)
+## 09 — Known Stubs & V2+ Scope
 
-<!-- Mettre à jour ce bloc après chaque sprint V1 -->
-<!-- Dernière mise à jour : sprint V1 — VectorRetriever fixé, tests integration/e2e créés -->
+<!-- Mise à jour : 2026-06-19 — Phase 3 clarification complète -->
 
-V1 is end-to-end functional. Remaining stubs to be aware of:
+V1 is end-to-end functional. Stubs below are **V2+ scope** and must NOT be implemented in V1. See [.claude/.instructions.md section 7](.claude/.instructions.md#7-version-scope-v1-vs-v2) and [.claude/rules/agentic_workflows.md](.claude/rules/agentic_workflows.md) for V2+ patterns.
 
-- `adapters/llms/`, `adapters/auth/`, `adapters/graphstores/`, `adapters/search/` → `.gitkeep` only (V2–V4 scope).
-- `tests/integration/` → tests exist but require Qdrant on `localhost:6333` (`pytest -m integration`).
-- `tests/e2e/` → requires Qdrant + `$env:MRAG_OPENAI_API_KEY` (`pytest -m e2e`).
-- `tests/benchmark/` → no test files yet.
-- `manifests/dev/`, `manifests/staging/`, `manifests/production/` → empty stubs (V4 scope).
+### Adapter Stubs (V2-V5 Scope)
+| Stub | Scope | Why Deferred | Implementation Notes |
+|------|-------|-------------|----------------------|
+| `adapters/llms/` | V2 | Requires LLM agent orchestration | Will implement OpenAI, Anthropic, local LLM bindings in V2 |
+| `adapters/auth/` | V4 | Requires policy engine + RBAC | Will implement OAuth, API key, tenant isolation in V4 |
+| `adapters/graphstores/` | V3 | Requires knowledge graph module | Will implement Neo4j, ArangoDB bindings in V3 |
+| `adapters/search/` | V2-V3 | Requires semantic search + multi-provider | Will implement Elasticsearch, Algolia bindings in V2-V3 |
 
-Wiring notes (V1 internals):
-- `VectorRetriever._embedder` and `VectorRetriever._store` are injected by `registry.wire()` post-wiring — do not pass them via the manifest config.
-- `HybridRetriever` passes `k` and `reranker_k` from manifest config; `k` is used at query time, `reranker_k` is available for the engine reranking step.
+**Rule**: Do NOT add implementations to these directories. Leave `.gitkeep` files in place. They serve as reserved namespace markers.
+
+### Test Stubs
+| Path | Status | Requirements | Action |
+|------|--------|--------------|--------|
+| `tests/integration/` | ✅ Exists | Qdrant on localhost:6333 | Run: `pytest tests/integration -m integration` |
+| `tests/e2e/` | ✅ Exists | Qdrant + `$env:MRAG_OPENAI_API_KEY` | Run: `pytest tests/e2e -m e2e` (full pipeline) |
+| `tests/benchmark/` | 🚫 Empty | Requires performance baselines | V3+ scope: defer until after V1 completion |
+
+### Manifest Stubs (V4 Scope)
+| Path | Purpose | Status | Notes |
+|------|---------|--------|-------|
+| `manifests/dev/` | Development pipeline configs | 🚫 Empty | Will populate with local-hybrid-rag.yaml variants |
+| `manifests/staging/` | Staging pipeline configs | 🚫 Empty | Will populate with production-like configs |
+| `manifests/production/` | Production pipeline configs | 🚫 Empty | V4 scope: requires governance + audit trails |
+
+**Rule**: `local-hybrid-rag.yaml` in `manifests/presets/` is the reference. Do NOT duplicate it to dev/staging/production yet.
+
+### V1 Completed ✅
+- ✅ Core RAG pipeline (ingestion → retrieval → generation)
+- ✅ Hybrid retrieval (BM25 + vector + reranking)
+- ✅ Security guards (prompt injection, PII redaction, basic policies)
+- ✅ Observability (TraceStep emissions throughout pipeline)
+- ✅ ComponentRegistry + manifest wiring pattern
+- ✅ Unit, contract, integration, e2e test scopes
+- ✅ `examples/simple_qa/` end-to-end working
+
+### V2 Preview (Do NOT Implement in V1)
+- Agent orchestration (Coordinator, Planner, Retriever, Generator agents)
+- Multi-turn conversation support
+- Tool use patterns
+- Advanced query routing (decision trees)
+- See [.claude/rules/agents.md](.claude/rules/agents.md) and [.claude/rules/agentic_workflows.md](.claude/rules/agentic_workflows.md) for V2+ patterns.
+
+### V3-V5 Future (Completely Out of Scope in V1)
+- **V3**: Knowledge graph memory, versioning, EvoRAG
+- **V4**: Governance, audit, compliance, RBAC, tenant isolation
+- **V5**: Multimodal (images, video, audio)
+
+### Wiring Notes (V1 Internals)
+- `VectorRetriever._embedder` and `VectorRetriever._store` are injected by `registry.wire()` post-wiring — do not pass them via manifest config.
+- `HybridRetriever` passes `k` (retrieval count) and `reranker_k` (reranking count) from manifest config. Use `k` at query time, `reranker_k` for engine-level reranking.
+- All components are wired via `orchestration/registry.py` — never instantiate directly in Python code. Use manifest YAML instead.
+
+### When to Revisit This
+- After `examples/simple_qa/` runs end-to-end ✅ (DONE)
+- After `pytest tests/unit tests/contract` passes 100% (VERIFY)
+- After stakeholder sign-off on V1 scope (CHECK)
+- **Then** start V2 planning and implementation
+- **Then** populate adapters/llms/ and adapters/search/
+- **Then** implement agent orchestration patterns
+
+### Questions?
+- "Can I implement X in V2 scope?" → Check [ADR-0002](.adr/0002-contracts-and-plugins.md) and [.claude/rules/agentic_workflows.md](.claude/rules/agentic_workflows.md) for patterns.
+- "Why not implement agents now?" → V2 agents require extensive refactoring of orchestration. Defer until V1 is locked in.
+- "What's in adapters/llms/?" → Nothing yet. LLM adapters come with V2 agent support. See `adapters/embeddings/` for current binding pattern.
