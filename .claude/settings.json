@@ -19,7 +19,7 @@
   },
   "permissions": {
     "description": "Permission model for Claude development on this project. Balances safety (protecting core architecture) with velocity (open tests/examples).",
-    "defaultMode": "ALLOW_BY_DEFAULT_WITH_LIMITS",
+    "defaultMode": "auto",
     "bypassPermissions": false,
     "denylists": [
       {
@@ -178,7 +178,7 @@
   },
   "notes": {
     "ruffConfig": "Ruff settings use defaults (see pyproject.toml for customization).",
-    "permissionsModel": "ALLOW_BY_DEFAULT_WITH_LIMITS protects core architecture (contracts, orchestration, security) while remaining open for domain extensions (ingestion, retrieval, generation), tests, and examples.",
+    "permissionsModel": "defaultMode='auto' respects the permission layers: denylists (block entirely), allowlists (full access), restrictedPaths (ask before edit). Protects core architecture while remaining open for domain extensions, tests, and examples.",
     "denylists": "Blocks V2+ reserved namespaces (adapters/llms, adapters/auth, adapters/graphstores, adapters/search) to prevent premature implementation before V1 completion.",
     "restrictedPaths": "Requires 'ask_before_edit' for Protocols (breaking impact), Registry wiring (central), Security (safety-critical), and Adapter implementations.",
     "bypassPermissions": "Always set to false. This is the exact governance pattern you want to enforce.",
