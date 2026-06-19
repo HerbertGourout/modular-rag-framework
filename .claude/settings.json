@@ -17,6 +17,127 @@
       }
     ]
   },
+  "permissions": {
+    "description": "Permission model for Claude development on this project. Balances safety (protecting core architecture) with velocity (open tests/examples).",
+    "defaultMode": "ALLOW_BY_DEFAULT_WITH_LIMITS",
+    "bypassPermissions": false,
+    "denylists": [
+      {
+        "path": "**/.env*",
+        "reason": "Secrets management - environment variables, API keys, credentials"
+      },
+      {
+        "path": "**/*.local.md",
+        "reason": "Local configuration files with personal preferences"
+      },
+      {
+        "path": "manifests/production/**",
+        "reason": "Production configs - V4 scope, locked until governance ready"
+      },
+      {
+        "path": ".claude/rules/**",
+        "reason": "Architecture rules - breaking changes impact entire framework"
+      },
+      {
+        "path": ".gitlab/**",
+        "reason": "CI/CD pipelines and repository infrastructure"
+      },
+      {
+        "path": "adapters/llms/**",
+        "reason": "V2+ scope (agent orchestration) - reserved namespace"
+      },
+      {
+        "path": "adapters/auth/**",
+        "reason": "V4+ scope (governance/RBAC) - reserved namespace"
+      },
+      {
+        "path": "adapters/graphstores/**",
+        "reason": "V3+ scope (graph memory) - reserved namespace"
+      },
+      {
+        "path": "adapters/search/**",
+        "reason": "V2-V3 scope (multi-provider search) - reserved namespace"
+      },
+      {
+        "path": "benchmarks/**",
+        "reason": "Performance benchmarks - V3+ scope"
+      }
+    ],
+    "allowlists": [
+      {
+        "path": "src/modular_rag/ingestion/**",
+        "commands": ["create", "edit", "refactor"],
+        "reason": "Domain module - safe to extend with new chunkers, parsers, processors"
+      },
+      {
+        "path": "src/modular_rag/retrieval/**",
+        "commands": ["create", "edit", "refactor"],
+        "reason": "Domain module - safe to extend with new retrievers, rerankers"
+      },
+      {
+        "path": "src/modular_rag/generation/**",
+        "commands": ["create", "edit", "refactor"],
+        "reason": "Domain module - safe to extend with new generators, prompts"
+      },
+      {
+        "path": "src/modular_rag/eval/**",
+        "commands": ["create", "edit", "refactor"],
+        "reason": "Evaluation module - safe to add metrics, scorers"
+      },
+      {
+        "path": "src/modular_rag/memory/**",
+        "commands": ["create", "edit", "refactor"],
+        "reason": "Memory module - safe for conversation/context management"
+      },
+      {
+        "path": "tests/**",
+        "commands": ["create", "edit", "refactor"],
+        "reason": "Test scope - creating tests is encouraged; full refactoring allowed"
+      },
+      {
+        "path": "examples/**",
+        "commands": ["create", "edit", "refactor"],
+        "reason": "Example scenarios - safe sandbox for demonstrations"
+      },
+      {
+        "path": "docs/**",
+        "commands": ["create", "edit"],
+        "reason": "Documentation - safe to add guides, ADRs, updates"
+      }
+    ],
+    "restrictedPaths": [
+      {
+        "path": "src/modular_rag/contracts/**",
+        "reason": "Protocol definitions - breaking changes impact entire framework",
+        "allowedChanges": ["documentation updates", "minor type annotations", "docstring improvements"],
+        "action": "ask_before_edit"
+      },
+      {
+        "path": "src/modular_rag/orchestration/**",
+        "reason": "Registry + wiring logic - central to component composition",
+        "allowedChanges": ["new routing logic within existing pattern", "new factory methods"],
+        "action": "ask_before_edit"
+      },
+      {
+        "path": "src/modular_rag/security/**",
+        "reason": "Safety/Security critical - PII redaction, prompt injection guards, policies",
+        "allowedChanges": ["extending filter rules", "adding new redaction patterns", "documentation"],
+        "action": "ask_before_edit"
+      },
+      {
+        "path": "src/modular_rag/adapters/embeddings/**",
+        "reason": "Embedding adapters - Protocol implementations for embeddings",
+        "allowedChanges": ["adding new embedding providers", "bug fixes"],
+        "action": "ask_before_edit"
+      },
+      {
+        "path": "src/modular_rag/adapters/vectorstores/**",
+        "reason": "Vector store adapters - Protocol implementations for persistence",
+        "allowedChanges": ["adding new vector store providers", "bug fixes"],
+        "action": "ask_before_edit"
+      }
+    ]
+  },
   "futureHooks": {
     "description": "Reserved for V2+ validation patterns. Uncomment when ready to enable.",
     "PostToolUse": [
@@ -57,7 +178,11 @@
   },
   "notes": {
     "ruffConfig": "Ruff settings use defaults (see pyproject.toml for customization).",
+    "permissionsModel": "ALLOW_BY_DEFAULT_WITH_LIMITS protects core architecture (contracts, orchestration, security) while remaining open for domain extensions (ingestion, retrieval, generation), tests, and examples.",
+    "denylists": "Blocks V2+ reserved namespaces (adapters/llms, adapters/auth, adapters/graphstores, adapters/search) to prevent premature implementation before V1 completion.",
+    "restrictedPaths": "Requires 'ask_before_edit' for Protocols (breaking impact), Registry wiring (central), Security (safety-critical), and Adapter implementations.",
+    "bypassPermissions": "Always set to false. This is the exact governance pattern you want to enforce.",
     "futureValidation": "To enable import cross-domain detection in V2+, set 'enabled': true in futureHooks and ensure scripts/ directory exists.",
-    "moreInfo": "See .claude/.instructions.md and .claude/rules/*.md for full guidelines."
+    "moreInfo": "See .claude/.instructions.md, .claude/rules/*.md, and CLAUDE.md block 09 for full guidelines."
   }
 }
