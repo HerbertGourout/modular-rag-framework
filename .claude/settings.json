@@ -18,123 +18,125 @@
     ]
   },
   "permissions": {
-    "description": "Permission model for Claude development on this project. Balances safety (protecting core architecture) with velocity (open tests/examples).",
+    "description": "Granular permission strategy: denylist (always block) + three tiers (dontAsk > acceptEdits > ask_before_edit).",
     "defaultMode": "auto",
     "bypassPermissions": false,
     "denylists": [
       {
         "path": "**/.env*",
-        "reason": "Secrets management - environment variables, API keys, credentials"
+        "reason": "Secrets - environment variables, API keys, credentials"
       },
       {
         "path": "**/*.local.md",
-        "reason": "Local configuration files with personal preferences"
+        "reason": "Local configuration files"
       },
       {
         "path": "manifests/production/**",
-        "reason": "Production configs - V4 scope, locked until governance ready"
+        "reason": "Production configs - V4 scope"
       },
       {
         "path": ".claude/rules/**",
-        "reason": "Architecture rules - breaking changes impact entire framework"
+        "reason": "Architecture rules - breaking changes"
       },
       {
         "path": ".gitlab/**",
-        "reason": "CI/CD pipelines and repository infrastructure"
+        "reason": "CI/CD pipelines"
       },
       {
         "path": "adapters/llms/**",
-        "reason": "V2+ scope (agent orchestration) - reserved namespace"
+        "reason": "V2+ scope - reserved"
       },
       {
         "path": "adapters/auth/**",
-        "reason": "V4+ scope (governance/RBAC) - reserved namespace"
+        "reason": "V4+ scope - reserved"
       },
       {
         "path": "adapters/graphstores/**",
-        "reason": "V3+ scope (graph memory) - reserved namespace"
+        "reason": "V3+ scope - reserved"
       },
       {
         "path": "adapters/search/**",
-        "reason": "V2-V3 scope (multi-provider search) - reserved namespace"
+        "reason": "V2-V3 scope - reserved"
       },
       {
         "path": "benchmarks/**",
-        "reason": "Performance benchmarks - V3+ scope"
+        "reason": "V3+ scope - reserved"
       }
     ],
-    "allowlists": [
-      {
-        "path": "src/modular_rag/ingestion/**",
-        "commands": ["create", "edit", "refactor"],
-        "reason": "Domain module - safe to extend with new chunkers, parsers, processors"
-      },
-      {
-        "path": "src/modular_rag/retrieval/**",
-        "commands": ["create", "edit", "refactor"],
-        "reason": "Domain module - safe to extend with new retrievers, rerankers"
-      },
-      {
-        "path": "src/modular_rag/generation/**",
-        "commands": ["create", "edit", "refactor"],
-        "reason": "Domain module - safe to extend with new generators, prompts"
-      },
-      {
-        "path": "src/modular_rag/eval/**",
-        "commands": ["create", "edit", "refactor"],
-        "reason": "Evaluation module - safe to add metrics, scorers"
-      },
-      {
-        "path": "src/modular_rag/memory/**",
-        "commands": ["create", "edit", "refactor"],
-        "reason": "Memory module - safe for conversation/context management"
-      },
+    "noAskPaths": [
       {
         "path": "tests/**",
-        "commands": ["create", "edit", "refactor"],
-        "reason": "Test scope - creating tests is encouraged; full refactoring allowed"
+        "mode": "dontAsk",
+        "reason": "Test scope - zero friction, creation encouraged"
       },
       {
         "path": "examples/**",
-        "commands": ["create", "edit", "refactor"],
-        "reason": "Example scenarios - safe sandbox for demonstrations"
+        "mode": "dontAsk",
+        "reason": "Example scenarios - safe sandbox"
       },
       {
         "path": "docs/**",
-        "commands": ["create", "edit"],
-        "reason": "Documentation - safe to add guides, ADRs, updates"
+        "mode": "dontAsk",
+        "reason": "Documentation - no risk"
+      }
+    ],
+    "autoPaths": [
+      {
+        "path": "src/modular_rag/ingestion/**",
+        "mode": "acceptEdits",
+        "reason": "Domain module - auto-accept new chunkers, parsers, processors"
+      },
+      {
+        "path": "src/modular_rag/retrieval/**",
+        "mode": "acceptEdits",
+        "reason": "Domain module - auto-accept new retrievers, rerankers"
+      },
+      {
+        "path": "src/modular_rag/generation/**",
+        "mode": "acceptEdits",
+        "reason": "Domain module - auto-accept new generators, prompts"
+      },
+      {
+        "path": "src/modular_rag/eval/**",
+        "mode": "acceptEdits",
+        "reason": "Evaluation module - auto-accept metrics, scorers"
+      },
+      {
+        "path": "src/modular_rag/memory/**",
+        "mode": "acceptEdits",
+        "reason": "Memory module - auto-accept context/conversation extensions"
       }
     ],
     "restrictedPaths": [
       {
         "path": "src/modular_rag/contracts/**",
+        "mode": "ask_before_edit",
         "reason": "Protocol definitions - breaking changes impact entire framework",
-        "allowedChanges": ["documentation updates", "minor type annotations", "docstring improvements"],
-        "action": "ask_before_edit"
+        "allowedChanges": ["documentation", "type annotations", "docstrings"]
       },
       {
         "path": "src/modular_rag/orchestration/**",
-        "reason": "Registry + wiring logic - central to component composition",
-        "allowedChanges": ["new routing logic within existing pattern", "new factory methods"],
-        "action": "ask_before_edit"
+        "mode": "ask_before_edit",
+        "reason": "Registry + wiring - central to composition",
+        "allowedChanges": ["new routing logic", "new factory methods"]
       },
       {
         "path": "src/modular_rag/security/**",
-        "reason": "Safety/Security critical - PII redaction, prompt injection guards, policies",
-        "allowedChanges": ["extending filter rules", "adding new redaction patterns", "documentation"],
-        "action": "ask_before_edit"
+        "mode": "ask_before_edit",
+        "reason": "Safety/Security critical - PII, injection guards, policies",
+        "allowedChanges": ["filter rules", "redaction patterns", "documentation"]
       },
       {
         "path": "src/modular_rag/adapters/embeddings/**",
-        "reason": "Embedding adapters - Protocol implementations for embeddings",
-        "allowedChanges": ["adding new embedding providers", "bug fixes"],
-        "action": "ask_before_edit"
+        "mode": "ask_before_edit",
+        "reason": "Embedding Protocol implementations",
+        "allowedChanges": ["new embedding providers", "bug fixes"]
       },
       {
         "path": "src/modular_rag/adapters/vectorstores/**",
-        "reason": "Vector store adapters - Protocol implementations for persistence",
-        "allowedChanges": ["adding new vector store providers", "bug fixes"],
-        "action": "ask_before_edit"
+        "mode": "ask_before_edit",
+        "reason": "Vector store Protocol implementations",
+        "allowedChanges": ["new vector store providers", "bug fixes"]
       }
     ]
   },
@@ -178,11 +180,13 @@
   },
   "notes": {
     "ruffConfig": "Ruff settings use defaults (see pyproject.toml for customization).",
-    "permissionsModel": "defaultMode='auto' respects the permission layers: denylists (block entirely), allowlists (full access), restrictedPaths (ask before edit). Protects core architecture while remaining open for domain extensions, tests, and examples.",
-    "denylists": "Blocks V2+ reserved namespaces (adapters/llms, adapters/auth, adapters/graphstores, adapters/search) to prevent premature implementation before V1 completion.",
-    "restrictedPaths": "Requires 'ask_before_edit' for Protocols (breaking impact), Registry wiring (central), Security (safety-critical), and Adapter implementations.",
-    "bypassPermissions": "Always set to false. This is the exact governance pattern you want to enforce.",
-    "futureValidation": "To enable import cross-domain detection in V2+, set 'enabled': true in futureHooks and ensure scripts/ directory exists.",
+    "permissionStrategy": "3-tier granular approach: denylist (always block) → noAskPaths (dontAsk, zero friction) → autoPaths (acceptEdits, auto-accept) → restrictedPaths (ask_before_edit, confirm before).",
+    "tier1_noAsk": "tests/, examples/, docs/ - zero requests, creation encouraged.",
+    "tier2_autoPaths": "Domain modules (ingestion, retrieval, generation, eval, memory) - auto-accept new implementations, no friction.",
+    "tier3_restrictedPaths": "Contracts, orchestration, security, adapters - ask confirmation before any edit to preserve architecture.",
+    "denylists": "Always blocked: secrets, production configs, architecture rules, V2-V5 reserved namespaces.",
+    "bypassPermissions": "Always false - this is the governance pattern.",
+    "futureValidation": "To enable V2+ hooks (cross-domain imports, conformance tests, lazy imports), set 'enabled': true in futureHooks.",
     "moreInfo": "See .claude/.instructions.md, .claude/rules/*.md, and CLAUDE.md block 09 for full guidelines."
   }
 }
