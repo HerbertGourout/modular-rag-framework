@@ -47,26 +47,52 @@ cli/ + api/  →  app/  →  orchestration/  →  contracts/ + core/
 
 ## 04 — Development commands
 
-```powershell
+### Quick reference (for daily development)
+```bash
 # Install V1 deps + dev tools
 pip install -e ".[v1,dev]"
 
+# ⚡ QUICK CHECK (< 30s) — Use after any change
+./scripts/check.sh quick        # Syntax + import order
+
+# ✓ FULL CHECK (2-5 min) — Use before merge
+./scripts/check.sh full         # Quick + unit + contracts
+
+# 🔗 INTEGRATION (1-2 min) — With Qdrant
+./scripts/check.sh integration
+
+# 🚀 E2E TESTS (2-5 min) — Full pipeline
+./scripts/check.sh e2e
+
+# 📋 ALL CHECKS (~ 10 min) — Pre-release
+./scripts/check.sh all
+```
+
+### Individual test scopes
+```bash
 # Unit tests (no external services)
-pytest tests/unit
+pytest tests/unit/ -v
 
 # Contract conformance tests (no external services)
-pytest tests/contract
+pytest tests/contract/ -v
 
 # Single test
-pytest tests/unit/ingestion/chunkers/test_fixed.py::test_short_text_single_chunk
+pytest tests/unit/ingestion/chunkers/test_fixed.py::test_short_text_single_chunk -v
 
-# Integration tests (Qdrant required on localhost:6333)
-pytest tests/integration
+# Integration tests (requires Qdrant on localhost:6333)
+pytest tests/integration/ -v -m integration
 
-# REST API
+# E2E tests (requires Qdrant + LLM API key)
+export MRAG_OPENAI_API_KEY=sk-...
+pytest tests/e2e/ -v -m e2e
+```
+
+### CLI & API development
+```bash
+# REST API (development mode with hot-reload)
 uvicorn modular_rag.api:create_app --factory --reload
 
-# CLI
+# CLI ingestion
 mrag ingest ./my_docs --manifest manifests/presets/local-hybrid-rag.yaml
 mrag ask "What is hybrid retrieval?" --manifest manifests/presets/local-hybrid-rag.yaml
 
@@ -74,6 +100,10 @@ mrag ask "What is hybrid retrieval?" --manifest manifests/presets/local-hybrid-r
 python examples/simple_qa/main.py ingest examples/simple_qa/docs/
 python examples/simple_qa/main.py ask "What is RAG?"
 ```
+
+**→ Full command reference:** [docs/guides/validation.md](docs/guides/validation.md)  
+**→ Validation strategies:** [.claude/settings.json (permissions)](`.claude/settings.json`)  
+**→ Testing rules:** [.claude/rules/tests.md](.claude/rules/tests.md)
 
 ---
 

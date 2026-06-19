@@ -175,6 +175,48 @@ uvicorn modular_rag.api:create_app --factory --reload
 
 ---
 
+## Development & Validation
+
+### Quick validation (< 1 minute)
+
+Use after code changes:
+
+```bash
+./scripts/check.sh quick    # Syntax & import order
+./scripts/check.sh full     # Quick + unit + contract tests
+```
+
+### Full validation workflows
+
+| Workflow | Command | Time | Use when |
+|----------|---------|------|----------|
+| **Daily** | `./scripts/check.sh quick` | ~30s | After edits, before commit |
+| **Pre-merge** | `./scripts/check.sh full` | ~2-5m | Ready for PR/MR |
+| **With services** | `./scripts/check.sh integration` | ~1-2m | Qdrant running |
+| **Production** | `./scripts/check.sh all` | ~10m | Before release |
+
+### Individual test scopes
+
+```bash
+# Unit tests (no external services)
+pytest tests/unit/ -v
+
+# Contract conformance (Protocol validation)
+pytest tests/contract/ -v
+
+# Integration tests (requires Qdrant on localhost:6333)
+docker run -p 6333:6333 qdrant/qdrant &
+pytest tests/integration/ -v -m integration
+
+# End-to-end pipeline (requires Qdrant + LLM API key)
+export MRAG_OPENAI_API_KEY=sk-...
+pytest tests/e2e/ -v -m e2e
+```
+
+→ **Full reference:** [docs/guides/validation.md](docs/guides/validation.md)
+
+---
+
 ## Key features
 
 - **Declarative orchestration** via YAML manifests (knowledge architecture as code).
