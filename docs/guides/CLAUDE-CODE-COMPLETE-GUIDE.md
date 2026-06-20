@@ -15,6 +15,12 @@
 4. [7-Layer Security Strategy](#7-layer-security-strategy)
 5. [4 Platform Mechanisms](#4-platform-mechanisms)
 6. [Configuration Files Reference](#configuration-files-reference)
+   - **[→ Complete Development Guide (2,500 lines)](./claude-code-complete-development-guide.md)** — End-to-end workflow ⭐
+   - **[→ Settings Reference (1,500 lines)](./claude-code-settings-reference.md)** — All 100+ settings
+   - **[→ MCP Setup (1,000 lines)](./claude-code-mcp-setup.md)** — Model Context Protocol
+   - **[→ Plugins & Marketplaces (1,000 lines)](./claude-code-plugins-marketplaces.md)** — Team plugins
+   - **[→ Advanced Configuration (800 lines)](./claude-code-advanced-config.md)** — Subagents, skills, hooks
+   - **[→ Enterprise Deployment (600 lines)](./claude-code-enterprise-deployment.md)** — MDM, Group Policy
 7. [The 6-Step Workflow](#the-6-step-workflow)
 8. [Available Commands](#available-commands)
 9. [Success Metrics & Tracking](#success-metrics--tracking)
@@ -424,6 +430,45 @@ coverage:   # pytest with coverage report
 | [docs/guides/working-with-agents.md](../../docs/guides/working-with-agents.md) | V2+ agent patterns (reference) | Future implementation |
 | [docs/adr/](../../docs/adr/) | Architectural decision records | Decision context |
 | [docs/architecture/](../../docs/architecture/) | Technical architecture | All developers |
+
+### Development Workflow Guide (The Complete Picture) 🆕
+
+**Master the end-to-end development process:**
+
+| Guide | Size | Coverage | Audience |
+|-------|------|----------|----------|
+| **[claude-code-complete-development-guide.md](./claude-code-complete-development-guide.md) 🆕** | 2,500 lines | **COMPLETE WORKFLOW** from problem to commit | All developers |
+| ↳ 5-minute quick start | 5 min | Prerequisites, rules, commands | All |
+| ↳ 5-phase workflow | 30 min | EXPLORE → DESIGN → IMPLEMENT → VALIDATE → REVIEW | All |
+| ↳ Architecture rules | 20 min | Hexagonal layering, imports, wiring, observability | All |
+| ↳ Pattern library | 30 min | Retrievers, guards, generators, metrics | Implementers |
+| ↳ Real-world examples | 40 min | BM25 retriever, PII detection with full code | Implementers |
+| ↳ Validation & testing | 15 min | Test scopes, checklist | All |
+| ↳ Debugging | 20 min | Common errors, root causes, fixes | All |
+| ↳ Anti-patterns | 15 min | What NOT to do, with corrections | All |
+
+**→ START HERE if you're building a feature or joining the team!**
+
+### Advanced Configuration Guides (Reference)
+
+**Comprehensive reference for Claude Code configuration:**
+
+| Guide | Size | Coverage | Audience |
+|-------|------|----------|----------|
+| [claude-code-settings-reference.md](./claude-code-settings-reference.md) | 1,500 lines | All 100+ settings, scopes, precedence | All developers |
+| [claude-code-mcp-setup.md](./claude-code-mcp-setup.md) | 1,000 lines | MCP configuration, built-in servers, custom servers | Integration leads |
+| [claude-code-plugins-marketplaces.md](./claude-code-plugins-marketplaces.md) | 1,000 lines | Plugin system, marketplace setup, governance | DevOps/Architecture |
+| [claude-code-advanced-config.md](./claude-code-advanced-config.md) | 800 lines | Subagents, skills, path-scoped rules, hooks | Advanced users |
+| [claude-code-enterprise-deployment.md](./claude-code-enterprise-deployment.md) | 600 lines | Managed settings, MDM, Group Policy, deployment | IT/DevOps teams |
+
+**Quick Navigation by Need:**
+
+- **"I'm building a feature"** → [claude-code-complete-development-guide.md](./claude-code-complete-development-guide.md) ⭐
+- **"I want to understand ALL settings"** → [claude-code-settings-reference.md](./claude-code-settings-reference.md)
+- **"How do I integrate with GitHub/Slack?"** → [claude-code-mcp-setup.md](./claude-code-mcp-setup.md)
+- **"How do I set up team plugins?"** → [claude-code-plugins-marketplaces.md](./claude-code-plugins-marketplaces.md)
+- **"I need advanced features like subagents/hooks"** → [claude-code-advanced-config.md](./claude-code-advanced-config.md)
+- **"I'm deploying Claude Code across an organization"** → [claude-code-enterprise-deployment.md](./claude-code-enterprise-deployment.md)
 
 ---
 
