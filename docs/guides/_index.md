@@ -1,18 +1,19 @@
 # Developer Guides — Complete Reference
 
-**For**: All developers working on Modular RAG Framework  
-**Updated**: June 20, 2026  
+**For**: All team members (developers, architects, product managers, stakeholders)  
+**Updated**: June 21, 2026  
 **Status**: Production Ready ✅
 
 ---
 
 ## 🚀 Getting Started (Start Here!)
 
-| Guide | Time | Purpose |
-|-------|------|---------|
-| **[Getting Started](./getting-started.md)** | 15 min | First-time setup + development environment |
-| **[Installation](./installation.md)** | 10 min | Install dependencies for V1-V5 |
-| **[Onboarding — Claude Code](./onboarding-claude-code.md)** | 1 day | Full team onboarding with productivity goals |
+| Guide | Time | Purpose | For |
+|-------|------|---------|-----|
+| **[Framework Overview & Onboarding 🆕](./framework-overview-onboarding.md)** | 20 min | Complete vision: present + future features, why it matters, quick start by role | Everyone |
+| **[Getting Started](./getting-started.md)** | 15 min | First-time setup + development environment | Developers |
+| **[Installation](./installation.md)** | 10 min | Install dependencies for V1-V5 | Developers |
+| **[Onboarding — Claude Code](./onboarding-claude-code.md)** | 1 day | Full team onboarding with productivity goals | Teams |
 
 ---
 
@@ -55,6 +56,12 @@
 
 ## 🎯 Quick Navigation by Need
 
+### "I'm new and want to understand the full vision (framework + features)"
+1. [Framework Overview & Onboarding](./framework-overview-onboarding.md) (20 min) ← **START HERE**
+2. [ROADMAP.md](../../ROADMAP.md) (15 min) — Version timeline
+3. [business-case.md](../business-case.md) (10 min) — Why it matters
+4. [CLAUDE.md](../../CLAUDE.md) (30 min) — Project rules
+
 ### "I'm a new developer, where do I start?"
 1. [Getting Started](./getting-started.md) (15 min)
 2. [Onboarding — Claude Code](./onboarding-claude-code.md) (1 day)
@@ -96,6 +103,14 @@
 ---
 
 ## 📊 Content Map by Category
+
+### Overview & Strategy (NEW - Framework Foundation)
+- **[Framework Overview & Onboarding](./framework-overview-onboarding.md)** (3,000+ lines)
+  - What the framework is and why it exists
+  - V1 status (now) + V2-V5 roadmap
+  - Quick start by role (developers, architects, PM, QA, DevOps)
+  - Business impact and strategic features
+  - One-page reference for everything
 
 ### Configuration (5 guides, 5,900 lines)
 - Complete system of 5 scopes, 100+ settings, MCP integration, plugins, enterprise deployment
