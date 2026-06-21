@@ -178,6 +178,192 @@
       }
     ]
   },
+  "parallelization": {
+    "description": "Parallel execution orchestration for multi-task workflows (V2+ feature, partially enabled in V1).",
+    "enabled": true,
+    "mode": "semi-parallel",
+    "notes": "V1 supports parallel tool calls (search, read_file). Full agentic parallelization in V2+.",
+    "taskDecomposition": {
+      "description": "How to break down work into independent parallel tasks.",
+      "patterns": [
+        {
+          "name": "analysis_tasks",
+          "description": "Run analysis on retrieval, generation, security components in parallel",
+          "examples": [
+            "parallel-feature-analysis skill uses: analyze_retrieval() | analyze_generation() | analyze_security()"
+          ],
+          "dependencies": "None - fully independent analysis",
+          "coordinator": "Aggregate results after parallel completion"
+        },
+        {
+          "name": "retriever_execution",
+          "description": "Parallel execution of multiple retrievers (vector + BM25), then fuse results",
+          "examples": [
+            "HybridRetriever: vector_retriever.retrieve() | bm25_retriever.retrieve() in parallel, then RRF fusion"
+          ],
+          "dependencies": "Fusion waits for both retrievers to complete",
+          "coordinator": "design-retriever-fusion skill orchestrates via asyncio.gather()"
+        },
+        {
+          "name": "test_execution",
+          "description": "Run unit, contract, integration tests in parallel (safe - no side effects)",
+          "examples": [
+            "pytest tests/unit/ tests/contract/ tests/integration/ -n auto"
+          ],
+          "dependencies": "None within scopes - can parallelize fully",
+          "coordinator": "pytest-xdist plugin or make -j"
+        },
+        {
+          "name": "file_operations",
+          "description": "Multiple file reads/writes in parallel (when no dependencies)",
+          "examples": [
+            "Read multiple doc files in parallel for ingestion"
+          ],
+          "dependencies": "Order-independent reads are safe to parallelize",
+          "coordinator": "asyncio or threading"
+        }
+      ]
+    },
+    "streamExecution": {
+      "description": "How parallel streams coordinate and merge results.",
+      "model": "Map-Reduce inspired",
+      "stages": [
+        {
+          "stage": "Map",
+          "description": "Distribute work to parallel tasks",
+          "example": "Start retrieval on vec, bm25, graph in parallel"
+        },
+        {
+          "stage": "Execute",
+          "description": "Tasks run independently, emit results to shared context",
+          "example": "Each retriever writes results to context['retriever_results']"
+        },
+        {
+          "stage": "Merge",
+          "description": "Combine results using fusion algorithm",
+          "example": "RRF fusion merges vec + bm25 results"
+        },
+        {
+          "stage": "Reduce",
+          "description": "Final aggregation and return to caller",
+          "example": "Return top-10 fused results"
+        }
+      ]
+    },
+    "contextSharing": {
+      "description": "How parallel tasks share state and context.",
+      "mechanism": "Shared dictionary (thread-safe) + message passing",
+      "example": {
+        "description": "Parallel retrieval with context sharing",
+        "code_pattern": "context = {}; asyncio.gather(vec_retrieve(context), bm25_retrieve(context)); return fuse(context['vec'], context['bm25'])"
+      },
+      "thread_safety": "Use asyncio for coroutines (cooperative multitasking, no GIL issues) or threading.Lock for thread parallelism",
+      "data_isolation": "Each parallel task gets own input, contributes to shared output dict by key"
+    },
+    "dependencyResolution": {
+      "description": "How to express and resolve task dependencies.",
+      "patterns": [
+        {
+          "type": "independent",
+          "description": "No dependencies - run all in parallel",
+          "example": "Multi-retriever fusion where vec and bm25 don't depend on each other",
+          "syntax": "await asyncio.gather(task_a(), task_b(), task_c())"
+        },
+        {
+          "type": "sequential_dependent",
+          "description": "Task B depends on Task A result - run sequential",
+          "example": "Reranking depends on retrieval results",
+          "syntax": "retrieval_result = await retriever.retrieve(); ranking_result = await reranker.rerank(retrieval_result)"
+        },
+        {
+          "type": "partial_dependent",
+          "description": "Some tasks parallel (A,B independent), then dependent (C waits for A,B)",
+          "example": "Vec + BM25 in parallel, then RRF fusion waits for both",
+          "syntax": "vec, bm25 = await asyncio.gather(vec_ret(), bm25_ret()); fusion = fuse(vec, bm25)"
+        },
+        {
+          "type": "fan_out_fan_in",
+          "description": "One initiator spawns multiple tasks, waits for all to complete",
+          "example": "Query parallelized across multiple components, results aggregated",
+          "syntax": "results = await asyncio.gather(*[component.execute() for component in components])"
+        }
+      ]
+    },
+    "failureHandling": {
+      "description": "How parallel tasks handle failures and timeouts.",
+      "strategies": [
+        {
+          "strategy": "fail_fast",
+          "description": "If any task fails, cancel others and raise error",
+          "use_case": "Critical path - one failure = entire operation fails",
+          "implementation": "CancelledError propagates, cancels gather()"
+        },
+        {
+          "strategy": "fail_tolerant",
+          "description": "If one retriever fails, continue with others",
+          "use_case": "Hybrid retrieval - one source failure not fatal",
+          "implementation": "Wrap task in try/except, return partial results"
+        },
+        {
+          "strategy": "timeout",
+          "description": "Cancel task after timeout, use cached/fallback result",
+          "use_case": "Slow services - don't block entire pipeline",
+          "implementation": "asyncio.wait_for(task, timeout=5) with exception handling"
+        }
+      ]
+    },
+    "performanceOptimization": {
+      "description": "How to measure and optimize parallel execution.",
+      "metrics": [
+        {
+          "metric": "speedup",
+          "formula": "Serial time / Parallel time",
+          "target": ">2.0x for 2-3 parallel tasks",
+          "measurement": "Trace start/end times for each task"
+        },
+        {
+          "metric": "efficiency",
+          "formula": "Speedup / Number of parallel tasks",
+          "target": ">0.6 (good), >0.8 (excellent)",
+          "measurement": "efficiency = speedup / num_tasks"
+        },
+        {
+          "metric": "total_latency",
+          "description": "End-to-end time including coordination overhead",
+          "target": "< sum of sequential (always, by definition)"
+        }
+      ],
+      "optimization_tactics": [
+        {
+          "tactic": "balance_load",
+          "description": "Ensure parallel tasks have similar runtime",
+          "example": "Don't parallelize fast (1ms) + slow (100ms) tasks - limits speedup"
+        },
+        {
+          "tactic": "minimize_overhead",
+          "description": "Coordination, serialization, deserialization costs",
+          "example": "Share simple types (strings, numbers) not large objects"
+        },
+        {
+          "tactic": "batch_operations",
+          "description": "Process multiple items in single parallel task",
+          "example": "Batch embed 100 queries in one task vs 100 parallel embed tasks"
+        }
+      ]
+    },
+    "v2PlusPlanning": {
+      "description": "Full multi-agent orchestration reserved for V2+.",
+      "features": [
+        "Agentic task coordination (multiple agents, task routing)",
+        "Dynamic workload distribution (load balancing across agents)",
+        "Complex dependency graphs (DAG scheduling)",
+        "Inter-agent communication (message passing, shared memory)",
+        "Consensus mechanisms (voting, aggregation)",
+        "Resource management (CPU, memory, I/O quotas per agent)"
+      ],
+      "current_scope_v1": "V1 uses basic parallelization (retriever fusion, parallel file ops). Full multi-agent framework in V2."
+    }
+  },
   "notes": {
     "ruffConfig": "Ruff settings use defaults (see pyproject.toml for customization).",
     "permissionStrategy": "3-tier granular approach: denylist (always block) → noAskPaths (dontAsk, zero friction) → autoPaths (acceptEdits, auto-accept) → restrictedPaths (ask_before_edit, confirm before).",
