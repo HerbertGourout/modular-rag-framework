@@ -1,326 +1,547 @@
 ---
-title: "Claude Code Custom Commands"
-description: "Team-wide shortcuts for common development workflows"
-applicableScopes: ["Development", "Testing", "Security", "CI/CD"]
-commands:
-  - name: "quick-check"
-    scope: "validation"
-  - name: "full-check"
-    scope: "validation"
-  - name: "validate-security"
-    scope: "security"
-  - name: "add-component"
-    scope: "development"
-  - name: "release"
-    scope: "deployment"
+title: "Claude Code Specialized Subagents"
+description: "8 domain-specialized agents for RAG framework development"
+version: "1.0"
+created: "2026-06-21"
+applicableScopes: ["All Development", "Architecture", "Testing", "Production"]
 ---
 
-# Claude Code Custom Commands
+# Claude Code Specialized Subagents
 
-This file defines team-wide slash commands for common workflows in the Modular RAG Framework. These commands encapsulate complex validation, component creation, and deployment patterns.
+**For**: All developers  
+**Purpose**: Invoke domain-specific AI experts for RAG framework work  
+**Updated**: June 21, 2026  
+**Status**: Production Ready ✅
+
+This document describes the **8 research-paper-driven subagents** available in Claude Code for Modular RAG Framework development.
 
 ---
 
-## Available Commands
+## Quick Reference
 
-### `/quick-check` — Fast Local Validation
+| Subagent | Purpose | Invocation | When to Use |
+|----------|---------|-----------|------------|
+| **retrieval-specialist** | Vector search, BM25, fusion, ranking | `@retrieval-specialist` | Building/optimizing retrievers |
+| **ingestion-specialist** | Document processing, chunking, preprocessing | `@ingestion-specialist` | Designing ingestion pipelines |
+| **generation-specialist** | LLM selection, prompt engineering, multi-model | `@generation-specialist` | Building generators, prompt optimization |
+| **security-specialist** | Guards, PII redaction, compliance | `@security-specialist` | Implementing security layers |
+| **architecture-reviewer** | Layering validation, imports, design patterns | `@architecture-reviewer` | Code review, architecture compliance |
+| **test-specialist** | Test design, coverage, quality metrics | `@test-specialist` | Test strategy, quality optimization |
+| **orchestration-specialist** | Registry patterns, manifest-driven wiring | `@orchestration-specialist` | Component orchestration design |
+| **observability-expert** | Tracing, metrics, performance analysis | `@observability-expert` | Observability architecture, debugging |
 
-**Purpose**: Run syntax and import checks after code changes (< 30 seconds).  
-**When to use**: After any file edit, before commit.  
-**Equivalent command**: `./scripts/check.sh quick`
+---
 
-**What it validates**:
-- ✅ Python syntax (ruff E, F rules)
-- ✅ Import ordering (ruff I rule)
-- ✅ Naming conventions (ruff N rule)
+## 1. retrieval-specialist
 
-**Output**:
+**Domain Expertise**: Vector search, BM25, hybrid fusion, reranking, ranking algorithms
+
+### Capabilities
+
+✅ Design vector retrieval strategies (Dense Passage Retrieval, ColBERT patterns)  
+✅ Optimize BM25 indexing (tokenization, stemming, field weighting)  
+✅ Implement hybrid fusion (Reciprocal Rank Fusion, weighted combination)  
+✅ Reranking strategies (cross-encoder, diversity, query-aware)  
+✅ Vector-to-metadata mapping and dense-sparse coordination  
+✅ Performance optimization (caching, indexing, query expansion)  
+
+### When to Use
+
+- **Building retrievers**: Implementing new vector/BM25/graph retrievers
+- **Fusion design**: Combining multiple retrieval signals
+- **Optimization**: Improving precision/recall, reducing latency
+- **Ranking**: Implementing cross-encoder reranking
+
+### Expertise Areas
+
+- **Algorithms**: DPR, BM25+, ColBERT, RRF, Noriega fusion, TF-IDF variants
+- **Patterns**: Async fan-out/fan-in for parallel retrieval
+- **Performance**: Indexing optimization, query expansion, caching
+- **Edge cases**: Out-of-vocabulary terms, domain-specific tokenization
+
+### Example Usage
+
 ```
-✓ Checking syntax and imports...
-✓ All checks passed (0.8s)
+@retrieval-specialist I need to design a hybrid retriever 
+that combines vector + BM25 + lexical search. 
+What fusion algorithm should I use?
 ```
 
-**On failure**:
+**File**: [`.claude/agents/retrieval-specialist.md`](./agents/retrieval-specialist.md)  
+**Related Skills**: [`/design-retriever-fusion`](./skills/design-retriever-fusion.md)
+
+---
+
+## 2. ingestion-specialist
+
+**Domain Expertise**: Document parsing, chunking strategies, preprocessing, embedding preparation
+
+### Capabilities
+
+✅ Chunking algorithm selection (fixed, semantic, recursive, domain-aware)  
+✅ Chunk size optimization for different LLMs  
+✅ Overlap strategy tuning  
+✅ Preprocessing pipelines (cleaning, normalization, filtering)  
+✅ Format-specific parsing (PDF, Markdown, HTML, tables)  
+✅ Metadata extraction and preservation  
+
+### When to Use
+
+- **Ingestion design**: Setting up document processing pipelines
+- **Optimization**: Balancing context window vs retrieval granularity
+- **Format handling**: Parsing complex document structures
+- **Quality assurance**: Data cleaning and validation
+
+### Expertise Areas
+
+- **Chunking**: Fixed-size, semantic (sentence/paragraph), recursive, domain-specific
+- **Optimization**: Golden-set testing, NDCG measurement, overlap tuning
+- **Parsing**: PDF tables/figures, multi-format support, metadata preservation
+- **Performance**: Batch processing, streaming, memory efficiency
+
+### Example Usage
+
 ```
-✗ Syntax error in src/modular_rag/ingestion/chunker.py:42
-  - undefined name 'Chunker' (did you forget to import?)
+@ingestion-specialist I have 1000 technical PDFs. 
+Should I use fixed 512-token chunks or semantic chunking?
+What overlap should I use for retrieval?
+```
+
+**File**: [`.claude/agents/ingestion-specialist.md`](./agents/ingestion-specialist.md)  
+**Related Skills**: [`/optimize-chunking`](./skills/optimize-chunking.md)
+
+---
+
+## 3. generation-specialist
+
+**Domain Expertise**: LLM selection, prompt engineering, multi-model support, generation quality
+
+### Capabilities
+
+✅ LLM model selection (GPT-4, GPT-3.5, Claude, local models, fine-tuned)  
+✅ Prompt engineering frameworks (few-shot, chain-of-thought, role-playing)  
+✅ Temperature/top-p tuning for different use cases  
+✅ Token estimation and budget management  
+✅ Multi-model routing strategies  
+✅ Quality metrics (factuality, coherence, cite-ability)  
+
+### When to Use
+
+- **Generator design**: Building answer generators
+- **Prompt optimization**: Improving output quality
+- **Cost optimization**: Selecting efficient models
+- **Multi-model setup**: Routing to different LLMs based on query/context
+
+### Expertise Areas
+
+- **Models**: GPT-4 (reasoning), GPT-3.5 (speed), Claude (instruction-following), local (privacy)
+- **Prompts**: Few-shot patterns, chain-of-thought, step-by-step reasoning
+- **Quality**: Factuality scoring, hallucination reduction, citation extraction
+- **Cost**: Token counting, budget estimation, fallback models
+
+### Example Usage
+
+```
+@generation-specialist My current generator has 15% hallucination rate.
+Should I switch to GPT-4? Use few-shot? Add chain-of-thought?
+```
+
+**File**: [`.claude/agents/generation-specialist.md`](./agents/generation-specialist.md)  
+**Related Skills**: [`/add-generator`](./skills/add-generator.md)
+
+---
+
+## 4. security-specialist
+
+**Domain Expertise**: Security guards, PII redaction, injection prevention, compliance
+
+### Capabilities
+
+✅ Guard implementation (filters, detectors, policies)  
+✅ PII pattern recognition (SSN, credit card, email, phone)  
+✅ Prompt injection detection and prevention  
+✅ Redaction strategies (masking, replacement, removal)  
+✅ Compliance frameworks (GDPR, CCPA, HIPAA)  
+✅ Safety vs Security distinction (filter vs policy)  
+
+### When to Use
+
+- **Security layer design**: Implementing guards and policies
+- **PII handling**: Building redaction pipelines
+- **Compliance**: Meeting regulatory requirements
+- **Injection prevention**: Protecting against adversarial inputs
+
+### Expertise Areas
+
+- **Guards**: Filter-based (simple rules), detector-based (ML models), policy-based (RBAC)
+- **PII patterns**: SSN (XXX-XX-XXXX), CC (XXXX-XXXX-XXXX-XXXX), emails, phone
+- **Safety**: Toxicity, prompt injection, jailbreaking patterns
+- **Security**: Role-based access, tenant isolation, policy enforcement
+- **Compliance**: GDPR (consent, retention), CCPA (opt-out), HIPAA (encryption)
+
+### Example Usage
+
+```
+@security-specialist I need to redact SSNs and credit card numbers
+from documents before retrieval. What's the best approach?
+```
+
+**File**: [`.claude/agents/security-specialist.md`](./agents/security-specialist.md)  
+**Related Skills**: [`/add-security-guard`](./skills/add-security-guard.md)
+
+---
+
+## 5. architecture-reviewer
+
+**Domain Expertise**: Hexagonal layering, import validation, design patterns, refactoring
+
+### Capabilities
+
+✅ Layering compliance verification (core → contracts → domains → adapters → orchestration)  
+✅ Cross-domain import detection  
+✅ Protocol implementation validation  
+✅ Circular dependency detection  
+✅ Test mirror verification (tests match src structure)  
+✅ Refactoring guidance  
+
+### When to Use
+
+- **Code review**: Verifying architecture compliance
+- **Design validation**: Checking new module structure
+- **Refactoring**: Planning module reorganization
+- **Protocol design**: Ensuring interface contracts are correct
+
+### Expertise Areas
+
+- **Layering**: Hexagonal model, one-directional dependencies
+- **Imports**: Cross-domain blocking, adapter protocol usage
+- **Protocols**: Protocol-first contracts, conformance testing
+- **Patterns**: Registry pattern, manifest-driven wiring, factory methods
+- **Testing**: Unit/contract/integration/e2e scope mapping
+
+### Example Usage
+
+```
+@architecture-reviewer Does this new security module violate 
+the hexagonal layering rules? Are there any cross-domain imports I missed?
+```
+
+**File**: [`.claude/agents/architecture-reviewer.md`](./agents/architecture-reviewer.md)  
+**Related Skills**: [`/validate-architecture`](./skills/validate-architecture.md)
+
+---
+
+## 6. test-specialist
+
+**Domain Expertise**: Test design, coverage optimization, quality metrics, flakiness elimination
+
+### Capabilities
+
+✅ Test pyramid design (unit/contract/integration/e2e ratios)  
+✅ Coverage targets by component type  
+✅ Fixture design and test data generation  
+✅ Flakiness elimination strategies  
+✅ Performance/benchmark testing  
+✅ Test maintainability patterns  
+
+### When to Use
+
+- **Test strategy**: Designing test suites for new features
+- **Coverage optimization**: Improving coverage efficiently
+- **Flakiness**: Debugging intermittent test failures
+- **Quality**: Setting metrics and tracking improvements
+
+### Expertise Areas
+
+- **Pyramid**: Unit (70%), contract (15%), integration (10%), e2e (5%) targets
+- **Scopes**: Unit (no dependencies), contract (Protocol conformance), integration (Qdrant), e2e (full pipeline)
+- **Fixtures**: Factory patterns, setup/teardown, data builders
+- **Performance**: Benchmark baselines, latency tracking, regression detection
+- **Markers**: `@pytest.mark.unit`, `@pytest.mark.integration`, `@pytest.mark.e2e`
+
+### Example Usage
+
+```
+@test-specialist My retriever tests are flaky. 
+Sometimes they pass, sometimes fail. What's causing this?
+```
+
+**File**: [`.claude/agents/test-specialist.md`](./agents/test-specialist.md)  
+**Related Skills**: [`/prepare-evaluation`](./skills/prepare-evaluation.md)
+
+---
+
+## 7. orchestration-specialist
+
+**Domain Expertise**: Registry patterns, manifest-driven wiring, component composition, lifecycle
+
+### Capabilities
+
+✅ Registry pattern implementation  
+✅ Manifest schema design  
+✅ Factory method patterns  
+✅ Component lifecycle management  
+✅ Dependency injection strategies  
+✅ Configuration validation  
+
+### When to Use
+
+- **Component wiring**: Registering and instantiating components
+- **Manifest design**: Creating deployment configurations
+- **Factory implementation**: Building component factories
+- **Lifecycle**: Managing component initialization and cleanup
+
+### Expertise Areas
+
+- **Registry**: Type-safe component registration, lazy loading, factory methods
+- **Manifests**: YAML schema, inheritance, override mechanisms
+- **DI**: Constructor injection, property injection, service locator
+- **Lifecycle**: Initialization, validation, shutdown, resource cleanup
+- **Configuration**: Environment variables, secrets management, overrides
+
+### Example Usage
+
+```
+@orchestration-specialist I need to wire a new BM25Retriever 
+into the system using the registry pattern. How do I do it?
+```
+
+**File**: [`.claude/agents/orchestration-specialist.md`](./agents/orchestration-specialist.md)  
+**Related Skills**: [`/design-retriever-fusion`](./skills/design-retriever-fusion.md)
+
+---
+
+## 8. observability-expert
+
+**Domain Expertise**: Distributed tracing, metrics, performance analysis, debugging
+
+### Capabilities
+
+✅ TraceStep schema and emission patterns  
+✅ Metrics design (NDCG, MRR, latency, cost)  
+✅ Structured logging setup  
+✅ Performance profiling  
+✅ Distributed debugging  
+✅ Monitoring and alerting  
+
+### When to Use
+
+- **Observability design**: Adding tracing to new components
+- **Metrics**: Designing performance metrics
+- **Debugging**: Tracing component interactions
+- **Performance**: Profiling and optimizing slow paths
+
+### Expertise Areas
+
+- **Tracing**: TraceStep schema, context propagation, span correlation
+- **Metrics**: NDCG (ranking quality), MRR (first relevant), latency, cost/query
+- **Logging**: Structured JSON logging, log levels, sampling
+- **Performance**: Latency breakdown, profiling, optimization tactics
+- **Dashboards**: Query traces, error rates, performance trends
+
+### Example Usage
+
+```
+@observability-expert My RAG pipeline is slow. 
+How do I trace which step is the bottleneck?
+```
+
+**File**: [`.claude/agents/observability-expert.md`](./agents/observability-expert.md)  
+**Related Skills**: [`/parallel-feature-analysis`](./skills/parallel-feature-analysis.md)
+
+---
+
+## How to Invoke Subagents
+
+### In Chat
+
+```
+@subagent-name Your question or request here
+```
+
+**Example**:
+```
+@retrieval-specialist I'm building a hybrid retriever that combines vector 
+and BM25 search. What fusion algorithm should I use?
+```
+
+### In Code Comments
+
+```python
+# @retrieval-specialist TODO: Optimize this BM25 retrieval
+# Current latency: 500ms, target: <100ms
+```
+
+### Via Slash Commands
+
+```
+/invoke-subagent retrieval-specialist "Design BM25 indexing strategy"
 ```
 
 ---
 
-### `/full-check` — Pre-Merge Validation
+## Subagent + Skill Mapping
 
-**Purpose**: Run comprehensive checks before creating a merge request (2-5 minutes).  
-**When to use**: Before pushing to GitLab.  
-**Equivalent command**: `./scripts/check.sh full`
+Each subagent has associated **Skills** (reusable workflows):
 
-**What it validates**:
-- ✅ Syntax + imports (from `/quick-check`)
-- ✅ Unit tests (tests/unit/)
-- ✅ Contract conformance tests (tests/contract/)
-- ✅ Code coverage report
-
-**Output**:
-```
-✓ Quick checks passed (0.8s)
-✓ Unit tests: 42 passed (2.1s)
-✓ Contract tests: 8 passed (1.3s)
-✓ Coverage: 92% (3.5s)
----
-✓ All checks passed (7.7s)
-```
-
-**On failure**:
-```
-✗ Contract test failed: tests/contract/test_retriever_conformance.py::test_vector_retriever_protocol
-  Expected isinstance(obj, VectorRetriever) — got MyCustomRetriever
-```
+| Subagent | Associated Skills | Files |
+|----------|------------------|-------|
+| **retrieval-specialist** | `/design-retriever-fusion` | [design-retriever-fusion.md](./skills/design-retriever-fusion.md) |
+| **ingestion-specialist** | `/optimize-chunking` | [optimize-chunking.md](./skills/optimize-chunking.md) |
+| **generation-specialist** | `/add-generator` | [add-generator.md](./skills/add-generator.md) |
+| **security-specialist** | `/add-security-guard` | [add-security-guard.md](./skills/add-security-guard.md) |
+| **architecture-reviewer** | `/validate-architecture` | [validate-architecture.md](./skills/validate-architecture.md) |
+| **test-specialist** | `/prepare-evaluation` | [prepare-evaluation.md](./skills/prepare-evaluation.md) |
+| **orchestration-specialist** | `/design-retriever-fusion` | [design-retriever-fusion.md](./skills/design-retriever-fusion.md) |
+| **observability-expert** | `/parallel-feature-analysis` | [parallel-feature-analysis.md](./skills/parallel-feature-analysis.md) |
 
 ---
 
-### `/validate-security` — Security Layer Compliance
+## Parallelization via Subagents
 
-**Purpose**: Verify adherence to security rules and policies.  
-**When to use**: Before security-sensitive changes.  
-**Checks**:
-- ✅ No hardcoded secrets (.env, API keys, credentials)
-- ✅ No cross-domain imports (e.g., retrieval importing from generation)
-- ✅ No unrestricted file access in adapters
-- ✅ PII patterns in security module correct
-- ✅ Lazy imports on heavy dependencies (qdrant-client, openai, etc.)
+Run multiple subagents in **parallel** using the `/parallel-feature-analysis` skill:
 
-**Output**:
-```
-✓ Security layer validation
-
-Secrets check:
-  ✓ No hardcoded API keys found
-  ✓ .env files properly gitignored
-  
-Cross-domain imports:
-  ✓ src/modular_rag/ingestion/ has no generation imports
-  ✓ src/modular_rag/retrieval/ has no generation imports
-  
-Adapter isolation:
-  ✓ adapters/embeddings/ only imports core + contracts
-  ✓ No domain module imports detected
-  
-Lazy imports:
-  ✓ openai imported inside methods (5 locations)
-  ✓ qdrant_client imported inside methods (3 locations)
-  ✓ rank_bm25 imported inside methods (2 locations)
-  
----
-✓ All security checks passed
+```python
+# Analyze retrieval + generation + security in parallel
+await asyncio.gather(
+    invoke_subagent("retrieval-specialist", retrieval_task),
+    invoke_subagent("generation-specialist", generation_task),
+    invoke_subagent("security-specialist", security_task)
+)
 ```
 
-**On failure**:
-```
-✗ Security check failed
+**Benefits**:
+- ⚡ 3 hours serial work → 1 hour parallel
+- 🔍 All domains analyzed simultaneously
+- 📊 Results aggregated automatically
+- 🔄 Regressions detected easily
 
-Cross-domain import detected:
-  src/modular_rag/retrieval/hybrid_retriever.py:15
-  from modular_rag.generation import PromptTemplate  ← BLOCKED
-  
-Reason: Retrieval cannot import from generation module
-Fix: Pass PromptTemplate via constructor or use manifest config
-```
+**See**: [claude-code-parallelization-orchestration.md](../../docs/guides/claude-code-parallelization-orchestration.md)
 
 ---
 
-### `/add-component` — Component Scaffolding Template
+## Integration with RAG Framework
 
-**Purpose**: Create a new component (chunker, retriever, generator, metric) with full scaffolding.  
-**When to use**: Adding a new adapter or domain implementation.  
-**Prompts**:
+All subagents are aligned with **V1 RAG architecture**:
+
 ```
-What type of component? (Choose one)
-  1. Chunker (ingestion/)
-  2. Retriever (retrieval/)
-  3. Reranker (retrieval/)
-  4. Generator (generation/)
-  5. Metric/Scorer (eval/)
-  6. Embedder (adapters/embeddings/)
-  7. Vector store (adapters/vectorstores/)
-
-Component name? (e.g., "bm25_retriever")
-
-Description? (One sentence describing what it does)
+┌─────────────────────────────────────────────────┐
+│           Orchestration (orchestration-specialist) │
+├─────────────────────────────────────────────────┤
+│  Ingestion    Retrieval    Generation  Security  │
+│ (ingestion-   (retrieval-  (generation-(security-│
+│  specialist)  specialist)  specialist)specialist)│
+├─────────────────────────────────────────────────┤
+│    Evaluation    Observability      Architecture  │
+│   (test-spec)  (observability-ex)  (architect-rev)│
+├─────────────────────────────────────────────────┤
+│          Core Contracts & Protocols              │
+│        (architecture-reviewer scope)             │
+└─────────────────────────────────────────────────┘
 ```
 
-**Output**: Creates full structure:
-```
-✓ Scaffolding new component: BM25Retriever
-
-Created:
-  ✓ src/modular_rag/retrieval/bm25_retriever.py
-  ✓ tests/unit/retrieval/test_bm25_retriever.py
-  ✓ tests/contract/test_bm25_retriever_conformance.py
-  ✓ Stubs for Protocol implementation
-
-Next steps:
-  1. Implement Protocol in src/modular_rag/retrieval/bm25_retriever.py
-  2. Write unit tests in tests/unit/retrieval/test_bm25_retriever.py
-  3. Add conformance test using isinstance(obj, VectorRetriever)
-  4. Register in orchestration/_default_factories.py
-  5. Run /full-check before merge
-```
+**Layering Rules** (enforced by architecture-reviewer):
+- ✅ `retrieval` can use `contracts/retrieval.py`
+- ✅ `generation` can use `contracts/generation.py`
+- ❌ `retrieval` cannot import `generation` directly
+- ✅ All use `core/models/` and `core/exceptions/`
 
 ---
 
-### `/release` — Pre-Release Validation
+## Research Papers Integration
 
-**Purpose**: Comprehensive checks before release (all scopes).  
-**When to use**: Before tagging a release.  
-**Equivalent command**: `./scripts/check.sh all`
+Each subagent is grounded in **research papers** from the `.claude/research-papers/` directory:
 
-**What it validates**:
-- ✅ All syntax + unit + contract checks (`/full-check`)
-- ✅ Integration tests (requires Qdrant on localhost:6333)
-- ✅ E2E tests (requires LLM API key)
-- ✅ Documentation build
-- ✅ CHANGELOG.md updated
-- ✅ Version bumped in pyproject.toml
-- ✅ ADR written (if structural changes)
+| Subagent | Paper Categories |
+|----------|------------------|
+| retrieval-specialist | retrieval/, overviews/, rag_optimisation_evaluation/ |
+| ingestion-specialist | chunking_strategies/, overviews/ |
+| generation-specialist | generation/, advanced_architecture/ |
+| security-specialist | security/ |
+| architecture-reviewer | advanced_architecture/, agentic/ |
+| test-specialist | rag_optimisation_evaluation/ |
+| orchestration-specialist | agentic/ |
+| observability-expert | rag_optimisation_evaluation/ |
 
-**Output**:
-```
-✓ Release validation checklist
-
-Pre-checks:
-  ✓ Branch is main or release/* branch
-  ✓ Working directory is clean
-  ✓ Latest changes from origin/main pulled
-  
-Full validation:
-  ✓ Quick checks passed (0.8s)
-  ✓ Unit tests: 42 passed (2.1s)
-  ✓ Contract tests: 8 passed (1.3s)
-  ✓ Coverage: 92% (3.5s)
-  ✓ Integration tests: 5 passed (4.2s) [Qdrant required]
-  ✓ E2E tests: 3 passed (6.1s) [LLM API key required]
-  
-Documentation:
-  ✓ docs/ builds successfully
-  ✓ CHANGELOG.md has [Unreleased] entries → versions 1.0.5
-  ✓ ADRs: 0001-0003 up to date
-  
-Final checks:
-  ✓ pyproject.toml version: 1.0.5
-  ✓ No untracked secrets (.env.local, etc.)
-  
 ---
-✓ Ready for release 1.0.5
-Next: git tag v1.0.5 && git push --tags
+
+## Best Practices
+
+### 1. Right Subagent for the Task
+
+```
+❌ WRONG: Ask retrieval-specialist about prompt engineering
+✅ RIGHT: Ask generation-specialist about prompt engineering
 ```
 
-**On failure**:
-```
-✗ Release check failed
+### 2. Be Specific
 
-Issue:
-  CHANGELOG.md has no [Unreleased] section
-  
-Fix:
-  1. Edit CHANGELOG.md
-  2. Add [Unreleased] section at top
-  3. List changes since last release
-  4. Run /release again
+```
+❌ VAGUE: "How do I improve retrieval?"
+✅ SPECIFIC: "I have 500ms latency in hybrid retrieval. 
+              BM25 is 30ms, vector is 400ms. How do I optimize vector?"
+```
+
+### 3. Include Context
+
+```
+❌ NO CONTEXT: "Should I use semantic chunking?"
+✅ WITH CONTEXT: "I have 10K short customer emails (avg 500 words each). 
+                  Should I use fixed 512-token or semantic chunking?"
+```
+
+### 4. Leverage Skills
+
+```
+❌ MANUAL: "Help me design a retriever fusion algorithm from scratch"
+✅ SKILL: Use `/design-retriever-fusion` skill for 6-step workflow
 ```
 
 ---
 
-## How to Use These Commands
+## Troubleshooting
 
-### In Claude Chat
+### Q: Subagent gives generic advice?
+**A**: Be more specific about your use case, constraints, and current approach.
 
-Type a command directly in chat:
+### Q: Which subagent should I use?
+**A**: Check the "When to Use" section in each subagent's description above.
 
-```
-/quick-check
-```
+### Q: Can I invoke multiple subagents?
+**A**: Yes! Use `/parallel-feature-analysis` skill to run them in parallel.
 
-Claude will execute the equivalent shell command and report results.
-
-### Example Workflow
-
-```
-1. You make code changes
-   → git add -A
-
-2. Run immediate check
-   /quick-check
-   
-3. All syntax OK, now validate fully
-   /full-check
-   
-4. Tests pass, verify security rules
-   /validate-security
-   
-5. All green, commit and push
-   → git commit -m "feat: Add BM25Retriever"
-   → git push origin feature/bm25-retriever
-   
-6. MR created, CI/CD auto-runs
-   → (same checks happen in .gitlab-ci.yml)
-   
-7. After review, merge to main
-   → git merge --squash
-   
-8. Before release, run final check
-   /release
-```
+### Q: How are subagents different from slash commands?
+**A**: Subagents are domain experts with deep knowledge; commands are workflows.
 
 ---
 
-## Commands vs. Hooks
+## Next Steps
 
-**Commands** (this file):
-- Manual invocation: `/quick-check`
-- Developer-triggered validation
-- Immediate feedback in chat
+### For Developers
+1. **Start simple**: Use `/add-retriever` or `/add-generator` skills
+2. **Leverage expertise**: Invoke specific subagents for complex problems
+3. **Track progress**: Use `/parallel-feature-analysis` for benchmarking
 
-**Hooks** (in `.claude/settings.json`):
-- Automatic invocation after file writes
-- PostToolUse: ruff linting after every edit
-- No user interaction needed
+### For Architects
+1. **Review design**: Ask @architecture-reviewer for compliance checks
+2. **Optimize performance**: Consult @observability-expert for tracing
+3. **Plan components**: Coordinate with @orchestration-specialist
 
-**Together**:
-- Hooks catch errors immediately (fail-fast)
-- Commands validate at workflow stages (pre-commit, pre-merge, pre-release)
-
----
-
-## Adding New Commands
-
-To add a custom command to this team:
-
-1. **Propose in GitLab issue**: Describe the workflow
-2. **Get approval**: From @architecture team
-3. **Update this file**: Add command definition
-4. **Update scripts**: Add corresponding shell script or checklist
-5. **Document**: Include in CONTRIBUTING.md if it's a critical workflow
-
-**Template for new commands**:
-
-```markdown
-### `/command-name` — Short Description
-
-**Purpose**: One-liner.  
-**When to use**: Common scenario.  
-**Equivalent command**: Shell equivalent.  
-**What it validates**: Bulleted list.
-
-**Output**: Example success output.
-
-**On failure**: Example failure + fix.
-```
+### For QA/Testing
+1. **Design test suites**: Work with @test-specialist
+2. **Prepare evaluation**: Use `/prepare-evaluation` skill
+3. **Measure quality**: Track metrics via @observability-expert
 
 ---
 
 ## References
 
-- **Validation scopes**: [docs/guides/validation.md](validation.md)
-- **Validation protocol**: [docs/guides/validation-protocol.md](validation-protocol.md)
-- **Security layers**: [.claude/rules/security-layers.md](../../.claude/rules/security-layers.md)
-- **Git workflow**: [CONTRIBUTING.md](../../CONTRIBUTING.md#git-workflow-strategy)
+- [Subagent Implementations](./agents/) — All 8 subagent definitions
+- [Reusable Skills](./skills/) — 8 workflow skills (add-retriever, etc.)
+- [Parallelization Guide](../../docs/guides/claude-code-parallelization-orchestration.md)
+- [CLAUDE.md](../../CLAUDE.md) — Project rules and roadmap
+- [.claude/settings.json](./settings.json) — Configuration
+
+---
+
+**Questions?** Refer to [docs/guides/](../../docs/guides/) for comprehensive guides, or invoke the appropriate subagent above.

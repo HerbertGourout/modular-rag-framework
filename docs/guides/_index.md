@@ -34,6 +34,7 @@
 
 | Guide | Purpose | Audience |
 |-------|---------|----------|
+| **[Parallelization & Orchestration 🆕](./claude-code-parallelization-orchestration.md)** | Tool/component/agentic parallelization (500+ lines) | All devs |
 | **[Validation Reference](./validation.md)** | Commands + scripts reference | All devs |
 | **[Validation Protocol](./validation-protocol.md)** | Formal test scopes (unit/contract/integration/e2e) | Tech leads |
 | **[Plugin Development](./plugin-development.md)** | Create custom plugins | Advanced users |
@@ -69,6 +70,7 @@
 2. [Settings Reference](./claude-code-settings-reference.md) — All settings
 3. [MCP Setup](./claude-code-mcp-setup.md) — MCP configuration
 4. [Advanced Configuration](./claude-code-advanced-config.md) — Subagents, hooks, skills
+5. [Parallelization & Orchestration](./claude-code-parallelization-orchestration.md) — Tool/component/agentic levels
 
 ### "I'm setting up for my team"
 1. [Enterprise Deployment](./claude-code-enterprise-deployment.md) — MDM/Group Policy
@@ -86,6 +88,11 @@
 2. [Complete Development Guide](./claude-code-complete-development-guide.md) — Debugging section
 3. [Validation Protocol](./validation-protocol.md) — Test scopes
 
+### "I want to use Claude Code subagents for RAG development"
+1. [Advanced Configuration](./claude-code-advanced-config.md) — Subagents overview
+2. [.claude/AGENTS.md](../.claude/AGENTS.md) — 8 domain-specialized subagents
+3. [Parallelization & Orchestration](./claude-code-parallelization-orchestration.md) — Parallel execution patterns
+
 ---
 
 ## 📊 Content Map by Category
@@ -93,8 +100,13 @@
 ### Configuration (5 guides, 5,900 lines)
 - Complete system of 5 scopes, 100+ settings, MCP integration, plugins, enterprise deployment
 
-### Development (2 guides, 2,800 lines)
-- End-to-end workflow with patterns, real examples, troubleshooting
+### Development (3 guides, 4,300 lines)
+- End-to-end workflow with patterns, real examples, troubleshooting, parallelization orchestration
+
+### Specialized Agents & Skills (2 collections)
+- **8 Domain Subagents** (retrieval, ingestion, generation, security, architecture, testing, orchestration, observability)
+- **8 Reusable Skills** (add-retriever, add-generator, validate-architecture, optimize-chunking, etc.)
+- See: [.claude/agents/](../../.claude/agents/) and [.claude/skills/](../../.claude/skills/)
 
 ### Operations (5 guides)
 - Deployment, observability, audit, metrics, integrations
