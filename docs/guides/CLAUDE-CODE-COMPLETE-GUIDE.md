@@ -1026,52 +1026,87 @@ Goal: Maintain 0
 
 ---
 
-## Advanced: Sub-Agents
+## Advanced: Specialized Sub-Agents (V1 Production-Ready)
 
-### What Are Sub-Agents?
+### What Are Specialized Sub-Agents?
 
-Sub-agents are **parallel Claude instances** focused on specific aspects of complex problems. Useful for:
-- Large monorepos (too much context in one go)
-- Multi-dimensional analysis
-- Breaking changes impact analysis
-- Complex refactors
+**8 domain-specialized sub-agents** focused on RAG framework development:
 
-### The 4 Sub-Agent Types
+1. **@retrieval-specialist** — Vector search, BM25, fusion, ranking algorithms
+2. **@ingestion-specialist** — Document processing, chunking, preprocessing  
+3. **@generation-specialist** — LLM selection, prompt engineering, multi-model
+4. **@security-specialist** — Guards, PII redaction, compliance (Safety ≠ Security)
+5. **@architecture-reviewer** — Layering validation, imports, design patterns
+6. **@test-specialist** — Test design, coverage, quality metrics
+7. **@orchestration-specialist** — Registry patterns, manifest-driven wiring
+8. **@observability-expert** — Tracing, metrics, performance analysis
 
-#### 1. 🗺️ Mapping Sub-Agent
-**Purpose**: Explore module usage across codebase  
-**Use when**: Analyzing impact of changes  
-**Returns**: List of all usages + file locations
+### How to Use
 
-#### 2. 🔌 API Contracts Sub-Agent
-**Purpose**: Analyze interfaces and compliance  
-**Use when**: Checking Protocol impacts  
-**Returns**: Interface definitions + compliance matrix
-
-#### 3. 🧪 Tests Sub-Agent
-**Purpose**: Analyze test coverage + gaps  
-**Use when**: Planning test improvements  
-**Returns**: Test inventory + coverage matrix
-
-#### 4. 🧠 Main Flow Sub-Agent (You)
-**Purpose**: Synthesize results and decide  
-**Use when**: Making implementation decisions  
-**Returns**: Clear plan with effort + risk estimates
-
-### Example: Parallel Analysis
-
-**Task**: "Add hybrid retrieval (BM25 + vector)"
-
+**In chat**: Type directly
 ```
-Mapping: "Map VectorRetriever usage" → Returns: 9 places used, low isolation risk
-API: "Check VectorRetriever Protocol" → Returns: Same Protocol works, no extension needed
-Tests: "Analyze retrieval tests" → Returns: 5 tests, 85% coverage, 1 gap
-
-Main (You): "Decision: Implement HybridRetriever using existing Protocol.
-             Effort: 2 hours. Risk: LOW."
+@retrieval-specialist I need a hybrid retriever combining vector + BM25.
+What fusion algorithm should I use?
 ```
 
-**Details**: See [docs/guides/subagents-parallelization.md](../../docs/guides/subagents-parallelization.md)
+**In code**: Add comments  
+```python
+# @generation-specialist TODO: Reduce hallucination rate from 15% to <5%
+```
+
+### Subagent + Skill Mapping
+
+Each subagent has a reusable **Skill** (workflow):
+
+| Subagent | Skill | Time |
+|----------|-------|------|
+| @retrieval-specialist | `/design-retriever-fusion` | 2-3 hours |
+| @ingestion-specialist | `/optimize-chunking` | 1.5-2 hours |
+| @generation-specialist | `/add-generator` | 1.5-2 hours |
+| @security-specialist | `/add-security-guard` | 1.5 hours |
+| @architecture-reviewer | `/validate-architecture` | 10-15 min |
+| @test-specialist | `/prepare-evaluation` | 1.5 hours |
+| @orchestration-specialist | `/design-retriever-fusion` | 2-3 hours |
+| @observability-expert | `/parallel-feature-analysis` | 30 min (first), 10 min (subsequent) |
+
+### Parallelization
+
+Run multiple subagents in **parallel** for faster analysis:
+
+```python
+# Analyze 3 domains simultaneously via /parallel-feature-analysis
+await asyncio.gather(
+    invoke_subagent("retrieval-specialist", task),
+    invoke_subagent("generation-specialist", task),
+    invoke_subagent("security-specialist", task)
+)
+# Result: 3 hours serial work → 1 hour parallel (3x speedup)
+```
+
+### Example: Hybrid Retriever Design
+
+**Task**: Build HybridRetriever (vector + BM25 + reranking)
+
+```
+Step 1: @retrieval-specialist — Recommend fusion algorithm
+  → "Use RRF (Reciprocal Rank Fusion) with weighted combination for optimal balance"
+
+Step 2: /design-retriever-fusion skill
+  → 6-step workflow: profiling → choose fusion → implement → test → rerank → register
+
+Step 3: @architecture-reviewer — Validate protocol compliance
+  → "HybridRetriever correctly implements VectorRetriever Protocol"
+
+Step 4: @test-specialist — Design test coverage
+  → "Unit: 3 tests (vector-only, bm25-only, fusion logic)
+     Contract: 2 tests (Protocol conformance)
+     Integration: 2 tests (with real Qdrant + index)"
+
+Result: Production-ready HybridRetriever in ~2 hours
+```
+
+**See**: [.claude/AGENTS.md](../../.claude/AGENTS.md) — Full subagent reference  
+**See**: [docs/guides/claude-code-parallelization-orchestration.md](./claude-code-parallelization-orchestration.md) — Parallelization patterns
 
 ---
 
