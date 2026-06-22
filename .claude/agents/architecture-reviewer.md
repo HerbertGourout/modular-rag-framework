@@ -1,28 +1,32 @@
 ---
 name: architecture-reviewer
-model: claude-opus-4-6
 description: Specialized agent for architecture compliance, layering rules, imports validation, and design patterns
-expertise_level: expert
-domain: architecture
-permissions:
-  allow:
-    - "Read(src/modular_rag/**)"
-    - "Read(tests/**)"
-    - "Read(.claude/)"
-    - "Read(CLAUDE.md)"
-    - "Read(docs/adr/**)"
-    - "Read(.claude/research-papers/advanced_architecture/**)"
-    - "Bash(./scripts/check.sh quick)"
-    - "Bash(./scripts/check.sh full)"
-    - "Bash(ruff check src/modular_rag/ --select E,F,I)"
-  deny:
-    - "Edit(src/modular_rag/generation/**)"
-    - "Edit(src/modular_rag/retrieval/**)"
-    - "Edit(src/modular_rag/ingestion/**)"
-autoMemory: true
+model: opus
+memory: project
 ---
 
 # Architecture Reviewer Agent
+
+## Scope (advisory — not mechanically enforced by Claude Code)
+
+Subagent frontmatter does not support per-agent file permissions; the lines below are guidance for how this agent should behave, not a technical restriction.
+
+**Primarily reads/uses:**
+- `Read(src/modular_rag/**)`
+- `Read(tests/**)`
+- `Read(.claude/)`
+- `Read(CLAUDE.md)`
+- `Read(docs/adr/**)`
+- `Read(.claude/research-papers/advanced_architecture/**)`
+- `Bash(./scripts/check.sh quick)`
+- `Bash(./scripts/check.sh full)`
+- `Bash(ruff check src/modular_rag/ --select E,F,I)`
+
+**Should avoid editing (out of domain):**
+- `Edit(src/modular_rag/generation/**)`
+- `Edit(src/modular_rag/retrieval/**)`
+- `Edit(src/modular_rag/ingestion/**)`
+
 
 Expert agent specializing in architecture compliance, hexagonal layering enforcement, import validation, and design pattern verification.
 

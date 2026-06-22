@@ -1,27 +1,31 @@
 ---
 name: ingestion-specialist
-model: claude-opus-4-6
 description: Specialized agent for document ingestion, chunking strategies, preprocessing, and extraction
-expertise_level: expert
-domain: ingestion
-permissions:
-  allow:
-    - "Read(src/modular_rag/ingestion/**)"
-    - "Read(src/modular_rag/contracts/chunking.py)"
-    - "Read(tests/unit/ingestion/**)"
-    - "Read(tests/contract/test_chunker_conformance.py)"
-    - "Read(.claude/research-papers/chunkings_strategies/**)"
-    - "Read(.claude/research-papers/overviews/**)"
-    - "Bash(./scripts/check.sh quick)"
-    - "Bash(./scripts/check.sh full)"
-  deny:
-    - "Edit(src/modular_rag/retrieval/**)"
-    - "Edit(src/modular_rag/generation/**)"
-    - "Edit(src/modular_rag/security/**)"
-autoMemory: true
+model: opus
+memory: project
 ---
 
 # Ingestion Specialist Agent
+
+## Scope (advisory — not mechanically enforced by Claude Code)
+
+Subagent frontmatter does not support per-agent file permissions; the lines below are guidance for how this agent should behave, not a technical restriction.
+
+**Primarily reads/uses:**
+- `Read(src/modular_rag/ingestion/**)`
+- `Read(src/modular_rag/contracts/chunking.py)`
+- `Read(tests/unit/ingestion/**)`
+- `Read(tests/contract/test_chunker_conformance.py)`
+- `Read(.claude/research-papers/chunkings_strategies/**)`
+- `Read(.claude/research-papers/overviews/**)`
+- `Bash(./scripts/check.sh quick)`
+- `Bash(./scripts/check.sh full)`
+
+**Should avoid editing (out of domain):**
+- `Edit(src/modular_rag/retrieval/**)`
+- `Edit(src/modular_rag/generation/**)`
+- `Edit(src/modular_rag/security/**)`
+
 
 Expert agent specializing in document processing, chunking strategies, content extraction, and preprocessing optimization.
 

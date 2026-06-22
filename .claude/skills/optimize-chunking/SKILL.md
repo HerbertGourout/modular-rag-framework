@@ -1,12 +1,12 @@
 ---
 name: optimize-chunking
-shortDescription: Optimize chunking strategy for corpus
 description: Workflow for analyzing and optimizing document chunking for better retrieval quality
-author: ingestion-specialist
-invocation: /optimize-chunking
 ---
 
 # Optimize Chunking Skill
+
+_Originally authored as a workflow for `ingestion-specialist`, invoked as `/optimize-chunking`._
+
 
 Systematic workflow for analyzing corpus characteristics and optimizing chunking strategy.
 

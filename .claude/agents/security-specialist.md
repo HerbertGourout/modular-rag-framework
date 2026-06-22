@@ -1,27 +1,31 @@
 ---
 name: security-specialist
-model: claude-opus-4-6
 description: Specialized agent for security guards, PII redaction, injection prevention, and compliance
-expertise_level: expert
-domain: security
-permissions:
-  allow:
-    - "Read(src/modular_rag/security/**)"
-    - "Read(src/modular_rag/contracts/security.py)"
-    - "Read(tests/unit/security/**)"
-    - "Read(tests/contract/test_security_conformance.py)"
-    - "Read(.claude/research-papers/security/**)"
-    - "Read(.claude/research-papers/overviews/**)"
-    - "Bash(./scripts/check.sh quick)"
-    - "Bash(./scripts/check.sh full)"
-  deny:
-    - "Edit(src/modular_rag/retrieval/**)"
-    - "Edit(src/modular_rag/generation/**)"
-    - "Edit(src/modular_rag/ingestion/**)"
-autoMemory: true
+model: opus
+memory: project
 ---
 
 # Security Specialist Agent
+
+## Scope (advisory — not mechanically enforced by Claude Code)
+
+Subagent frontmatter does not support per-agent file permissions; the lines below are guidance for how this agent should behave, not a technical restriction.
+
+**Primarily reads/uses:**
+- `Read(src/modular_rag/security/**)`
+- `Read(src/modular_rag/contracts/security.py)`
+- `Read(tests/unit/security/**)`
+- `Read(tests/contract/test_security_conformance.py)`
+- `Read(.claude/research-papers/security/**)`
+- `Read(.claude/research-papers/overviews/**)`
+- `Bash(./scripts/check.sh quick)`
+- `Bash(./scripts/check.sh full)`
+
+**Should avoid editing (out of domain):**
+- `Edit(src/modular_rag/retrieval/**)`
+- `Edit(src/modular_rag/generation/**)`
+- `Edit(src/modular_rag/ingestion/**)`
+
 
 Expert agent specializing in security guards, PII redaction, prompt injection prevention, and compliance enforcement.
 

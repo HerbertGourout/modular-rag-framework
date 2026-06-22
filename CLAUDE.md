@@ -6,6 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 <!-- Revoir le bloc 09 quand VectorRetriever.retrieve() sera fixé (V1 sprint en cours) -->
 <!-- Pour ajouter des préférences personnelles (URL Qdrant, clé API, etc.) : créer CLAUDE.local.md (gitignored) -->
 
+@.claude/.instructions.md
+@.claude/.prompt.md
+
 ---
 
 ## 01 — Project purpose

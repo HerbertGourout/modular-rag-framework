@@ -194,13 +194,14 @@ Violations per week = count(cross-domain imports + direct wiring + other violati
 
 **Target**: 0 (protected by hooks + code review)
 
-**Tool**: Future hook (Layer 02) will auto-detect
-```python
-# In .claude/settings.json futureHooks
-"cross-domain-imports" → detects src/retrieval importing from src/generation
-"direct-wiring" → detects component instantiation outside registry
-"lazy-imports" → detects openai, qdrant-client, etc. at module level
+**Tool**: not automated yet — `futureHooks` is not a real Claude Code key (`.claude/settings.json` only has `hooks.PreToolUse`/`hooks.PostToolUse`), and no `scripts/validate_imports.py` exists. Today, run the `validate-security` skill manually, which checks the same three things by hand with grep:
+```bash
+# what the validate-security skill actually runs:
+# - cross-domain imports: grep across ingestion/retrieval/generation/security/agents/memory/eval
+# - direct wiring: grep for concrete component instantiation outside orchestration/ and tests/
+# - lazy imports: grep for module-level "import qdrant_client/rank_bm25/openai/..."
 ```
+If this becomes a real automated hook later, it would need an actual script wired into `hooks.PostToolUse` — not a `futureHooks` key.
 
 ---
 

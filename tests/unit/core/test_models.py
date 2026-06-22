@@ -4,13 +4,9 @@ from __future__ import annotations
 import pytest
 
 from modular_rag.core.enums import (
-    AgentRole,
-    ChunkingStrategy,
-    GraphRelation,
     Modality,
     PolicyAction,
     RetrievalMethod,
-    RoutingStrategy,
 )
 from modular_rag.core.ids import new_id, short_id
 from modular_rag.core.models.answer import Answer, Citation
@@ -21,7 +17,6 @@ from modular_rag.core.models.policy import Policy, PolicyRule
 from modular_rag.core.models.query import Query
 from modular_rag.core.models.retrieved import RetrievedChunk
 from modular_rag.core.models.trace import Trace, TraceStep
-
 
 # ---------------------------------------------------------------------------
 # IDs

@@ -1,25 +1,20 @@
 ---
 name: add-security-guard
-shortDescription: Add a new security guard to the framework
 description: Step-by-step workflow for implementing security guards (filters, detectors, policies)
-author: security-specialist
-invocation: /add-security-guard
-parameters:
-  - name: guard_type
-    type: enum
-    values: [filter, detector, policy]
-    required: true
-  - name: guard_name
-    type: string
-    pattern: "^[A-Z][a-zA-Z0-9]*(Filter|Detector|Policy)$"
-    required: true
-  - name: threat_category
-    type: enum
-    values: [injection, pii, toxicity, policy_violation]
-    required: true
 ---
 
 # Add Security Guard Skill
+
+## Parameters (advisory — not schema-validated by Claude Code)
+
+Claude Code skills don't support typed/validated parameters in frontmatter; describe these to the agent in your invocation prompt instead:
+
+- `guard_type` (enum, required) — one of: ['filter', 'detector', 'policy']
+- `guard_name` (string, required) — pattern: `^[A-Z][a-zA-Z0-9]*(Filter|Detector|Policy)$`
+- `threat_category` (enum, required) — one of: ['injection', 'pii', 'toxicity', 'policy_violation']
+
+_Originally authored as a workflow for `security-specialist`, invoked as `/add-security-guard`._
+
 
 Guided workflow for implementing security guards (filters, detectors, policies) following SecurityGuardProtocol.
 

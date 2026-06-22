@@ -6,7 +6,6 @@ import structlog
 
 from modular_rag.contracts.chunking import Chunker
 from modular_rag.core.models.chunk import Chunk
-from modular_rag.core.models.document import Document
 from modular_rag.ingestion.enrichers.metadata_enricher import MetadataEnricher
 from modular_rag.ingestion.normalizers.text_normalizer import TextNormalizer
 from modular_rag.ingestion.parsers.pdf_parser import PDFParser

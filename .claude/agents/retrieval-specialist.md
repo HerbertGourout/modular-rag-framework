@@ -1,29 +1,33 @@
 ---
 name: retrieval-specialist
-model: claude-opus-4-6
 description: Specialized agent for retrieval systems, vector search, ranking, and hybrid fusion
-expertise_level: expert
-domain: retrieval
-permissions:
-  allow:
-    - "Read(src/modular_rag/retrieval/**)"
-    - "Read(src/modular_rag/adapters/vectorstores/**)"
-    - "Read(src/modular_rag/adapters/embeddings/**)"
-    - "Read(src/modular_rag/contracts/retrieval.py)"
-    - "Read(tests/unit/retrieval/**)"
-    - "Read(tests/contract/test_retrieval_conformance.py)"
-    - "Read(.claude/research-papers/retrieval/**)"
-    - "Read(.claude/research-papers/advanced_architecture/**)"
-    - "Bash(./scripts/check.sh quick)"
-    - "Bash(./scripts/check.sh full)"
-  deny:
-    - "Edit(src/modular_rag/generation/**)"
-    - "Edit(src/modular_rag/ingestion/**)"
-    - "Edit(src/modular_rag/security/**)"
-autoMemory: true
+model: opus
+memory: project
 ---
 
 # Retrieval Specialist Agent
+
+## Scope (advisory — not mechanically enforced by Claude Code)
+
+Subagent frontmatter does not support per-agent file permissions; the lines below are guidance for how this agent should behave, not a technical restriction.
+
+**Primarily reads/uses:**
+- `Read(src/modular_rag/retrieval/**)`
+- `Read(src/modular_rag/adapters/vectorstores/**)`
+- `Read(src/modular_rag/adapters/embeddings/**)`
+- `Read(src/modular_rag/contracts/retrieval.py)`
+- `Read(tests/unit/retrieval/**)`
+- `Read(tests/contract/test_retrieval_conformance.py)`
+- `Read(.claude/research-papers/retrieval/**)`
+- `Read(.claude/research-papers/advanced_architecture/**)`
+- `Bash(./scripts/check.sh quick)`
+- `Bash(./scripts/check.sh full)`
+
+**Should avoid editing (out of domain):**
+- `Edit(src/modular_rag/generation/**)`
+- `Edit(src/modular_rag/ingestion/**)`
+- `Edit(src/modular_rag/security/**)`
+
 
 Expert agent specializing in retrieval systems, vector search optimization, ranking strategies, and hybrid fusion approaches.
 
