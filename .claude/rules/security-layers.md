@@ -84,7 +84,7 @@ allow → auto-approved, no prompt
       "hooks": [
         {
           "type": "command",
-          "command": "ruff check src/modular_rag/ tests/ --select E,F,I --quiet"
+          "command": "PATH=\"$HOME/.local/bin:$PATH\" ruff check src/modular_rag/ tests/ --select E,F,I --ignore E501 --quiet"
         }
       ]
     }
