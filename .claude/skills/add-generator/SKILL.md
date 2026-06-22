@@ -1,25 +1,20 @@
 ---
 name: add-generator
-shortDescription: Add a new generator implementation to the framework
 description: Step-by-step workflow for implementing a new LLM generator following GeneratorProtocol
-author: generation-specialist
-invocation: /add-generator
-parameters:
-  - name: generator_type
-    type: enum
-    values: [openai, anthropic, cohere, local, custom]
-    required: true
-  - name: generator_name
-    type: string
-    pattern: "^[A-Z][a-zA-Z0-9]*Generator$"
-    required: true
-  - name: model_name
-    type: string
-    description: "LLM model identifier (e.g., gpt-4, claude-2)"
-    required: true
 ---
 
 # Add Generator Skill
+
+## Parameters (advisory — not schema-validated by Claude Code)
+
+Claude Code skills don't support typed/validated parameters in frontmatter; describe these to the agent in your invocation prompt instead:
+
+- `generator_type` (enum, required) — one of: ['openai', 'anthropic', 'cohere', 'local', 'custom']
+- `generator_name` (string, required) — pattern: `^[A-Z][a-zA-Z0-9]*Generator$`
+- `model_name` (string, required) — LLM model identifier (e.g., gpt-4, claude-2)
+
+_Originally authored as a workflow for `generation-specialist`, invoked as `/add-generator`._
+
 
 Guided workflow for implementing a new LLM generator following GeneratorProtocol.
 

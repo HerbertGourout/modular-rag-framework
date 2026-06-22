@@ -260,7 +260,7 @@ results = await asyncio.gather(
 - Results aggregated automatically
 - Regressions detected easily
 
-**See:** [`.claude/skills/parallel-feature-analysis.md`](../skills/parallel-feature-analysis.md)
+**See:** [`.claude/skills/parallel-feature-analysis/SKILL.md`](../../.claude/skills/parallel-feature-analysis/SKILL.md)
 
 ---
 
@@ -619,11 +619,11 @@ for result in results:
 
 ### Example 1: Hybrid Retrieval (Component-Level)
 
-See [`.claude/skills/design-retriever-fusion.md`](../skills/design-retriever-fusion.md)
+See [`.claude/skills/design-retriever-fusion/SKILL.md`](../../.claude/skills/design-retriever-fusion/SKILL.md)
 
 ### Example 2: Parallel Feature Analysis (Task-Level)
 
-See [`.claude/skills/parallel-feature-analysis.md`](../skills/parallel-feature-analysis.md)
+See [`.claude/skills/parallel-feature-analysis/SKILL.md`](../../.claude/skills/parallel-feature-analysis/SKILL.md)
 
 ### Example 3: Multi-Agent Orchestration (V2+)
 
@@ -663,7 +663,7 @@ agents:
 ## References
 
 - [`.claude/settings.json`](../settings.json) - Parallelization configuration
-- [`/parallel-feature-analysis` skill](../skills/parallel-feature-analysis.md)
-- [`/design-retriever-fusion` skill](../skills/design-retriever-fusion.md)
+- [`/parallel-feature-analysis` skill](../../.claude/skills/parallel-feature-analysis/SKILL.md)
+- [`/design-retriever-fusion` skill](../../.claude/skills/design-retriever-fusion/SKILL.md)
 - [CLAUDE.md - V2 Agentic Workflows](../../CLAUDE.md#09---roadmap-v1--v5-with-strategic-features)
 - [ADR-0001: Modular Architecture](../../docs/adr/0001-modular-architecture.md)

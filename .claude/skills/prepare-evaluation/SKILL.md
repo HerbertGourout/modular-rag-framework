@@ -1,12 +1,12 @@
 ---
 name: prepare-evaluation
-shortDescription: Prepare comprehensive evaluation suite
 description: Workflow for creating evaluation datasets, metrics, and test scenarios
-author: test-specialist
-invocation: /prepare-evaluation
 ---
 
 # Prepare Evaluation Skill
+
+_Originally authored as a workflow for `test-specialist`, invoked as `/prepare-evaluation`._
+
 
 Systematic workflow for creating comprehensive evaluation suites with datasets, metrics, and benchmarks.
 

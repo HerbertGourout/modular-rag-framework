@@ -1,7 +1,6 @@
 """Unit tests for ExactMatchEvaluator."""
 from __future__ import annotations
 
-from modular_rag.core.ids import new_id
 from modular_rag.core.models.answer import Answer
 from modular_rag.core.models.query import Query
 from modular_rag.eval.scorers.exact_match import ExactMatchEvaluator

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import structlog
 
-from modular_rag.core.models.answer import Answer, Citation
+from modular_rag.core.models.answer import Answer
 from modular_rag.core.models.query import Query
 from modular_rag.core.models.retrieved import RetrievedChunk
 from modular_rag.core.models.trace import Trace, TraceStep

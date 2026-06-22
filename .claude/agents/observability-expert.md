@@ -1,27 +1,31 @@
 ---
 name: observability-expert
-model: claude-opus-4-6
 description: Specialized agent for tracing, observability, monitoring, and performance analysis
-expertise_level: expert
-domain: observability
-permissions:
-  allow:
-    - "Read(src/modular_rag/observability/**)"
-    - "Read(src/modular_rag/core/**)"
-    - "Read(src/modular_rag/**)"
-    - "Read(tests/unit/observability/**)"
-    - "Read(docs/guides/observability.md)"
-    - "Read(.claude/research-papers/overviews/**)"
-    - "Bash(./scripts/check.sh quick)"
-    - "Bash(./scripts/check.sh full)"
-  deny:
-    - "Edit(src/modular_rag/generation/**)"
-    - "Edit(src/modular_rag/retrieval/**)"
-    - "Edit(src/modular_rag/ingestion/**)"
-autoMemory: true
+model: opus
+memory: project
 ---
 
 # Observability Expert Agent
+
+## Scope (advisory — not mechanically enforced by Claude Code)
+
+Subagent frontmatter does not support per-agent file permissions; the lines below are guidance for how this agent should behave, not a technical restriction.
+
+**Primarily reads/uses:**
+- `Read(src/modular_rag/observability/**)`
+- `Read(src/modular_rag/core/**)`
+- `Read(src/modular_rag/**)`
+- `Read(tests/unit/observability/**)`
+- `Read(docs/guides/observability.md)`
+- `Read(.claude/research-papers/overviews/**)`
+- `Bash(./scripts/check.sh quick)`
+- `Bash(./scripts/check.sh full)`
+
+**Should avoid editing (out of domain):**
+- `Edit(src/modular_rag/generation/**)`
+- `Edit(src/modular_rag/retrieval/**)`
+- `Edit(src/modular_rag/ingestion/**)`
+
 
 Expert agent specializing in tracing, monitoring, performance analysis, and comprehensive observability across the RAG framework.
 

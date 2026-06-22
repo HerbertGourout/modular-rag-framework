@@ -1,12 +1,12 @@
 ---
 name: validate-architecture
-shortDescription: Validate architecture compliance of new code
 description: Comprehensive validation workflow for verifying hexagonal layering, imports, and design patterns
-author: architecture-reviewer
-invocation: /validate-architecture
 ---
 
 # Validate Architecture Skill
+
+_Originally authored as a workflow for `architecture-reviewer`, invoked as `/validate-architecture`._
+
 
 Comprehensive workflow for validating architecture compliance, import rules, and design patterns.
 

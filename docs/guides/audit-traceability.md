@@ -226,9 +226,9 @@ git checkout -b fix/security-policy-update
 # Commit with clear message
 git commit -m "chore: Update .claude/settings.json with new API restriction
 
-- Added new_api_path to denylist (V3 scope)
+- Added new_api_path to permissions.deny (V3 scope)
 - Reduced timeout for Qdrant operations
-- Clarified restrictedPaths documentation
+- Clarified permissions.ask documentation
 
 Reason: Prevent accidental V3 implementation in V1"
 

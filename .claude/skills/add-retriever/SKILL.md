@@ -1,25 +1,20 @@
 ---
 name: add-retriever
-shortDescription: Add a new retriever implementation to the framework
 description: Step-by-step workflow for implementing a new retriever following RetrieverProtocol
-author: retrieval-specialist
-invocation: /add-retriever
-parameters:
-  - name: retriever_type
-    type: enum
-    values: [vector, bm25, hybrid, semantic, graph]
-    required: true
-  - name: retriever_name
-    type: string
-    pattern: "^[A-Z][a-zA-Z0-9]*Retriever$"
-    required: true
-  - name: external_library
-    type: string
-    description: "Optional external library dependency (e.g., qdrant-client)"
-    required: false
 ---
 
 # Add Retriever Skill
+
+## Parameters (advisory — not schema-validated by Claude Code)
+
+Claude Code skills don't support typed/validated parameters in frontmatter; describe these to the agent in your invocation prompt instead:
+
+- `retriever_type` (enum, required) — one of: ['vector', 'bm25', 'hybrid', 'semantic', 'graph']
+- `retriever_name` (string, required) — pattern: `^[A-Z][a-zA-Z0-9]*Retriever$`
+- `external_library` (string, optional) — Optional external library dependency (e.g., qdrant-client)
+
+_Originally authored as a workflow for `retrieval-specialist`, invoked as `/add-retriever`._
+
 
 Guided workflow for implementing a new retriever component following RetrieverProtocol.
 

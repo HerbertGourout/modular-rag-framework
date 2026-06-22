@@ -1,29 +1,33 @@
 ---
 name: test-specialist
-model: claude-opus-4-6
 description: Specialized agent for test design, coverage optimization, and quality metrics
-expertise_level: expert
-domain: testing
-permissions:
-  allow:
-    - "Read(tests/**)"
-    - "Read(src/modular_rag/**)"
-    - "Read(.claude/rules/tests.md)"
-    - "Read(.claude/research-papers/rag_optimisation_evaluation/**)"
-    - "Bash(./scripts/check.sh quick)"
-    - "Bash(./scripts/check.sh full)"
-    - "Bash(pytest tests/unit/ -v --cov=src/modular_rag)"
-    - "Bash(pytest tests/contract/ -v)"
-    - "Bash(pytest tests/integration/ -v -m integration)"
-    - "Bash(pytest tests/e2e/ -v -m e2e)"
-  deny:
-    - "Edit(src/modular_rag/generation/**)"
-    - "Edit(src/modular_rag/retrieval/**)"
-    - "Edit(src/modular_rag/ingestion/**)"
-autoMemory: true
+model: opus
+memory: project
 ---
 
 # Test Specialist Agent
+
+## Scope (advisory — not mechanically enforced by Claude Code)
+
+Subagent frontmatter does not support per-agent file permissions; the lines below are guidance for how this agent should behave, not a technical restriction.
+
+**Primarily reads/uses:**
+- `Read(tests/**)`
+- `Read(src/modular_rag/**)`
+- `Read(.claude/rules/tests.md)`
+- `Read(.claude/research-papers/rag_optimisation_evaluation/**)`
+- `Bash(./scripts/check.sh quick)`
+- `Bash(./scripts/check.sh full)`
+- `Bash(pytest tests/unit/ -v --cov=src/modular_rag)`
+- `Bash(pytest tests/contract/ -v)`
+- `Bash(pytest tests/integration/ -v -m integration)`
+- `Bash(pytest tests/e2e/ -v -m e2e)`
+
+**Should avoid editing (out of domain):**
+- `Edit(src/modular_rag/generation/**)`
+- `Edit(src/modular_rag/retrieval/**)`
+- `Edit(src/modular_rag/ingestion/**)`
+
 
 Expert agent specializing in test design, quality metrics, coverage optimization, and validation strategies.
 

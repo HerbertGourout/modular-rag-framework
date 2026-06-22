@@ -4,7 +4,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from modular_rag.core.enums import RetrievalMethod
-from modular_rag.core.ids import new_id
 from modular_rag.core.models.chunk import Chunk
 from modular_rag.core.models.query import Query
 from modular_rag.core.models.retrieved import RetrievedChunk
@@ -37,7 +36,6 @@ class QdrantStore:
         if self._client is None:
             try:
                 from qdrant_client import QdrantClient
-                from qdrant_client.http.models import Distance, VectorParams
             except ImportError as exc:
                 raise ImportError(
                     "qdrant-client is required for QdrantStore. "

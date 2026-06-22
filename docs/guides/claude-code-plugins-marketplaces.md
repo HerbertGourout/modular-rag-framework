@@ -434,24 +434,24 @@ Uses configured formatters to reformat code automatically.
 
 ### Creating an Agent Plugin
 
+> **Correction (2026-06-22, revised)**: there's no `instructions:` frontmatter field — put the instructions in the markdown body, as below (see claude-code-advanced-config.md "Creating a Subagent" for the full real field list — `name`/`description` are required; `tools`, `model`, `permissionMode`, `memory`, and others are real optional fields). `claude-opus-4-6` is a real model ID (just not the current latest, `claude-opus-4-8` — an earlier revision of this note wrongly called it fake). There's also no `/agent <name> <args>` slash command, but `claude --agent <name>` and the `agent` settings.json key (to set a default) **are** real — see the correction in claude-code-advanced-config.md "Using a Subagent".
+
 **agents/code-reviewer.md**:
 ```markdown
 ---
 name: code-reviewer
-model: claude-opus-4-6
-instructions: |
-  You are a code reviewer specializing in security and performance.
-  Always check for:
-  - Security vulnerabilities
-  - Performance issues
-  - Code style violations
-  - Missing tests
-  - Documentation gaps
+description: Code reviewer specializing in security and performance
+model: opus
 ---
 
 # Code Reviewer Agent
 
-Specialized agent for thorough code reviews.
+Specialized agent for thorough code reviews. Always check for:
+- Security vulnerabilities
+- Performance issues
+- Code style violations
+- Missing tests
+- Documentation gaps
 
 ## Tools Available
 
@@ -462,10 +462,12 @@ Specialized agent for thorough code reviews.
 
 ## Example Usage
 
-\`/agent code-reviewer review-pr\`
+Mention it in chat: `@code-reviewer review this PR`
 ```
 
 ### Creating Hook Plugin
+
+> **Correction**: no `filePattern` field, no `{file}` template — `matcher` matches tool name only; the command must read the file path itself from the JSON piped to stdin (see claude-code-advanced-config.md "Hooks Advanced" for the `jq` pattern).
 
 **hooks.json**:
 ```json
@@ -474,11 +476,10 @@ Specialized agent for thorough code reviews.
     "PostToolUse": [
       {
         "matcher": "Edit",
-        "filePattern": "src/**/*.py",
         "hooks": [
           {
             "type": "command",
-            "command": "black {file}"
+            "command": "file=$(jq -r .tool_input.file_path); [[ \"$file\" == *.py ]] && black \"$file\""
           }
         ]
       }

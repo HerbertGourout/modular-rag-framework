@@ -1,378 +1,88 @@
 {
-  "description": "VS Code settings for Claude customization on Modular RAG Framework.",
-  "version": "1.0",
-  "lastUpdated": "2026-06-19",
+  "description": "Claude Code settings for Modular RAG Framework. Schema follows the real Claude Code permissions/hooks model — see docs/guides/CLAUDE-CODE-COMPLETE-GUIDE.md for the narrative explanation of the 7-layer security strategy this enforces.",
+  "version": "2.0",
+  "lastUpdated": "2026-06-22",
+  "permissions": {
+    "deny": [
+      "Read(**/.env*)",
+      "Edit(**/.env*)",
+      "Write(**/.env*)",
+      "Read(**/*.local.md)",
+      "Edit(manifests/production/**)",
+      "Write(manifests/production/**)",
+      "Edit(.claude/rules/**)",
+      "Write(.claude/rules/**)",
+      "Edit(.gitlab/**)",
+      "Write(.gitlab/**)",
+      "Edit(src/modular_rag/adapters/llms/**)",
+      "Write(src/modular_rag/adapters/llms/**)",
+      "Edit(src/modular_rag/adapters/auth/**)",
+      "Write(src/modular_rag/adapters/auth/**)",
+      "Edit(src/modular_rag/adapters/graphstores/**)",
+      "Write(src/modular_rag/adapters/graphstores/**)",
+      "Edit(src/modular_rag/adapters/search/**)",
+      "Write(src/modular_rag/adapters/search/**)",
+      "Edit(benchmarks/**)",
+      "Write(benchmarks/**)"
+    ],
+    "allow": [
+      "Edit(tests/**)",
+      "Write(tests/**)",
+      "Edit(examples/**)",
+      "Write(examples/**)",
+      "Edit(docs/**)",
+      "Write(docs/**)",
+      "Edit(src/modular_rag/ingestion/**)",
+      "Write(src/modular_rag/ingestion/**)",
+      "Edit(src/modular_rag/retrieval/**)",
+      "Write(src/modular_rag/retrieval/**)",
+      "Edit(src/modular_rag/generation/**)",
+      "Write(src/modular_rag/generation/**)",
+      "Edit(src/modular_rag/eval/**)",
+      "Write(src/modular_rag/eval/**)",
+      "Edit(src/modular_rag/memory/**)",
+      "Write(src/modular_rag/memory/**)"
+    ],
+    "ask": [
+      "Edit(src/modular_rag/contracts/**)",
+      "Write(src/modular_rag/contracts/**)",
+      "Edit(src/modular_rag/orchestration/**)",
+      "Write(src/modular_rag/orchestration/**)",
+      "Edit(src/modular_rag/security/**)",
+      "Write(src/modular_rag/security/**)",
+      "Edit(src/modular_rag/adapters/embeddings/**)",
+      "Write(src/modular_rag/adapters/embeddings/**)",
+      "Edit(src/modular_rag/adapters/vectorstores/**)",
+      "Write(src/modular_rag/adapters/vectorstores/**)",
+      "Edit(src/modular_rag/core/**)",
+      "Write(src/modular_rag/core/**)",
+      "Edit(pyproject.toml)",
+      "Write(pyproject.toml)",
+      "Edit(CONTRIBUTING.md)",
+      "Write(CONTRIBUTING.md)",
+      "Edit(.gitlab-ci.yml)",
+      "Write(.gitlab-ci.yml)"
+    ]
+  },
   "hooks": {
     "PostToolUse": [
       {
         "description": "Lint Python code after any file write. Checks for syntax (E), undefined names (F), and import order (I).",
         "matcher": "Edit|Write",
-        "filePattern": "src/modular_rag/**/*.py|tests/**/*.py",
         "hooks": [
           {
             "type": "command",
-            "command": "ruff check src/modular_rag/ tests/ --select E,F,I --quiet"
+            "command": "PATH=\"$HOME/.local/bin:$PATH\" ruff check src/modular_rag/ tests/ --select E,F,I --ignore E501 --quiet"
           }
         ]
       }
     ]
-  },
-  "permissions": {
-    "description": "Granular permission strategy: denylist (always block) + three tiers (dontAsk > acceptEdits > ask_before_edit).",
-    "defaultMode": "auto",
-    "bypassPermissions": false,
-    "denylists": [
-      {
-        "path": "**/.env*",
-        "reason": "Secrets - environment variables, API keys, credentials"
-      },
-      {
-        "path": "**/*.local.md",
-        "reason": "Local configuration files"
-      },
-      {
-        "path": "manifests/production/**",
-        "reason": "Production configs - V4 scope"
-      },
-      {
-        "path": ".claude/rules/**",
-        "reason": "Architecture rules - breaking changes"
-      },
-      {
-        "path": ".gitlab/**",
-        "reason": "CI/CD pipelines"
-      },
-      {
-        "path": "adapters/llms/**",
-        "reason": "V2+ scope - reserved"
-      },
-      {
-        "path": "adapters/auth/**",
-        "reason": "V4+ scope - reserved"
-      },
-      {
-        "path": "adapters/graphstores/**",
-        "reason": "V3+ scope - reserved"
-      },
-      {
-        "path": "adapters/search/**",
-        "reason": "V2-V3 scope - reserved"
-      },
-      {
-        "path": "benchmarks/**",
-        "reason": "V3+ scope - reserved"
-      }
-    ],
-    "noAskPaths": [
-      {
-        "path": "tests/**",
-        "mode": "dontAsk",
-        "reason": "Test scope - zero friction, creation encouraged"
-      },
-      {
-        "path": "examples/**",
-        "mode": "dontAsk",
-        "reason": "Example scenarios - safe sandbox"
-      },
-      {
-        "path": "docs/**",
-        "mode": "dontAsk",
-        "reason": "Documentation - no risk"
-      }
-    ],
-    "autoPaths": [
-      {
-        "path": "src/modular_rag/ingestion/**",
-        "mode": "acceptEdits",
-        "reason": "Domain module - auto-accept new chunkers, parsers, processors"
-      },
-      {
-        "path": "src/modular_rag/retrieval/**",
-        "mode": "acceptEdits",
-        "reason": "Domain module - auto-accept new retrievers, rerankers"
-      },
-      {
-        "path": "src/modular_rag/generation/**",
-        "mode": "acceptEdits",
-        "reason": "Domain module - auto-accept new generators, prompts"
-      },
-      {
-        "path": "src/modular_rag/eval/**",
-        "mode": "acceptEdits",
-        "reason": "Evaluation module - auto-accept metrics, scorers"
-      },
-      {
-        "path": "src/modular_rag/memory/**",
-        "mode": "acceptEdits",
-        "reason": "Memory module - auto-accept context/conversation extensions"
-      }
-    ],
-    "restrictedPaths": [
-      {
-        "path": "src/modular_rag/contracts/**",
-        "mode": "ask_before_edit",
-        "reason": "Protocol definitions - breaking changes impact entire framework",
-        "allowedChanges": ["documentation", "type annotations", "docstrings"]
-      },
-      {
-        "path": "src/modular_rag/orchestration/**",
-        "mode": "ask_before_edit",
-        "reason": "Registry + wiring - central to composition",
-        "allowedChanges": ["new routing logic", "new factory methods"]
-      },
-      {
-        "path": "src/modular_rag/security/**",
-        "mode": "ask_before_edit",
-        "reason": "Safety/Security critical - PII, injection guards, policies",
-        "allowedChanges": ["filter rules", "redaction patterns", "documentation"]
-      },
-      {
-        "path": "src/modular_rag/adapters/embeddings/**",
-        "mode": "ask_before_edit",
-        "reason": "Embedding Protocol implementations",
-        "allowedChanges": ["new embedding providers", "bug fixes"]
-      },
-      {
-        "path": "src/modular_rag/adapters/vectorstores/**",
-        "mode": "ask_before_edit",
-        "reason": "Vector store Protocol implementations",
-        "allowedChanges": ["new vector store providers", "bug fixes"]
-      }
-    ]
-  },
-  "futureHooks": {
-    "description": "Reserved for V2+ validation patterns. Uncomment when ready to enable.",
-    "PostToolUse": [
-      {
-        "description": "RESERVED: Detect cross-domain imports (e.g., retrieval/ importing from generation/)",
-        "filePattern": "src/modular_rag/ingestion/**/*.py|src/modular_rag/retrieval/**/*.py|src/modular_rag/generation/**/*.py",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python scripts/validate_imports.py",
-            "enabled": false
-          }
-        ]
-      },
-      {
-        "description": "RESERVED: Verify Protocol implementations have conformance tests",
-        "filePattern": "src/modular_rag/contracts/**/*.py",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python scripts/validate_conformance.py",
-            "enabled": false
-          }
-        ]
-      },
-      {
-        "description": "RESERVED: Check that lazy imports are used for heavy deps",
-        "filePattern": "src/modular_rag/adapters/**/*.py",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python scripts/validate_lazy_imports.py",
-            "enabled": false
-          }
-        ]
-      }
-    ]
-  },
-  "parallelization": {
-    "description": "Parallel execution orchestration for multi-task workflows (V2+ feature, partially enabled in V1).",
-    "enabled": true,
-    "mode": "semi-parallel",
-    "notes": "V1 supports parallel tool calls (search, read_file). Full agentic parallelization in V2+.",
-    "taskDecomposition": {
-      "description": "How to break down work into independent parallel tasks.",
-      "patterns": [
-        {
-          "name": "analysis_tasks",
-          "description": "Run analysis on retrieval, generation, security components in parallel",
-          "examples": [
-            "parallel-feature-analysis skill uses: analyze_retrieval() | analyze_generation() | analyze_security()"
-          ],
-          "dependencies": "None - fully independent analysis",
-          "coordinator": "Aggregate results after parallel completion"
-        },
-        {
-          "name": "retriever_execution",
-          "description": "Parallel execution of multiple retrievers (vector + BM25), then fuse results",
-          "examples": [
-            "HybridRetriever: vector_retriever.retrieve() | bm25_retriever.retrieve() in parallel, then RRF fusion"
-          ],
-          "dependencies": "Fusion waits for both retrievers to complete",
-          "coordinator": "design-retriever-fusion skill orchestrates via asyncio.gather()"
-        },
-        {
-          "name": "test_execution",
-          "description": "Run unit, contract, integration tests in parallel (safe - no side effects)",
-          "examples": [
-            "pytest tests/unit/ tests/contract/ tests/integration/ -n auto"
-          ],
-          "dependencies": "None within scopes - can parallelize fully",
-          "coordinator": "pytest-xdist plugin or make -j"
-        },
-        {
-          "name": "file_operations",
-          "description": "Multiple file reads/writes in parallel (when no dependencies)",
-          "examples": [
-            "Read multiple doc files in parallel for ingestion"
-          ],
-          "dependencies": "Order-independent reads are safe to parallelize",
-          "coordinator": "asyncio or threading"
-        }
-      ]
-    },
-    "streamExecution": {
-      "description": "How parallel streams coordinate and merge results.",
-      "model": "Map-Reduce inspired",
-      "stages": [
-        {
-          "stage": "Map",
-          "description": "Distribute work to parallel tasks",
-          "example": "Start retrieval on vec, bm25, graph in parallel"
-        },
-        {
-          "stage": "Execute",
-          "description": "Tasks run independently, emit results to shared context",
-          "example": "Each retriever writes results to context['retriever_results']"
-        },
-        {
-          "stage": "Merge",
-          "description": "Combine results using fusion algorithm",
-          "example": "RRF fusion merges vec + bm25 results"
-        },
-        {
-          "stage": "Reduce",
-          "description": "Final aggregation and return to caller",
-          "example": "Return top-10 fused results"
-        }
-      ]
-    },
-    "contextSharing": {
-      "description": "How parallel tasks share state and context.",
-      "mechanism": "Shared dictionary (thread-safe) + message passing",
-      "example": {
-        "description": "Parallel retrieval with context sharing",
-        "code_pattern": "context = {}; asyncio.gather(vec_retrieve(context), bm25_retrieve(context)); return fuse(context['vec'], context['bm25'])"
-      },
-      "thread_safety": "Use asyncio for coroutines (cooperative multitasking, no GIL issues) or threading.Lock for thread parallelism",
-      "data_isolation": "Each parallel task gets own input, contributes to shared output dict by key"
-    },
-    "dependencyResolution": {
-      "description": "How to express and resolve task dependencies.",
-      "patterns": [
-        {
-          "type": "independent",
-          "description": "No dependencies - run all in parallel",
-          "example": "Multi-retriever fusion where vec and bm25 don't depend on each other",
-          "syntax": "await asyncio.gather(task_a(), task_b(), task_c())"
-        },
-        {
-          "type": "sequential_dependent",
-          "description": "Task B depends on Task A result - run sequential",
-          "example": "Reranking depends on retrieval results",
-          "syntax": "retrieval_result = await retriever.retrieve(); ranking_result = await reranker.rerank(retrieval_result)"
-        },
-        {
-          "type": "partial_dependent",
-          "description": "Some tasks parallel (A,B independent), then dependent (C waits for A,B)",
-          "example": "Vec + BM25 in parallel, then RRF fusion waits for both",
-          "syntax": "vec, bm25 = await asyncio.gather(vec_ret(), bm25_ret()); fusion = fuse(vec, bm25)"
-        },
-        {
-          "type": "fan_out_fan_in",
-          "description": "One initiator spawns multiple tasks, waits for all to complete",
-          "example": "Query parallelized across multiple components, results aggregated",
-          "syntax": "results = await asyncio.gather(*[component.execute() for component in components])"
-        }
-      ]
-    },
-    "failureHandling": {
-      "description": "How parallel tasks handle failures and timeouts.",
-      "strategies": [
-        {
-          "strategy": "fail_fast",
-          "description": "If any task fails, cancel others and raise error",
-          "use_case": "Critical path - one failure = entire operation fails",
-          "implementation": "CancelledError propagates, cancels gather()"
-        },
-        {
-          "strategy": "fail_tolerant",
-          "description": "If one retriever fails, continue with others",
-          "use_case": "Hybrid retrieval - one source failure not fatal",
-          "implementation": "Wrap task in try/except, return partial results"
-        },
-        {
-          "strategy": "timeout",
-          "description": "Cancel task after timeout, use cached/fallback result",
-          "use_case": "Slow services - don't block entire pipeline",
-          "implementation": "asyncio.wait_for(task, timeout=5) with exception handling"
-        }
-      ]
-    },
-    "performanceOptimization": {
-      "description": "How to measure and optimize parallel execution.",
-      "metrics": [
-        {
-          "metric": "speedup",
-          "formula": "Serial time / Parallel time",
-          "target": ">2.0x for 2-3 parallel tasks",
-          "measurement": "Trace start/end times for each task"
-        },
-        {
-          "metric": "efficiency",
-          "formula": "Speedup / Number of parallel tasks",
-          "target": ">0.6 (good), >0.8 (excellent)",
-          "measurement": "efficiency = speedup / num_tasks"
-        },
-        {
-          "metric": "total_latency",
-          "description": "End-to-end time including coordination overhead",
-          "target": "< sum of sequential (always, by definition)"
-        }
-      ],
-      "optimization_tactics": [
-        {
-          "tactic": "balance_load",
-          "description": "Ensure parallel tasks have similar runtime",
-          "example": "Don't parallelize fast (1ms) + slow (100ms) tasks - limits speedup"
-        },
-        {
-          "tactic": "minimize_overhead",
-          "description": "Coordination, serialization, deserialization costs",
-          "example": "Share simple types (strings, numbers) not large objects"
-        },
-        {
-          "tactic": "batch_operations",
-          "description": "Process multiple items in single parallel task",
-          "example": "Batch embed 100 queries in one task vs 100 parallel embed tasks"
-        }
-      ]
-    },
-    "v2PlusPlanning": {
-      "description": "Full multi-agent orchestration reserved for V2+.",
-      "features": [
-        "Agentic task coordination (multiple agents, task routing)",
-        "Dynamic workload distribution (load balancing across agents)",
-        "Complex dependency graphs (DAG scheduling)",
-        "Inter-agent communication (message passing, shared memory)",
-        "Consensus mechanisms (voting, aggregation)",
-        "Resource management (CPU, memory, I/O quotas per agent)"
-      ],
-      "current_scope_v1": "V1 uses basic parallelization (retriever fusion, parallel file ops). Full multi-agent framework in V2."
-    }
   },
   "notes": {
-    "ruffConfig": "Ruff settings use defaults (see pyproject.toml for customization).",
-    "permissionStrategy": "3-tier granular approach: denylist (always block) → noAskPaths (dontAsk, zero friction) → autoPaths (acceptEdits, auto-accept) → restrictedPaths (ask_before_edit, confirm before).",
-    "tier1_noAsk": "tests/, examples/, docs/ - zero requests, creation encouraged.",
-    "tier2_autoPaths": "Domain modules (ingestion, retrieval, generation, eval, memory) - auto-accept new implementations, no friction.",
-    "tier3_restrictedPaths": "Contracts, orchestration, security, adapters - ask confirmation before any edit to preserve architecture.",
-    "denylists": "Always blocked: secrets, production configs, architecture rules, V2-V5 reserved namespaces.",
-    "bypassPermissions": "Always false - this is the governance pattern.",
-    "futureValidation": "To enable V2+ hooks (cross-domain imports, conformance tests, lazy imports), set 'enabled': true in futureHooks.",
-    "moreInfo": "See .claude/.instructions.md, .claude/rules/*.md, and CLAUDE.md block 09 for full guidelines."
+    "permissionStrategy": "Real Claude Code 3-bucket model: deny (always blocked, no prompt) > ask (prompts every time) > allow (auto-approved, no prompt). Paths not matched by any rule fall back to Claude Code's defaultMode behavior.",
+    "tier_mapping": "deny == old 'denylist' (secrets, production configs, V2-V5 reserved adapters). allow == old 'dontAsk'+'acceptEdits' tiers merged (tests/examples/docs + safe domain modules — both are 'no prompt' in the real model, there's no separate dontAsk vs acceptEdits distinction). ask == old 'restrictedPaths' (contracts, orchestration, security, adapters/embeddings, adapters/vectorstores, core, and a few root config files).",
+    "hooksLimitation": "The 'matcher' field matches on TOOL NAME only (e.g. 'Edit|Write'), not on file path. This hook therefore runs ruff over the whole src/modular_rag/+tests/ tree on every Edit or Write, regardless of which file changed — there is no native per-path hook filtering in Claude Code.",
+    "removedFromV1": "Earlier versions of this file had invented, non-functional keys: 'denylists/noAskPaths/autoPaths/restrictedPaths' (replaced by the real allow/ask/deny above), 'futureHooks' and 'parallelization' (narrative-only, never read by Claude Code — see docs/guides/claude-code-parallelization-orchestration.md for that content as documentation), and a 'mcpServers' key (MCP servers are configured in a project-root .mcp.json file, not here; this project does not currently define any MCP server).",
+    "moreInfo": "See CLAUDE.md (@-imports .claude/.instructions.md and .claude/.prompt.md), .claude/rules/*.md (path-scoped, auto-loaded by Claude Code when matching files are opened), and .claude/rules/security-layers.md (no path scoping — always loaded)."
   }
 }

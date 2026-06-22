@@ -1,12 +1,12 @@
 ---
 name: parallel-feature-analysis
-shortDescription: Analyze multiple features in parallel
 description: Workflow for parallel analysis of retrieval, generation, security features
-author: observability-expert
-invocation: /parallel-feature-analysis
 ---
 
 # Parallel Feature Analysis Skill
+
+_Originally authored as a workflow for `observability-expert`, invoked as `/parallel-feature-analysis`._
+
 
 Systematic workflow for analyzing multiple framework features in parallel.
 

@@ -1,12 +1,12 @@
 ---
 name: design-retriever-fusion
-shortDescription: Design hybrid retriever fusion strategy
 description: Workflow for designing and implementing retriever fusion (vector + lexical + other)
-author: retrieval-specialist
-invocation: /design-retriever-fusion
 ---
 
 # Design Retriever Fusion Skill
+
+_Originally authored as a workflow for `retrieval-specialist`, invoked as `/design-retriever-fusion`._
+
 
 Systematic workflow for designing and implementing hybrid retriever fusion strategies.
 

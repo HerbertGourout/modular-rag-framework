@@ -1,7 +1,6 @@
 """Register all built-in adapters into a ComponentRegistry."""
 from __future__ import annotations
 
-from modular_rag.contracts.manifests import ComponentConfig
 from modular_rag.orchestration.registry import ComponentRegistry
 
 

@@ -73,7 +73,7 @@ Review team (Architecture + Security) must sign off on ALL criteria:
 
 ### Step 3: Scope Definition
 
-Define **exactly** which paths the MCP can access:
+Define **exactly** which paths the MCP can access. This is internal governance bookkeeping for the review process — `enabled`/`allowPaths`/`denyPaths`/`capabilities`/`audit` are not real `.mcp.json` fields (see the correction in Step 4); record them here, then translate the *capabilities* into actual `permissions.allow`/`ask`/`deny` rules in `.claude/settings.json` if the MCP's tools need scoping:
 
 ```json
 {
@@ -102,30 +102,25 @@ Define **exactly** which paths the MCP can access:
 - ❌ **denyPaths** (blacklist): MCP can NEVER access these paths
 - **Collision rule**: If a path matches both allow and deny, DENY wins (fail-safe)
 
-### Step 4: Integration into .claude/settings.json
+### Step 4: Integration into .mcp.json
 
-Once approved, add the MCP to `.claude/settings.json`:
+> **Correction (2026-06-22)**: MCP servers are configured in a **`.mcp.json` file at the project root**, not inside `.claude/settings.json`. `mcpServers` is not a recognized key in `settings.json` — Claude Code only reads it from `.mcp.json`. The `allowPaths`/`denyPaths`/`scope`/`approvedDate` fields below are this project's own governance metadata (useful for the review process and audit trail), not fields Claude Code itself understands — Claude Code's real `.mcp.json` entry shape is just `command`/`args`/`env` (for a local `stdio` server) or `type`/`url` (for a remote `http`/`sse` server). Keep the governance metadata in this guide's "Current MCP Integrations" section below instead of inventing extra JSON keys.
+
+Once approved, add the MCP to a project-root `.mcp.json`:
 
 ```json
 {
   "mcpServers": {
     "your-mcp-name": {
-      "enabled": true,
-      "description": "What this MCP does",
-      "vendor": "Vendor name",
-      "approvedDate": "2026-06-20",
-      "approvedBy": "@architecture, @security",
-      "scope": ["tests/", "examples/"],
-      "capabilities": ["read_file"],
-      "denyPaths": ["**/.env*", "manifests/production/**", ".claude/**"],
-      "allowPaths": ["tests/**", "examples/**"],
-      "audit": "Audit trail location/method",
-      "secretsRequired": false,
-      "secretsStorage": "none"
+      "command": "npx",
+      "args": ["-y", "@some-vendor/mcp-server"],
+      "env": {}
     }
   }
 }
 ```
+
+Then record the governance metadata (vendor, approval date, scope, capabilities, audit notes) in the "Current MCP Integrations" section of this guide — not in JSON.
 
 ### Step 5: Documentation
 

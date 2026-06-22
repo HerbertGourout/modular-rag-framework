@@ -42,25 +42,21 @@ Use subagents for:
 
 **File**: `.claude/agents/code-reviewer.md`
 
+> **Correction (2026-06-22, revised)**: an earlier pass through this doc over-corrected. Only `name` and `description` are required, but there are **15 real optional fields**, not "exactly four": `tools`, `disallowedTools`, `model`, `permissionMode`, `maxTurns`, `skills`, `mcpServers`, `hooks`, `memory`, `background`, `effort`, `isolation`, `color`, `initialPrompt`. What's genuinely **not** real: a `permissions` block with `allow`/`deny` path arrays (the real, much simpler equivalent is the `permissionMode` enum: `default`/`acceptEdits`/`auto`/`dontAsk`/`bypassPermissions`/`plan`), an `autoMemory` boolean (the real field is `memory: user|project|local`, see below), and `expertise_level`/`domain`/`instructions` (not recognized — put that content in the body). Also: `claude-opus-4-6` **is** a real model ID (just not the current latest, which is `claude-opus-4-8`) — an earlier note here wrongly called it fake.
+
 ```markdown
 ---
 name: code-reviewer
-model: claude-opus-4-6
 description: Specialized code review agent
-permissions:
-  allow:
-    - "Read(src/**)"
-    - "Read(tests/**)"
-    - "Bash(npm run lint)"
-  deny:
-    - "Edit(**)"
-    - "Bash(npm publish)"
-autoMemory: true
+model: opus
+tools: Read, Grep, Bash
+permissionMode: dontAsk
+memory: project
 ---
 
 # Code Reviewer Agent
 
-Expert code reviewer focused on quality and security.
+Expert code reviewer focused on quality and security. Only reads src/** and tests/**; never edits files; runs `npm run lint` to verify findings.
 
 ## Responsibilities
 
@@ -81,39 +77,34 @@ Expert code reviewer focused on quality and security.
 
 ### Using a Subagent
 
+> **Correction (2026-06-22, revised)**: `claude --agent <name>` and the top-level `agent` settings.json key **are real** — an earlier note here wrongly called them fake. What's genuinely not real is a `/agent <name>` slash command with trailing arguments; the real chat-time invocation is `@`-mention.
+
 ```bash
-# Run main thread as code-reviewer agent
+# Run main thread as the code-reviewer agent for this session
 claude --agent code-reviewer
 
-# Set default agent for all sessions
-echo '{"agent": "code-reviewer"}' >> ~/.claude/settings.json
+# Set it as the default agent for all sessions (real settings.json key)
+# .claude/settings.json: { "agent": "code-reviewer" }
+```
 
-# Switch agent mid-session
-/agent code-reviewer
+```
+# Mid-conversation: Claude delegates automatically when a task matches the
+# subagent's `description`, or you @-mention it explicitly:
+@code-reviewer please review this diff for security issues
+# (manual form without the picker: @agent-code-reviewer)
 ```
 
 ### Subagent Memory
 
-Each subagent maintains its own auto memory:
+> **Correction (2026-06-22, revised)**: per-subagent memory **is real** — an earlier note here wrongly denied it. The real field is `memory: user|project|local` (not `autoMemory: true`), and the real path depends on scope:
 
-```
-~/.claude/projects/<project>/memory/
-├── MEMORY.md                  # Main session memory
-├── agents/
-│   ├── code-reviewer/
-│   │   └── MEMORY.md          # Code reviewer learnings
-│   ├── docs-writer/
-│   │   └── MEMORY.md          # Docs writer learnings
-```
+| Scope | Location |
+|-------|----------|
+| `user` | `~/.claude/agent-memory/<name-of-agent>/` |
+| `project` | `.claude/agent-memory/<name-of-agent>/` (shareable via version control — recommended default) |
+| `local` | `.claude/agent-memory-local/<name-of-agent>/` (project-specific, not checked in) |
 
-Enable per subagent:
-
-```markdown
----
-name: code-reviewer
-autoMemory: true
----
-```
+When enabled, Read/Write/Edit are auto-granted for that directory, and the first 200 lines (or 25KB) of its `MEMORY.md` are injected into the subagent's system prompt automatically.
 
 ---
 
@@ -122,20 +113,20 @@ autoMemory: true
 ### What are Skills?
 
 **Skills** are reusable workflows:
-- Stored as `.md` files
-- Loaded on demand or automatically
-- Can invoke with `/skill-name`
-- Saved to `~/.claude/skills/` or `.claude/skills/`
+- Stored as a **directory** containing `SKILL.md` (not a flat `.md` file — see correction below)
+- Invoked explicitly (by Claude or a user typing `/skill-name`) — never auto-loaded just because a path matched (that's what path-scoped Rules are for, see next section)
+- Saved to `~/.claude/skills/<name>/` (user, all projects) or `.claude/skills/<name>/` (project, checked in)
 
 ### Skill File Format
 
-**File**: `.claude/skills/deploy-to-staging.md`
+> **Correction (2026-06-22)**: the path must be `.claude/skills/deploy-to-staging/SKILL.md` (a directory per skill), not a flat `.claude/skills/deploy-to-staging.md` file — flat files are silently never discovered. Frontmatter supports only `name` and `description`; `when_to_use`/`example_invocation` are not real fields (put that guidance in the body instead).
+
+**File**: `.claude/skills/deploy-to-staging/SKILL.md`
 
 ```markdown
 ---
 name: deploy-to-staging
-when_to_use: Deploy code changes to staging environment
-example_invocation: /deploy-to-staging
+description: Deploy code changes to staging environment
 ---
 
 # Deploy to Staging
@@ -175,18 +166,18 @@ Claude will:
 
 ```
 .claude/skills/
-├── build-and-test.md
-├── deploy-to-staging.md
-├── deploy-to-production.md
-├── security/
-│   ├── security-scan.md
-│   └── dependency-audit.md
-└── documentation/
-    ├── generate-api-docs.md
-    └── update-changelog.md
+├── build-and-test/SKILL.md
+├── deploy-to-staging/SKILL.md
+├── deploy-to-production/SKILL.md
+├── security-scan/SKILL.md
+└── dependency-audit/SKILL.md
 ```
 
+(Each skill is its own directory; there's no nested-folder grouping like `security/`/`documentation/` shown in earlier drafts of this doc — `.claude/skills/` is a flat list of skill directories.)
+
 ### Controlling Skill Visibility
+
+> **Not independently verified (2026-06-22)**: `skillOverrides`, `skillListingBudgetFraction`, `maxSkillDescriptionChars`, and `strictPluginOnlyCustomization` (mentioned earlier in this file) were not confirmed against official docs during this audit — treat them as unverified rather than assume they work. Everything else on this page up to this point (subagent frontmatter, skill directory format, hook events/matcher, model IDs) was checked and corrected.
 
 **Hide or collapse skills** with `skillOverrides`:
 
@@ -308,15 +299,22 @@ ln -s ~/shared-rules/api-design.md .claude/rules/api-design.md
 
 ### Hook Types
 
+> **Correction (2026-06-22)**: `ConfigChange`, `InstructionsLoaded`, and `ContextWindows` are not real hook events — they were invented. The real lifecycle events are:
+
 | Hook | Event | Usage |
 |------|-------|-------|
 | `PreToolUse` | Before tool execution | Validate/block operations |
 | `PostToolUse` | After tool execution | Auto-formatting, linting |
-| `ConfigChange` | Settings changed | Notify/reload config |
-| `InstructionsLoaded` | Session starts | Log what rules loaded |
-| `ContextWindows` | Context window changes | Track memory usage |
+| `Notification` | Claude sends a notification | Custom alerting |
+| `UserPromptSubmit` | User submits a prompt | Inject extra context, validate input |
+| `Stop` | Main agent finishes responding | Cleanup, summaries |
+| `SubagentStop` | A subagent finishes | Aggregate subagent results |
+| `PreCompact` | Before context compaction | Save state before it's summarized |
+| `SessionStart` / `SessionEnd` | Session begins/ends | Setup/teardown |
 
 ### Post-Tool-Use Hook (Most Common)
+
+> **Correction**: there is no `filePattern` field, and no `{file}` template substitution in the `command` string — `matcher` only matches the **tool name**. Claude Code pipes a JSON payload (including `tool_input.file_path`) to the hook command's **stdin**; the command itself must parse that (e.g. with `jq`) if it needs to act conditionally on the file path:
 
 ```json
 {
@@ -324,21 +322,10 @@ ln -s ~/shared-rules/api-design.md .claude/rules/api-design.md
     "PostToolUse": [
       {
         "matcher": "Edit|Create",
-        "filePattern": "src/**/*.py",
         "hooks": [
           {
             "type": "command",
-            "command": "ruff check {file} --select E,F,I --fix"
-          }
-        ]
-      },
-      {
-        "matcher": "Edit",
-        "filePattern": "src/**/*.ts",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "eslint {file} --fix"
+            "command": "file=$(jq -r .tool_input.file_path); case \"$file\" in *.py) ruff check \"$file\" --select E,F,I --fix;; *.ts) eslint \"$file\" --fix;; esac"
           }
         ]
       }
@@ -452,7 +439,7 @@ claude
 ### Available Models
 
 ```
-claude-opus-4-6        # Most capable, most expensive
+claude-opus-4-8        # Most capable, most expensive
 claude-sonnet-4-6      # Balanced (default)
 claude-haiku-4-5       # Fast, cheap
 ```
@@ -463,7 +450,7 @@ When primary model overloaded, fall back to others:
 
 ```json
 {
-  "model": "claude-opus-4-6",
+  "model": "claude-opus-4-8",
   "fallbackModel": ["claude-sonnet-4-6", "claude-haiku-4-5"]
 }
 ```
@@ -486,7 +473,7 @@ Map Anthropic models to provider-specific IDs (Bedrock, Vertex):
 ```json
 {
   "modelOverrides": {
-    "claude-opus-4-6": "arn:aws:bedrock:us-east-1:123456789012:inference-profile/anthropic.claude-opus-4-6-20250514-v1:0",
+    "claude-opus-4-8": "arn:aws:bedrock:us-east-1:123456789012:inference-profile/anthropic.claude-opus-4-8-20250514-v1:0",
     "claude-sonnet-4-6": "arn:aws:bedrock:us-east-1:123456789012:inference-profile/anthropic.claude-sonnet-4-6-20250514-v1:0"
   }
 }
@@ -535,7 +522,7 @@ Map Anthropic models to provider-specific IDs (Bedrock, Vertex):
 
 ```json
 {
-  "model": "claude-opus-4-6",
+  "model": "claude-opus-4-8",
   "fallbackModel": ["claude-sonnet-4-6"],
   "alwaysThinkingEnabled": true,
   "effortLevel": "xhigh",
