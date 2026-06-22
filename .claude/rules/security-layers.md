@@ -8,19 +8,23 @@ This document defines the complete security architecture for Claude Code interac
 
 **Definition**: Globally defines what is possible. Granular per-path permission model in `.claude/settings.json`.
 
-### Three-Tier Strategy
+### 3-Bucket Model (real Claude Code permission system)
+
+Claude Code uses **three buckets**, not four tiers. The old `dontAsk`/`acceptEdits`/`ask_before_edit` terminology was invented and never read by the tool. The real model:
 
 ```
-BLOCKED BY DEFAULT (Denylist)
-    ↓
-Tier 1: DONTASK (tests/, examples/, docs/)
-    ↓
-Tier 2: ACCEPTEDITS (ingestion/, retrieval/, generation/, eval/, memory/)
-    ↓
-Tier 3: ASK_BEFORE_EDIT (contracts/, orchestration/, security/, adapters/embeddings, adapters/vectorstores)
+deny  → always blocked, no prompt (highest priority)
+  ↓
+ask   → prompts every time before acting
+  ↓
+allow → auto-approved, no prompt
+  ↓
+(everything else falls to defaultMode — "default" in this project)
 ```
 
-### Denylist (Always Blocked)
+**Configuration**: `.claude/settings.json` → `permissions.deny` / `permissions.ask` / `permissions.allow` arrays of `Edit(path/**)` / `Write(path/**)` / `Read(path/**)` patterns.
+
+### deny — Always Blocked
 
 | Path | Reason |
 |------|--------|
@@ -29,44 +33,38 @@ Tier 3: ASK_BEFORE_EDIT (contracts/, orchestration/, security/, adapters/embeddi
 | `manifests/production/**` | Production configs (V4+ scope) |
 | `.claude/rules/**` | Architecture rules — breaking changes |
 | `.gitlab/**` | CI/CD pipeline configuration |
-| `adapters/llms/**` | LLM adapters (V2+ scope) |
-| `adapters/auth/**` | Auth adapters (V4+ scope) |
-| `adapters/graphstores/**` | Graph store adapters (V3+ scope) |
-| `adapters/search/**` | Search adapters (V2-V3 scope) |
+| `src/modular_rag/adapters/llms/**` | LLM adapters (V2+ scope) |
+| `src/modular_rag/adapters/auth/**` | Auth adapters (V4+ scope) |
+| `src/modular_rag/adapters/graphstores/**` | Graph store adapters (V3+ scope) |
+| `src/modular_rag/adapters/search/**` | Search adapters (V2-V3 scope) |
 | `benchmarks/**` | Benchmarks (V3+ scope) |
 
-### NoAsk Paths (Zero Friction)
+### allow — Auto-Approved (no prompt)
 
-| Path | Mode | Rationale |
-|------|------|-----------|
-| `tests/**` | `dontAsk` | Test creation encouraged; no risk to core |
-| `examples/**` | `dontAsk` | Safe sandbox; demonstrates framework use |
-| `docs/**` | `dontAsk` | Documentation changes never break code |
+| Path | Rationale |
+|------|-----------|
+| `tests/**` | Test creation encouraged; no risk to core |
+| `examples/**` | Safe sandbox; demonstrates framework use |
+| `docs/**` | Documentation changes never break code |
+| `src/modular_rag/ingestion/**` | New chunkers, parsers, processors safe |
+| `src/modular_rag/retrieval/**` | New retrievers, rerankers safe |
+| `src/modular_rag/generation/**` | New generators, prompt templates safe |
+| `src/modular_rag/eval/**` | New metrics, scorers safe |
+| `src/modular_rag/memory/**` | Context/conversation extensions safe |
 
-### AutoPaths (Auto-Accept)
+### ask — Prompts Every Time
 
-| Path | Mode | Rationale |
-|------|------|-----------|
-| `src/modular_rag/ingestion/**` | `acceptEdits` | New chunkers, parsers, processors safe |
-| `src/modular_rag/retrieval/**` | `acceptEdits` | New retrievers, rerankers safe |
-| `src/modular_rag/generation/**` | `acceptEdits` | New generators, prompt templates safe |
-| `src/modular_rag/eval/**` | `acceptEdits` | New metrics, scorers safe |
-| `src/modular_rag/memory/**` | `acceptEdits` | Context/conversation extensions safe |
-
-### RestrictedPaths (Ask Before Edit)
-
-| Path | Mode | Allowed Changes |
-|------|------|-----------------|
-| `src/modular_rag/contracts/**` | `ask_before_edit` | Docstrings, type annotations, documentation only |
-| `src/modular_rag/orchestration/**` | `ask_before_edit` | Registry, engine, router changes need approval |
-| `src/modular_rag/security/**` | `ask_before_edit` | Policies, guards, redaction rules need review |
-| `src/modular_rag/adapters/embeddings/**` | `ask_before_edit` | Embedding protocol implementations protected |
-| `src/modular_rag/adapters/vectorstores/**` | `ask_before_edit` | Vector store binding implementations protected |
-| `src/modular_rag/core/**` | `ask_before_edit` | Core models, exceptions, utilities protected |
-| `.claude/` | `ask_before_edit` | Claude Code configuration protected |
-| `pyproject.toml` | `ask_before_edit` | Dependencies, versions, build config protected |
-| `CONTRIBUTING.md` | `ask_before_edit` | Development guidelines protected |
-| `.gitlab-ci.yml` | `ask_before_edit` | CI/CD pipeline protected |
+| Path | Rationale |
+|------|-----------|
+| `src/modular_rag/contracts/**` | Protocol definitions — breaking changes propagate everywhere |
+| `src/modular_rag/orchestration/**` | Registry, engine, router changes need approval |
+| `src/modular_rag/security/**` | Policies, guards, redaction rules need review |
+| `src/modular_rag/adapters/embeddings/**` | Embedding protocol implementations protected |
+| `src/modular_rag/adapters/vectorstores/**` | Vector store binding implementations protected |
+| `src/modular_rag/core/**` | Core models, exceptions, utilities protected |
+| `pyproject.toml` | Dependencies, versions, build config protected |
+| `CONTRIBUTING.md` | Development guidelines protected |
+| `.gitlab-ci.yml` | CI/CD pipeline protected |
 
 ---
 
@@ -83,7 +81,6 @@ Tier 3: ASK_BEFORE_EDIT (contracts/, orchestration/, security/, adapters/embeddi
   "PostToolUse": [
     {
       "matcher": "Edit|Write",
-      "filePattern": "src/modular_rag/**/*.py|tests/**/*.py",
       "hooks": [
         {
           "type": "command",
@@ -100,38 +97,17 @@ Tier 3: ASK_BEFORE_EDIT (contracts/, orchestration/, security/, adapters/embeddi
 - **F** — Undefined names (missing imports, typos)
 - **I** — Import ordering (alphabetical, grouped by type)
 
-**When it runs**: After every `replace_string_in_file`, `create_file`, `edit_notebook_file` operation.
+**When it runs**: After every Edit or Write tool call. Note: `matcher` matches the **tool name** (`Edit|Write`), not file paths — there is no native per-path hook filter. The hook therefore lints the entire `src/modular_rag/` + `tests/` tree on every Edit/Write regardless of which file changed.
 
-### FutureHooks (V2+ Reserved)
+### Reserved Validation Ideas (not in settings.json — backlog only)
 
-**Purpose**: Validate architecture compliance before merge.
+These checks would be valuable but require external scripts — no `futureHooks` key exists in Claude Code:
 
-```json
-{
-  "futureHooks": [
-    {
-      "name": "cross-domain-imports",
-      "description": "Prevent imports between ingestion → generation, retrieval → memory, etc.",
-      "filePattern": "src/modular_rag/**/*.py",
-      "enabled": false
-    },
-    {
-      "name": "conformance-check",
-      "description": "Verify Protocol implementation matches contracts/",
-      "filePattern": "src/modular_rag/**/*.py",
-      "enabled": false
-    },
-    {
-      "name": "lazy-imports-required",
-      "description": "Detect qdrant-client, openai, rank-bm25 at module level (must be inside functions)",
-      "filePattern": "src/modular_rag/adapters/**/*.py",
-      "enabled": false
-    }
-  ]
-}
-```
+- Cross-domain import detection (`retrieval/` never imports from `generation/`)
+- Protocol conformance checking (implementations match contracts/)
+- Lazy import validation (heavy deps inside function, not at module level)
 
-**When enabled**: During V2+ implementation phase. Prevents regressions.
+Use the `/validate-security` and `/validate-architecture` skills for manual versions today.
 
 ---
 
@@ -184,43 +160,43 @@ src/modular_rag/
 ├── cli/                      ← API entry point (restricted)
 ├── api/                      ← REST handlers (restricted)
 ├── app/                      ← Bootstrap, settings (restricted)
-├── orchestration/            ← Registry, engine, wiring (ask_before_edit)
-├── contracts/                ← Protocol definitions (ask_before_edit)
-├── core/                     ← Models, exceptions, utilities (ask_before_edit)
+├── orchestration/            ← Registry, engine, wiring (ask)
+├── contracts/                ← Protocol definitions (ask)
+├── core/                     ← Models, exceptions, utilities (ask)
 ├── adapters/
-│   ├── embeddings/           ← Embedding implementations (ask_before_edit)
-│   ├── vectorstores/         ← Vector store bindings (ask_before_edit)
+│   ├── embeddings/           ← Embedding implementations (ask)
+│   ├── vectorstores/         ← Vector store bindings (ask)
 │   ├── llms/                 ← LLM adapters (BLOCKED — V2+ scope)
 │   ├── auth/                 ← Auth adapters (BLOCKED — V4+ scope)
 │   └── ...
-├── security/                 ← Filters, policies, guards (ask_before_edit)
-├── ingestion/                ← Chunkers, parsers (acceptEdits)
-├── retrieval/                ← Retrievers, rerankers (acceptEdits)
-├── generation/               ← Generators, prompts (acceptEdits)
-├── eval/                     ← Metrics, scorers (acceptEdits)
-├── memory/                   ← Context, conversation (acceptEdits)
-└── agents/                   ← Agent protocols (ask_before_edit)
+├── security/                 ← Filters, policies, guards (ask)
+├── ingestion/                ← Chunkers, parsers (allow)
+├── retrieval/                ← Retrievers, rerankers (allow)
+├── generation/               ← Generators, prompts (allow)
+├── eval/                     ← Metrics, scorers (allow)
+├── memory/                   ← Context, conversation (allow)
+└── agents/                   ← Agent protocols (ask)
 
 tests/
-├── unit/                     ← Unit tests (dontAsk)
-├── integration/              ← Integration tests (dontAsk)
-├── contract/                 ← Protocol conformance tests (dontAsk)
-└── e2e/                      ← End-to-end tests (dontAsk)
+├── unit/                     ← Unit tests (allow)
+├── integration/              ← Integration tests (allow)
+├── contract/                 ← Protocol conformance tests (allow)
+└── e2e/                      ← End-to-end tests (allow)
 
 docs/
-├── adr/                      ← Architectural decisions (dontAsk — ask before major ADR)
-├── architecture/             ← Architecture docs (dontAsk)
-├── guides/                   ← Developer guides (dontAsk)
-└── reviews/                  ← Review notes (dontAsk)
+├── adr/                      ← Architectural decisions (allow)
+├── architecture/             ← Architecture docs (allow)
+├── guides/                   ← Developer guides (allow)
+└── reviews/                  ← Review notes (allow)
 
 manifests/
-├── presets/                  ← Reference configs (acceptEdits for docs, ask before adding)
+├── presets/                  ← Reference configs (allow)
 ├── dev/                      ← Dev configs (BLOCKED until V2)
 ├── staging/                  ← Staging configs (BLOCKED until V4)
 └── production/               ← Production configs (BLOCKED until V4)
 
 examples/
-├── simple_qa/                ← V1 reference example (acceptEdits for docs)
+├── simple_qa/                ← V1 reference example (allow)
 ├── agentic_rag/              ← V2+ example (BLOCKED — V2 scope)
 ├── graph_memory/             ← V3+ example (BLOCKED — V3 scope)
 └── ...                       ← Others (BLOCKED)
@@ -230,8 +206,8 @@ examples/
 
 - **Blocked zones** (llms/, auth/, graphstores/, search/): Reserved namespaces prevent accidental V2+ implementation
 - **Ask-before zones** (contracts/, orchestration/, security/): Changes here propagate to entire framework
-- **AutoAccept zones** (ingestion/, retrieval/, generation/): New implementations are localized, safe
-- **NoAsk zones** (tests/, examples/, docs/): Zero friction on documentation and testing
+- **Allow zones** (ingestion/, retrieval/, generation/): New implementations are localized, safe
+- **Allow zones** (tests/, examples/, docs/): Zero friction on documentation and testing
 
 ---
 
@@ -354,19 +330,7 @@ Before using any MCP server integration, security review must cover:
 
 ### Current MCP Integrations
 
-**Installed MCPs**:
-```json
-{
-  "mcpServers": {
-    "claude-vscode-tools": {
-      "enabled": true,
-      "scope": ["src/modular_rag/**", "tests/**", "docs/**"],
-      "capabilities": ["read_file", "write_file", "list_dir", "run_command"],
-      "audit": "VS Code integration; logs in .vscode/output"
-    }
-  }
-}
-```
+**Current state**: No MCP server is configured in this project — no `.mcp.json` file exists yet. "Layer 06" describes the review *process* to follow once one is requested, not an already-installed integration.
 
 ### Adding New MCP Servers
 
@@ -375,25 +339,8 @@ Before using any MCP server integration, security review must cover:
 2. Security review (review checklist above)
 3. Scope definition (which paths can MCP access?)
 4. Approval (security + architecture team sign-off)
-5. Add to `.claude/settings.json` with audit trail
+5. Add the server to a project-root **`.mcp.json`** file (not `.claude/settings.json` — `mcpServers` is not a recognized `settings.json` key); scope its tool access via `permissions.allow`/`ask`/`deny` in `settings.json` if needed
 6. Document in [docs/guides/mcp-integrations.md](../../docs/guides/) (if added)
-
-### MCP Server Restrictions in `.claude/settings.json`
-
-Example (hypothetical future integration):
-```json
-{
-  "mcpServers": {
-    "database-query-tool": {
-      "enabled": false,
-      "reason": "V3+ scope — knowledge graph requires governance review",
-      "denyPaths": ["**/.env*", "manifests/production/**", ".claude/**"],
-      "allowPaths": ["tests/e2e/**"],
-      "audit": "Requires MRAG_DB_URL + connection audit logging"
-    }
-  }
-}
-```
 
 ---
 
@@ -533,7 +480,7 @@ glab mr view 42 --web  # Opens approval chain
 | Layer | Control | Tools | Status |
 |-------|---------|-------|--------|
 | **01** | Permissions | `.claude/settings.json` | ✅ Implemented |
-| **02** | Hooks | PostToolUse (ruff), futureHooks (reserved) | ✅ Implemented |
+| **02** | Hooks | PostToolUse (ruff) — `matcher: "Edit|Write"` lints full `src/+tests/` tree | ✅ Implemented |
 | **03** | Policies | CLAUDE.md (9 blocks + local), CONTRIBUTING.md | ✅ Implemented |
 | **04** | Segmentation | Folder boundaries + permission matrix | ✅ Implemented |
 | **05** | Secrets | .env + .gitignore + code patterns | ✅ Implemented |

@@ -108,7 +108,7 @@ Your configuration is built on **three non-negotiable principles**:
 - **Standard commands** — /quick-check, /full-check, /add-component, etc.
 - **Standard validation** — scripts/check.sh (quick/full/integration/e2e/all)
 - **Standard git workflow** — CONTRIBUTING.md (branch naming, commit format, MR process)
-- **Standard permissions** — 3-tier model in settings.json (denylist/noAsk/autoAccept/restricted)
+- **Standard permissions** — 3-bucket model in settings.json (deny/ask/allow)
 
 **What this means for you**:
 - Everyone uses the same validation commands
@@ -146,26 +146,23 @@ Your security is protected by **7 independent layers**, each with a different co
 
 ### Layer 01: Permissions (First Line of Control)
 
-**What it does**: Globally defines what is possible. Granular per-path.
+**What it does**: Globally defines what is possible. Granular per-path, using Claude Code's **real** `permissions.allow` / `permissions.ask` / `permissions.deny` schema (corrected 2026-06-22 — earlier revisions of this doc and of `.claude/settings.json` used invented keys `denylists`/`noAskPaths`/`autoPaths`/`restrictedPaths` that Claude Code never read).
 
-**3-Tier Model**:
+**3-Bucket Model** (this is the actual Claude Code model, not a 4-tier one — `deny` and `ask` are absolute; everything else falls under `allow` or the session's `defaultMode`):
 ```
-BLOCKED BY DEFAULT (Denylist — always no)
-    ↓
-Tier 1: DONTASK (tests/, examples/, docs/ — zero friction)
-    ↓
-Tier 2: ACCEPTEDITS (ingestion/, retrieval/, generation/, eval/, memory/ — auto-accept)
-    ↓
-Tier 3: ASK_BEFORE_EDIT (contracts/, orchestration/, security/, adapters/embeddings, adapters/vectorstores)
+deny  → always blocked, never prompts (.env*, manifests/production/, .claude/rules/, adapters/{llms,auth,graphstores,search}/, benchmarks/)
+  ↓
+ask   → prompts every time (contracts/, orchestration/, security/, adapters/{embeddings,vectorstores}/, core/, pyproject.toml, CONTRIBUTING.md, .gitlab-ci.yml)
+  ↓
+allow → auto-approved, no prompt (tests/, examples/, docs/, ingestion/, retrieval/, generation/, eval/, memory/)
 ```
 
-**Configuration**: `.claude/settings.json` (permissions section)
+**Configuration**: `.claude/settings.json` → `permissions.allow` / `permissions.ask` / `permissions.deny` (arrays of `Edit(path/**)` / `Write(path/**)` / `Read(path/**)` patterns)
 
 **Examples**:
-- ❌ BLOCKED: `.env`, `manifests/production/`, `.claude/rules/`, `adapters/llms/`
-- ✅ DONTASK: `tests/`, `examples/`, `docs/`
-- ✅ ACCEPTEDITS: New chunkers, retrievers, generators
-- ✅ ASK_BEFORE_EDIT: Protocol changes, registry changes, security rules
+- ❌ deny: `.env*`, `manifests/production/**`, `.claude/rules/**`, `adapters/llms/**`
+- ✅ allow: `tests/**`, `examples/**`, `docs/**`, new chunkers/retrievers/generators
+- ⚠️ ask: Protocol changes, registry changes, security rules
 
 **Why it matters**: Prevents accidental breaking changes while encouraging component development
 
@@ -176,16 +173,18 @@ Tier 3: ASK_BEFORE_EDIT (contracts/, orchestration/, security/, adapters/embeddi
 **What it does**: Automatic validation after file writes.
 
 **PostToolUse Hooks** (implemented):
-- After every file edit → `ruff check src/modular_rag/ tests/ --select E,F,I`
+- `matcher: "Edit|Write"` → after every Edit/Write tool call (any file, not just `.py` — the `matcher` field matches **tool names**, not file paths; Claude Code has no native per-path hook filter) → runs `ruff check src/modular_rag/ tests/ --select E,F,I --quiet`
 - Catches: syntax errors, undefined names, import order violations
-- Runs automatically (no manual intervention)
+- Runs automatically (no manual intervention) — but always scans the whole `src/modular_rag/` + `tests/` tree, not just the changed file
 
-**FutureHooks** (V2+ reserved):
+**Reserved validation ideas** (not implemented — no script exists yet, kept here as a backlog, not in `settings.json`):
 - Cross-domain import detection
 - Protocol conformance checking
 - Lazy import validation
 
-**Configuration**: `.claude/settings.json` (hooks section)
+Use the `validate-security` skill for a manual version of these checks today.
+
+**Configuration**: `.claude/settings.json` → `hooks.PostToolUse`
 
 **Why it matters**: Fail-fast — errors caught immediately, not in CI/CD
 
@@ -258,9 +257,11 @@ src/modular_rag/
 **Process**:
 1. Request MCP (GitLab issue)
 2. Security review (7-point checklist)
-3. Scope definition (allowPaths + denyPaths)
-4. Add to settings.json
+3. Scope definition (governance bookkeeping — see correction in mcp-integrations.md)
+4. Add the server to a project-root **`.mcp.json`** (not `.claude/settings.json` — `mcpServers` is not a recognized `settings.json` key); restrict its tools via `permissions.allow`/`ask`/`deny` in `settings.json` if needed
 5. Document in [docs/guides/mcp-integrations.md](../../docs/guides/mcp-integrations.md)
+
+**Current state**: no MCP server is configured in this project (no `.mcp.json` exists yet) — "Layer 06" describes the review *process* to follow once one is requested, not an already-installed integration.
 
 **Review Checklist**:
 - ✅ Source verified (trusted vendor/OSS)
@@ -302,73 +303,76 @@ src/modular_rag/
 
 **What it does**: Triggers automatic actions at specific lifecycle points.
 
-**PostToolUse Hooks** (active):
+**PostToolUse Hooks** (active — actual shape in `.claude/settings.json`, note there's no `filePattern` field, that key was never real):
 ```json
 {
   "matcher": "Edit|Write",
-  "filePattern": "src/modular_rag/**/*.py|tests/**/*.py",
-  "command": "ruff check src/modular_rag/ tests/ --select E,F,I --quiet"
+  "hooks": [
+    { "type": "command", "command": "ruff check src/modular_rag/ tests/ --select E,F,I --quiet" }
+  ]
 }
 ```
 
-**Trigger**: After every file write  
-**Action**: Lint with ruff  
+**Trigger**: After every Edit/Write tool call (any file)
+**Action**: Lint the whole `src/modular_rag/` + `tests/` tree with ruff
 **Result**: Immediate feedback (pass/fail)
 
-**FutureHooks** (V2+ reserved):
+**Reserved validation ideas** (not implemented, no script exists — see Layer 02 above):
 - Cross-domain import detection
 - Conformance validation
 - Lazy import checking
 
-**Configuration**: `.claude/settings.json` → hooks section
+**Configuration**: `.claude/settings.json` → `hooks.PostToolUse`
 
 ---
 
-### Mechanism 2: 🧠 Skills
+### Mechanism 2: 📐 Rules (path-scoped auto-context — distinct from Skills, see Mechanism 3)
 
-**What it does**: Formalized reusable workflows, callable by Claude or humans.
+**What it does**: Markdown files Claude Code automatically loads into context, either always (no `paths:` frontmatter) or only when a file matching `paths:` is opened.
 
-**7 Domain-Specific Rules** (act as skills):
-1. [orchestration.md](../../.claude/rules/orchestration.md) — Registry patterns, engine flow
-2. [adapters.md](../../.claude/rules/adapters.md) — External bindings, lazy imports, Protocol implementation
-3. [agents.md](../../.claude/rules/agents.md) — Agent interfaces, state passing, TraceStep
-4. [agentic_workflows.md](../../.claude/rules/agentic_workflows.md) — V2+ coordination patterns
-5. [contracts.md](../../.claude/rules/contracts.md) — Protocol-first development
-6. [security.md](../../.claude/rules/security.md) — Safety vs Security distinction
-7. [tests.md](../../.claude/rules/tests.md) — Testing conventions
+**6 path-scoped rules** (loaded automatically when their `paths:` glob is touched):
+1. [orchestration.md](../../.claude/rules/orchestration.md) — `src/modular_rag/orchestration/**/*.py`
+2. [adapters.md](../../.claude/rules/adapters.md) — `src/modular_rag/adapters/**/*.py`
+3. [agents.md](../../.claude/rules/agents.md) — `src/modular_rag/agents/**/*.py`
+4. [agentic_workflows.md](../../.claude/rules/agentic_workflows.md) — `src/modular_rag/agents/**/*.py` + `orchestration/team_coordinator.py` (V2+ content, dormant until those paths are touched)
+5. [contracts.md](../../.claude/rules/contracts.md) — `src/modular_rag/contracts/**/*.py`
+6. [security.md](../../.claude/rules/security.md) — `src/modular_rag/security/**/*.py`
+7. [tests.md](../../.claude/rules/tests.md) — `tests/**/*.py`
 
-**Plus meta-rules**:
+**1 always-on rule** (no `paths:` frontmatter → loaded every session, like CLAUDE.md):
 - [security-layers.md](../../.claude/rules/security-layers.md) — 7-layer defense system
-- [.instructions.md](../../.claude/.instructions.md) — Global architecture rules
-- [.prompt.md](../../.claude/.prompt.md) — Response style guide
 
-**Configuration**: Automatic discovery via `.claude/rules/` + `applyTo` patterns
+**Configuration**: Automatic discovery of every `.md` file under `.claude/rules/`. The scoping key is `paths:` in YAML frontmatter (a list of globs), not `applyTo` (that's a different tool's convention).
 
-**Example**: When editing `src/modular_rag/adapters/embeddings/huggingface.py`, automatically loads `adapters.md` rules
+**Example**: When editing `src/modular_rag/adapters/embeddings/huggingface.py`, `adapters.md` is automatically loaded into context — no invocation needed.
+
+> `.claude/.instructions.md` and `.claude/.prompt.md` are **not** rules and are **not** auto-discovered by Claude Code on their own — they're plain files that only load because `CLAUDE.md` now `@`-imports them (see Configuration Files Reference below).
 
 ---
 
-### Mechanism 3: ⚡ Custom Commands
+### Mechanism 3: 🧠 Skills (on-demand workflows, not auto-loaded)
 
-**What it does**: Team-wide slash commands for common workflows.
+**What it does**: Reusable workflows that Claude (or a user typing `/<name>`) explicitly invokes — unlike Rules, skills are never loaded automatically just because a file path matched.
 
-**5 Available Commands** (in `.claude/AGENTS.md`):
+**Configuration**: One directory per skill under `.claude/skills/<skill-name>/SKILL.md`, with `name` + `description` frontmatter only. A **flat** `.claude/skills/<name>.md` file is *not* discovered — this project's skills were flat files until 2026-06-22 and were silently invisible to Claude Code until converted to the directory form.
 
-| Command | Purpose | Time | Use When |
-|---------|---------|------|----------|
-| `/quick-check` | Syntax + imports | 30s | After code edits |
-| `/full-check` | Unit + contract tests | 2-5m | Before MR |
-| `/validate-security` | Security layer compliance | 5-10m | Security-sensitive changes |
-| `/add-component` | Scaffolding template | 10m | New adapter/component |
-| `/release` | Pre-release validation | 10m | Before tagging release |
+**13 skills available**:
+
+| Skill | Purpose |
+|-------|---------|
+| `/quick-check` | Syntax + imports (30s) |
+| `/full-check` | Unit + contract tests (2-5m) |
+| `/validate-security` | Security layer compliance (5-10m) |
+| `/add-component` | Generic scaffolding for a new component |
+| `/release` | Pre-release validation |
+| `/add-retriever`, `/add-generator`, `/add-security-guard` | Type-specific scaffolding |
+| `/design-retriever-fusion`, `/optimize-chunking`, `/prepare-evaluation`, `/validate-architecture`, `/parallel-feature-analysis` | Domain workflows tied to a subagent (see Advanced: Sub-Agents) |
 
 **Example**:
 ```
 You:  /quick-check
 Claude: Runs ./scripts/check.sh quick and reports results
 ```
-
-**Configuration**: `.claude/AGENTS.md` — describes each command
 
 ---
 
@@ -403,19 +407,21 @@ coverage:   # pytest with coverage report
 
 ### Core Configuration Files
 
-| File | Purpose | Size | Edited By |
+| File | Purpose | Auto-loaded by Claude Code? | Edited By |
 |------|---------|------|-----------|
-| **CLAUDE.md** | Project policy (9 blocks) | 350 lines | Architecture team |
-| **.claude/.instructions.md** | Global rules for Claude | 800 lines | Architecture team |
-| **.claude/.prompt.md** | Response style guide | 700 lines | Architecture team |
-| **.claude/settings.json** | Permissions + hooks | 200 lines | Architecture team |
-| **.claude/AGENTS.md** | Custom commands | 350 lines | Architecture team |
-| **.claude/rules/*.md** | Domain-specific rules | 3,500 lines | Domain owners |
-| **.env.example** | Template environment vars | 20 lines | Any developer |
-| **.gitignore** | Git exclusions (documented) | 150 lines | Any developer |
-| **CONTRIBUTING.md** | Git workflow + MR process | 300 lines | Architecture team |
-| **scripts/check.sh** | Validation script | 250 lines | Architecture team |
-| **.gitlab-ci.yml** | CI/CD pipeline | 60 lines | DevOps/Architecture |
+| **CLAUDE.md** | Project policy (9 blocks) | ✅ Always (root + nested) | Architecture team |
+| **.claude/.instructions.md** | Global architecture rules | ✅ Via `@`-import in CLAUDE.md (added 2026-06-22 — not auto-discovered on its own) | Architecture team |
+| **.claude/.prompt.md** | Response style guide | ✅ Via `@`-import in CLAUDE.md (added 2026-06-22 — not auto-discovered on its own) | Architecture team |
+| **.claude/settings.json** | Permissions + hooks | ✅ Always (this is the real config Claude Code reads) | Architecture team |
+| **.claude/agents/*.md** | The 8 subagent definitions | ✅ Always (this is what actually registers `@retrieval-specialist` etc.) | Architecture team |
+| **.claude/skills/*/SKILL.md** | The 13 invocable skills (`/quick-check`, `/add-retriever`, ...) | ✅ Always discovered; each one only *runs* when invoked | Domain owners |
+| **.claude/AGENTS.md** | Human-readable reference describing the 8 subagents | ❌ Not auto-loaded — Claude Code reads `CLAUDE.md`, not `AGENTS.md`. This file is documentation only; the agents work because of `.claude/agents/*.md` above, not because of this file. | Architecture team |
+| **.claude/rules/*.md** | Domain-specific rules | ✅ Path-scoped (`paths:` frontmatter) or always-on if no `paths:` — see Mechanism 2 above | Domain owners |
+| **.env.example** | Template environment vars | ❌ Read by developers, not by Claude Code | Any developer |
+| **.gitignore** | Git exclusions (documented) | ❌ Read by git, not by Claude Code | Any developer |
+| **CONTRIBUTING.md** | Git workflow + MR process | ❌ Reference only | Architecture team |
+| **scripts/check.sh** | Validation script | ❌ Executed via Bash when a skill or developer calls it | Architecture team |
+| **.gitlab-ci.yml** | CI/CD pipeline | ❌ Read by GitLab CI, not by Claude Code | DevOps/Architecture |
 
 ### Documentation Files
 
