@@ -173,7 +173,9 @@ allow → auto-approved, no prompt (tests/, examples/, docs/, ingestion/, retrie
 **What it does**: Automatic validation after file writes.
 
 **PostToolUse Hooks** (implemented):
-- `matcher: "Edit|Write"` → after every Edit/Write tool call (any file, not just `.py` — the `matcher` field matches **tool names**, not file paths; Claude Code has no native per-path hook filter) → runs `ruff check src/modular_rag/ tests/ --select E,F,I --quiet`
+- `matcher: "Edit|Write"` → after every Edit/Write tool call (any file, not just `.py` — the `matcher` field matches **tool names**, not file paths; Claude Code has no native per-path hook filter) → runs `PATH="$HOME/.local/bin:$PATH" ruff check src/modular_rag/ tests/ --select E,F,I --ignore E501 --quiet`
+- `PATH` prefix: ruff is at `~/.local/bin/ruff` (installed via `curl -LsSf https://astral.sh/ruff/install.sh | sh`), not in default PATH
+- `--ignore E501`: line-length is a style preference, not a syntax error; hook intent is syntax (E), undefined names (F), import order (I)
 - Catches: syntax errors, undefined names, import order violations
 - Runs automatically (no manual intervention) — but always scans the whole `src/modular_rag/` + `tests/` tree, not just the changed file
 
@@ -308,7 +310,7 @@ src/modular_rag/
 {
   "matcher": "Edit|Write",
   "hooks": [
-    { "type": "command", "command": "ruff check src/modular_rag/ tests/ --select E,F,I --quiet" }
+    { "type": "command", "command": "PATH=\"$HOME/.local/bin:$PATH\" ruff check src/modular_rag/ tests/ --select E,F,I --ignore E501 --quiet" }
   ]
 }
 ```
