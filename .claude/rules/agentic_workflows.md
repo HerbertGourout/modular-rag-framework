@@ -1,9 +1,9 @@
 ---
 paths:
-  - "Reserved for V2+ planning and design discussions"
+  - "src/modular_rag/agents/**/*.py"
 description: "Agentic workflows: coordination patterns, tool use, multi-turn interactions. V1 reserved, V2+ implementation scope."
 version: "1.0"
-lastUpdated: "2026-06-19"
+lastUpdated: "2026-06-22"
 ---
 
 # Règles — Agentic Workflows (V2+ Reserved)
