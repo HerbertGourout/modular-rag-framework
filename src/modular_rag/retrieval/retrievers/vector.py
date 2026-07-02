@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import structlog
+from typing import Protocol
 
 from modular_rag.core.errors import RetrievalError
 from modular_rag.core.models.query import Query
 from modular_rag.core.models.retrieved import RetrievedChunk
 
 log = structlog.get_logger(__name__)
+
+
+class _VectorStore(Protocol):
+    def retrieve_by_vector(self, vector: list[float], k: int = 10) -> list[RetrievedChunk]: ...
 
 
 class VectorRetriever:
@@ -23,19 +28,16 @@ class VectorRetriever:
         self.url = url
         self.api_key = api_key
         self._embedder = embedder
-        self._store: object | None = None  # injected by registry post-wiring
+        self._store: _VectorStore | None = None  # injected by registry post-wiring
 
     def name(self) -> str:
         return "vector"
 
-    def _get_store(self) -> object:
-        """Return the QdrantStore, creating one lazily if not injected."""
+    def _get_store(self) -> _VectorStore:
+        """Return the injected vector store."""
         if self._store is None:
-            from modular_rag.adapters.vectorstores.qdrant_store import QdrantStore
-            self._store = QdrantStore(
-                url=self.url,
-                collection=self.collection,
-                api_key=self.api_key or None,
+            raise RetrievalError(
+                "VectorRetriever requires a vector store - wire one via the manifest indexer field."
             )
         return self._store
 
@@ -45,7 +47,7 @@ class VectorRetriever:
                 "VectorRetriever requires an embedder — wire one via the manifest embedder field."
             )
         query_vec: list[float] = self._embedder.embed([query.text])[0]  # type: ignore[union-attr]
-        chunks = self._get_store().retrieve_by_vector(query_vec, k=k)  # type: ignore[union-attr]
+        chunks = self._get_store().retrieve_by_vector(query_vec, k=k)
         log.debug("vector.retrieved", chunks=len(chunks), query_id=query.id)
         return chunks
 

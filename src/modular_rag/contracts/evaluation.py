@@ -21,3 +21,10 @@ class Evaluator(Protocol):
     ) -> Metrics: ...
 
     def name(self) -> str: ...
+
+
+@runtime_checkable
+class AnswerEngine(Protocol):
+    """Minimal QA engine interface consumed by evaluation runners."""
+
+    def answer(self, question: str, **query_kwargs: object) -> Answer: ...

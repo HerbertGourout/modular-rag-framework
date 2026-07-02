@@ -222,7 +222,12 @@ Track progress and milestones:
    [`tests/contract/`](tests/contract/)).
 4. Update docs if needed
    ([`docs/guides/`](docs/guides/), [`docs/architecture/`](docs/architecture/)).
-5. Open a Pull Request into `main`.
+5. If you use Claude Code, run `/qa-v1` and see
+   [`docs/guides/claude-code.md`](docs/guides/claude-code.md).
+6. If you use Claude Code and Codex together, follow
+   [`docs/guides/ai-engineering-workflow.md`](docs/guides/ai-engineering-workflow.md)
+   and [`docs/guides/model-routing.md`](docs/guides/model-routing.md).
+7. Open a GitLab MR into `main`.
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for coding, testing, and documentation guidelines.
 

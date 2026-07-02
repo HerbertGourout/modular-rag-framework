@@ -1,7 +1,7 @@
 from modular_rag.contracts.agents import Agent, AgentResult, AgentTask
 from modular_rag.contracts.chunking import Chunker
 from modular_rag.contracts.embeddings import Embedder
-from modular_rag.contracts.evaluation import Evaluator
+from modular_rag.contracts.evaluation import AnswerEngine, Evaluator
 from modular_rag.contracts.generation import Generator
 from modular_rag.contracts.indexing import Indexer
 from modular_rag.contracts.manifests import ManifestLoader, PipelineManifest
@@ -16,6 +16,7 @@ __all__ = [
     "Agent", "AgentResult", "AgentTask",
     "Chunker",
     "Embedder",
+    "AnswerEngine",
     "Evaluator",
     "Generator",
     "Indexer",

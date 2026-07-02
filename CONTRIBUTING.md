@@ -5,6 +5,9 @@
 1. Read [CLAUDE.md](CLAUDE.md) — it documents the architectural rules you must follow.
 2. Read [docs/architecture/overview.md](docs/architecture/overview.md) — the technical specification.
 3. Read the relevant ADR(s) in [docs/adr/](docs/adr/) for the area you are modifying.
+4. If you use Claude Code, read [docs/guides/claude-code.md](docs/guides/claude-code.md).
+5. If you use multiple AI providers, read [docs/guides/ai-engineering-workflow.md](docs/guides/ai-engineering-workflow.md)
+   and [docs/guides/model-routing.md](docs/guides/model-routing.md).
 
 ## Development setup
 
@@ -28,10 +31,15 @@ pip install -e .[v1,dev]
 
 ```bash
 pytest tests/unit            # fast, no external services
+python scripts/check_layering.py  # architecture import audit
 pytest tests/integration     # requires Qdrant running locally
 pytest tests/contract        # protocol conformance
 pytest tests/e2e             # full pipeline, requires LLM API key
 ```
+
+Claude Code users can run `/qa-v1` for the local V1 gate.
+Codex users should follow `AGENTS.md` and default to independent review unless
+asked to implement.
 
 ## Adding a new component (example: new chunker)
 
@@ -54,6 +62,8 @@ pytest tests/e2e             # full pipeline, requires LLM API key
 
 - [ ] New code has tests (unit + contract if applicable)
 - [ ] No cross-domain imports introduced
+- [ ] Local V1 gate run (`/qa-v1` or Ruff + unit + contract + layering audit)
+- [ ] High-risk AI-generated changes reviewed by a second provider or human reviewer
 - [ ] New adapter registered in `_default_factories.py`
 - [ ] `docs/architecture/` updated if layering or contracts changed
 - [ ] ADR written if a structural decision was made

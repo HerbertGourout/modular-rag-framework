@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Production-grade modular RAG + agentic orchestration framework for Publicis enterprise use cases. Five-version progression: V1 (Core RAG) → V2 (Agentic) → V3 (Graph Memory) → V4 (Governance) → V5 (Multimodal).
 
-**Non-negotiable priority**: do not implement V3+ features until `examples/simple_qa/` runs end-to-end. V1 is the current target.
+**Non-negotiable priority**: preserve the V1 end-to-end path before adding V3+ features. New graph, governance, or multimodal work must not break `examples/simple_qa/`, unit tests, contract tests, or the local layering audit.
 
 ---
 
@@ -75,6 +75,26 @@ python examples/simple_qa/main.py ingest examples/simple_qa/docs/
 python examples/simple_qa/main.py ask "What is RAG?"
 ```
 
+### Claude Code project workflows
+
+Project-level skills live in `.claude/skills/` and are exposed as slash commands:
+
+| Workflow | Use when | Runs |
+|---|---|---|
+| `/test-unit` | Validate fast core behavior | `pytest tests/unit` |
+| `/test-contract` | Validate Protocol conformance | `pytest tests/contract` |
+| `/qa-v1` | Run the local V1 gate before an MR | Ruff + unit + contract + layering audit |
+| `/check-layering` | Audit hexagonal import boundaries | `python scripts/check_layering.py` |
+| `/run-simple-qa` | Smoke-test the example pipeline | `examples/simple_qa/main.py` ingest + ask |
+
+The shared post-edit hook is configured in `.claude/settings.json` and delegates to
+`.claude/hooks/post-edit-quality.ps1`. Personal preferences belong in `CLAUDE.local.md`
+using `CLAUDE.local.example.md` as a template.
+
+When Claude Code is paired with Codex, Claude Code is the default builder and Codex
+is the independent challenger. See `AGENTS.md`, `docs/guides/ai-engineering-workflow.md`,
+and `docs/guides/model-routing.md`.
+
 ---
 
 ## 05 — Coding rules
@@ -99,6 +119,7 @@ After any change, run the appropriate scope:
 |---|---|---|
 | Core logic | `pytest tests/unit` | nothing |
 | Protocol conformance | `pytest tests/contract` | nothing |
+| Layering audit | `python scripts/check_layering.py` | nothing |
 | Vector store | `pytest tests/integration` | Qdrant on :6333 |
 | Full pipeline | `pytest tests/e2e` | Qdrant + LLM API key |
 

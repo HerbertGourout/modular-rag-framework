@@ -1,17 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
-
 import structlog
 
-from modular_rag.contracts.evaluation import Evaluator
+from modular_rag.contracts.evaluation import AnswerEngine, Evaluator
 from modular_rag.core.models.answer import Answer
 from modular_rag.core.models.metrics import Metrics
 from modular_rag.core.models.query import Query
-
-if TYPE_CHECKING:
-    from modular_rag.orchestration.engine import RAGEngine
 
 log = structlog.get_logger(__name__)
 
@@ -40,9 +35,9 @@ class BenchmarkReport:
 
 
 class BenchmarkRunner:
-    """Run a set of QA cases through a RAGEngine and aggregate metrics."""
+    """Run a set of QA cases through an answer engine and aggregate metrics."""
 
-    def __init__(self, engine: RAGEngine, evaluator: Evaluator) -> None:
+    def __init__(self, engine: AnswerEngine, evaluator: Evaluator) -> None:
         self.engine = engine
         self.evaluator = evaluator
 

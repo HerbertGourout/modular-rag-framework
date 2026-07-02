@@ -15,11 +15,15 @@ modular-rag-framework/
 ├── manifests/                    ← Configurations YAML de pipelines
 ├── examples/                     ← Applications exemples exécutables
 ├── benchmarks/                   ← Benchmarks de performance (futur)
-├── scripts/                      ← Scripts utilitaires (futur)
+├── scripts/                      ← Scripts utilitaires et audits locaux
+├── .claude/                      ← Skills, hooks et settings Claude Code
+├── .codex/                       ← Notes projet Codex
+├── AGENTS.md                     ← Instructions Codex et stratégie reviewer
 ├── .gitlab/                      ← Templates CI/CD GitLab
 ├── pyproject.toml                ← Configuration du projet Python
 ├── README.md                     ← Pitch, vision, API cible
 ├── CLAUDE.md                     ← Instructions pour Claude Code
+├── CLAUDE.local.example.md       ← Template de preferences Claude Code locales
 ├── ROADMAP.md                    ← Jalons V1→V5 avec checkboxes
 ├── CHANGELOG.md                  ← Historique des versions
 ├── CONTRIBUTING.md               ← Guide de contribution
@@ -80,7 +84,21 @@ Instructions architecturales pour Claude Code. Contient :
 - État du projet (ce qui est implémenté, ce qui manque)
 - Les 7 règles de conventions (contracts first, no cross-domain imports, manifests as source of truth…)
 - Les commandes usuelles (pytest, mrag, uvicorn)
+- Les workflows Claude Code exposés par `.claude/skills/`
+- Le hook qualité post-édition et l'audit de layering
 - Info sur le repo GitLab privé Publicis
+
+Voir aussi [`docs/guides/claude-code.md`](../guides/claude-code.md) pour le guide
+d'utilisation et de maintenance de cette configuration.
+
+### `AGENTS.md`
+Instructions persistantes pour Codex. Définit Codex comme reviewer/challenger
+indépendant, décrit les règles de review de diff, les limites d'édition, et la
+politique d'escalade par tiers de modèle.
+
+### `.codex/`
+Notes projet spécifiques à Codex. Le dossier reste minimal : les règles durables
+vivent dans `AGENTS.md`, les workflows détaillés dans `docs/guides/`.
 
 ---
 
@@ -342,9 +360,9 @@ Tous des `BaseModel` Pydantic v2. Pas d'ORM, pas de DB mapping.
 - `name()` → `"bm25"`
 
 **`vector.py` → `VectorRetriever`**
-- Implémente `Retriever`. Wrappeur de `QdrantStore` + `Embedder`.
-- `retrieve()` : **lève `NotImplementedError`** — l'embedding de la query n'est pas encore branché
-- À compléter : `query_vec = self.embedder.embed([query.text])[0]` puis `self.store.retrieve_by_vector(query_vec, k)`
+- Implémente `Retriever`. Wrappeur générique d'un vector store injecté + `Embedder`.
+- `retrieve()` : embed la query via `_embedder`, puis appelle `_store.retrieve_by_vector(query_vec, k)`.
+- `_embedder` et `_store` sont injectés par `orchestration/registry.py`; le retriever n'instancie pas d'adapter directement.
 - `name()` → `"vector"`
 
 **`hybrid.py` → `HybridRetriever`**
@@ -445,7 +463,7 @@ Tous des `BaseModel` Pydantic v2. Pas d'ORM, pas de DB mapping.
 
 **`agents/synthesizer/synthesizer.py` → `SynthesizerAgent`** : Concatène les top-5 chunks de contexte. Limite le draft à 2000 chars.
 
-**`agents/validator/validator.py` → `ValidatorAgent`** : Utilise `GroundednessValidator`. Ajoute un warning si score < 0.05.
+**`agents/validator/validator.py` → `ValidatorAgent`** : Calcule un score local de groundedness par overlap de tokens. Ajoute un warning si score < 0.05.
 
 ---
 
@@ -481,7 +499,7 @@ Tous des `BaseModel` Pydantic v2. Pas d'ORM, pas de DB mapping.
 
 **`eval/runners/benchmark.py` → `BenchmarkCase` + `BenchmarkReport` + `BenchmarkRunner`**
 - `BenchmarkCase` : question, expected_answer, relevant_chunk_ids
-- `BenchmarkRunner.run(cases)` : parcourt les cas, appelle `engine.answer()`, calcule les métriques
+- `BenchmarkRunner.run(cases)` : parcourt les cas, appelle un `AnswerEngine` compatible (`answer()`), calcule les métriques
 - `BenchmarkReport` : metrics_per_case + `avg_answer_relevance`, `avg_recall`
 
 ---
@@ -744,7 +762,7 @@ for c in answer.citations:
 
 | Version | Thème | État | Ce qu'il reste |
 |---|---|---|---|
-| **V1** | Core RAG | ~95% | `VectorRetriever.retrieve()` à brancher, tests integration/e2e, `adapters/llms/` à remplir |
+| **V1** | Core RAG | ~95% | Stabiliser tests integration/e2e, `adapters/llms/` à remplir |
 | **V2** | Agentic | ~100% code | Tests E2E avec vrai LLM, `examples/agentic_rag/` |
 | **V3** | Graph Memory | ~80% | `adapters/graphstores/neo4j_store.py`, NER spaCy, communautés Louvain, `examples/graph_memory/` |
 | **V4** | Governance | ~60% | Évaluation CEL/OPA Rego, audit trail, human-in-the-loop, manifests env-specific |

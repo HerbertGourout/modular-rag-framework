@@ -1,0 +1,3 @@
+# Known layering violations accepted temporarily by scripts/check_layering.py.
+# Format:
+# path|importer_layer|imported_module|reason

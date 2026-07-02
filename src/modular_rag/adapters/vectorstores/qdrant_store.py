@@ -116,7 +116,7 @@ class QdrantStore:
     def retrieve(self, query: Query, k: int = 10) -> list[RetrievedChunk]:
         raise NotImplementedError(
             "QdrantStore.retrieve() requires a query embedding. "
-            "Use QdrantRetriever (which wraps QdrantStore + Embedder) instead."
+            "Use VectorRetriever wired with QdrantStore and an Embedder instead."
         )
 
     def retrieve_by_vector(self, vector: list[float], k: int = 10) -> list[RetrievedChunk]:

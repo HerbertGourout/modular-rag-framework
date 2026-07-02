@@ -1,11 +1,13 @@
 """Validator / critic agent (V2): check answer coherence and groundedness."""
 from __future__ import annotations
 
+import re
+
 from modular_rag.contracts.agents import AgentResult, AgentTask
 from modular_rag.core.enums import AgentRole
-from modular_rag.generation.validators.groundedness import GroundednessValidator
+from modular_rag.core.models.retrieved import RetrievedChunk
 
-_validator = GroundednessValidator(min_overlap_ratio=0.05)
+MIN_GROUNDEDNESS = 0.05
 
 
 class ValidatorAgent:
@@ -18,13 +20,10 @@ class ValidatorAgent:
         return "validator"
 
     def run(self, task: AgentTask) -> AgentResult:
-        from modular_rag.core.models.answer import Answer
-
-        draft_answer = Answer(query_id=task.query.id, text=task.instructions or "")
-        score = _validator.validate(draft_answer, task.context)
+        score = _groundedness_score(task.instructions or "", task.context)
         output = task.instructions or ""
-        if score < 0.05:
-            output += "\n\n[Validator warning: low groundedness — answer may contain hallucinations.]"
+        if score < MIN_GROUNDEDNESS:
+            output += "\n\n[Validator warning: low groundedness - answer may contain hallucinations.]"
         return AgentResult(
             task_name=task.name,
             role=AgentRole.VALIDATOR,
@@ -35,3 +34,18 @@ class ValidatorAgent:
 
     async def arun(self, task: AgentTask) -> AgentResult:
         return self.run(task)
+
+
+def _groundedness_score(answer_text: str, context: list[RetrievedChunk]) -> float:
+    """Return token-overlap groundedness in [0, 1] without crossing domains."""
+    if not context or not answer_text:
+        return 0.0
+    answer_tokens = set(re.findall(r"\w+", answer_text.lower()))
+    context_tokens = set(
+        token
+        for retrieved in context
+        for token in re.findall(r"\w+", retrieved.chunk.content.lower())
+    )
+    if not answer_tokens:
+        return 0.0
+    return len(answer_tokens & context_tokens) / len(answer_tokens)

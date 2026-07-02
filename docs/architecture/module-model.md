@@ -59,7 +59,7 @@ src/modular_rag/
 │
 ├── retrieval/          ← Domain module: Query → list[RetrievedChunk]
 │   ├── bm25.py             BM25Retriever (rank-bm25, lazy import)
-│   ├── vector.py           VectorRetriever (stub — wires QdrantStore + Embedder)
+│   ├── vector.py           VectorRetriever (wired store + Embedder)
 │   └── fusion.py           ReciprocRankFusion (rrf_k=60)
 │
 ├── generation/         ← Domain module: context → Answer
