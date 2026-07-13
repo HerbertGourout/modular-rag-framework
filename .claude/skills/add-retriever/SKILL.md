@@ -5,6 +5,10 @@ description: Step-by-step workflow for implementing a new retriever following Re
 
 # Add Retriever Skill
 
+## State of the Art First (mandatory)
+
+Before designing the retriever, read [docs/research/DIGEST-retrieval.md](../../../docs/research/DIGEST-retrieval.md), [docs/research/DIGEST-evaluation.md](../../../docs/research/DIGEST-evaluation.md) and [docs/research/DIGEST-overviews.md](../../../docs/research/DIGEST-overviews.md); cite the arXiv id backing each design choice (fusion, reranking, metric targets). If a choice contradicts the digests, justify it explicitly in the MR.
+
 ## Parameters (advisory — not schema-validated by Claude Code)
 
 Claude Code skills don't support typed/validated parameters in frontmatter; describe these to the agent in your invocation prompt instead:

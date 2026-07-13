@@ -5,6 +5,10 @@ description: Step-by-step workflow for implementing a new LLM generator followin
 
 # Add Generator Skill
 
+## State of the Art First (mandatory)
+
+Before designing the generator, read [docs/research/DIGEST-generation.md](../../../docs/research/DIGEST-generation.md) and [docs/research/DIGEST-overviews.md](../../../docs/research/DIGEST-overviews.md) and cite the arXiv id backing each design choice. Key baselines: prompt-based grounding + numbered-source format validated as the correct System-1 baseline; one-citation-per-chunk supported; token-overlap is a lexical-support *gate*, not a faithfulness metric (true faithfulness = supported-statements ratio, RAGAS-style — V1.1); temperature is an engineering default, uncited.
+
 ## Parameters (advisory — not schema-validated by Claude Code)
 
 Claude Code skills don't support typed/validated parameters in frontmatter; describe these to the agent in your invocation prompt instead:

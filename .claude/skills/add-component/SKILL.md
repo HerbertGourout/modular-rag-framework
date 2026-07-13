@@ -7,6 +7,8 @@ description: Scaffold a new V1 component (chunker, retriever, generator, metric,
 
 Generic scaffolding workflow for any new V1 component. For retrievers, generators, or security guards specifically, prefer the more detailed `add-retriever`, `add-generator`, or `add-security-guard` skills — use this one for chunkers, metrics, embedders, or vectorstore adapters, or as a fallback.
 
+**State of the art first:** before making design choices, read the matching digest in [docs/research/](../../../docs/research/) (DIGEST-chunking, DIGEST-evaluation, DIGEST-security, DIGEST-overviews, DIGEST-architecture) and cite the arXiv id backing each parameter. If a choice contradicts the digest, justify it explicitly in the MR.
+
 ## Steps
 
 1. **Confirm the Protocol exists.** Check `src/modular_rag/contracts/` for the relevant Protocol (e.g. `Chunker`, `MetricsProtocol`, `Embedder`, `VectorStore`). If it doesn't exist yet, stop and ask — contracts are `ask`-tier in `.claude/settings.json` and CLAUDE.md rule 05.1 requires Protocol-first development.

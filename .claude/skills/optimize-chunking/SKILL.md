@@ -10,6 +10,12 @@ _Originally authored as a workflow for `ingestion-specialist`, invoked as `/opti
 
 Systematic workflow for analyzing corpus characteristics and optimizing chunking strategy.
 
+## State of the Art First (mandatory)
+
+Before choosing chunk sizes, overlap, or splitting strategy, read [docs/research/DIGEST-chunking.md](../../../docs/research/DIGEST-chunking.md) and cite the arXiv id backing each parameter choice. Key baselines from the corpus: 512-token cap with 25% (128-token) overlap as empirical sweet spot; split-then-merge post-processing (merge <100-token fragments, cap ~1,100 tokens, sub-split oversized tables); no single size is universally optimal — prefer manifest-selectable chunkers.
+
+If a design choice contradicts the digest, justify it explicitly in the MR.
+
 ## When to Use
 
 - Document retrieval performance is poor
