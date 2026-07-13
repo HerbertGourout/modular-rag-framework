@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from modular_rag.core.models.document import Document
@@ -14,7 +14,7 @@ class MetadataEnricher:
         extra: dict[str, object] = {
             "filename": p.name,
             "extension": p.suffix.lower(),
-            "enriched_at": datetime.now(timezone.utc).isoformat(),
+            "enriched_at": datetime.now(UTC).isoformat(),
         }
         if p.exists():
             extra["size_bytes"] = p.stat().st_size

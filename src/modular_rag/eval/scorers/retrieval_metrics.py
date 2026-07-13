@@ -12,7 +12,7 @@ def recall_at_k(retrieved: list[RetrievedChunk], relevant_ids: set[str], k: int)
 
 
 def precision_at_k(retrieved: list[RetrievedChunk], relevant_ids: set[str], k: int) -> float:
-    top_k = [rc for rc in retrieved[:k]]
+    top_k = list(retrieved[:k])
     if not top_k:
         return 0.0
     return sum(1 for rc in top_k if rc.chunk.id in relevant_ids) / len(top_k)
