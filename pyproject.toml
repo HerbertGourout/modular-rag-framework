@@ -45,6 +45,9 @@ v1 = [
     "qdrant-client>=1.9",
     "rank-bm25>=0.2",
     "cohere>=5.5",
+    # Opt-in subword token counting for chunkers (token_counter: "tiktoken" in manifests);
+    # the default whitespace counter needs no dependency.
+    "tiktoken>=0.7",
 ]
 # V3 — Graph Memory
 v3 = [

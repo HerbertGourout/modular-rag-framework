@@ -33,15 +33,15 @@ V5: Multimodal Intelligence                    (Q2 2027)
 
 **Core modules:**
 - [x] Architectural skeleton (contracts, models, orchestration, manifests)
-- [ ] Document parsers: PDF, Word, HTML, Markdown, plain text
-- [ ] Chunkers: fixed-size, adaptive (section-aware)
-- [ ] Hybrid retrieval: vector (Qdrant) + BM25 fusion (RRF)
-- [ ] Cross-encoder reranker
-- [ ] Generators: OpenAI, Anthropic
+- [x] Document parsers: PDF, Word, HTML, Markdown, plain text
+- [x] Chunkers: fixed-size, adaptive (section-aware)
+- [ ] Hybrid retrieval: vector (Qdrant) + BM25 fusion (RRF) — code + unit tests done; pending integration run against Qdrant
+- [x] Cross-encoder reranker
+- [x] Generators: OpenAI, Anthropic
 - [ ] Basic security guard (injection detection, length check, redaction)
 - [ ] REST API (FastAPI) + CLI (`mrag ask`, `mrag ingest`)
 - [ ] Example: `examples/simple_qa/` end-to-end running
-- [ ] Example: `examples/hybrid_search/`
+- [x] Example: `examples/hybrid_search/`
 - [ ] `pip install modular-rag[v1]` installs and works
 
 **Success criteria:**
@@ -146,6 +146,7 @@ security/
 **Core agentic modules:**
 - [ ] Adaptive query router (LLM-only / simple / agentic / graph)
 - [ ] Multi-agent runtime: coordinator, planner, retriever agent, extractor, synthesizer, validator
+- [ ] Fix pre-existing layering debt before expanding agents/: `agents/validator/validator.py` imports `generation/validators/groundedness` (domain→domain, flagged in pre-MR architecture review 2026-07-12) — invert via a Protocol in `contracts/` or move the lexical-overlap helper to `core/`
 - [ ] Multi-step agentic workflow with plan → retrieve → synthesize → critique → refine
 - [ ] Agent plan inspection by security guard
 - [ ] Example: `examples/agentic_rag/`

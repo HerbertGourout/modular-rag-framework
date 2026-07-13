@@ -50,7 +50,7 @@ Configuration centrale du projet. Remplace `setup.py` + `setup.cfg`.
 
 | Groupe | Commande | Ce qu'il ajoute |
 |---|---|---|
-| `v1` | `pip install -e ".[v1]"` | FastAPI, Uvicorn, Typer, pypdf, docx, BS4, sentence-transformers, openai, anthropic, qdrant-client, rank-bm25, cohere, pymupdf |
+| `v1` | `pip install -e ".[v1]"` | FastAPI, Uvicorn, Typer, pymupdf, docx, BS4, sentence-transformers, openai, anthropic, qdrant-client, rank-bm25, cohere, tiktoken |
 | `v3` | `pip install -e ".[v3]"` | neo4j, networkx, spacy, python-louvain (communautés) |
 | `v4` | `pip install -e ".[v4]"` | opentelemetry-sdk, opentelemetry-api, opentelemetry-exporter-otlp |
 | `v5` | `pip install -e ".[v5]"` | pymupdf, pillow, pytesseract (vision) |
