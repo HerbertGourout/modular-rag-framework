@@ -12,8 +12,8 @@ app = typer.Typer(name="mrag", help="Modular RAG Framework CLI")
 
 @app.command()
 def ingest(
-    path: Path = typer.Argument(..., help="File or directory to ingest"),
-    manifest: Path = typer.Option(..., "--manifest", "-m", help="Pipeline manifest YAML"),
+    path: Path = typer.Argument(..., help="File or directory to ingest"),  # noqa: B008
+    manifest: Path = typer.Option(..., "--manifest", "-m", help="Pipeline manifest YAML"),  # noqa: B008
 ) -> None:
     """Parse, chunk, embed and index documents from a file or directory."""
     pipeline = load_pipeline(manifest)
@@ -28,7 +28,7 @@ def ingest(
 @app.command()
 def ask(
     question: str = typer.Argument(..., help="Question to answer"),
-    manifest: Path = typer.Option(..., "--manifest", "-m", help="Pipeline manifest YAML"),
+    manifest: Path = typer.Option(..., "--manifest", "-m", help="Pipeline manifest YAML"),  # noqa: B008
 ) -> None:
     """Answer a question using the configured RAG pipeline."""
     pipeline = load_pipeline(manifest)

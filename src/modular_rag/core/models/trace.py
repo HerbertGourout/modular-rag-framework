@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -25,7 +25,7 @@ class Trace(BaseModel):
     total_input_tokens: int = 0
     total_output_tokens: int = 0
     routing_strategy: str = ""
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def totals(self) -> dict[str, float | int]:

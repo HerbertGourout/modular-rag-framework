@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from modular_rag.core.enums import (
     Modality,
@@ -66,7 +67,7 @@ def test_document_defaults():
 
 def test_document_is_frozen():
     doc = Document(source="a.txt", content="foo")
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         doc.content = "bar"  # type: ignore[misc]
 
 
@@ -95,7 +96,7 @@ def test_chunk_defaults():
 
 def test_query_frozen():
     q = Query(text="what is RAG?")
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         q.text = "other"  # type: ignore[misc]
 
 

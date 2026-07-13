@@ -73,7 +73,9 @@ class RAGEngine:
             sm.transition(PipelineState.GUARDING_QUERY)
             t0 = time.perf_counter()
             result = self._c.guard.check_query(query)
-            trace.add_step(TraceStep(name="guard_query", latency_ms=(time.perf_counter() - t0) * 1000))
+            trace.add_step(
+                TraceStep(name="guard_query", latency_ms=(time.perf_counter() - t0) * 1000)
+            )
             if not result.allowed:
                 raise SecurityError(result.reason or "Query blocked by security guard.")
 
