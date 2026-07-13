@@ -21,6 +21,11 @@ class _FakeRetriever:
         return self._hits[:k]
 
 
+class _FailingRetriever:
+    def retrieve(self, query: Query, k: int = 10) -> list[RetrievedChunk]:
+        raise RuntimeError("source unavailable")
+
+
 def _hit(content: str, method: RetrievalMethod) -> RetrievedChunk:
     chunk = Chunk(doc_id=new_id(), content=content)
     return RetrievedChunk(chunk=chunk, score=0.5, rank=1, retrieval_method=method)
@@ -63,3 +68,15 @@ def test_higher_weight_wins_a_tie():
     result = retriever.retrieve(Query(text="q"), k=10)
 
     assert result[0].chunk.id == doc_a.chunk.id
+
+
+def test_hybrid_retriever_falls_back_when_vector_source_is_unavailable():
+    retriever = HybridRetriever()
+    bm25_only = _hit("bm25 document", RetrievalMethod.BM25)
+    retriever._vector = _FailingRetriever()
+    retriever._bm25 = _FakeRetriever([bm25_only])
+
+    result = retriever.retrieve(Query(text="q"), k=10)
+
+    assert [r.chunk.id for r in result] == [bm25_only.chunk.id]
+    assert result[0].retrieval_method == RetrievalMethod.BM25
