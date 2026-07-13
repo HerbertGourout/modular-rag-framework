@@ -7,6 +7,7 @@ from modular_rag.core.models.query import Query
 from modular_rag.core.models.retrieved import RetrievedChunk
 from modular_rag.core.models.trace import Trace, TraceStep
 from modular_rag.generation.citations.builder import build_citations
+from modular_rag.generation.validators.groundedness import GroundednessValidator
 
 log = structlog.get_logger(__name__)
 
@@ -33,6 +34,7 @@ class AnthropicGenerator:
         self.max_tokens = max_tokens
         self.api_key = api_key
         self._client: object | None = None
+        self._groundedness = GroundednessValidator()
 
     def name(self) -> str:
         return "anthropic"
@@ -78,12 +80,15 @@ class AnthropicGenerator:
             )
         )
         text = response.content[0].text
-        return Answer(
+        answer = Answer(
             query_id=query.id,
             text=text,
             citations=build_citations(context),
             model=self.model,
         )
+        if self._groundedness.should_refuse(answer, context):
+            return self._groundedness.refusal_answer(answer)
+        return answer
 
     async def agenerate(self, query: Query, context: list[RetrievedChunk], trace: Trace) -> Answer:
         return self.generate(query, context, trace)

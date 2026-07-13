@@ -60,3 +60,17 @@ class GroundednessValidator:
             return 0.0
         overlap = answer_tokens & context_tokens
         return len(overlap) / len(answer_tokens)
+
+    def should_refuse(self, answer: Answer, context: list[RetrievedChunk]) -> bool:
+        """Return True when the answer is too weakly supported to ship."""
+        return self.validate(answer, context) < self.min_overlap_ratio
+
+    def refusal_answer(self, answer: Answer) -> Answer:
+        """Build a deterministic refusal answer preserving the query metadata."""
+        return answer.model_copy(
+            update={
+                "text": "I don't know based on the provided context.",
+                "citations": [],
+                "confidence": 0.0,
+            }
+        )

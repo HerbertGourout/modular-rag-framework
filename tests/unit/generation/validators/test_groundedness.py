@@ -76,3 +76,17 @@ def test_overlap_counts_across_multiple_chunks():
         _context("vector search", "lexical search"),
     )
     assert score == 1.0
+
+
+def test_should_refuse_when_support_is_too_low():
+    validator = GroundednessValidator(min_overlap_ratio=0.51)
+    assert validator.should_refuse(_answer("hybrid bananas"), _context("hybrid retrieval"))
+
+
+def test_refusal_answer_is_deterministic_and_source_free():
+    validator = GroundednessValidator()
+    refusal = validator.refusal_answer(_answer("original"))
+
+    assert refusal.text == "I don't know based on the provided context."
+    assert refusal.citations == []
+    assert refusal.confidence == 0.0
