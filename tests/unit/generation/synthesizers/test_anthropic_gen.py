@@ -59,18 +59,29 @@ def test_client_is_not_loaded_at_init():
 
 def test_answer_carries_text_model_and_query_id():
     generator = AnthropicGenerator(model="claude-sonnet-5")
-    generator._client = _fake_client("Grounded answer.")
+    generator._client = _fake_client("RAG combines retrieval and generation.")
 
     query, _, answer = _generate(generator, ["RAG combines retrieval and generation."])
 
-    assert answer.text == "Grounded answer."
+    assert answer.text == "RAG combines retrieval and generation."
     assert answer.model == "claude-sonnet-5"
     assert answer.query_id == query.id
 
 
+def test_low_support_answer_becomes_refusal():
+    generator = AnthropicGenerator(model="claude-sonnet-5")
+    generator._client = _fake_client("bananas oranges kiwis")
+
+    _, _, answer = _generate(generator, ["RAG combines retrieval and generation."])
+
+    assert answer.text == "I don't know based on the provided context."
+    assert answer.citations == []
+    assert answer.confidence == 0.0
+
+
 def test_one_citation_per_context_chunk():
     generator = AnthropicGenerator()
-    generator._client = _fake_client()
+    generator._client = _fake_client("chunk one chunk two")
 
     _, _, answer = _generate(generator, ["chunk one", "chunk two"])
 
