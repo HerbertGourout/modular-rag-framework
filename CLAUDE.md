@@ -2,9 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-<!-- Mis à jour : 2026-05-22 — structure en 9 blocs selon recommandations officielles Claude Code -->
-<!-- Revoir le bloc 09 quand VectorRetriever.retrieve() sera fixé (V1 sprint en cours) -->
-<!-- Pour ajouter des préférences personnelles (URL Qdrant, clé API, etc.) : créer CLAUDE.local.md (gitignored) -->
+<!-- Updated: 2026-05-22 — 9-block structure per official Claude Code recommendations -->
+<!-- Revisit block 09 once VectorRetriever.retrieve() is finalized (V1 sprint in progress) -->
+<!-- For personal preferences (Qdrant URL, API key, etc.): create CLAUDE.local.md (gitignored) -->
 
 @.claude/.instructions.md
 @.claude/.prompt.md
@@ -112,7 +112,7 @@ python examples/simple_qa/main.py ask "What is RAG?"
 
 ## 05 — Coding rules
 
-<!-- Ces règles sont les plus critiques. Les règles path-spécifiques vivent dans .claude/rules/ -->
+<!-- These rules are the most critical ones. Path-specific rules live in .claude/rules/ -->
 
 1. **Contracts first.** The `contracts/` Protocol must exist before any concrete implementation.
 2. **No cross-domain imports.** Retrievers never import from `generation/`; guards never import from `ingestion/`. They share only `core/models/` types.
