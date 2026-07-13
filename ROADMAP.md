@@ -497,7 +497,7 @@ Query: "Quelle est la meilleure gare pour voyager?" (French)
 6. Regulation check: CNIL compliance (France-specific)
 7. Generation: Claude in French (not translate + generate)
 8. Cultural context: Explain why "gare" in French context
-9. Output: Réponse en français avec contexte culturel
+9. Output: answer delivered in French with cultural context
 
 vs English query:
 Query: "What's the best station to travel from?"

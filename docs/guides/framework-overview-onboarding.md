@@ -64,7 +64,7 @@ A **reusable, governed, observable** foundation that:
 - ✅ Supports multi-tenant policies and audit trails
 - ✅ Works with any LLM, any vector store, any chunker
 
-**Result**: 4-8 weeks saved per project. Actifs réutilisables. Knowledge compounds.
+**Result**: 4-8 weeks saved per project. Reusable assets. Knowledge compounds.
 
 ### Business Impact
 
