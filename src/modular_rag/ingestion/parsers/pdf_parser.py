@@ -17,7 +17,9 @@ class PDFParser:
         try:
             import fitz  # pymupdf
         except ImportError as exc:
-            raise ImportError("Install 'pymupdf' (pip install modular-rag[v1]) to parse PDFs.") from exc
+            raise ImportError(
+                "Install 'pymupdf' (pip install modular-rag[v1]) to parse PDFs."
+            ) from exc
 
         p = Path(path)
         doc = fitz.open(str(p))
