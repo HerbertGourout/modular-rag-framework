@@ -10,7 +10,8 @@
 
 | Guide | Time | Purpose | For |
 |-------|------|---------|-----|
-| **[Framework Overview & Onboarding 🆕](./framework-overview-onboarding.md)** | 20 min | Complete vision: present + future features, why it matters, quick start by role | Everyone |
+| **[Framework Overview & Onboarding](./framework-overview-onboarding.md)** | 20 min | Complete vision: present + future features, why it matters, quick start by role | Everyone |
+| **[Code Walkthrough 🆕](./code-walkthrough.md)** | 30 min | Progressive guided tour of the codebase: follow a query and a document through every module | Developers |
 | **[Getting Started](./getting-started.md)** | 15 min | First-time setup + development environment | Developers |
 | **[Installation](./installation.md)** | 10 min | Install dependencies for V1-V5 | Developers |
 | **[Onboarding — Claude Code](./onboarding-claude-code.md)** | 1 day | Full team onboarding with productivity goals | Teams |
