@@ -10,9 +10,13 @@ from modular_rag.generation.citations.builder import build_citations
 
 log = structlog.get_logger(__name__)
 
+# Negative-rejection clause per arXiv:2404.10981 §7.1 (Negative Rejection is a
+# first-class responsible-generation metric): instructing the model to decline
+# when the context lacks the answer is a low-cost hallucination reduction for V1.
 _SYSTEM_PROMPT = """\
 You are a precise assistant. Answer the user's question using ONLY the provided context.
 Cite the source of each claim. If the context is insufficient, say so explicitly.
+If the context does not contain the answer, say you don't know — do not guess.
 """
 
 
@@ -22,6 +26,8 @@ class OpenAIGenerator:
     def __init__(
         self,
         model: str = "gpt-4o-mini",
+        # Low-variance engineering default, unsourced by the research corpus
+        # (docs/research/DIGEST-generation.md #7) — sweep during V1.1 evaluation.
         temperature: float = 0.1,
         max_tokens: int = 2048,
         api_key: str = "",
@@ -48,7 +54,8 @@ class OpenAIGenerator:
     def _build_context(self, chunks: list[RetrievedChunk]) -> str:
         parts = []
         for i, rc in enumerate(chunks, 1):
-            parts.append(f"[{i}] Source: {rc.chunk.metadata.get('source', 'unknown')}\n{rc.chunk.content}")
+            source = rc.chunk.metadata.get("source", "unknown")
+            parts.append(f"[{i}] Source: {source}\n{rc.chunk.content}")
         return "\n\n".join(parts)
 
     def generate(self, query: Query, context: list[RetrievedChunk], trace: Trace) -> Answer:
