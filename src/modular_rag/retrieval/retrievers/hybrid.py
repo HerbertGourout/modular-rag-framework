@@ -17,6 +17,8 @@ class HybridRetriever:
 
     def __init__(
         self,
+        # 0.7/0.3 is an engineering prior, unsourced by the research corpus
+        # (docs/research/DIGEST-retrieval.md #5) — tune empirically on the golden set in V1.1.
         vector_weight: float = 0.7,
         bm25_weight: float = 0.3,
         collection: str = "documents",
@@ -38,7 +40,11 @@ class HybridRetriever:
     def retrieve(self, query: Query, k: int = 10) -> list[RetrievedChunk]:
         vector_hits = self._vector.retrieve(query, k=k * 2)
         bm25_hits = self._bm25.retrieve(query, k=k * 2)
-        fused = reciprocal_rank_fusion([vector_hits, bm25_hits], k=k)
+        fused = reciprocal_rank_fusion(
+            [vector_hits, bm25_hits],
+            k=k,
+            weights=[self.vector_weight, self.bm25_weight],
+        )
         for rank, chunk in enumerate(fused, 1):
             object.__setattr__(chunk, "rank", rank)
             object.__setattr__(chunk, "retrieval_method", RetrievalMethod.HYBRID)
