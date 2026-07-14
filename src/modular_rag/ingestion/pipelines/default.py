@@ -8,12 +8,14 @@ from modular_rag.contracts.chunking import Chunker
 from modular_rag.core.models.chunk import Chunk
 from modular_rag.ingestion.enrichers.metadata_enricher import MetadataEnricher
 from modular_rag.ingestion.normalizers.text_normalizer import TextNormalizer
+from modular_rag.ingestion.parsers.docx_parser import DocxParser
+from modular_rag.ingestion.parsers.html_parser import HTMLParser
 from modular_rag.ingestion.parsers.pdf_parser import PDFParser
 from modular_rag.ingestion.parsers.text_parser import TextParser
 
 log = structlog.get_logger(__name__)
 
-_PARSERS = [TextParser(), PDFParser()]
+_PARSERS = [TextParser(), PDFParser(), DocxParser(), HTMLParser()]
 _NORMALIZER = TextNormalizer()
 _ENRICHER = MetadataEnricher()
 

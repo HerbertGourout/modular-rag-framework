@@ -10,6 +10,16 @@ _Originally authored as a workflow for `retrieval-specialist`, invoked as `/desi
 
 Systematic workflow for designing and implementing hybrid retriever fusion strategies.
 
+## State of the Art First (mandatory)
+
+Before choosing fusion weights, `rrf_k`, or reranking strategy, read the research digests and cite the arXiv id backing each parameter choice:
+
+- [docs/research/DIGEST-retrieval.md](../../../docs/research/DIGEST-retrieval.md) — over-fetch→rerank shape validated (retrieve ~20, keep 4-8); rrf_k=60 and 0.7/0.3 weights are unsourced defaults to tune on the golden set; dense-leg quality (hard negatives) outweighs fusion-constant tuning
+- [docs/research/DIGEST-evaluation.md](../../../docs/research/DIGEST-evaluation.md) — fusion validation (BM25 closes the lexical gap), reranker regression metric (Δ nDCG@k before/after at small k), late-interaction cross-encoders
+- [docs/research/DIGEST-overviews.md](../../../docs/research/DIGEST-overviews.md) — hybrid+RRF SOTA confirmation (RankRAG +7.8% MRR@10, RAG-Fusion +9%), post-retrieval context filtering (FILCO)
+
+If a design choice contradicts the digests, justify it explicitly in the MR.
+
 ## When to Use
 
 - Need better retrieval combining multiple signals

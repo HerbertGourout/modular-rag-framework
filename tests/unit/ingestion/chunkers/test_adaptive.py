@@ -1,4 +1,7 @@
-"""Unit tests for AdaptiveChunker."""
+"""Unit tests for AdaptiveChunker (token-based sizing + split-then-merge).
+
+Defaults per arXiv:2604.12047; min-fragment merge per arXiv:2603.25333.
+"""
 from __future__ import annotations
 
 from modular_rag.core.models.document import Document
@@ -32,10 +35,35 @@ def test_name():
     assert chunker.name() == "adaptive"
 
 
+def test_sota_defaults():
+    # Defaults per arXiv:2604.12047 + min-fragment merge per arXiv:2603.25333.
+    chunker = AdaptiveChunker()
+    assert chunker.chunk_size == 512
+    assert chunker.chunk_overlap == 128
+    assert chunker.min_chunk_tokens == 100
+
+
 def test_structured_doc_splits_on_headings():
+    # Disable the merge pass to observe raw structural splitting.
     doc = _doc(STRUCTURED_DOC)
-    chunks = AdaptiveChunker(max_chunk_size=512).chunk(doc)
+    chunks = AdaptiveChunker(max_chunk_size=512, min_chunk_tokens=0).chunk(doc)
     assert len(chunks) >= 3  # at least one chunk per section
+
+
+def test_small_fragments_merged_by_default():
+    # Each section is ~15 tokens (< default min_chunk_tokens=100), so the
+    # split-then-merge pass (arXiv:2603.25333) fuses them into one chunk.
+    doc = _doc(STRUCTURED_DOC)
+    chunks = AdaptiveChunker().chunk(doc)
+    assert len(chunks) == 1
+
+
+def test_min_chunk_tokens_configurable():
+    doc = _doc(STRUCTURED_DOC)
+    no_merge = AdaptiveChunker(min_chunk_tokens=0).chunk(doc)
+    aggressive = AdaptiveChunker(min_chunk_tokens=1000).chunk(doc)
+    assert len(no_merge) >= 3
+    assert len(aggressive) == 1
 
 
 def test_chunk_doc_id_matches():
@@ -46,10 +74,18 @@ def test_chunk_doc_id_matches():
 
 
 def test_flat_text_still_produces_chunks():
-    flat = "This is a flat document. " * 100
+    flat = "This is a flat document. " * 100  # 500 tokens
     doc = _doc(flat)
     chunks = AdaptiveChunker(max_chunk_size=200).chunk(doc)
     assert len(chunks) >= 1
+
+
+def test_oversized_section_is_token_windowed():
+    flat = "This is a flat document. " * 100  # 500 tokens, single section
+    doc = _doc(flat)
+    chunks = AdaptiveChunker(max_chunk_size=200, chunk_overlap=0, min_chunk_tokens=0).chunk(doc)
+    assert len(chunks) > 1
+    assert all(chunk.token_estimate <= 200 for chunk in chunks)
 
 
 def test_empty_document_returns_no_chunks():
@@ -63,3 +99,10 @@ def test_chunk_content_non_empty():
     chunks = AdaptiveChunker().chunk(doc)
     for chunk in chunks:
         assert chunk.content.strip() != ""
+
+
+def test_offsets_are_faithful_to_source():
+    doc = _doc(STRUCTURED_DOC)
+    chunks = AdaptiveChunker(min_chunk_tokens=0).chunk(doc)
+    for chunk in chunks:
+        assert doc.content[chunk.start_char : chunk.end_char] == chunk.content

@@ -5,6 +5,12 @@ description: Step-by-step workflow for implementing security guards (filters, de
 
 # Add Security Guard Skill
 
+## State of the Art First (mandatory)
+
+Before designing detection patterns or risk scoring, read [docs/research/DIGEST-security.md](../../../docs/research/DIGEST-security.md) and cite the arXiv id backing each choice. Key baselines from the corpus: corpus-poisoning markers (embedded imperatives, reasoning-directive text); risk-score-gated guard chains (always-on stacks cut retrieval recall 41-46%); reversible pseudonymization (placeholder+mapping) alongside destructive redaction for audit trails.
+
+If a design choice contradicts the digest, justify it explicitly in the MR.
+
 ## Parameters (advisory — not schema-validated by Claude Code)
 
 Claude Code skills don't support typed/validated parameters in frontmatter; describe these to the agent in your invocation prompt instead:

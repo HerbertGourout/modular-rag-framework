@@ -40,3 +40,23 @@ def test_redacts_api_key_pattern():
     text = "Use key sk-abcdefghijklmnopqrstuvwxyz123456 to authenticate."
     result = PatternRedactor().redact(text)
     assert "sk-abcdefghijklmnopqrstuvwxyz123456" not in result
+
+
+def test_redacts_ssn_pattern():
+    text = "SSN 123-45-6789 must be protected."
+    result = PatternRedactor().redact(text)
+    assert "123-45-6789" not in result
+    assert "[REDACTED]" in result
+
+
+def test_redacts_luhn_valid_credit_card():
+    text = "Card 4111 1111 1111 1111 should be redacted."
+    result = PatternRedactor().redact(text)
+    assert "4111 1111 1111 1111" not in result
+    assert "[REDACTED]" in result
+
+
+def test_does_not_redact_benign_numeric_string():
+    text = "Reference number 1234 5678 9012 3456 is not a card."
+    result = PatternRedactor().redact(text)
+    assert result == text

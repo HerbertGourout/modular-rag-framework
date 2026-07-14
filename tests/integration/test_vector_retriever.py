@@ -40,7 +40,7 @@ def retriever(embedder, store):
 def _index_chunks(store, embedder, texts: list[str]) -> list[Chunk]:
     chunks = []
     embeddings = embedder.embed(texts)
-    for text, emb in zip(texts, embeddings):
+    for text, emb in zip(texts, embeddings, strict=True):
         c = Chunk(id=new_id(), doc_id="doc-1", content=text)
         c.embedding = emb
         chunks.append(c)
