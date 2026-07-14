@@ -30,7 +30,9 @@ class BenchmarkReport:
 
     @property
     def avg_answer_relevance(self) -> float:
-        values = [m.answer_relevance for m in self.metrics_per_case if m.answer_relevance is not None]
+        values = [
+            m.answer_relevance for m in self.metrics_per_case if m.answer_relevance is not None
+        ]
         return sum(values) / len(values) if values else 0.0
 
     @property

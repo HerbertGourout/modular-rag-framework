@@ -10,6 +10,12 @@ _Originally authored as a workflow for `test-specialist`, invoked as `/prepare-e
 
 Systematic workflow for creating comprehensive evaluation suites with datasets, metrics, and benchmarks.
 
+## State of the Art First (mandatory)
+
+Before defining metrics or golden sets, read [docs/research/DIGEST-evaluation.md](../../../docs/research/DIGEST-evaluation.md) and cite the arXiv id backing each choice. Key baselines from the corpus: exact formulas for NDCG@k, MRR, Recall@k, MAP (retrieval) and Relevance/Faithfulness/Correctness (generation); aggregate nDCG is biased — measure per semantic stratum; reranker regressions tracked via Δ nDCG@k at small k.
+
+If a design choice contradicts the digest, justify it explicitly in the MR.
+
 ## When to Use
 
 - Establishing performance baselines

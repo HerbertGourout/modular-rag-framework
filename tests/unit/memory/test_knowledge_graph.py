@@ -72,7 +72,9 @@ def test_subgraph_for_query():
     retrieval = _node("Retrieval", "CONCEPT")
     kg.add_node(rag)
     kg.add_node(retrieval)
-    kg.add_edge(GraphEdge(source_id=rag.id, target_id=retrieval.id, relation=GraphRelation.DEPENDS_ON))
+    kg.add_edge(
+        GraphEdge(source_id=rag.id, target_id=retrieval.id, relation=GraphRelation.DEPENDS_ON)
+    )
 
     subgraph = kg.subgraph_for_query(["RAG"], hops=1)
     node_labels = [n.label for n in subgraph]

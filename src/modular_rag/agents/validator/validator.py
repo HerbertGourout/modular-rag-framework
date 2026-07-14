@@ -24,7 +24,9 @@ class ValidatorAgent:
         score = _validator.validate(draft_answer, task.context)
         output = task.instructions or ""
         if score < 0.05:
-            output += "\n\n[Validator warning: low groundedness — answer may contain hallucinations.]"
+            output += (
+                "\n\n[Validator warning: low groundedness — answer may contain hallucinations.]"
+            )
         return AgentResult(
             task_name=task.name,
             role=AgentRole.VALIDATOR,

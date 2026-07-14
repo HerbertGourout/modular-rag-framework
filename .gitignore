@@ -181,3 +181,6 @@ logs/
 #   python -m venv .venv
 #   source .venv/bin/activate  # or .venv\Scripts\activate on Windows
 #   pip install -e .[v1,dev]
+
+# Windows WSL alternate-data-stream junk
+*:Zone.Identifier

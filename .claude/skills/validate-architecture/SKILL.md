@@ -10,6 +10,10 @@ _Originally authored as a workflow for `architecture-reviewer`, invoked as `/val
 
 Comprehensive workflow for validating architecture compliance, import rules, and design patterns.
 
+## State of the Art Reference
+
+[docs/research/DIGEST-architecture.md](../../../docs/research/DIGEST-architecture.md) externally validates this framework's manifest-driven registry design (ADR-0002) and documents the fail-closed permission model recommended for the V2 Policy Engine (ADR-0003). Consult it when reviewing structural changes or new ADRs.
+
 ## When to Use
 
 - Before committing new features

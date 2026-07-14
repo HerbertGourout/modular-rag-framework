@@ -11,7 +11,9 @@ class FlowCompiler:
     def compile(self, query: Query, strategy: RoutingStrategy) -> ExecutionPlan:
         match strategy:
             case RoutingStrategy.LLM_ONLY:
-                steps = [ExecutionStep(name="generate", tool="generator", args={"use_context": False})]
+                steps = [
+                    ExecutionStep(name="generate", tool="generator", args={"use_context": False})
+                ]
             case RoutingStrategy.SIMPLE_RAG:
                 steps = [
                     ExecutionStep(name="retrieve", tool="retriever"),
@@ -22,8 +24,12 @@ class FlowCompiler:
                 steps = [
                     ExecutionStep(name="plan", tool="planner"),
                     ExecutionStep(name="retrieve", tool="retriever_agent", depends_on=["plan"]),
-                    ExecutionStep(name="synthesize", tool="synthesizer_agent", depends_on=["retrieve"]),
-                    ExecutionStep(name="validate", tool="validator_agent", depends_on=["synthesize"]),
+                    ExecutionStep(
+                        name="synthesize", tool="synthesizer_agent", depends_on=["retrieve"]
+                    ),
+                    ExecutionStep(
+                        name="validate", tool="validator_agent", depends_on=["synthesize"]
+                    ),
                     ExecutionStep(name="output", tool="generator", depends_on=["validate"]),
                 ]
             case RoutingStrategy.GRAPH_RAG:
