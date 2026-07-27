@@ -2,6 +2,13 @@
 
 **Summary:** All 8 strategic capabilities integrated into V1→V5 roadmap with clear timelines, dependencies, and success criteria.
 
+**Scope of this document** (to avoid re-duplicating three overlapping sources): this is the
+**commercial and staffing plan** — deal-size impact, revenue model, week-by-week team
+allocation, and launch dates. For the two things it deliberately does *not* restate in full:
+- **Current delivery status** (which box is checked) → [ROADMAP.md](../../ROADMAP.md).
+- **Why each feature exists, its implementation sketch, and its technical success
+  criteria** → [ADR-0004](../adr/0004-strategic-features-v1-v5.md).
+
 ---
 
 ## 🎯 Feature Matrix
@@ -23,218 +30,80 @@
 
 ## 🔄 Dependency Graph
 
-```mermaid
-%%{init: {"theme": "base"}}%%
-flowchart TD
-    V10["V1.0 Core RAG"] --> V11["V1.1 Evaluation"]
-    V10 --> V12["V1.2 Audit"]
-    V10 --> V20["V2.0 Policies"]
-    V11 --> V32["V3.2 Fine-Tuning"]
-    V20 --> V21["V2.1 Teams"]
-    V21 --> V30["V3.0 Graphs"]
-    V30 --> V31["V3.1 Cost"]
-    V30 --> V32
-    V31 --> V40["V4.0 Governance"]
-    V32 --> V40
-    V40 --> V41["V4.1 Multi-Language"]
-    V40 --> V50["V5.0 Multimodal\n(also needs all prior versions)"]
-    V41 -.-> V50
-```
-
 **Critical path:** V1.0 → V1.1 → V1.2 → V2.0 → V2.1 → V3.0 → V3.1 → V3.2 → V4.0 → V4.1
 **Timeline:** 18 months Q2 2026 → Q2 2027
 
-> This graph duplicates, in a slightly different shape, the timeline in
-> [ADR-0004](../adr/0004-strategic-features-v1-v5.md#detailed-timeline) (which has the
-> canonical Gantt chart and success criteria) and the version checklist in
-> [ROADMAP.md](../../ROADMAP.md). If you're updating one, check whether the others need the
-> same update — these three documents describing the same 8-feature rollout have not yet been
-> consolidated into one source of truth.
+The canonical dependency diagram (Gantt chart) lives in
+[ADR-0004](../adr/0004-strategic-features-v1-v5.md#detailed-timeline) — see it there rather
+than here, so this critical path is never edited in two places at once.
 
 ---
 
 ## 📊 Feature Capabilities by Version
 
-### V1 — Core RAG (`Q2-Q3 2026`)
+The capability list per sub-version (what each one implements) and its outcome statement are
+maintained in one place — [ROADMAP.md](../../ROADMAP.md) — so a capability doesn't drift out
+of sync between two documents. Quick index of what to expect, timeline-wise:
 
-```
-┌─────────────────────────────────────────────┐
-│ V1.0: Hybrid Retrieval + Basic Security    │
-│ ├─ BM25 + vector + reranking               │
-│ ├─ Basic guards (injection, PII)           │
-│ ├─ TraceStep observability                 │
-│ └─ FastAPI + CLI                           │
-└─────────────────────────────────────────────┘
-         ↓
-┌─────────────────────────────────────────────┐
-│ V1.1: Evaluation-as-Contract (NEW)          │
-│ ├─ MetricsProtocol for all components      │
-│ ├─ NDCG, MRR, factuality, semantic sim     │
-│ ├─ Golden sets (finance, health, mfg)      │
-│ ├─ Regression dashboard                    │
-│ └─ F1 > 0.85 guarantee                     │
-└─────────────────────────────────────────────┘
-         ↓
-┌─────────────────────────────────────────────┐
-│ V1.2: Compliance Audit Trail (NEW)          │
-│ ├─ Immutable append-only event store       │
-│ ├─ Data lineage tracking                   │
-│ ├─ GDPR/CCPA/HIPAA report generators       │
-│ ├─ Redaction proof logging                 │
-│ └─ Zero unredacted PII guarantee           │
-└─────────────────────────────────────────────┘
+| Version group | Timeline | Outcome |
+|---|---|---|
+| V1.0 + V1.1 + V1.2 | Q2-Q3 2026 | Production-ready RAG + measured quality + auditable |
+| V2.0 + V2.1 | Q3-Q4 2026 | Explainable multi-agent RAG + policy enforcement |
+| V3.0 + V3.1 + V3.2 | Q4 2026-Q1 2027 | Intelligent RAG + cost-effective + self-improving |
+| V4.0 + V4.1 | Q1-Q2 2027 | Global-by-default RAG + cultural awareness + compliance per region |
+| V5.0 | Q2 2027 | Full multimedia RAG + cross-modal reasoning |
 
-Outcome: Production-ready RAG + measured quality + auditable
-```
-
-### V2 — Agentic + Governance (`Q3-Q4 2026`)
-
-```
-┌─────────────────────────────────────────────┐
-│ V2.0: Policy Engine (MOVED FROM V4!)        │
-│ ├─ Policy-as-Code (YAML rules)             │
-│ ├─ Role-based access control               │
-│ ├─ Data classification                     │
-│ ├─ Multi-tenant isolation                  │
-│ └─ Query evaluation before execution       │
-└─────────────────────────────────────────────┘
-      + Multi-agent runtime
-      ├─ Coordinator, Planner, Retriever
-      ├─ Extractor, Synthesizer, Validator
-      └─ Plan → Retrieve → Synthesize → Critique
-         ↓
-┌─────────────────────────────────────────────┐
-│ V2.1: Collaborative Teams (NEW)             │
-│ ├─ Domain specialist agents                │
-│ ├─ Fact-checker agent                      │
-│ ├─ Consensus scoring                       │
-│ ├─ Human escalation                        │
-│ └─ Full reasoning trace                    │
-└─────────────────────────────────────────────┘
-
-Outcome: Explainable multi-agent RAG + policy enforcement
-```
-
-### V3 — Graph Memory + Intelligence (`Q4 2026 - Q1 2027`)
-
-```
-┌─────────────────────────────────────────────┐
-│ V3.0: GraphRAG + Knowledge Graphs           │
-│ ├─ Entity & relation extraction             │
-│ ├─ Graph construction (Neo4j)               │
-│ ├─ Multi-hop reasoning                      │
-│ ├─ Community detection                      │
-│ └─ F1 > 0.80 on graph queries              │
-└─────────────────────────────────────────────┘
-         ↓
-┌─────────────────────────────────────────────┐
-│ V3.1: Cost Optimization Engine (NEW)        │
-│ ├─ Query classifier (factual vs reasoning) │
-│ ├─ Smart routing (cheap → expensive)       │
-│ ├─ Multi-model support (GPT-4, 3.5, local)│
-│ ├─ Query caching (>95% similarity)         │
-│ └─ 50-80% cost reduction                   │
-└─────────────────────────────────────────────┘
-      + V3.2: Fine-Tuning Loop (NEW)
-      ├─ Feedback collection (thumbs up/down)
-      ├─ Drift detection                      
-      ├─ Auto fine-tuning (embedder/reranker)
-      ├─ Model versioning + rollback         
-      └─ F1 improves +2-5% monthly           
-
-Outcome: Intelligent RAG + cost-effective + self-improving
-```
-
-### V4 — Multi-Language Governance (`Q1-Q2 2027`)
-
-```
-┌─────────────────────────────────────────────┐
-│ V4.0: Multi-environment + human review      │
-│ ├─ Staging/production manifests             │
-│ ├─ Risk profiles per pipeline               │
-│ ├─ Review queue for risky answers           │
-│ └─ OPA policy integration                   │
-└─────────────────────────────────────────────┘
-         ↓
-┌─────────────────────────────────────────────┐
-│ V4.1: Multi-Language + Cultural (NEW)       │
-│ ├─ 20+ languages (Arabic, Chinese, etc)    │
-│ ├─ Language-aware chunking                 │
-│ ├─ Multilingual embeddings (mxbai, e5)     │
-│ ├─ Cultural context injection              │
-│ ├─ Regulatory routing (GDPR/CCPA/CNIL)     │
-│ └─ F1 > 0.80 in non-English                │
-└─────────────────────────────────────────────┘
-
-Outcome: Global-by-default RAG + cultural awareness + compliance per region
-```
-
-### V5 — Multimodal (`Q2 2027`)
-
-```
-┌─────────────────────────────────────────────┐
-│ V5.0: Multimodal Intelligence               │
-│ ├─ Image/table/audio/video parsers          │
-│ ├─ Multi-vector Qdrant index                │
-│ ├─ Modality-specialized agents              │
-│ ├─ VLM generation (Claude vision, GPT-4V)   │
-│ └─ Enriched citations (images, timecodes)   │
-└─────────────────────────────────────────────┘
-
-Outcome: Full multimedia RAG + cross-modal reasoning
-```
+See [ROADMAP.md](../../ROADMAP.md) for the per-feature checklist and
+[ADR-0004](../adr/0004-strategic-features-v1-v5.md) for the implementation sketch and
+technical success criteria behind each one.
 
 ---
 
 ## 💰 Business Impact per Feature
 
+Technical success criteria for each feature (the bar it must clear to be considered done)
+live in [ADR-0004](../adr/0004-strategic-features-v1-v5.md) — not repeated below to avoid a
+third copy drifting out of sync. This section is the commercial "why it's worth building."
+
 ### V1.1 — Evaluation-as-Contract
 - **Benefit:** Prove quality, prevent regressions, golden set baselines
 - **Deal impact:** +$50k (evaluation baseline per deployment)
 - **Timeline:** +1 month after V1.0
-- **Success:** F1 > 0.85 on golden sets
 
 ### V1.2 — Compliance Audit Trail
 - **Benefit:** GDPR/CCPA audit < 10 seconds, regulatory sign-off
 - **Deal impact:** +$150k (compliance assurance, regulatory premium)
 - **Timeline:** +2 months after V1.0
-- **Success:** Immutable audit trail, zero unredacted PII
 
 ### V2.0 — Policy Engine
 - **Benefit:** Zero-trust governance, multi-tenant isolation
 - **Deal impact:** +$200k (enterprise governance premium)
 - **Timeline:** Q3 2026 (3 months after V1)
-- **Success:** Policies enforced, violations logged
 
 ### V2.1 — Multi-Agent Teams
 - **Benefit:** Explainability, accountability, complex reasoning
 - **Deal impact:** +$100k (reasoning + transparency)
 - **Timeline:** Q4 2026 (3 months after V2.0)
-- **Success:** Consensus > 85%, full trace
 
 ### V3.0 — Knowledge Graphs
 - **Benefit:** Multi-hop reasoning, relationship discovery
 - **Deal impact:** +$75k (advanced reasoning)
 - **Timeline:** Q4 2026
-- **Success:** 3-hop queries work, F1 > 0.80
 
 ### V3.1 — Cost Optimization
 - **Benefit:** 50-80% LLM cost reduction
 - **Deal impact:** +$250k (TCO reduction = big sell)
 - **Timeline:** Q1 2027 (2 months after V3.0)
-- **Success:** 70% cheap-path routing, cost reduction > 50%
 
 ### V3.2 — Fine-Tuning Loop
 - **Benefit:** Self-improving RAG, SaaS-like model
 - **Deal impact:** +$100k (continuous improvement)
 - **Timeline:** Q1 2027 (3 months after V3.0)
-- **Success:** Feedback > 80%, F1 +2% monthly
 
 ### V4.1 — Multi-Language
 - **Benefit:** Global deployment, 20+ languages native
 - **Deal impact:** +$175k (global expansion)
 - **Timeline:** Q2 2027 (4 months after V4.0)
-- **Success:** 20+ languages, F1 > 0.80 non-English
 
 ---
 
@@ -266,65 +135,21 @@ Outcome: Full multimedia RAG + cross-modal reasoning
 
 ## 🎯 Success Metrics
 
-### V1 (June 2026)
-- ✅ End-to-end RAG pipeline
-- ✅ F1 > 0.75 on golden set
-- ✅ All tests passing
-- ✅ `examples/simple_qa/` running
+| Version | Target month | Full technical criteria |
+|---|---|---|
+| V1.0 | June 2026 | End-to-end pipeline, F1 > 0.75, all tests passing, `examples/simple_qa/` running |
+| V1.1 | July 2026 | See [ADR-0004 § Feature 1](../adr/0004-strategic-features-v1-v5.md#feature-1-evaluation-as-contract-v11) |
+| V1.2 | August 2026 | See [ADR-0004 § Feature 2](../adr/0004-strategic-features-v1-v5.md#feature-2-compliance-audit-trail-v12) |
+| V2.0 | September 2026 | See [ADR-0004 § Feature 3](../adr/0004-strategic-features-v1-v5.md#feature-3-policy-engine-v20) |
+| V2.1 | October 2026 | See [ADR-0004 § Feature 4](../adr/0004-strategic-features-v1-v5.md#feature-4-collaborative-multi-agent-teams-v21) |
+| V3.0 | November 2026 | See [ADR-0004 § Feature 7](../adr/0004-strategic-features-v1-v5.md#feature-7-knowledge-graphs-for-reasoning-v30) |
+| V3.1 | December 2026 | See [ADR-0004 § Feature 5](../adr/0004-strategic-features-v1-v5.md#feature-5-cost-optimization-engine-v31) |
+| V3.2 | January 2027 | See [ADR-0004 § Feature 6](../adr/0004-strategic-features-v1-v5.md#feature-6-continuous-fine-tuning-loop-v32) |
+| V4.1 | April 2027 | See [ADR-0004 § Feature 8](../adr/0004-strategic-features-v1-v5.md#feature-8-multi-language--cultural-reasoning-v41) |
+| V5.0 | May 2027 | See [ROADMAP.md](../../ROADMAP.md), V5 section |
 
-### V1.1 (July 2026)
-- ✅ Metrics for all components
-- ✅ Golden sets ready
-- ✅ Regression dashboard working
-- ✅ F1 > 0.85 on pilot
-
-### V1.2 (August 2026)
-- ✅ GDPR report < 10s
-- ✅ Zero unredacted PII
-- ✅ Data lineage traceable
-- ✅ Audit trail immutable
-
-### V2.0 (September 2026)
-- ✅ Policy engine active
-- ✅ Multi-tenant isolation
-- ✅ Violations logged
-- ✅ Agent orchestration working
-
-### V2.1 (October 2026)
-- ✅ Teams executable
-- ✅ Consensus > 85%
-- ✅ Reasoning trace complete
-- ✅ Human escalation working
-
-### V3.0 (November 2026)
-- ✅ Graph construction working
-- ✅ 3-hop reasoning
-- ✅ F1 > 0.80
-- ✅ Neo4j adapter functional
-
-### V3.1 (December 2026)
-- ✅ 70% cheap-path routing
-- ✅ Cost reduction > 50%
-- ✅ Cache hit rate > 20%
-- ✅ Quality maintained
-
-### V3.2 (January 2027)
-- ✅ Feedback > 80%
-- ✅ Drift detection working
-- ✅ F1 improving monthly
-- ✅ Zero regressions
-
-### V4.1 (April 2027)
-- ✅ 20+ languages
-- ✅ F1 > 0.80 non-English
-- ✅ Regulatory routing
-- ✅ Cultural awareness
-
-### V5.0 (May 2027)
-- ✅ Multimodal parsing
-- ✅ VLM integration
-- ✅ Cross-modal reasoning
-- ✅ Enriched citations
+Live delivery status (which of these is actually met today, not just targeted) is tracked in
+[ROADMAP.md](../../ROADMAP.md), not here — this table is the launch calendar, not the tracker.
 
 ---
 
@@ -405,24 +230,9 @@ Outcome: Full multimedia RAG + cross-modal reasoning
 
 ## 📚 Documentation Structure
 
-```
-docs/
-├── adr/
-│   ├── 0001-modular-architecture.md       (six planes)
-│   ├── 0002-contracts-and-plugins.md      (protocols)
-│   ├── 0003-security-and-governance.md    (7 layers)
-│   └── 0004-strategic-features.md         (THIS PLAN)
-├── architecture/
-│   ├── module-model.md                    (six planes detail)
-│   ├── runtime-flow.md                    (V1 pipeline)
-│   └── security.md                        (policy engine detail)
-├── guides/
-│   ├── CLAUDE-CODE-COMPLETE-GUIDE.md     (Claude config)
-│   ├── onboarding-claude-code.md          (developer onboarding)
-│   ├── adoption-metrics.md                (KPIs)
-│   └── subagents-parallelization.md      (advanced)
-└── ROADMAP.md                             (this file + detailed timeline)
-```
+This section used to hand-maintain a snapshot of the `docs/` tree, which drifted out of date
+as new documents were added. [docs/_index.md](../_index.md) is the maintained, current map
+of the documentation set — go there instead.
 
 ---
 
@@ -466,22 +276,9 @@ docs/
 
 ## 📊 Competitive Positioning
 
-```
-                  Governance
-                     ↑
-        LangChain   Haystack   THIS FRAMEWORK
-        (Generic)   (Pipelines) (Enterprise)
-            •         •           •
-            |         |           |
-        Breadth     Structured    Depth
-         Plugins     Nodes     Compliance
-        (100+)      (20+)      Features
-                               (Evaluation,
-                                Audit,
-                                Policies,
-                                Cost Opt,
-                                Fine-Tuning)
-```
+The feature-by-feature comparison against LangChain and Haystack is maintained in
+[ADR-0004 § Market Gaps](../adr/0004-strategic-features-v1-v5.md#market-gaps) and in
+[business-case.md § 3](../business-case.md) — not repeated a third time here.
 
 **Message:** "Don't build RAG if you need to prove it doesn't hallucinate, audit every query, and control costs. Use this."
 
