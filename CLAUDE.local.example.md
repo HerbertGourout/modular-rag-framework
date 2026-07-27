@@ -20,5 +20,5 @@ $env:MRAG_ANTHROPIC_API_KEY = "sk-ant-..."
 ## Personal Workflow Notes
 
 - Prefer `.venv\Scripts\python.exe -m pytest` when the virtual environment exists.
-- Run `/qa-v1` before opening a GitLab MR.
+- Run `/qa-v1` before opening a GitHub PR.
 - Run `/run-simple-qa` only when Qdrant and an LLM API key are available.

@@ -254,13 +254,13 @@ Three documents, at different levels of granularity, get updated as things evolv
 | Document | Granularity | Updated when |
 |---|---|---|
 | [ROADMAP.md](../ROADMAP.md) | Checkbox per feature, per version | A listed feature is delivered and validated by its tests |
-| [CHANGELOG.md](../CHANGELOG.md) | Narrative entry per notable change | On every Merge Request, under the `[Unreleased]` section (a rule enforced by the MR checklist in [CONTRIBUTING.md](../CONTRIBUTING.md)) |
+| [CHANGELOG.md](../CHANGELOG.md) | Narrative entry per notable change | On every Pull Request, under the `[Unreleased]` section (a rule enforced by the PR checklist in [CONTRIBUTING.md](../CONTRIBUTING.md)) |
 | [README.md](../README.md), "Project status" section | Flat overview, per component | When a major component changes status (✅/⬜) |
 
-There is no automated mechanism: updating these three files is part of the Merge Request
-checklist. It's a team discipline, not a tool — if an MR closes a roadmap item without
+There is no automated mechanism: updating these three files is part of the Pull Request
+checklist. It's a team discipline, not a tool — if a PR closes a roadmap item without
 checking the matching box, the roadmap silently becomes wrong. See
-[CONTRIBUTING.md](../CONTRIBUTING.md), "Merge Request checklist" section.
+[CONTRIBUTING.md](../CONTRIBUTING.md), "Pull Request checklist" section.
 
 To visualize the same roadmap as diagrams (timeline, dependency graphs), see
 [docs/architecture/roadmap-mermaid.md](architecture/roadmap-mermaid.md).
