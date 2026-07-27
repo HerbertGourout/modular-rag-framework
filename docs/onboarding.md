@@ -1,288 +1,280 @@
-# Onboarding — Profils fonctionnels et parcours complet du framework
+# Onboarding — Functional Profiles and the Framework's Full Journey
 
-> Ce document répond à une question simple mais qui n'avait pas de réponse unique dans le
-> dépôt : **qui doit lire quoi, dans quel ordre, et pourquoi** — que vous soyez développeur,
-> lead technique, consultant en mission client, product owner fonctionnel, ou responsable
-> sécurité/conformité. Il complète [`docs/business-case.md`](business-case.md) (le "pourquoi
-> commercial") et [`ROADMAP.md`](../ROADMAP.md) (le "quoi, coché au fur et à mesure") en
-> répondant au "qui fait quoi, et comment s'y retrouver".
-
----
-
-## 1. Pourquoi ce document existe
-
-Le framework a grossi vite : cinq versions planifiées (V1 à V5), une trentaine de fichiers
-de documentation, des ADR, des manifests, une architecture hexagonale à treize couches. Un
-nouvel arrivant — qu'il vienne coder ou qu'il vienne comprendre ce que l'outil permet de
-faire pour un client — se retrouve devant une quantité d'information qui n'indique pas par
-où commencer. Ce document trace ce chemin.
-
-Il ne remplace aucun document existant : il **indexe et contextualise**. Chaque section
-renvoie vers le document source qui fait autorité sur le sujet.
+> This document answers a simple question that had no single answer anywhere in the repo:
+> **who should read what, in what order, and why** — whether you're a developer, a tech
+> lead, a client-engagement consultant, a functional product owner, or a security/compliance
+> officer. It complements [`docs/business-case.md`](business-case.md) (the "commercial why")
+> and [`ROADMAP.md`](../ROADMAP.md) (the "what, checked off as it ships") by answering
+> "who does what, and how to find your way around."
 
 ---
 
-## 2. Les profils qui interagissent avec le framework
+## 1. Why this document exists
 
-Le framework n'a pas un seul type d'utilisateur. Chaque profil ci-dessous a des besoins et
-un niveau de profondeur technique différents. Comprendre à quel profil vous appartenez (ou
-pour lequel vous écrivez) évite de lire 700 lignes de spécification Pydantic quand une seule
-page de manifest YAML suffirait.
+The framework grew fast: five planned versions (V1 through V5), roughly thirty
+documentation files, ADRs, manifests, a thirteen-layer hexagonal architecture. A newcomer —
+whether they're here to write code or to understand what the tool lets them do for a client
+— faces a volume of information that doesn't indicate where to start. This document maps
+that path.
 
-### 2.1 Développeur du framework (contribue au code source)
+It replaces no existing document: it **indexes and contextualizes**. Every section points to
+the source document that is authoritative on the topic.
 
-Construit ou étend les composants internes : un nouveau chunker, un nouveau retriever, un
-nouveau générateur, une nouvelle policy. Ce profil touche à `src/modular_rag/`, écrit des
-tests, et doit respecter la règle de dépendance hexagonale (`core/` → `contracts/` →
-domaines → `orchestration/` → `app/` → `cli/`/`api/`).
+---
 
-**Ce que ce profil doit lire, dans l'ordre :**
-1. [CLAUDE.md](../CLAUDE.md) — les règles non négociables (contracts first, pas d'import
-   croisé entre domaines, manifests comme source de vérité).
-2. [CONTRIBUTING.md](../CONTRIBUTING.md) — setup local, recette pas-à-pas pour ajouter un
-   composant.
-3. [docs/architecture/module-model.md](architecture/module-model.md) — pourquoi la règle de
-   dépendance existe, avec des exemples concrets de ce qu'elle empêche.
-4. [docs/architecture/data-model.md](architecture/data-model.md) — les objets Pydantic qui
-   circulent partout (`Document`, `Chunk`, `Query`, `Answer`, `Trace`…).
-5. [docs/guides/plugin-development.md](guides/plugin-development.md) — la recette en quatre
-   étapes (contrat → implémentation → registre → manifest).
-6. Les ADR ([docs/adr/](adr/)) pertinents pour la zone qu'il modifie.
+## 2. The profiles that interact with the framework
 
-Ce profil ne doit **jamais** avoir besoin de lire `docs/business-case.md` pour faire son
-travail — mais le lire une fois aide à comprendre pourquoi certaines contraintes
-(gouvernance V4, souveraineté des données) sont non négociables même quand elles compliquent
-l'implémentation.
+The framework doesn't have a single type of user. Each profile below has different needs
+and a different depth of technical involvement. Knowing which profile you belong to (or
+which one you're writing for) saves you from reading 700 lines of Pydantic specification
+when a single page of YAML manifest would have done the job.
 
-### 2.2 Lead technique / architecte
+### 2.1 Framework developer (contributes to the source code)
 
-Décide des évolutions structurelles : nouveau layer, nouveau contrat, changement de
-frontière entre modules. Écrit ou valide les ADR. Arbitre entre "on étend un contrat
-existant" et "on en crée un nouveau".
+Builds or extends internal components: a new chunker, a new retriever, a new generator, a
+new policy. This profile touches `src/modular_rag/`, writes tests, and must respect the
+hexagonal dependency rule (`core/` → `contracts/` → domains → `orchestration/` → `app/` →
+`cli/`/`api/`).
 
-**Lecture prioritaire :**
-1. [docs/architecture/overview.md](architecture/overview.md) — la spécification technique
-   complète, les six plans du système, la roadmap V1→V5 avec le détail de ce que chaque
-   version ajoute.
-2. [docs/adr/](adr/) — les trois décisions déjà actées (six plans, Protocol + registry,
-   safety vs security) et le gabarit à suivre pour une nouvelle décision.
-3. [docs/architecture/module-model.md](architecture/module-model.md) et
-   [structure.md](architecture/structure.md) — la carte complète du code, fichier par
-   fichier.
-4. [docs/reviews/2026-05-20-initial-review.md](reviews/2026-05-20-initial-review.md) — la
-   revue initiale qui a posé les priorités P0/P1/P2 ; utile pour comprendre pourquoi certains
-   choix (Apache 2.0, statut pre-alpha honnête, tests miroir de `src/`) ont été tranchés tôt.
+**What this profile should read, in order:**
+1. [CLAUDE.md](../CLAUDE.md) — the non-negotiable rules (contracts first, no cross-domain
+   imports, manifests as the source of truth).
+2. [CONTRIBUTING.md](../CONTRIBUTING.md) — local setup, step-by-step recipe for adding a
+   component.
+3. [docs/architecture/module-model.md](architecture/module-model.md) — why the dependency
+   rule exists, with concrete examples of what it prevents.
+4. [docs/architecture/data-model.md](architecture/data-model.md) — the Pydantic objects that
+   flow through everything (`Document`, `Chunk`, `Query`, `Answer`, `Trace`…).
+5. [docs/guides/plugin-development.md](guides/plugin-development.md) — the four-step recipe
+   (contract → implementation → registry → manifest).
+6. The relevant [ADRs](adr/) for the area being modified.
 
-### 2.3 Consultant / delivery lead sur un projet client
+This profile should **never** need to read `docs/business-case.md` to do the job — but
+reading it once helps explain why certain constraints (V4 governance, data sovereignty) are
+non-negotiable even when they complicate the implementation.
 
-Configure un pipeline pour un client via les manifests YAML, sans nécessairement modifier de
-code Python. Doit savoir quel preset choisir, comment l'adapter (modèle LLM, niveau de
-sécurité, profondeur de retrieval), et comment démontrer une preuve de concept rapidement.
+### 2.2 Tech lead / architect
 
-**Lecture prioritaire :**
-1. [docs/guides/getting-started.md](guides/getting-started.md) — du clone à la première
-   réponse, en cinq étapes.
-2. [manifests/_index.md](../manifests/_index.md) — quel preset choisir selon le contexte
-   client (dev local, entreprise sécurisée, agentique, graphe, multimodal).
-3. [docs/guides/installation.md](guides/installation.md) — variables d'environnement,
-   dépendances par version.
-4. [docs/guides/deployment.md](guides/deployment.md) — comment faire tourner ça en dehors
-   d'un poste de dev (Docker, multi-environnement).
-5. [docs/business-case.md](business-case.md) — les arguments à réutiliser face à un client
-   (économie de 4-8 semaines, gouvernance by design, indépendance vendor).
+Decides on structural changes: new layer, new contract, a shifted boundary between modules.
+Writes or approves ADRs. Arbitrates between "extend an existing contract" and "create a new
+one."
 
-Ce profil n'a normalement pas besoin de lire `data-model.md` ni `module-model.md` — sauf s'il
-doit expliquer à un DSI client *pourquoi* l'architecture est fiable.
+**Priority reading:**
+1. [docs/architecture/overview.md](architecture/overview.md) — the complete technical
+   specification, the system's six planes, the V1→V5 roadmap with the detail of what each
+   version adds.
+2. [docs/adr/](adr/) — the three decisions already settled (six planes, Protocol +
+   registry, safety vs. security) and the template to follow for a new decision.
+3. [docs/architecture/module-model.md](architecture/module-model.md) and
+   [structure.md](architecture/structure.md) — the complete map of the code, file by file.
+4. [docs/reviews/2026-05-20-initial-review.md](reviews/2026-05-20-initial-review.md) — the
+   initial review that set the P0/P1/P2 priorities; useful for understanding why certain
+   choices (Apache 2.0, an honest pre-alpha status, tests mirroring `src/`) were settled
+   early.
 
-### 2.4 Profil fonctionnel / product owner / business analyst
+### 2.3 Consultant / delivery lead on a client project
 
-Ne code pas, ne configure pas nécessairement les manifests, mais doit savoir **ce que
-l'outil permet de faire aujourd'hui, ce qu'il permettra de faire demain**, pour cadrer un
-besoin client ou une user story. C'est le profil le plus souvent oublié dans une
-documentation technique — d'où l'existence de ce document.
+Configures a pipeline for a client via YAML manifests, without necessarily touching Python
+code. Needs to know which preset to choose, how to adapt it (LLM model, security level,
+retrieval depth), and how to demonstrate a proof of concept quickly.
 
-**Lecture prioritaire :**
-1. La section 3 ci-dessous (« Le parcours complet, expliqué sans jargon technique »).
-2. [docs/business-case.md](business-case.md) — le cas d'usage business complet : ROI,
-   positionnement concurrentiel, couverture réglementaire.
-3. [ROADMAP.md](../ROADMAP.md) — ce qui est déjà livré (case cochée) versus ce qui reste à
-   construire, par version.
-4. [examples/simple_qa/docs/rag-overview.md](../examples/simple_qa/docs/rag-overview.md) —
-   une explication non technique de ce qu'est le RAG et pourquoi ça existe, utile pour
-   vulgariser face à un client qui ne connaît pas le terme.
+**Priority reading:**
+1. [docs/guides/getting-started.md](guides/getting-started.md) — from clone to first
+   answer, in five steps.
+2. [manifests/_index.md](../manifests/_index.md) — which preset to choose depending on the
+   client context (local dev, secure enterprise, agentic, graph, multimodal).
+3. [docs/guides/installation.md](guides/installation.md) — environment variables,
+   per-version dependencies.
+4. [docs/guides/deployment.md](guides/deployment.md) — how to run this outside a dev
+   machine (Docker, multi-environment).
+5. [docs/business-case.md](business-case.md) — arguments to reuse in front of a client
+   (4–8 weeks saved, governance by design, vendor independence).
 
-Ce profil n'a besoin d'aucun fichier sous `src/modular_rag/`, ni des ADR (trop techniques),
-ni de `module-model.md`. S'il a besoin de connaître une capacité précise ("est-ce qu'on peut
-déjà répondre sur une vidéo ?"), la réponse est dans le tableau de version de la section 3 —
-pas dans le code.
+This profile normally doesn't need to read `data-model.md` or `module-model.md` — unless
+they need to explain to a client's CIO *why* the architecture is trustworthy.
 
-### 2.5 Sécurité / conformité (RSSI, DPO, auditeur)
+### 2.4 Functional profile / product owner / business analyst
 
-Doit évaluer si le framework respecte les contraintes réglementaires (RGPD, DORA, NIS2,
-sectorielles) avant qu'un client régulé ne l'adopte. Ne code pas, mais a besoin de preuves
-concrètes — pas de promesses marketing.
+Doesn't code, doesn't necessarily configure the manifests, but needs to know **what the
+tool can do today and what it will be able to do tomorrow**, in order to scope a client need
+or a user story. This is the profile most often forgotten in technical documentation — which
+is exactly why this document exists.
 
-**Lecture prioritaire :**
-1. [docs/architecture/security.md](architecture/security.md) — les surfaces d'attaque
-   couvertes, la chaîne de garde-fous, les patterns de redaction PII exacts (regex, types de
-   données couvertes).
-2. [docs/adr/0003-security-and-governance.md](adr/0003-security-and-governance.md) — la
-   séparation Safety (anti-injection, PII) vs Security (RBAC, policies), et ce qui est déjà
-   implémenté (V1) versus prévu (V4).
-3. [docs/business-case.md](business-case.md), section 4 — couverture des industries
-   régulées, argumentaire pour un DPO ou un RSSI côté client.
+**Priority reading:**
+1. Section 3 below ("The full journey, explained without technical jargon").
+2. [docs/business-case.md](business-case.md) — the full business case: ROI, competitive
+   positioning, regulatory coverage.
+3. [ROADMAP.md](../ROADMAP.md) — what's already delivered (box checked) versus what's still
+   to be built, by version.
+4. [examples/simple_qa/docs/rag-overview.md](../examples/simple_qa/docs/rag-overview.md) — a
+   non-technical explanation of what RAG is and why it exists, useful for explaining it to a
+   client who doesn't know the term.
 
-**Point de vigilance à communiquer à ce profil sans détour** : au statut actuel, la
-gouvernance policy-as-code, le multi-tenant et l'audit trail complet sont des items **V4,
-non encore livrés** (voir [ROADMAP.md](../ROADMAP.md)). Ne jamais présenter ces capacités
-comme déjà opérationnelles face à un client ou un auditeur — c'est le type d'écart entre
-promesse documentaire et code livré que la revue initiale du 2026-05-20 a explicitement
-signalé comme risque n°1 du projet (voir
+This profile needs no file under `src/modular_rag/`, no ADRs (too technical), and no
+`module-model.md`. If they need to know a specific capability ("can we already answer
+questions about a video?"), the answer is in the version table in section 3 — not in the
+code.
+
+### 2.5 Security / compliance (CISO, DPO, auditor)
+
+Needs to assess whether the framework meets regulatory constraints (GDPR, DORA, NIS2,
+sector-specific rules) before a regulated client adopts it. Doesn't code, but needs concrete
+proof — not marketing promises.
+
+**Priority reading:**
+1. [docs/architecture/security.md](architecture/security.md) — the attack surfaces
+   covered, the guard chain, the exact PII redaction patterns (regexes, data types covered).
+2. [docs/adr/0003-security-and-governance.md](adr/0003-security-and-governance.md) — the
+   Safety (anti-injection, PII) vs. Security (RBAC, policies) split, and what's already
+   implemented (V1) versus planned (V4).
+3. [docs/business-case.md](business-case.md), section 4 — coverage of regulated
+   industries, talking points for a client-side DPO or CISO.
+
+**Watch point to communicate to this profile without softening it**: as things currently
+stand, policy-as-code governance, multi-tenancy, and the full audit trail are **V4 items,
+not yet delivered** (see [ROADMAP.md](../ROADMAP.md)). Never present these capabilities as
+already operational to a client or an auditor — this is exactly the kind of gap between
+documented promise and delivered code that the initial review of 2026-05-20 explicitly
+flagged as the project's #1 risk (see
 [docs/reviews/2026-05-20-initial-review.md](reviews/2026-05-20-initial-review.md)).
 
 ### 2.6 Management / commercial
 
-N'a besoin que de [docs/business-case.md](business-case.md) et du tableau de statut du
-[README.md](../README.md) ("Project status"). Rien d'autre n'est nécessaire à ce niveau.
+Only needs [docs/business-case.md](business-case.md) and the status table in
+[README.md](../README.md) ("Project status"). Nothing else is required at this level.
 
 ---
 
-## 3. Le parcours complet, expliqué sans jargon technique
+## 3. The full journey, explained without technical jargon
 
-Cette section répond à la question "qu'est-ce que ce framework va faire, du début à la
-fin ?" en langage clair, sans supposer de connaissance de l'architecture. Chaque version
-n'est pas un module isolé : elle dépend de la précédente et il n'existe pas de raccourci
-(vous ne pouvez pas sauter à la V3 sans que la V1 fonctionne, parce que le graphe de
-connaissances V3 s'appuie sur le pipeline de retrieval déjà construit en V1).
+This section answers the question "what is this framework going to do, from start to
+finish?" in plain language, without assuming any knowledge of the architecture. Each version
+is not an isolated module: it depends on the one before it, and there is no shortcut (you
+can't jump to V3 without V1 working, because V3's knowledge graph builds on the retrieval
+pipeline already built in V1).
 
-### V1 — Core RAG : répondre à une question à partir de documents
+### V1 — Core RAG: answering a question from documents
 
-**Le problème résolu.** Un client a des documents (PDF, Word, pages web, notes internes) et
-veut poser des questions en langage naturel et obtenir une réponse sourcée, plutôt que de
-chercher manuellement dans des dizaines de fichiers.
+**The problem solved.** A client has documents (PDFs, Word files, web pages, internal notes)
+and wants to ask questions in natural language and get a sourced answer, instead of
+manually searching through dozens of files.
 
-**Comment ça marche, en une phrase.** Les documents sont découpés en petits morceaux
-("chunks"), indexés de deux façons complémentaires (une recherche par sens et une recherche
-par mots-clés), et à chaque question, les morceaux les plus pertinents sont retrouvés puis
-donnés à un modèle de langage (GPT ou Claude) qui rédige une réponse en citant ses sources.
+**How it works, in one sentence.** Documents are split into small pieces ("chunks"),
+indexed in two complementary ways (a search by meaning and a search by keyword), and for
+each question, the most relevant pieces are retrieved and handed to a language model (GPT
+or Claude), which writes an answer citing its sources.
 
-**Pourquoi deux méthodes de recherche combinées et pas une seule ?** La recherche par sens
-("vectorielle") comprend les paraphrases et les synonymes mais peut rater un acronyme
-technique exact ("SLA", "IBAN") que l'utilisateur tape mot pour mot. La recherche par
-mots-clés (BM25) fait l'inverse : parfaite sur les termes exacts, aveugle aux paraphrases.
-Combiner les deux (fusion RRF, détaillée dans
-[docs/architecture/overview.md](architecture/overview.md), section 11) donne le meilleur des
-deux mondes sans sacrifice.
+**Why combine two search methods instead of just one?** Search by meaning ("vector search")
+understands paraphrases and synonyms but can miss an exact technical acronym ("SLA", "IBAN")
+that the user types verbatim. Keyword search (BM25) does the opposite: perfect on exact
+terms, blind to paraphrasing. Combining the two (RRF fusion, detailed in
+[docs/architecture/overview.md](architecture/overview.md), section 11) gives the best of
+both worlds without sacrificing either.
 
-**État** : ✅ terminé et fonctionnel de bout en bout — voir `examples/simple_qa/`.
+**Status**: ✅ complete and functional end to end — see `examples/simple_qa/`.
 
-### V2 — Agentic : des questions qui demandent plusieurs étapes de raisonnement
+### V2 — Agentic: questions that need several reasoning steps
 
-**Le problème résolu.** V1 fonctionne bien pour "quel est le chiffre d'affaires du Q3 ?"
-mais échoue sur "compare les résultats du Q3 aux prévisions initiales et explique l'écart" —
-une question qui demande de récupérer plusieurs informations, de les croiser, puis de
-vérifier que la réponse est bien étayée avant de la donner.
+**The problem solved.** V1 works well for "what was Q3 revenue?" but fails on "compare Q3
+results to the initial forecast and explain the gap" — a question that requires pulling
+several pieces of information, cross-referencing them, and then double-checking the answer
+is well supported before returning it.
 
-**Comment ça marche.** Un routeur détecte qu'une question est complexe et la confie à une
-équipe de cinq agents spécialisés plutôt qu'à un seul appel de modèle : un planificateur
-découpe la question en étapes, un agent récupère l'information, un agent extrait les faits
-pertinents, un agent rédige un brouillon, un agent valide que le brouillon est bien étayé par
-les sources — et si ce n'est pas le cas, la boucle recommence la recherche avant de rendre la
-réponse finale.
+**How it works.** A router detects that a question is complex and hands it off to a team of
+five specialized agents rather than a single model call: a planner breaks the question into
+steps, an agent retrieves the information, an agent extracts the relevant facts, an agent
+drafts an answer, an agent validates that the draft is well supported by the sources — and
+if it isn't, the loop retries the search before returning the final answer.
 
-**État** : ⬜ planifié — voir [ROADMAP.md](../ROADMAP.md).
+**Status**: ⬜ planned — see [ROADMAP.md](../ROADMAP.md).
 
-### V3 — Graph Memory : comprendre les relations entre les informations, pas seulement leur contenu
+### V3 — Graph Memory: understanding relationships between facts, not just their content
 
-**Le problème résolu.** V1 et V2 retrouvent des morceaux de texte pertinents, mais ne
-"savent" pas que "Client X" est lié contractuellement à "Fournisseur Y", qui a eu un
-incident affectant "Projet Z". Ce type de question à sauts multiples ("qui est concerné, en
-cascade, par l'incident chez Y ?") demande un graphe de connaissances, pas juste une
-recherche de texte.
+**The problem solved.** V1 and V2 retrieve relevant pieces of text, but don't "know" that
+"Client X" is contractually tied to "Supplier Y", which had an incident affecting "Project
+Z". This kind of multi-hop question ("who is affected, in cascade, by the incident at Y?")
+needs a knowledge graph, not just text search.
 
-**Comment ça marche.** Le corpus est analysé pour en extraire les entités (personnes,
-organisations, projets) et leurs relations, construisant un graphe. À la question, le
-framework part des entités mentionnées, explore le graphe à N sauts, et injecte ce
-sous-graphe comme contexte structuré en plus des chunks de texte classiques. Un mécanisme de
-retour d'expérience (EvoRAG) renforce ou affaiblit les relations du graphe selon que les
-réponses basées dessus se sont avérées correctes ou non.
+**How it works.** The corpus is analyzed to extract entities (people, organizations,
+projects) and their relationships, building a graph. At query time, the framework starts
+from the entities mentioned, explores the graph N hops out, and injects that sub-graph as
+structured context alongside the usual text chunks. A feedback mechanism (EvoRAG)
+strengthens or weakens the graph's relationships depending on whether the answers based on
+them turned out to be correct.
 
-**État** : ⬜ planifié — voir [ROADMAP.md](../ROADMAP.md).
+**Status**: ⬜ planned — see [ROADMAP.md](../ROADMAP.md).
 
-### V4 — Governance : rendre le système utilisable dans un contexte réglementé, à grande échelle
+### V4 — Governance: making the system usable in a regulated context, at scale
 
-**Le problème résolu.** Un déploiement interne à une seule équipe n'a pas besoin de
-gouvernance formelle. Un déploiement chez une banque, un assureur, ou pour plusieurs clients
-sur la même instance en a besoin absolument : qui a le droit de voir quelles données,
-comment prouver à un régulateur que telle réponse n'a pas fuité de PII, comment isoler
-complètement les données d'un client de celles d'un autre.
+**The problem solved.** A deployment internal to a single team doesn't need formal
+governance. A deployment shared across a bank, an insurer, or multiple clients on the same
+instance absolutely does: who is allowed to see which data, how to prove to a regulator that
+a given answer didn't leak PII, how to fully isolate one client's data from another's.
 
-**Comment ça marche.** Des règles de gouvernance sont écrites en YAML ("policy-as-code"),
-versionnées dans Git comme du code, et appliquées automatiquement à chaque requête et
-chaque action d'agent. Chaque tenant (client, business unit) a ses propres règles et ses
-propres données, sans risque de contamination croisée. Chaque décision de sécurité est
-journalisée pour audit. Les réponses jugées à risque peuvent être mises en attente de
-validation humaine avant d'être renvoyées.
+**How it works.** Governance rules are written in YAML ("policy-as-code"), versioned in Git
+like code, and automatically applied to every query and every agent action. Each tenant
+(client, business unit) has its own rules and its own data, with no risk of cross-
+contamination. Every security decision is logged for audit. Answers judged risky can be held
+for human review before being returned.
 
-**État** : ⬜ planifié — voir [ROADMAP.md](../ROADMAP.md). C'est la version qui déverrouille
-les projets clients dans les secteurs régulés (voir
-[docs/business-case.md](business-case.md), section 4).
+**Status**: ⬜ planned — see [ROADMAP.md](../ROADMAP.md). This is the version that unlocks
+client projects in regulated sectors (see [docs/business-case.md](business-case.md),
+section 4).
 
-### V5 — Multimodal : au-delà du texte
+### V5 — Multimodal: beyond text
 
-**Le problème résolu.** Beaucoup de documents utiles ne sont pas du texte pur : un rapport
-financier a des graphiques, un contrat a des tableaux, une réunion a un enregistrement audio.
-V1 à V4 ne traitent que le texte extrait de ces documents — perdant l'information contenue
-dans une image ou un tableau.
+**The problem solved.** Many useful documents aren't plain text: a financial report has
+charts, a contract has tables, a meeting has an audio recording. V1 through V4 only process
+the text extracted from these documents — losing the information contained in an image or a
+table.
 
-**Comment ça marche.** Des parseurs spécialisés extraient les images, tableaux, transcriptions
-audio et segments vidéo. Chaque modalité a son propre agent spécialisé, et l'index vectoriel
-devient multi-vecteur (texte + image + tableau). Les réponses peuvent citer directement une
-image, un passage de tableau ou un timecode vidéo comme preuve.
+**How it works.** Specialized parsers extract images, tables, audio transcriptions, and
+video segments. Each modality has its own specialized agent, and the vector index becomes
+multi-vector (text + image + table). Answers can directly cite an image, a table excerpt, or
+a video timecode as evidence.
 
-**État** : ⬜ planifié, l'implémentation la moins avancée à ce jour — voir
+**Status**: ⬜ planned, the least advanced implementation to date — see
 [ROADMAP.md](../ROADMAP.md).
 
 ---
 
-## 4. Comment le plan de développement se met à jour
+## 4. How the development plan gets updated
 
-Trois documents, à des granularités différentes, se mettent à jour à chaque évolution :
+Three documents, at different levels of granularity, get updated as things evolve:
 
-| Document | Granularité | Se met à jour quand |
+| Document | Granularity | Updated when |
 |---|---|---|
-| [ROADMAP.md](../ROADMAP.md) | Case à cocher par fonctionnalité, par version | Une fonctionnalité listée est livrée et validée par ses tests |
-| [CHANGELOG.md](../CHANGELOG.md) | Entrée narrative par changement notable | À chaque Merge Request, sous la section `[Unreleased]` (règle imposée par la checklist de MR dans [CONTRIBUTING.md](../CONTRIBUTING.md)) |
-| [README.md](../README.md), section "Project status" | Vue d'ensemble à plat, par composant | Quand un composant majeur change de statut (✅/⬜) |
+| [ROADMAP.md](../ROADMAP.md) | Checkbox per feature, per version | A listed feature is delivered and validated by its tests |
+| [CHANGELOG.md](../CHANGELOG.md) | Narrative entry per notable change | On every Merge Request, under the `[Unreleased]` section (a rule enforced by the MR checklist in [CONTRIBUTING.md](../CONTRIBUTING.md)) |
+| [README.md](../README.md), "Project status" section | Flat overview, per component | When a major component changes status (✅/⬜) |
 
-Il n'existe pas de mécanisme automatique : la mise à jour de ces trois fichiers fait partie
-de la checklist de Merge Request. C'est une discipline d'équipe, pas un outil — si une MR
-ferme un item de la roadmap sans cocher la case correspondante, la roadmap devient
-silencieusement fausse. Voir [CONTRIBUTING.md](../CONTRIBUTING.md), section "Merge Request
-checklist".
+There is no automated mechanism: updating these three files is part of the Merge Request
+checklist. It's a team discipline, not a tool — if an MR closes a roadmap item without
+checking the matching box, the roadmap silently becomes wrong. See
+[CONTRIBUTING.md](../CONTRIBUTING.md), "Merge Request checklist" section.
 
-Pour visualiser la même roadmap sous forme de diagrammes (frise chronologique, graphes de
-dépendance), voir [docs/architecture/roadmap-mermaid.md](architecture/roadmap-mermaid.md).
+To visualize the same roadmap as diagrams (timeline, dependency graphs), see
+[docs/architecture/roadmap-mermaid.md](architecture/roadmap-mermaid.md).
 
 ---
 
-## 5. Ce qui n'existe pas encore et qu'il ne faut pas promettre
+## 5. What doesn't exist yet, and shouldn't be promised
 
-Pour éviter de reproduire l'écart identifié dans la revue du 2026-05-20 (documentation qui
-annonce des capacités non livrées), voici l'état honnête au moment de la rédaction de ce
-document :
+To avoid repeating the gap identified in the 2026-05-20 review (documentation announcing
+capabilities that weren't delivered), here is the honest state as of this document's
+writing:
 
-- Tout ce qui est V2 à V5 dans la section 3 est **planifié, pas livré**. Le code peut déjà
-  exister partiellement (voir le tableau "Roadmap d'implémentation par version" dans
-  [docs/architecture/structure.md](architecture/structure.md)), mais "code écrit" ne veut
-  pas dire "testé end-to-end et démontrable en clientèle".
-- `adapters/llms/`, `adapters/auth/`, `adapters/graphstores/`, `adapters/search/` sont des
-  placeholders vides (voir [CLAUDE.md](../CLAUDE.md), section 09).
-- `tests/integration/` et `tests/e2e/` existent mais nécessitent des services externes
-  (Qdrant, clé API LLM) pour s'exécuter.
-- `manifests/dev/`, `manifests/staging/`, `manifests/production/` sont des stubs V4 — voir
+- Everything listed as V2 through V5 in section 3 is **planned, not delivered**. Code may
+  already exist partially (see the "Implementation roadmap per version" table in
+  [docs/architecture/structure.md](architecture/structure.md)), but "code written" doesn't
+  mean "tested end to end and demonstrable to a client."
+- `adapters/llms/`, `adapters/auth/`, `adapters/graphstores/`, `adapters/search/` are empty
+  placeholders (see [CLAUDE.md](../CLAUDE.md), section 09).
+- `tests/integration/` and `tests/e2e/` exist but require external services (Qdrant, an LLM
+  API key) to run.
+- `manifests/dev/`, `manifests/staging/`, `manifests/production/` are V4 stubs — see
   [manifests/_index.md](../manifests/_index.md).
 
-Avant toute présentation client ou tout engagement contractuel sur une capacité, vérifier son
-statut dans [ROADMAP.md](../ROADMAP.md) plutôt que de se fier à la mémoire ou à une
-conversation précédente — la roadmap change plus vite que les habitudes.
+Before any client presentation or contractual commitment on a capability, check its status
+in [ROADMAP.md](../ROADMAP.md) rather than relying on memory or a previous conversation —
+the roadmap changes faster than habits do.

@@ -1,16 +1,15 @@
-# `manifests/staging/` — Surcharges d'environnement de préproduction (V4, pas encore implémenté)
+# `manifests/staging/` — Pre-production environment overrides (V4, not yet implemented)
 
-Ce dossier est un stub, au même titre que [`../dev/`](../dev/) et
-[`../production/`](../production/). Aucune surcharge d'environnement n'est encore
-implémentée — voir [ROADMAP.md](../../ROADMAP.md), section "V4 — Governance".
+This folder is a stub, same as [`../dev/`](../dev/) and [`../production/`](../production/).
+No environment-override mechanism is implemented yet — see
+[ROADMAP.md](../../ROADMAP.md), "V4 — Governance" section.
 
-**Ce qui est prévu ici** : une configuration qui reflète la production (mêmes garde-fous de
-sécurité, mêmes modèles) mais pointant vers des ressources de test — un cluster Qdrant
-dédié, une clé API avec quota limité, un tenant de démonstration isolé des données réelles
-des clients. L'objectif est de pouvoir valider un changement de manifest ou de policy dans
-des conditions proches du réel avant de le promouvoir en production, sans risquer de données
-sensibles.
+**What's planned here**: a configuration that mirrors production (same security guards,
+same models) but points to test resources — a dedicated Qdrant cluster, an API key with a
+limited quota, a demo tenant isolated from real client data. The goal is to validate a
+manifest or policy change under near-real conditions before promoting it to production,
+without risking sensitive data.
 
-En attendant, dérivez manuellement un manifest à partir de
-[`secure-enterprise-rag.yaml`](../presets/secure-enterprise-rag.yaml) en pointant vers vos
-ressources de préproduction.
+In the meantime, manually derive a manifest from
+[`secure-enterprise-rag.yaml`](../presets/secure-enterprise-rag.yaml), pointing it at your
+pre-production resources.

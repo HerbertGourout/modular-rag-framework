@@ -1,50 +1,50 @@
-# Manifests — Configurer un pipeline sans écrire de Python
+# Manifests — Configuring a pipeline without writing Python
 
-Un manifest est un fichier YAML qui décrit un pipeline RAG complet : quel chunker, quel
-modèle d'embedding, quel store vectoriel, quel retriever, quel reranker, quel générateur,
-quel garde-fou de sécurité, quelle télémétrie. C'est la pièce centrale de la philosophie du
-framework (voir [CLAUDE.md](../CLAUDE.md), règle 03) : **un composant n'est activé que s'il
-est déclaré dans un manifest** — il n'existe aucun câblage caché dans le code Python que la
-configuration YAML ne rendrait pas visible.
+A manifest is a YAML file that describes a complete RAG pipeline: which chunker, which
+embedding model, which vector store, which retriever, which reranker, which generator, which
+security guard, which telemetry. It's the central piece of the framework's philosophy (see
+[CLAUDE.md](../CLAUDE.md), rule 03): **a component is only active if it's declared in a
+manifest** — there is no hidden wiring in the Python code that the YAML configuration
+wouldn't make visible.
 
-**Pourquoi ce choix plutôt qu'une configuration Python classique ?** Trois raisons
-concrètes :
-1. Un lead ou un chef de projet côté client peut lire et modifier un manifest sans jamais
-   ouvrir un fichier `.py` — la barrière d'entrée pour ajuster un pipeline tombe à zéro.
-2. Changer de fournisseur LLM (passer de GPT-4o à Claude, ou à un modèle on-premise) devient
-   un changement d'une seule ligne YAML, jamais une modification de code — argument central
-   pour l'indépendance vendor mise en avant dans [docs/business-case.md](../docs/business-case.md).
-3. Un manifest versionné dans Git constitue, à lui seul, la documentation vivante de "quel
-   pipeline exact tourne pour quel client" — utile en audit ou en debug de régression.
+**Why this choice over a classic Python configuration?** Three concrete reasons:
+1. A lead or a project manager on the client side can read and edit a manifest without ever
+   opening a `.py` file — the barrier to adjusting a pipeline drops to zero.
+2. Switching LLM providers (moving from GPT-4o to Claude, or to an on-premise model) becomes
+   a one-line YAML change, never a code change — the central argument for the vendor
+   independence highlighted in [docs/business-case.md](../docs/business-case.md).
+3. A manifest versioned in Git is, on its own, the living documentation of "exactly which
+   pipeline runs for which client" — useful for audits or regression debugging.
 
-## Comment un manifest devient un pipeline exécutable
+## How a manifest becomes a runnable pipeline
 
-Le chemin complet (détaillé dans
-[docs/architecture/overview.md](../docs/architecture/overview.md), section 9) est : le YAML
-est chargé et validé par `app/bootstrap.py`, puis `orchestration/registry.py` associe chaque
-`type:` déclaré à la classe concrète correspondante (via les factories enregistrées dans
-`_default_factories.py`), et le résultat est un `Container` d'instances prêtes à l'emploi que
-le `RAGEngine` utilise pour répondre aux questions.
+The full path (detailed in
+[docs/architecture/overview.md](../docs/architecture/overview.md), section 9) is: the YAML
+is loaded and validated by `app/bootstrap.py`, then `orchestration/registry.py` maps each
+declared `type:` to the matching concrete class (via the factories registered in
+`_default_factories.py`), and the result is a `Container` of ready-to-use instances that the
+`RAGEngine` uses to answer questions.
 
-## `presets/` — configurations prêtes à l'emploi
+## `presets/` — ready-to-use configurations
 
-| Preset | Version cible | Cas d'usage |
+| Preset | Target version | Use case |
 |---|---|---|
-| [`local-hybrid-rag.yaml`](presets/local-hybrid-rag.yaml) | V1 | Développement local : pas d'authentification, modèles légers (GPT-4o-mini, bge-small), Qdrant en localhost. Point de départ recommandé pour tout nouveau contributeur ou toute démo rapide. |
-| [`secure-enterprise-rag.yaml`](presets/secure-enterprise-rag.yaml) | V1 | Déploiement interne à un client : garde-fous de sécurité activés, `max_query_length` resserré, température de génération à 0 pour des réponses plus déterministes. |
-| [`agentic-rag.yaml`](presets/agentic-rag.yaml) | V2 | Questions multi-étapes nécessitant le runtime à cinq agents (coordinateur, planificateur, retriever, extracteur, synthétiseur, validateur). |
-| [`graph-memory-rag.yaml`](presets/graph-memory-rag.yaml) | V3 | Raisonnement sur les relations entre entités (GraphRAG), avec retour d'expérience EvoRAG. |
-| [`multimodal-rag.yaml`](presets/multimodal-rag.yaml) | V5 | Documents contenant images, tableaux, ou segments audio/vidéo. |
+| [`local-hybrid-rag.yaml`](presets/local-hybrid-rag.yaml) | V1 | Local development: no authentication, lightweight models (GPT-4o-mini, bge-small), Qdrant on localhost. Recommended starting point for any new contributor or quick demo. |
+| [`secure-enterprise-rag.yaml`](presets/secure-enterprise-rag.yaml) | V1 | Internal deployment for a client: security guards enabled, tighter `max_query_length`, generation temperature at 0 for more deterministic answers. |
+| [`agentic-rag.yaml`](presets/agentic-rag.yaml) | V2 | Multi-step questions requiring the five-agent runtime (coordinator, planner, retriever, extractor, synthesizer, validator). |
+| [`graph-memory-rag.yaml`](presets/graph-memory-rag.yaml) | V3 | Reasoning over relationships between entities (GraphRAG), with EvoRAG feedback. |
+| [`multimodal-rag.yaml`](presets/multimodal-rag.yaml) | V5 | Documents containing images, tables, or audio/video segments. |
 
-Pour choisir un preset côté mission client, voir aussi
-[docs/onboarding.md](../docs/onboarding.md), section 2.3 (profil consultant / delivery lead).
+To choose a preset for a client engagement, see also
+[docs/onboarding.md](../docs/onboarding.md), section 2.3 (consultant / delivery lead
+profile).
 
-## `dev/`, `staging/`, `production/` — surcharges par environnement
+## `dev/`, `staging/`, `production/` — per-environment overrides
 
-Ces trois dossiers sont des **stubs volontairement vides** à ce stade (portée V4 — voir
-[CLAUDE.md](../CLAUDE.md), section 09). L'idée, une fois construite, est de permettre une
-surcharge d'un preset par environnement (ex. : `secure-enterprise-rag.yaml` en base, avec un
-`production/overrides.yaml` qui resserre encore la sécurité et active l'audit trail complet)
-sans dupliquer tout le fichier. Voir chaque sous-dossier pour le détail de ce qui est prévu :
-[dev/_index.md](dev/_index.md), [staging/_index.md](staging/_index.md),
+These three folders are **deliberately empty stubs** at this stage (V4 scope — see
+[CLAUDE.md](../CLAUDE.md), section 09). The idea, once built, is to allow a per-environment
+override on top of a base preset (e.g., `secure-enterprise-rag.yaml` as the base, with a
+`production/overrides.yaml` that tightens security further and enables the full audit
+trail) without duplicating the entire file. See each subfolder for the detail of what's
+planned: [dev/_index.md](dev/_index.md), [staging/_index.md](staging/_index.md),
 [production/_index.md](production/_index.md).

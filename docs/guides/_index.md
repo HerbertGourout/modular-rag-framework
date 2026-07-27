@@ -53,6 +53,8 @@
 | **[MCP Integrations](./mcp-integrations.md)** | External tools integration process | Architects |
 | **[Deployment](./deployment.md)** | Production deployment guide | DevOps |
 | **[Audit & Traceability](./audit-traceability.md)** | Compliance + logging | Security/Compliance |
+| **[Troubleshooting 🆕](./troubleshooting.md)** | Common errors (Qdrant unreachable, RegistryError, layering violations...) and their fixes | Everyone |
+| **[Glossary 🆕](../glossary.md)** | Definitions of recurring terms (RRF, ULID, groundedness, EvoRAG...) | Everyone |
 
 ---
 
