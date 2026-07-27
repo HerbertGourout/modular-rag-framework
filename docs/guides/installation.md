@@ -1,5 +1,12 @@
 # Installation
 
+This guide gets the framework installed and importable on your machine. It does not walk
+through running a real query end to end — for that, see
+[getting-started.md](getting-started.md) once installation succeeds. The two guides are
+split deliberately: installation problems (missing Python version, wrong dependency group)
+are a different failure mode than pipeline problems (wrong manifest, missing API key), and
+conflating them makes troubleshooting slower.
+
 ## Requirements
 
 - Python 3.11 or later
@@ -27,7 +34,11 @@ pip install -e ".[v1,dev]"
 
 ## Extras
 
-The project uses optional dependency groups. Install only what you need:
+The project uses optional dependency groups rather than one flat dependency list. This
+matters in practice: `sentence-transformers` alone pulls in a multi-gigabyte PyTorch install,
+and `neo4j`/`spacy` (V3) are irrelevant if you only ever run V1 pipelines. Installing only
+the group your work actually needs keeps setup fast and avoids dragging heavy, unused
+dependencies into a CI image or a client's production container. Install only what you need:
 
 | Group | Install command | What it adds |
 |---|---|---|
@@ -40,7 +51,11 @@ The project uses optional dependency groups. Install only what you need:
 
 ## Running Qdrant locally (V1)
 
-Qdrant is the default vector store for V1. Start it with Docker:
+Qdrant is the default vector store for V1 — it holds the dense embeddings that power the
+"vector" half of hybrid retrieval (the BM25 half is an in-memory index that needs no
+service). Unlike the framework's Python code, Qdrant is an external service that must be
+running before you ingest or query anything; forgetting this step is the most common reason
+`mrag ingest` fails on a first run. Start it with Docker:
 
 ```bash
 docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant
@@ -61,6 +76,11 @@ services:
 The default manifest (`manifests/presets/local-hybrid-rag.yaml`) connects to `localhost:6333`.
 
 ## Environment variables
+
+Settings are read once per process by `app/settings.py` (a `pydantic-settings` model with
+the `MRAG_` prefix) — the manifest YAML configures *which components* are wired, while these
+environment variables configure *credentials and endpoints* that shouldn't live in a
+version-controlled YAML file. Keep secrets here, not in a manifest committed to Git.
 
 | Variable | Description | Default |
 |---|---|---|

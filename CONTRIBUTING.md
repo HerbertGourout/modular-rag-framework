@@ -1,7 +1,17 @@
 # Contributing
 
+This document exists because the framework's value depends entirely on its architectural
+discipline holding up as more people touch it: the hexagonal layering, the contract-first
+approach, and the manifest-driven wiring only stay useful if every contribution respects
+them. A single cross-domain import or a component wired directly in Python instead of
+through a manifest quietly erodes the guarantees the rest of the codebase relies on — which
+is why the rules below are enforced rather than just suggested.
+
 ## Before you start
 
+0. New to this project? Read [docs/onboarding.md](docs/onboarding.md) first — it explains
+   which of the documents below matter for your role (developer, tech lead, delivery
+   consultant, functional/business profile, security) and in what order.
 1. Read [CLAUDE.md](CLAUDE.md) — it documents the architectural rules you must follow.
 2. Read [docs/architecture/overview.md](docs/architecture/overview.md) — the technical specification.
 3. Read the relevant ADR(s) in [docs/adr/](docs/adr/) for the area you are modifying.
@@ -21,11 +31,29 @@ pip install -e .[v1,dev]
 
 ## Code rules
 
-- **Contracts first**: add or update the Protocol in `contracts/` before writing an implementation.
-- **No cross-domain imports**: `ingestion/` must not import from `generation/`. Both communicate through `contracts/` and `core/models/`.
-- **Register in `_default_factories.py`**: every new built-in adapter must be registered by type name.
-- **Tests mirror `src/`**: `tests/unit/ingestion/chunkers/test_fixed.py` mirrors `src/modular_rag/ingestion/chunkers/fixed.py`.
-- **Contract tests** go in `tests/contract/` and must use `isinstance(obj, SomeProtocol)` to verify conformance.
+Each rule below exists to prevent a specific, previously-identified failure mode — not as
+style preference. See [docs/architecture/module-model.md](docs/architecture/module-model.md)
+for the worked examples of what breaks when a rule is skipped.
+
+- **Contracts first**: add or update the Protocol in `contracts/` before writing an
+  implementation. This keeps the interface the thing everyone agrees on before any one
+  implementation biases the design.
+- **No cross-domain imports**: `ingestion/` must not import from `generation/`. Both
+  communicate through `contracts/` and `core/models/`. Skipping this means a unit test for a
+  chunker could start silently requiring an LLM API key, because generation code got pulled
+  in transitively.
+- **Register in `_default_factories.py`**: every new built-in adapter must be registered by
+  type name. A component that exists in code but isn't registered is invisible to every
+  manifest — it simply cannot be selected, which is by design: nothing runs unless a
+  manifest says so.
+- **Tests mirror `src/`**: `tests/unit/ingestion/chunkers/test_fixed.py` mirrors
+  `src/modular_rag/ingestion/chunkers/fixed.py`. This mapping is what lets anyone find the
+  test for a given file without searching — it does not scale if tests are grouped any other
+  way once there are hundreds of components.
+- **Contract tests** go in `tests/contract/` and must use `isinstance(obj, SomeProtocol)` to
+  verify conformance. This is what actually proves an implementation satisfies its Protocol
+  at runtime — `typing.Protocol` gives no static guarantee on its own (see
+  [docs/adr/0002-contracts-and-plugins.md](docs/adr/0002-contracts-and-plugins.md)).
 
 ## Running tests
 

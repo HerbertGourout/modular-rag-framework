@@ -1,6 +1,13 @@
 # REST API Reference
 
-The Modular RAG Framework ships a FastAPI application (`src/modular_rag/api/`).
+The Modular RAG Framework ships a FastAPI application (`src/modular_rag/api/`) so that a RAG
+pipeline can be called as a network service rather than embedded as a Python library. This
+matters for any client whose existing application (a portal, a chatbot integration, an
+internal tool) is not written in Python, or that simply doesn't want heavy dependencies like
+`sentence-transformers` or `qdrant-client` inside its own process. The API is a thin
+`create_app()` factory over the same `RAGEngine` the CLI uses — there is no separate business
+logic here, only request/response translation.
+
 Start it with:
 
 ```bash

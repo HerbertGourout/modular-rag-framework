@@ -1,6 +1,18 @@
 # Deployment Guide
 
+This guide covers running the framework somewhere other than a developer's own machine — a
+shared staging box, a client's cloud account, or a container platform. If you have not yet
+run the pipeline locally, do that first via [getting-started.md](getting-started.md): every
+problem you would hit in production (missing API key, unreachable Qdrant, wrong manifest) is
+faster to diagnose locally than in a container log.
+
 ## Architecture overview
+
+The three boxes below are intentionally separate processes, not because the framework
+requires it, but because it lets each one scale, fail, and be replaced independently. The
+FastAPI application is stateless — it holds no data of its own — so the vector database
+(persistent knowledge) and the LLM API (the reasoning step) are the only two components that
+actually need to survive a container restart.
 
 ```
                 ┌─────────────────────────────────┐
@@ -85,7 +97,12 @@ docker-compose up -d
 
 ## Multi-environment manifests
 
-Use the environment-specific manifests under `manifests/`:
+The same pipeline definition should not run unchanged from a developer's laptop to a
+client's production environment — dev favors fast iteration and verbose logs, production
+favors the full security stack and quiet logs. Rather than maintaining separate copies of an
+entire manifest per environment, the intent (see
+[manifests/_index.md](../../manifests/_index.md)) is to layer a small override on top of a
+shared preset:
 
 ```
 manifests/
@@ -94,7 +111,11 @@ manifests/
 └── production/  # full security stack, multi-tenant, audit trail
 ```
 
-Select the environment at runtime:
+**This layering mechanism is V4 scope and not implemented yet** — the three folders above
+are currently stubs (see each folder's `_index.md`). Until it ships, use
+[`secure-enterprise-rag.yaml`](../../manifests/presets/secure-enterprise-rag.yaml) directly
+as your production manifest and adapt it by hand per environment. Once the mechanism exists,
+selecting an environment at runtime will look like this:
 
 ```bash
 export MRAG_ENVIRONMENT=production
@@ -115,6 +136,11 @@ curl http://localhost:8000/health
 - **Embedding**: Consider a dedicated embedding service (e.g., Infinity, TEI) to avoid reloading the model on each container restart. Wire it via the `adapters/embeddings/` adapter.
 
 ## Security hardening for production
+
+None of the following is on by default in the local development preset — security is
+opt-in in V1 so that local iteration stays fast and frictionless. Before anything
+client-facing goes live, work through this list explicitly rather than assuming a preset
+switch handles it:
 
 1. Enable `BasicSecurityGuard` and `PatternRedactor` in your manifest.
 2. Set `MRAG_QDRANT_API_KEY` — Qdrant supports API-key authentication.

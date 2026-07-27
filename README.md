@@ -38,7 +38,7 @@ Qdrant, rank-bm25, OpenAI, Anthropic…) behind stable contracts, so that what o
 project builds, every subsequent project inherits. The result is faster delivery,
 higher margins, and a demonstrable technical differentiator on regulated-industry pitches.
 
-→ [Full business case](docs/business-case.md)
+→ [Full business case](docs/business-case.md) · [Onboarding by role — developer, tech lead, delivery, functional, security](docs/onboarding.md)
 
 ---
 
