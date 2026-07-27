@@ -29,20 +29,32 @@ This framework provides a **context OS** for RAG and agentic systems: a control 
 
 ## 3. The system's six planes
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  CONTROL PLANE          manifests, policies, routing        │
-├─────────────────────────────────────────────────────────────┤
-│  INGESTION PLANE        parsing, chunking, enrichment       │
-├────────────────────────┬────────────────────────────────────┤
-│  KNOWLEDGE PLANE       │  REASONING PLANE                   │
-│  vector/lex/graph      │  planning, agents, generation      │
-│  store, reranking      │                                    │
-├────────────────────────┴────────────────────────────────────┤
-│  SAFETY PLANE           detectors, filters, redaction       │
-├─────────────────────────────────────────────────────────────┤
-│  EVALUATION PLANE       benchmarks, scorers, dashboards     │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+%%{init: {"theme": "base"}}%%
+flowchart TB
+    subgraph Control["CONTROL PLANE"]
+        C["manifests, policies, routing"]
+    end
+    subgraph Ingestion["INGESTION PLANE"]
+        I["parsing, chunking, enrichment"]
+    end
+    subgraph Middle[" "]
+        direction LR
+        subgraph Knowledge["KNOWLEDGE PLANE"]
+            K["vector/lex/graph store, reranking"]
+        end
+        subgraph Reasoning["REASONING PLANE"]
+            R["planning, agents, generation"]
+        end
+    end
+    subgraph Safety["SAFETY PLANE"]
+        S["detectors, filters, redaction"]
+    end
+    subgraph Evaluation["EVALUATION PLANE"]
+        E["benchmarks, scorers, dashboards"]
+    end
+
+    Control --> Ingestion --> Middle --> Safety --> Evaluation
 ```
 
 ---
@@ -106,30 +118,34 @@ rather than replacing it.
 
 ## 5. V1 execution flow (simple RAG)
 
+```mermaid
+%%{init: {"theme": "base"}}%%
+flowchart TD
+    Q([Query])
+    subgraph SafetyIn["Safety plane"]
+        G1["SecurityGuard.check_query()"]
+    end
+    subgraph Knowledge["Knowledge plane"]
+        Ret["Retriever.retrieve()"]
+        Rer["Reranker.rerank()"]
+    end
+    subgraph Reasoning["Reasoning plane"]
+        Gen["Generator.generate()"]
+    end
+    subgraph SafetyOut["Safety plane"]
+        G2["SecurityGuard.check_answer()"]
+    end
+    subgraph Control["Control plane"]
+        Tel["Telemetry.record_trace()"]
+    end
+    A([Answer: text + citations + trace_id])
+
+    Q --> G1 --> Ret --> Rer --> Gen --> G2 --> Tel --> A
 ```
-Query
-  │
-  ▼
-SecurityGuard.check_query()          ← safety plane
-  │
-  ▼
-Retriever.retrieve()                 ← knowledge plane
-  │
-  ▼
-Reranker.rerank()                    ← knowledge plane
-  │
-  ▼
-Generator.generate()                 ← reasoning plane
-  │
-  ▼
-SecurityGuard.check_answer()         ← safety plane
-  │
-  ▼
-Telemetry.record_trace()             ← control plane
-  │
-  ▼
-Answer (text + citations + trace_id)
-```
+
+For the same flow drawn as a sequence diagram across actors (`RAGEngine`, `SecurityGuard`,
+`Retriever`, `Reranker`, `Generator`, `Telemetry`), see
+[runtime-flow.md](runtime-flow.md), "V1 — Simple RAG (query path)".
 
 ---
 
@@ -196,25 +212,16 @@ The domain models are defined in `src/modular_rag/core/models/`. They are Pydant
 
 The complete path from a YAML file to an operational pipeline:
 
-```
-manifests/presets/local-hybrid-rag.yaml
-  │
-  ▼ app/bootstrap.py → load_manifest(path) → PipelineManifest
-  │
-  ▼ orchestration/registry.py → ComponentRegistry.default()
-  │   # _default_factories maps "fixed" → FixedSizeChunker, "bm25" → BM25Retriever, etc.
-  │
-  ▼ registry.wire(manifest) → Container
-  │   # Reads manifest.chunker.type, manifest.retriever.type …
-  │   # Calls factory(config) for each component
-  │   # Stores wired instances in Container.components dict
-  │
-  ▼ app/container.py → Container (holds all wired instances)
-  │
-  ▼ orchestration/engine.py → RAGEngine(container)
-  │   # engine.ingest() / engine.answer() use container.get(Chunker), etc.
-  │
-  ▼ cli/main.py or api/routes.py → calls engine methods
+```mermaid
+%%{init: {"theme": "base"}}%%
+flowchart TD
+    YAML["manifests/presets/local-hybrid-rag.yaml"]
+    YAML -->|"load_manifest(path)"| Manifest["app/bootstrap.py\n→ PipelineManifest"]
+    Manifest --> Registry["orchestration/registry.py\nComponentRegistry.default()\n_default_factories maps 'fixed'→FixedSizeChunker,\n'bm25'→BM25Retriever, etc."]
+    Registry -->|"registry.wire(manifest)"| Wire["Reads manifest.chunker.type, manifest.retriever.type …\nCalls factory(config) for each component"]
+    Wire --> Container["app/container.py\nContainer (holds all wired instances)"]
+    Container --> Engine["orchestration/engine.py\nRAGEngine(container)\nengine.ingest() / engine.answer()\nuse container.get(Chunker), etc."]
+    Engine --> Callers["cli/main.py or api/routes.py\ncalls engine methods"]
 ```
 
 To wire a new component:
@@ -226,34 +233,18 @@ To wire a new component:
 
 ## 10. Ingestion pipeline (V1 detail)
 
-```
-File (PDF / Markdown / plain text)
-  │
-  ▼ ingestion/parsers/
-  │   TextParser → Document  (for .txt, .md, .html)
-  │   PDFParser  → Document  (for .pdf, via PyMuPDF)
-  │
-  ▼ ingestion/normalizers/TextNormalizer.normalize(doc)
-  │   • Collapse excessive newlines (3+ → 2)
-  │   • Collapse excessive spaces (2+ → 1)
-  │   • Strip leading/trailing whitespace
-  │   → new Document (frozen → new instance)
-  │
-  ▼ ingestion/enrichers/MetadataEnricher.enrich(doc)
-  │   • Computes word_count, lang, reading_level
-  │   • Merges with existing metadata
-  │   → new Document
-  │
-  ▼ contracts/chunking.Chunker.chunk(doc) → list[Chunk]
-  │   FixedSizeChunker  : windows of N tokens with overlap
-  │   AdaptiveChunker   : splits on Markdown headings (##, ###)
-  │
-  ▼ Embedder.embed([c.content for c in chunks]) → list[list[float]]
-  │   → writes the embedding into each Chunk in place
-  │
-  ▼ Indexer.index(chunks) → int
-      QdrantStore : upserts as PointStruct (vector + payload)
-      BM25Retriever : rebuilds the BM25 index over the corpus
+```mermaid
+%%{init: {"theme": "base"}}%%
+flowchart TD
+    File["File (PDF / Markdown / plain text)"]
+    File --> Parser["ingestion/parsers/\nTextParser → Document (.txt, .md, .html)\nPDFParser → Document (.pdf, via PyMuPDF)"]
+    Parser --> Normalize["ingestion/normalizers/TextNormalizer.normalize(doc)\n• Collapse excessive newlines (3+ → 2)\n• Collapse excessive spaces (2+ → 1)\n• Strip leading/trailing whitespace\n→ new Document (frozen → new instance)"]
+    Normalize --> Enrich["ingestion/enrichers/MetadataEnricher.enrich(doc)\n• Computes word_count, lang, reading_level\n• Merges with existing metadata\n→ new Document"]
+    Enrich --> Chunk["contracts/chunking.Chunker.chunk(doc) → list[Chunk]\nFixedSizeChunker: windows of N tokens with overlap\nAdaptiveChunker: splits on Markdown headings (##, ###)"]
+    Chunk --> Embed["Embedder.embed([c.content for c in chunks])\n→ writes the embedding into each Chunk in place"]
+    Embed --> Index["Indexer.index(chunks) → int"]
+    Index --> Qdrant[("QdrantStore\nupserts as PointStruct (vector + payload)")]
+    Index --> BM25[("BM25Retriever\nrebuilds the BM25 index over the corpus")]
 ```
 
 Note: Embedding and indexing happen in `RAGEngine.ingest()`, not in `ingest_path()`. The separation is intentional — `ingest_path()` is testable without any external service.
@@ -291,21 +282,23 @@ After fusion, chunks are re-ranked by decreasing `RRF_score`. A cross-encoder re
 
 All framework exceptions inherit from `ModularRAGError` (defined in `core/errors.py`). The complete tree:
 
-```
-ModularRAGError                     ← base of all framework errors
-├── ConfigurationError              ← invalid manifest or settings
-│   └── ManifestError               ← YAML cannot be loaded or validated
-├── RegistryError                   ← component not found in the registry
-├── IngestionError                  ← parsing or chunking failed
-├── IndexingError                   ← write to the vector/lexical store failed
-├── RetrievalError                  ← retrieval operation failed
-├── GenerationError                 ← LLM call failed or response unusable
-├── SecurityError                   ← guard blocks a query or an answer
-│   └── PolicyViolationError        ← pipeline action violates a declared policy
-├── EvaluationError                 ← scoring or benchmark failed
-├── GraphError                      ← graph construction or traversal failed (V3)
-├── AgentError                      ← agent task failed (V2)
-└── StorageError                    ← storage backend operation failed
+```mermaid
+%%{init: {"theme": "base"}}%%
+flowchart TD
+    Base["ModularRAGError\nbase of all framework errors"]
+    Base --> Config["ConfigurationError\ninvalid manifest or settings"]
+    Config --> Manifest["ManifestError\nYAML cannot be loaded or validated"]
+    Base --> Registry["RegistryError\ncomponent not found in the registry"]
+    Base --> Ingestion["IngestionError\nparsing or chunking failed"]
+    Base --> Indexing["IndexingError\nwrite to the vector/lexical store failed"]
+    Base --> Retrieval["RetrievalError\nretrieval operation failed"]
+    Base --> Generation["GenerationError\nLLM call failed or response unusable"]
+    Base --> Security["SecurityError\nguard blocks a query or an answer"]
+    Security --> Policy["PolicyViolationError\npipeline action violates a declared policy"]
+    Base --> Evaluation["EvaluationError\nscoring or benchmark failed"]
+    Base --> Graph["GraphError\ngraph construction or traversal failed (V3)"]
+    Base --> Agent["AgentError\nagent task failed (V2)"]
+    Base --> Storage["StorageError\nstorage backend operation failed"]
 ```
 
 **Handling rule:** catch the most specific exception possible. Only catch `ModularRAGError` at the HTTP/CLI handler level to return a generic error response. Never silently swallow a `SecurityError` — it must always be logged.

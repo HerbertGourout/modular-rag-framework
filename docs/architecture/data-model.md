@@ -6,25 +6,22 @@ All domain entities live under `src/modular_rag/core/models/`. They are plain Py
 
 ## Relations between models
 
+```mermaid
+%%{init: {"theme": "base"}}%%
+erDiagram
+    DOCUMENT ||--o{ CHUNK : "1:N chunked into"
+    CHUNK ||--o| RETRIEVED_CHUNK : "wrapped into"
+    QUERY ||--o{ RETRIEVED_CHUNK : "produces (retrieve)"
+    RETRIEVED_CHUNK ||--o| CITATION : "becomes"
+    CITATION }o--|| ANSWER : "N:1 supports"
+    ANSWER ||--|| TRACE : "trace_id link"
+    TRACE ||--o{ TRACE_STEP : "1:N accumulates"
+    POLICY ||--o{ POLICY_RULE : "1:N groups"
 ```
-Document ──────────1:N──────────► Chunk
-                                    │
-                              (wrapped into)
-                                    │
-                                    ▼
-Query ──────────────────────► RetrievedChunk (Chunk + score + rank + method)
-                                    │
-                              (becomes)
-                                    │
-                                    ▼
-                               Citation ──────N:1──► Answer
-                                                       │
-                               Trace ◄─────────────────┘ (trace_id link)
-                               TraceStep (per pipeline step)
 
-Policy ──────────────1:N──────► PolicyRule
-Metrics (standalone evaluation result — not linked to Answer at model level)
-```
+`Metrics` is a standalone evaluation result — it is not linked to `Answer` at the model
+level; an evaluator computes it separately from a `(Query, Answer, expected)` triple. See
+section 8 below.
 
 ---
 
@@ -376,45 +373,25 @@ print(m.summary())
 
 This section traces the data transformation path through a V1 pipeline:
 
-```
-1. File on disk
-        │
-        ▼ Parser.parse(path) → Document
-2. Document (frozen, raw content)
-        │
-        ▼ TextNormalizer.normalize(doc) → Document (new instance — whitespace cleaned)
-        │
-        ▼ MetadataEnricher.enrich(doc)  → Document (new instance — metadata populated)
-3. Document (normalised + enriched)
-        │
-        ▼ Chunker.chunk(doc) → list[Chunk]
-4. list[Chunk] (embedding=None, start_char/end_char set)
-        │
-        ▼ Embedder.embed([c.content for c in chunks]) → list[list[float]]
-        │  (engine writes vectors back into chunks in-place)
-5. list[Chunk] (embedding filled)
-        │
-        ▼ Indexer.index(chunks) → int (number indexed)
-        │  → stored in Qdrant + BM25 index
-        ▼
-   ── QUERY TIME ──────────────────────────────────────────────
-        │
-        ▼ Query (frozen)
-        │
-        ▼ SecurityGuard.check_query(query) → GuardResult
-        │
-        ▼ Retriever.retrieve(query, k=20) → list[RetrievedChunk]
-        │  (vector + BM25 fused with RRF)
-        │
-        ▼ Reranker.rerank(query, chunks, k=5) → list[RetrievedChunk]
-        │
-        ▼ Generator.generate(query, context, trace) → Answer
-        │  (context = [rc.chunk.content for rc in reranked])
-        │  (citations = [Citation(chunk_id=rc.chunk.id, ...) for rc in reranked])
-        │
-        ▼ SecurityGuard.check_answer(answer) + PatternRedactor.redact(answer.text)
-        │
-        ▼ Answer (text + citations + trace_id)
+```mermaid
+%%{init: {"theme": "base"}}%%
+flowchart TD
+    File[File on disk] -->|"Parser.parse(path)"| Doc["Document\n(frozen, raw content)"]
+    Doc -->|"TextNormalizer.normalize(doc)"| DocN["Document\n(new instance — whitespace cleaned)"]
+    DocN -->|"MetadataEnricher.enrich(doc)"| DocE["Document\n(normalised + enriched)"]
+    DocE -->|"Chunker.chunk(doc)"| Chunks["list[Chunk]\n(embedding=None)"]
+    Chunks -->|"Embedder.embed([c.content ...])"| ChunksV["list[Chunk]\n(embedding filled in-place)"]
+    ChunksV -->|"Indexer.index(chunks)"| Store[("Qdrant + BM25 index")]
+
+    subgraph QT["Query time"]
+        Query["Query (frozen)"] -->|"SecurityGuard.check_query"| Guard1{GuardResult}
+        Guard1 -->|allowed| Retrieve["Retriever.retrieve(query, k=20)\nvector + BM25 fused via RRF"]
+        Store --> Retrieve
+        Retrieve -->|"list[RetrievedChunk]"| Rerank["Reranker.rerank(query, chunks, k=5)"]
+        Rerank -->|"list[RetrievedChunk]"| Generate["Generator.generate(query, context, trace)\ncontext = reranked chunk content\ncitations built from reranked chunks"]
+        Generate -->|Answer| Guard2["SecurityGuard.check_answer +\nPatternRedactor.redact(answer.text)"]
+        Guard2 --> Final["Answer\n(text + citations + trace_id)"]
+    end
 ```
 
 The `Trace` object is created at the start of the query path and accumulates a `TraceStep` after each stage. The final `Answer.trace_id` links back to it for observability.

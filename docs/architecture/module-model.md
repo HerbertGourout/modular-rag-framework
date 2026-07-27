@@ -118,15 +118,32 @@ src/modular_rag/
 
 ## Dependency rule — and why it exists
 
+```mermaid
+%%{init: {"theme": "base"}}%%
+flowchart BT
+    Core["core/\nimports nothing from this project"]
+    Contracts["contracts/\nimports only core/"]
+    subgraph Domains["domain modules (ingestion/, retrieval/, generation/, security/, agents/, memory/, eval/)"]
+        direction LR
+        D1["no imports\nbetween each other"]
+    end
+    Adapters["adapters/\nimports contracts/ + core/ (+ external libs)"]
+    Orchestration["orchestration/\nimports contracts/ + core/"]
+    App["app/\nimports orchestration/ + contracts/ + core/"]
+    CliApi["cli/ + api/\nimports app/ only"]
+
+    Contracts --> Core
+    Domains --> Contracts
+    Adapters --> Contracts
+    Orchestration --> Contracts
+    App --> Orchestration
+    CliApi --> App
 ```
-core/                          ← imports nothing from this project
-contracts/                     ← imports only core/
-adapters/                      ← imports contracts/ + core/  (+ external libs)
-domain modules                 ← imports contracts/ + core/  (NO other domain modules)
-orchestration/                 ← imports contracts/ + core/ + app/
-app/                           ← imports orchestration/ + contracts/ + core/
-cli/ + api/                    ← imports app/ only
-```
+
+> Note: `orchestration/` imports only `contracts/` + `core/` — it never imports `app/`.
+> This matches [CLAUDE.md](../../CLAUDE.md) section 02 (`app/ → orchestration/ →
+> contracts/ + core/`). A previous version of this document listed `+ app/` on the
+> `orchestration/` line, which would have created a circular import; corrected here.
 
 **Why the rule exists — a concrete example:**
 
