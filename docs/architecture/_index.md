@@ -1,33 +1,34 @@
-# Architecture — Vue d'ensemble
+# Architecture — Overview
 
-Ce dossier est la spécification technique du framework : pas "comment configurer un
-pipeline" (ça, c'est [../guides/](../guides/)), mais "comment le système est construit et
-pourquoi". Si vous cherchez à comprendre le code avant de le modifier, ou à défendre un choix
-structurel devant un architecte client, c'est ici que la réponse se trouve — avec, en
-complément, le "pourquoi" figé dans les [ADR](../adr/_index.md).
+This folder is the framework's technical specification: not "how to configure a pipeline"
+(that's [../guides/](../guides/)), but "how the system is built and why." If you're trying
+to understand the code before changing it, or to defend a structural choice in front of a
+client architect, this is where the answer lives — complemented by the "why" captured in the
+[ADRs](../adr/_index.md).
 
-## Comment naviguer selon votre question
+## How to navigate by question
 
-| Votre question | Document |
+| Your question | Document |
 |---|---|
-| "Quelle est la vision globale et que fait chaque version V1→V5 ?" | [overview.md](overview.md) |
-| "Quels objets de données circulent dans le pipeline, avec quels champs et invariants ?" | [data-model.md](data-model.md) |
-| "Quels modules existent, et pourquoi ne peuvent-ils pas s'importer entre eux ?" | [module-model.md](module-model.md) |
-| "Que se passe-t-il, étape par étape, quand une requête est traitée ?" | [runtime-flow.md](runtime-flow.md) |
-| "Quelles attaques le framework couvre-t-il, et avec quels mécanismes exacts ?" | [security.md](security.md) |
-| "Je veux la carte exhaustive de chaque fichier du dépôt, avec son rôle" | [structure.md](structure.md) |
-| "Je veux visualiser la roadmap et les flux sous forme de diagrammes" | [roadmap-mermaid.md](roadmap-mermaid.md) |
+| "What's the overall vision, and what does each V1→V5 version do?" | [overview.md](overview.md) |
+| "What data objects flow through the pipeline, with what fields and invariants?" | [data-model.md](data-model.md) |
+| "What modules exist, and why can't they import from each other?" | [module-model.md](module-model.md) |
+| "What happens, step by step, when a query is processed?" | [runtime-flow.md](runtime-flow.md) |
+| "What attacks does the framework cover, and with what exact mechanisms?" | [security.md](security.md) |
+| "I want the exhaustive map of every file in the repo, with its role" | [structure.md](structure.md) |
+| "I want to visualize the roadmap and the flows as diagrams" | [roadmap-mermaid.md](roadmap-mermaid.md) |
 
-## Ordre de lecture recommandé pour un nouvel arrivant technique
+## Recommended reading order for a new technical contributor
 
-1. [overview.md](overview.md) — le cadre général, à lire en entier une première fois.
-2. [module-model.md](module-model.md) — pour internaliser la règle de dépendance avant de
-   toucher au code.
-3. [data-model.md](data-model.md) — pour reconnaître les objets qu'on manipule partout
+1. [overview.md](overview.md) — the general framework, read in full once.
+2. [module-model.md](module-model.md) — to internalize the dependency rule before touching
+   the code.
+3. [data-model.md](data-model.md) — to recognize the objects handled everywhere
    (`Document`, `Chunk`, `Query`, `Answer`, `Trace`...).
-4. [runtime-flow.md](runtime-flow.md) — pour visualiser le trajet complet d'une requête.
-5. [security.md](security.md) et [structure.md](structure.md) — en référence, au besoin.
+4. [runtime-flow.md](runtime-flow.md) — to visualize the full path of a request.
+5. [security.md](security.md) and [structure.md](structure.md) — as reference, as needed.
 
-Ce dossier documente l'état **cible** de l'architecture, y compris pour les versions V2 à V5
-pas encore livrées. Le statut réel de chaque capacité (livré / en cours / planifié) est dans
-[../../ROADMAP.md](../../ROADMAP.md) — ne confondez pas "documenté" et "implémenté".
+This folder documents the **target** state of the architecture, including for versions V2
+through V5 not yet delivered. The real status of each capability (delivered / in progress /
+planned) is in [../../ROADMAP.md](../../ROADMAP.md) — don't confuse "documented" with
+"implemented."

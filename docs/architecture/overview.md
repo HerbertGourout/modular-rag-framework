@@ -49,12 +49,12 @@ This framework provides a **context OS** for RAG and agentic systems: a control 
 
 ## 4. Roadmap V1 → V5
 
-Cette section décrit l'état **cible** de chaque version — ce qu'elle est censée permettre
-une fois terminée, indépendamment de ce qui est déjà livré aujourd'hui. Pour l'état réel
-(quelles cases sont cochées), voir [ROADMAP.md](../../ROADMAP.md) ; pour la même
-progression racontée sans jargon technique, voir [docs/onboarding.md](../onboarding.md),
-section 3. Les cinq versions ne sont pas des lots indépendants — chacune s'appuie sur le
-pipeline construit par la précédente plutôt que de le remplacer.
+This section describes the **target** state of each version — what it is meant to enable
+once complete, independent of what's already delivered today. For the real state (which
+boxes are checked), see [ROADMAP.md](../../ROADMAP.md); for the same progression told
+without technical jargon, see [docs/onboarding.md](../onboarding.md), section 3. The five
+versions are not independent batches — each builds on the pipeline built by the previous one
+rather than replacing it.
 
 ### V1 — Core RAG
 **What the framework enables:**

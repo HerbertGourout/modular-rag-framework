@@ -173,16 +173,17 @@ A change to a contract (`contracts/`) requires updating the matching `tests/cont
 
 ## 08 — Git and PR workflow
 
-- Remote: **private GitLab** at `pscode.lioncloud.net` (Publicis). No public GitHub mirror.
-- CI templates and issue templates are under **`.gitlab/`**, not `.github/`.
-- Do not reference GitHub Actions, GitHub Issues, or GitHub PRs — use GitLab MR terminology.
-- Branch from `main`. One feature per branch. MR checklist is in `CONTRIBUTING.md`.
+- Remote: **GitHub** at `github.com/HerbertGourout/modular-rag-framework`. Use GitHub PR
+  and Issues terminology.
+- CI templates and issue templates still live under `.gitlab/` for historical reasons; new
+  CI work should target GitHub Actions under `.github/workflows/` going forward.
+- Branch from `main`. One feature per branch. PR checklist is in `CONTRIBUTING.md`.
 
 ---
 
 ## 09 — Roadmap: V1 → V5 with Strategic Features
 
-<!-- Mise à jour : 2026-06-20 — Integrated 8 strategic features across V1-V5 -->
+<!-- Updated: 2026-06-20 — Integrated 8 strategic features across V1-V5 -->
 
 Strategic roadmap integrating **8 high-value features** that make this framework incontournable (irreplaceable).
 See [ROADMAP.md](ROADMAP.md) for complete timeline and success criteria per version.
