@@ -12,6 +12,21 @@ The trace records each pipeline step with:
 
 The `Trace` accumulates totals: `total_input_tokens`, `total_output_tokens`, `total_latency_ms`.
 
+```mermaid
+%%{init: {"theme": "base"}}%%
+flowchart LR
+    Engine["RAGEngine.answer()"] -->|"creates"| T["Trace\n(query_id, pipeline_id)"]
+    T -->|"add_step()"| S1["TraceStep\nguard_query"]
+    T -->|"add_step()"| S2["TraceStep\nretrieve"]
+    T -->|"add_step()"| S3["TraceStep\nrerank"]
+    T -->|"add_step()"| S4["TraceStep\ngenerate"]
+    T -->|"add_step()"| S5["TraceStep\nguard_answer"]
+    T -->|"record_trace(trace)"| Backend{"Telemetry backend"}
+    Backend --> Struct["StructlogTelemetry\n(default: JSON to stdout)"]
+    Backend --> Null["NullTelemetry\n(tests: no-op)"]
+    Backend --> Custom["Custom adapter\n(e.g., Datadog)"]
+```
+
 ## Telemetry backends
 
 The telemetry contract (`contracts/telemetry.py`) defines two methods:

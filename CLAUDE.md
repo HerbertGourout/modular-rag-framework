@@ -23,14 +23,15 @@ Production-grade modular RAG + agentic orchestration framework for Publicis ente
 
 Strict hexagonal layering. Dependencies flow in one direction only:
 
-```
-cli/ + api/  →  app/  →  orchestration/  →  contracts/ + core/
-                                              ↑
-                         domain modules  ────┘
-                         (ingestion, retrieval, generation,
-                          security, agents, memory, eval)
-                                              ↑
-                         adapters/  ──────────┘
+```mermaid
+%%{init: {"theme": "base"}}%%
+flowchart BT
+    Contracts["contracts/ + core/"]
+    Domains["domain modules\n(ingestion, retrieval, generation,\nsecurity, agents, memory, eval)"] --> Contracts
+    Adapters["adapters/"] --> Contracts
+    Orchestration["orchestration/"] --> Contracts
+    App["app/"] --> Orchestration
+    CliApi["cli/ + api/"] --> App
 ```
 
 **Hard rules:**
