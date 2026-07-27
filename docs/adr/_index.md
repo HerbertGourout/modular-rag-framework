@@ -1,32 +1,113 @@
-# Architecture Decision Records (ADR)
+# Architectural Decision Records (ADRs)
 
-Un ADR documente **une décision structurelle et pourquoi elle a été prise** — pas ce que fait
-le code (ça, c'est le rôle de `docs/architecture/`), mais pourquoi il fait ainsi plutôt
-qu'autrement, quelles options ont été écartées, et quelles conséquences (positives et
-négatives) la décision assume.
+This directory contains architectural decisions for the Modular RAG Framework. Each ADR documents a key design choice, rationale, and consequences.
 
-**Pourquoi ça compte** : sans ADR, un contributeur qui arrive six mois plus tard et se
-demande "pourquoi utilise-t-on `typing.Protocol` plutôt que des classes abstraites ?" n'a
-que le code pour deviner la réponse — et le code ne dit jamais pourquoi une alternative a été
-rejetée. L'ADR fige cette mémoire.
+---
 
-**Règle du projet** (voir [CLAUDE.md](../../CLAUDE.md), section 07) : tout nouveau module de
-premier niveau, toute nouvelle frontière de couche, ou toute modification d'un contrat
-existant nécessite un nouvel ADR sous ce dossier. Les ADR 0001 à 0003 sont déjà actés et
-réservés — un nouvel ADR commence à 0004.
+## Index
 
-## ADR actés
+### [ADR-0001: Modular Architecture with Six Planes](0001-modular-architecture.md)
 
-| ADR | Décision | Pourquoi elle compte |
-|---|---|---|
-| [0001](0001-modular-architecture.md) | Six plans fonctionnels (control, ingestion, knowledge, reasoning, safety, evaluation), chacun exposé uniquement via des contrats | C'est la décision qui rend chaque composant remplaçable sans toucher au reste — elle sous-tend toute la règle de dépendance décrite dans `CLAUDE.md` |
-| [0002](0002-contracts-and-plugins.md) | Les contrats sont des `typing.Protocol`, pas des classes abstraites ; le câblage se fait par un registre de factories, jamais en dur dans le code | Permet à un manifest YAML de choisir une implémentation sans qu'aucune classe Python n'ait besoin d'hériter de quoi que ce soit — essentiel pour des implémentations tierces |
-| [0003](0003-security-and-governance.md) | Séparation stricte Safety (anti-injection, PII) vs Security (RBAC, policies), montée en charge progressive V1→V4 | Évite que la sécurité devienne un fourre-tout non testable ; permet de livrer une version minimale de sécurité en V1 sans bloquer sur la gouvernance complète de V4 |
+**Status:** Accepted  
+**Date:** 2026-05-20
 
-## Écrire un nouvel ADR
+Organizes the system into six independent planes (Control, Ingestion, Knowledge, Reasoning, Safety, Evaluation) with strict dependency rules. Each plane communicates only through contracts (Python Protocols), enabling component swappability and testability.
 
-Reprenez le format des trois ADR existants : Status / Date / Authors, puis Context (le
-problème et les risques identifiés), Decision (ce qui est choisi, avec des extraits de code
-ou de config si utile), Consequences (positives, négatives, mitigations). Un ADR n'est jamais
-supprimé même si la décision est plus tard renversée — un nouvel ADR le remplace et
-référence l'ancien.
+**Key insight:** No plane imports from another plane's implementation. All communication via `contracts/` and `core/models/`.
+
+---
+
+### [ADR-0002: Contracts and Plugins Pattern](0002-contracts-and-plugins.md)
+
+**Status:** Accepted  
+**Date:** 2026-05-22
+
+Every component is exposed through a Protocol (`@runtime_checkable`). Implementations are registered in `orchestration/registry.py` and selected via YAML manifests. No direct Python wiring.
+
+**Key insight:** Contracts first, implementation second. Tests verify Protocol conformance before deployment.
+
+---
+
+### [ADR-0003: Security and Governance](0003-security-and-governance.md)
+
+**Status:** Accepted  
+**Date:** 2026-06-19
+
+Seven-layer security strategy: Permissions → Hooks → Policies → Segmentation → Secrets → MCP → Audit.  
+Distinguishes Safety (prompt injection, PII) from Security (RBAC, policies, enforcement).
+
+**Key insight:** Safety ≠ Security. Governance is proactive (prevent bad queries) not just reactive.
+
+---
+
+### [ADR-0004: Strategic Features (V1→V5)](0004-strategic-features-v1-v5.md)
+
+**Status:** Accepted  
+**Date:** 2026-06-20
+
+Roadmap integrating 8 transformational capabilities across versions:
+- **V1.1**: Evaluation-as-Contract
+- **V1.2**: Compliance Audit Trail
+- **V2.0**: Policy Engine
+- **V2.1**: Multi-Agent Teams
+- **V3.0**: Knowledge Graphs
+- **V3.1**: Cost Optimization
+- **V3.2**: Fine-Tuning Loop
+- **V4.1**: Multi-Language + Cultural Reasoning
+
+**Key insight:** Do not compete with LangChain on breadth. Compete on depth in governance, compliance, cost optimization, and fine-tuning.
+
+---
+
+## Decision Making Process
+
+1. **Identification**: Problem identified in sprint planning, client feedback, or architecture review.
+2. **Context**: Document the problem, alternatives considered, and trade-offs.
+3. **Decision**: State the chosen solution clearly.
+4. **Consequences**: List positive outcomes, risks, and mitigations.
+5. **Status**: Track through Accepted → Implemented → Superseded (if applicable).
+
+---
+
+## How to Propose an ADR
+
+1. Create `docs/adr/000X-title.md` following this template:
+   ```markdown
+   # ADR-000X — Title
+   
+   **Status:** Proposed  
+   **Date:** YYYY-MM-DD  
+   **Authors:** Your Name
+   
+   ---
+   
+   ## Context
+   (Explain the problem)
+   
+   ## Decision
+   (Explain the solution)
+   
+   ## Consequences
+   (Positive, Negative, Mitigations)
+   ```
+
+2. Link from this index.
+3. Submit as MR with architecture team review.
+4. Update status to "Accepted" after approval.
+
+---
+
+## Version Scope
+
+- **ADR-0001, 0002, 0003**: Core architecture (V1-V5 stable)
+- **ADR-0004**: Feature roadmap (V1→V5 progression)
+
+Future ADRs will be added as new major decisions arise (e.g., ADR-0005 for distributed deployment, ADR-0006 for multi-modal design, etc.).
+
+---
+
+## References
+
+- [ROADMAP.md](../ROADMAP.md) — Implementation timeline
+- [CLAUDE.md](../../CLAUDE.md) — Development guidelines
+- [Security Layers](../architecture/security.md) — Detailed security strategy

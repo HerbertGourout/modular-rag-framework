@@ -5,6 +5,7 @@ from modular_rag.contracts.evaluation import AnswerEngine, Evaluator
 from modular_rag.contracts.generation import Generator
 from modular_rag.contracts.indexing import Indexer
 from modular_rag.contracts.manifests import ManifestLoader, PipelineManifest
+from modular_rag.contracts.parsing import Parser
 from modular_rag.contracts.planning import ExecutionPlan, ExecutionStep, Planner
 from modular_rag.contracts.reranking import Reranker
 from modular_rag.contracts.retrieval import Retriever
@@ -21,6 +22,7 @@ __all__ = [
     "Generator",
     "Indexer",
     "ManifestLoader", "PipelineManifest",
+    "Parser",
     "ExecutionPlan", "ExecutionStep", "Planner",
     "Reranker",
     "Retriever",

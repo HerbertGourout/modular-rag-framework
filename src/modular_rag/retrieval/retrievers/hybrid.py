@@ -17,6 +17,8 @@ class HybridRetriever:
 
     def __init__(
         self,
+        # 0.7/0.3 is an engineering prior, unsourced by the research corpus
+        # (docs/research/DIGEST-retrieval.md #5) — tune empirically on the golden set in V1.1.
         vector_weight: float = 0.7,
         bm25_weight: float = 0.3,
         collection: str = "documents",
@@ -36,14 +38,58 @@ class HybridRetriever:
         return "hybrid"
 
     def retrieve(self, query: Query, k: int = 10) -> list[RetrievedChunk]:
-        vector_hits = self._vector.retrieve(query, k=k * 2)
-        bm25_hits = self._bm25.retrieve(query, k=k * 2)
-        fused = reciprocal_rank_fusion([vector_hits, bm25_hits], k=k)
+        vector_hits = self._safe_retrieve(self._vector, query, k=k * 2, source="vector")
+        bm25_hits = self._safe_retrieve(self._bm25, query, k=k * 2, source="bm25")
+
+        if not vector_hits and not bm25_hits:
+            log.warning("hybrid.retrieved.empty", query_id=query.id)
+            return []
+
+        if not vector_hits:
+            fused = bm25_hits[:k]
+            for rank, chunk in enumerate(fused, 1):
+                object.__setattr__(chunk, "rank", rank)
+                object.__setattr__(chunk, "retrieval_method", RetrievalMethod.BM25)
+            log.debug("hybrid.retrieved", chunks=len(fused), query_id=query.id, mode="bm25_only")
+            return fused
+
+        if not bm25_hits:
+            fused = vector_hits[:k]
+            for rank, chunk in enumerate(fused, 1):
+                object.__setattr__(chunk, "rank", rank)
+                object.__setattr__(chunk, "retrieval_method", RetrievalMethod.VECTOR)
+            log.debug("hybrid.retrieved", chunks=len(fused), query_id=query.id, mode="vector_only")
+            return fused
+
+        fused = reciprocal_rank_fusion(
+            [vector_hits, bm25_hits],
+            k=k,
+            weights=[self.vector_weight, self.bm25_weight],
+        )
         for rank, chunk in enumerate(fused, 1):
             object.__setattr__(chunk, "rank", rank)
             object.__setattr__(chunk, "retrieval_method", RetrievalMethod.HYBRID)
         log.debug("hybrid.retrieved", chunks=len(fused), query_id=query.id)
         return fused
+
+    def _safe_retrieve(
+        self,
+        retriever: object,
+        query: Query,
+        *,
+        k: int,
+        source: str,
+    ) -> list[RetrievedChunk]:
+        try:
+            return retriever.retrieve(query, k=k)  # type: ignore[attr-defined]
+        except Exception as exc:
+            log.warning(
+                "hybrid.source_unavailable",
+                source=source,
+                query_id=query.id,
+                error=exc.__class__.__name__,
+            )
+            return []
 
     async def aretrieve(self, query: Query, k: int = 10) -> list[RetrievedChunk]:
         return self.retrieve(query, k)

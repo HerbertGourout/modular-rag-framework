@@ -4,7 +4,6 @@ from pathlib import Path
 
 import yaml
 
-from modular_rag.app.container import Container
 from modular_rag.contracts.manifests import PipelineManifest
 from modular_rag.core.errors import ManifestError
 from modular_rag.orchestration.engine import RAGEngine

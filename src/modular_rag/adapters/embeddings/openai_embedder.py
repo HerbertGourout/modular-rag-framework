@@ -1,7 +1,6 @@
 """OpenAI embedding adapter — implements the Embedder contract."""
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 

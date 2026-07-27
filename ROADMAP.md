@@ -1,80 +1,316 @@
-# Roadmap
+# Roadmap — Modular RAG V1 → V5 + Strategic Features
 
-Ce document est **le plan de développement vivant** du framework : il liste, version par
-version, chaque fonctionnalité prévue, et la case correspondante est cochée dès que la
-fonctionnalité est livrée et couverte par ses tests. Contrairement à
-[docs/architecture/overview.md](docs/architecture/overview.md) (qui décrit l'état *cible* de
-l'architecture, y compris pour ce qui n'est pas encore construit), ce fichier reflète l'état
-*réel* : une case non cochée signifie que la fonctionnalité n'existe pas encore de façon
-fiable, même si du code partiel existe déjà quelque part dans `src/`.
+## Version Progression Overview
 
-**Comment ce document se met à jour** : à chaque Merge Request qui livre une fonctionnalité
-listée ici, la case correspondante est cochée dans la même MR — c'est une étape de la
-checklist décrite dans [CONTRIBUTING.md](CONTRIBUTING.md). Le
-[CHANGELOG.md](CHANGELOG.md) enregistre en parallèle le détail narratif de chaque changement.
-Si vous cherchez une explication non technique de ce que chaque version apporte
-concrètement, voir [docs/onboarding.md](docs/onboarding.md), section 3.
+```
+V1: Core RAG Base                              (Q2 2026)
+├─ V1.0: Hybrid retrieval + basic security    
+├─ V1.1: Evaluation-as-Contract               (NEW)
+└─ V1.2: Compliance audit trail               (NEW)
 
-Les versions ne sont pas des lots indépendants : chacune dépend de la précédente. Le
-raisonnement multi-agents de la V2 s'appuie sur le pipeline de retrieval déjà construit en
-V1 ; le graphe de connaissances de la V3 vient enrichir ce même retrieval plutôt que le
-remplacer ; la gouvernance de la V4 encadre l'exécution des versions précédentes plutôt que
-d'ajouter une fonctionnalité de recherche ; et le multimodal de la V5 étend l'ingestion et
-les agents déjà en place. Il n'y a donc pas de raccourci possible vers une version avancée
-sans que les précédentes soient stables.
+V2: Agentic + Governance                      (Q3 2026)
+├─ V2.0: Multi-agent runtime + policy engine  (UPDATED)
+└─ V2.1: Collaborative multi-agent teams      (NEW)
+
+V3: Graph Memory + Intelligence                (Q4 2026)
+├─ V3.0: GraphRAG + knowledge graphs
+├─ V3.1: Cost optimization engine             (NEW)
+└─ V3.2: Continuous fine-tuning loop          (NEW)
+
+V4: Multi-Language Governance                  (Q1 2027)
+├─ V4.0: Multi-tenant policies + environments
+└─ V4.1: Multi-language + cultural reasoning  (NEW)
+
+V5: Multimodal Intelligence                    (Q2 2027)
+└─ V5.0: Images, audio, video, tables + VLMs
+```
+
+---
+
+This document is the framework's **living development plan**: it lists, version by version,
+every planned feature, and the matching checkbox is ticked as soon as the feature is
+delivered and covered by tests. Unlike
+[docs/architecture/overview.md](docs/architecture/overview.md) (which describes the *target*
+architecture, including what isn't built yet), this file reflects the *real* state: an
+unchecked box means the feature doesn't reliably exist yet, even if partial code for it
+already lives somewhere under `src/`.
+
+**How this document gets updated**: every Merge Request that delivers a feature listed here
+ticks the matching checkbox in that same MR — this is a step in the checklist described in
+[CONTRIBUTING.md](CONTRIBUTING.md). [CHANGELOG.md](CHANGELOG.md) records the narrative detail
+of each change in parallel. For a non-technical explanation of what each version actually
+delivers, see [docs/onboarding.md](docs/onboarding.md), section 3.
+
+Versions are not independent batches — each depends on the one before it. V2's multi-agent
+reasoning builds on the retrieval pipeline already built in V1; V3's knowledge graph enriches
+that same retrieval rather than replacing it; V4's governance wraps around the execution of
+earlier versions rather than adding a search feature; and V5's multimodal support extends the
+ingestion and agents already in place. There is no shortcut to an advanced version without
+the earlier ones being stable first.
 
 ---
 
 ## V1 — Core RAG `[In design]`
 
-**Ce que cette version résout** : permettre de poser une question en langage naturel sur un
-corpus de documents (PDF, Word, HTML, Markdown, texte) et d'obtenir une réponse sourcée,
-sans recherche manuelle. C'est la fondation sur laquelle tout le reste s'appuie — aucune
-version suivante ne peut être crédible si celle-ci n'est pas fiable de bout en bout.
+**What this version solves**: let a user ask a natural-language question over a document
+corpus (PDF, Word, HTML, Markdown, text) and get a sourced answer, without manual search.
+This is the foundation everything else builds on — no later version is credible if this one
+isn't reliable end to end.
 
+### V1.0 — Hybrid Retrieval + Basic Security
+
+**Core modules:**
 - [x] Architectural skeleton (contracts, models, orchestration, manifests)
-- [ ] Document parsers: PDF, Word, HTML, Markdown, plain text
-- [ ] Chunkers: fixed-size, adaptive (section-aware)
-- [ ] Hybrid retrieval: vector (Qdrant) + BM25 fusion (RRF)
-- [ ] Cross-encoder reranker
-- [ ] Generators: OpenAI, Anthropic
+- [x] Document parsers: PDF, Word, HTML, Markdown, plain text
+- [x] Chunkers: fixed-size, adaptive (section-aware)
+- [ ] Hybrid retrieval: vector (Qdrant) + BM25 fusion (RRF) — code + unit tests done; pending integration run against Qdrant
+- [x] Cross-encoder reranker
+- [x] Generators: OpenAI, Anthropic
 - [ ] Basic security guard (injection detection, length check, redaction)
-- [ ] Evaluation: exact match F1, recall@k, MRR
 - [ ] REST API (FastAPI) + CLI (`mrag ask`, `mrag ingest`)
 - [ ] Example: `examples/simple_qa/` end-to-end running
-- [ ] Example: `examples/hybrid_search/`
+- [x] Example: `examples/hybrid_search/`
 - [ ] `pip install modular-rag[v1]` installs and works
 
-**Critère de "fait"** : `examples/simple_qa/` tourne réellement de bout en bout (ingestion
-réelle, retrieval réel, réponse générée par un vrai LLM, pas un mock), et les tests
-unitaires + contract passent sans service externe requis pour ces deux catégories.
+**"Done" criterion**: `examples/simple_qa/` genuinely runs end to end (real ingestion, real
+retrieval, an answer generated by a real LLM, not a mock), and unit + contract tests pass
+without requiring external services for those two categories.
 
-## V2 — Agentic + Security `[Planned]`
+**Success criteria:**
+- ✅ End-to-end RAG pipeline functional
+- ✅ Security guards pass tests
+- ✅ Hybrid retrieval F1 > 0.75 on golden set
 
-**Ce que cette version résout** : la V1 échoue sur les questions qui demandent plusieurs
-étapes de raisonnement (croiser plusieurs informations, vérifier une réponse avant de la
-rendre). Un seul appel à un modèle de langage ne suffit pas à décomposer un problème complexe
-de façon fiable — cette version introduit une équipe d'agents spécialisés qui se répartissent
-les étapes du raisonnement, avec une boucle d'auto-correction si la réponse n'est pas assez
-étayée.
+---
 
+### V1.1 — Evaluation-as-Contract `[NEW — 1 month]`
+
+**Purpose:** Force every component to be measurable; contract-enforced metrics.
+
+**Implementation:**
+- `contracts/evaluation.py`: Define `MetricsProtocol` for all components
+  - Retriever metrics: NDCG@k, MRR, latency_p95, recall
+  - Generator metrics: semantic similarity, factuality score, token efficiency
+  - System metrics: F1 on golden set, cost per query
+- `eval/metrics/`: Implement all scorers
+  - `semantic_similarity.py`: Compare generated vs expected answers
+  - `factuality.py`: Check if answer is grounded in retrieved docs (RAGAS-style)
+  - `efficiency.py`: Cost + latency measurement
+- `eval/golden_sets/`: Per-domain reference Q&A
+  - Finance, Healthcare, Manufacturing, default
+- `eval/regression_dashboard/`: Auto-detect performance drops
+  - Alerts if F1 drops > 2% vs baseline
+- `tests/contract/test_metrics_conformance.py`: Verify each adapter implements metrics
+
+**Modules:**
+```
+eval/
+├── metrics/
+│   ├── retriever_metrics.py      (NDCG, MRR, latency)
+│   ├── generator_metrics.py      (semantic similarity, factuality)
+│   ├── system_metrics.py         (F1, cost/query, coverage)
+│   └── regression_detector.py    (alert on degradation)
+├── golden_sets/
+│   ├── finance.yaml              (Q&A for finance domain)
+│   ├── healthcare.yaml
+│   ├── manufacturing.yaml
+│   └── default.yaml
+└── dashboard.py                   (metrics visualization)
+```
+
+**Success criteria:**
+- ✅ All retrievers evaluated with NDCG@k
+- ✅ All generators evaluated with factuality score
+- ✅ Golden set coverage > 90%
+- ✅ Regression detector prevents merges below baseline
+
+---
+
+### V1.2 — Compliance Audit Trail `[NEW — 2 months]`
+
+**Purpose:** GDPR/CCPA-ready logging; prove what happened, when, by whom, with what result.
+
+**Implementation:**
+- `security/audit/`: Immutable audit system
+  - `immutable_log.py`: Append-only event store (cannot modify past events)
+  - `event_schema.py`: Structured events (query, user, role, data_touched, redaction_applied, timestamp)
+  - `data_lineage.py`: Track source → processing → response chain
+  - `access_control_log.py`: Who accessed what data, when, why
+- `security/redaction/`: Proof of PII redaction
+  - Log what was redacted, how (regex pattern, replacement)
+  - Never log full PII, only redaction proof
+- `security/compliance_reports/`: Auto-generate audit reports
+  - GDPR report: queries touching personal data last 90 days
+  - CCPA report: user data access + deletion requests
+  - HIPAA report: healthcare data access trails
+  - Immutable export (signed, timestamped)
+
+**Modules:**
+```
+security/
+├── audit/
+│   ├── immutable_log.py          (append-only event store)
+│   ├── event_schema.py           (structured events)
+│   ├── data_lineage_tracker.py   (source → response chain)
+│   └── access_control_log.py     (RBAC audit)
+├── redaction/
+│   ├── redaction_proof.py        (log redaction actions)
+│   └── pii_detector.py           (what needs redacting)
+└── compliance/
+    ├── gdpr_reporter.py          (personal data audit)
+    ├── ccpa_reporter.py          (deletion request support)
+    ├── hipaa_reporter.py         (healthcare compliance)
+    └── report_generator.py       (signed exports)
+```
+
+**Success criteria:**
+- ✅ Zero unredacted PII in logs
+- ✅ GDPR report generates < 10 seconds
+- ✅ Audit trail immutable (cannot delete)
+- ✅ Data lineage traceable (source → output)
+
+---
+
+## V2 — Agentic + Governance `[Q3 2026]`
+
+**What this version solves**: V1 fails on questions that need several reasoning steps
+(cross-referencing multiple facts, double-checking an answer before returning it). A single
+call to a language model isn't reliable enough to decompose a complex problem — this version
+introduces a team of specialized agents that split up the reasoning steps, with a
+self-correction loop when the answer isn't well enough supported by evidence.
+
+### V2.0 — Multi-Agent Runtime + Policy Engine
+
+**Core agentic modules:**
 - [ ] Adaptive query router (LLM-only / simple / agentic / graph)
 - [ ] Multi-agent runtime: coordinator, planner, retriever agent, extractor, synthesizer, validator
+- [ ] Fix pre-existing layering debt before expanding agents/: `agents/validator/validator.py` imports `generation/validators/groundedness` (domain→domain, flagged in pre-MR architecture review 2026-07-12) — invert via a Protocol in `contracts/` or move the lexical-overlap helper to `core/`
 - [ ] Multi-step agentic workflow with plan → retrieve → synthesize → critique → refine
 - [ ] Agent plan inspection by security guard
 - [ ] Example: `examples/agentic_rag/`
 
-**Dépendance à la V1** : le routeur ne remplace jamais le pipeline V1 — il décide, question
-par question, si le pipeline simple suffit ou si l'équipe d'agents doit prendre le relais.
-Une régression sur le retrieval hybride de la V1 casse donc silencieusement la V2 aussi.
+**Dependency on V1**: the router never replaces the V1 pipeline — it decides, question by
+question, whether the simple pipeline is enough or the agent team needs to take over. A
+regression in V1's hybrid retrieval therefore silently breaks V2 as well.
 
-## V3 — Graph Memory `[Planned]`
+**Policy Engine (moved from V4):** `[NEW — P0 priority]`
+- `security/policies/`: Policy-as-Code framework
+  - `policy_engine.py`: Evaluate queries vs policies before execution
+  - `policy_yaml_loader.py`: Load YAML policies (who can access what)
+  - `role_based_access.py`: Role-based routing (analyst vs director)
+  - `data_classification.yaml`: Sensitivity levels (public, internal, confidential, restricted)
+  - `query_routing_policy.yaml`: Route queries to appropriate retrievers/stores
+  - `audit_policy.yaml`: Log everything matching criteria
+- `orchestration/`: Registry updates
+  - `policy_executor.py`: Apply policies before/after retrieval/generation
+  - Policies + TraceStep = full auditability
+- Multi-tenant support (tenant ID in context, policies per tenant)
 
-**Ce que cette version résout** : la V1 et la V2 retrouvent des passages de texte pertinents,
-mais ne modélisent pas les relations entre les entités qu'ils contiennent (qui dépend de qui,
-qui a causé quoi). Les questions à sauts multiples ("qui est impacté, en cascade, par tel
-incident ?") ont besoin d'un graphe de connaissances plutôt que d'une recherche de texte pure.
+**Modules:**
+```
+security/
+├── policies/
+│   ├── policy_engine.py          (evaluate query vs policies)
+│   ├── policy_loader.py          (YAML → Policy objects)
+│   ├── role_based_access.py      (RBAC enforcement)
+│   └── policy_schemas.py         (YAML schema validation)
+└── data_classification/
+    └── classification.yaml        (sensitivity levels)
 
+orchestration/
+├── policy_executor.py            (apply policies in engine)
+└── policy_registry.py            (register custom policies)
+
+manifests/
+└── policies/
+    ├── data_classification.yaml
+    ├── role_access.yaml
+    ├── query_routing.yaml
+    └── audit_rules.yaml
+```
+
+**Success criteria:**
+- ✅ Queries evaluated against policies before execution
+- ✅ Multi-tenant isolation working (tenant A cannot see tenant B data)
+- ✅ Policy violations logged + escalated
+- ✅ Policy audit trail complete
+
+---
+
+### V2.1 — Collaborative Multi-Agent Teams `[NEW — 3 months]`
+
+**Purpose:** Enable complex enterprise workflows where multiple specialized agents collaborate.
+
+**Implementation:**
+- `agents/`: Expanded agent roles
+  - `domain_specialist/`: Expert for specific domain (finance, HR, supply chain)
+  - `fact_checker/`: Validates other agents' answers against retrieved docs
+  - `synthesis/`: Combines answers from multiple agents
+  - `human_escalation/`: When to escalate to human review
+- `agents/collaboration/`: Agent-to-agent communication
+  - `consensus_scoring.py`: Do all agents agree?
+  - `conflict_resolution.py`: What if agents disagree?
+  - `evidence_aggregation.py`: Combine evidence from multiple sources
+- `orchestration/`: Updated engine for team coordination
+  - `team_coordinator.py`: Orchestrates which agents run, in what order
+  - `agent_communication.py`: Message passing between agents
+  - `reasoning_transparency.py`: Explain why each agent was involved
+
+**Modules:**
+```
+agents/
+├── domain_specialist/            (new role)
+├── fact_checker/                 (new role)
+├── synthesis/                    (enhanced)
+├── collaboration/
+│   ├── consensus_scoring.py
+│   ├── conflict_resolution.py
+│   ├── evidence_aggregation.py
+│   └── team_decisions.py
+└── human_escalation/             (new)
+
+orchestration/
+├── team_coordinator.py           (multi-agent orchestration)
+└── agent_communication.py        (messaging)
+```
+
+**Example workflow (HR query):**
+```yaml
+question: "What's our policy on remote work + parental leave combined?"
+
+agents_run_in_sequence:
+  1. domain_specialist (HR)      → "Fetch HR policies"
+  2. legal_agent                 → "Check compliance implications"
+  3. finance_agent               → "Cost impact analysis"
+  4. fact_checker                → "Validate consistency"
+  5. synthesis_agent             → "Create coherent answer"
+  6. if confidence < 70%         → escalate to human
+
+output:
+  - answer: "Here's the policy..."
+  - confidence: 0.85
+  - agents_involved: [HR, Legal, Finance]
+  - reasoning_trace: [trace per agent]
+```
+
+**Success criteria:**
+- ✅ Multi-agent queries executable
+- ✅ Consensus scoring > 85% on golden set
+- ✅ Full reasoning trace per agent
+- ✅ Human escalation works
+
+---
+
+## V3 — Graph Memory + Intelligence `[Q4 2026]`
+
+**What this version solves**: V1 and V2 retrieve relevant passages of text, but don't model
+the relationships between the entities they contain (who depends on whom, what caused what).
+Multi-hop questions ("who is affected, in cascade, by this incident?") need a knowledge
+graph, not plain text search.
+
+### V3.0 — GraphRAG + Knowledge Graphs
+
+**Core graph modules:**
 - [ ] Knowledge graph construction from corpus (spaCy entity extraction)
 - [ ] GraphRAG retrieval (sub-graph selection, multi-hop)
 - [ ] Community detection (Louvain) + hierarchical summaries
@@ -83,38 +319,275 @@ incident ?") ont besoin d'un graphe de connaissances plutôt que d'une recherche
 - [ ] Neo4j adapter for `adapters/graphstores/`
 - [ ] Example: `examples/graph_memory/`
 
-**Dépendance aux versions précédentes** : le graphe vient enrichir le contexte donné au
-générateur — il ne se substitue jamais à la recherche vectorielle/BM25 de la V1, qui continue
-de fournir le texte brut des passages cités en réponse.
+**Dependency on earlier versions**: the graph enriches the context handed to the generator —
+it never replaces V1's vector/BM25 search, which continues to supply the raw passage text
+cited in the answer.
 
-## V4 — Governance `[Planned]`
+---
 
-**Ce que cette version résout** : un déploiement interne à une équipe unique n'a pas besoin
-de gouvernance formelle, mais un déploiement partagé entre plusieurs clients ou dans un
-secteur régulé (banque, assurance, santé) en a besoin absolument — isolation des données par
-tenant, preuve d'auditabilité, capacité à mettre une réponse à risque en attente de
-validation humaine avant de la renvoyer. C'est la version qui rend le framework éligible aux
-appels d'offres de grands comptes régulés (voir [docs/business-case.md](docs/business-case.md),
-section 4).
+### V3.1 — Cost Optimization Engine `[NEW — 2 months]`
 
-- [ ] Policy-as-code: YAML rules, PolicyEngine, OPA integration
-- [ ] Multi-tenant context (per-tenant knowledge base + policies)
+**Purpose:** Automatically route queries to cheapest sufficient solution; reduce LLM costs 60-80%.
+
+**Implementation:**
+- `orchestration/cost_optimizer/`: Smart routing
+  - `query_classifier.py`: Is this factual (BM25 enough) or reasoning-heavy (needs LLM)?
+  - `routing_strategy.py`: Route to cheap path first, escalate if needed
+  - `token_budgeting.py`: Penalize verbose responses
+- `adapters/llms/`: Multi-model support (not just OpenAI)
+  - Mix GPT-4 (reasoning), GPT-3.5 (factual), local LLMs (private)
+  - Model selection per query type
+- `orchestration/caching/`: Cache questions + answers
+  - Hash-based: return cached if > 95% similarity
+  - Cost savings: avoid repeated expensive calls
+- `eval/cost_reporting/`: Dashboard
+  - Cost per query, per user, per month
+  - Trends, anomalies (spike detection)
+
+**Modules:**
+```
+orchestration/
+├── cost_optimizer/
+│   ├── query_classifier.py       (factual vs reasoning)
+│   ├── routing_strategy.py       (cheap → expensive)
+│   ├── model_selector.py         (GPT-4 vs 3.5 vs local)
+│   └── caching.py               (dedup similar queries)
+├── query_cache.py               (with similarity matching)
+└── cost_config.yaml             (model prices, thresholds)
+
+eval/
+└── cost_reporting/
+    ├── cost_dashboard.py
+    └── cost_anomaly_detector.py
+
+adapters/llms/
+├── openai_multi_model.py        (GPT-4, 3.5, etc.)
+├── local_llm.py                 (Ollama, LM Studio)
+└── anthropic_multi_model.py     (Claude variants)
+```
+
+**Cost savings example:**
+```
+Before optimization:
+- 10,000 queries/month
+- All via GPT-4 ($0.03/query)
+- Total: $300/month
+
+After optimization:
+- 7,000 queries → BM25 + GPT-3.5 ($0.002/query) = $14
+- 2,500 queries → vector + GPT-3.5 ($0.005/query) = $12.5
+- 500 queries → full reasoning + GPT-4 ($0.03/query) = $15
+- Total: $41.5/month
+- Savings: 86% cost reduction
+```
+
+**Success criteria:**
+- ✅ Cost classifier F1 > 0.85
+- ✅ 70%+ queries routed to cheap path
+- ✅ Cache hit rate > 20%
+- ✅ Cost reduction > 50% vs baseline
+
+---
+
+### V3.2 — Continuous Fine-Tuning Loop `[NEW — 3 months]`
+
+**Purpose:** Auto-improve embedders/rerankers based on user feedback; RAG that learns.
+
+**Implementation:**
+- `eval/feedback_collection/`: Gather user signals
+  - Thumbs up/down on answers
+  - Manual corrections (user provides better answer)
+  - Explicit queries vs implicit signals
+- `eval/drift_detection.py`: Monitor performance over time
+  - F1 on validation set vs today
+  - AUROC trends
+  - Alert if degrading > 2%
+- `orchestration/auto_fine_tuning/`: Auto-trigger retraining
+  - Fine-tune embedders on corrected questions
+  - Fine-tune rerankers on feedback examples
+  - Safety gates: only deploy if metrics improve
+- `orchestration/model_versioning/`: Track embedder/reranker versions
+  - Rollback if new version performs worse
+  - A/B test new versions on subset of traffic
+
+**Modules:**
+```
+eval/
+├── feedback_collection/
+│   ├── thumbs_up_down.py
+│   ├── correction_capture.py
+│   └── feedback_aggregator.py
+└── drift_detection.py           (performance monitoring)
+
+orchestration/
+├── auto_fine_tuning/
+│   ├── embedder_finetuner.py    (sentence-transformers)
+│   ├── reranker_finetuner.py    (cross-encoder)
+│   ├── safety_gates.py          (don't deploy if regress)
+│   └── fine_tuning_config.yaml
+├── model_versioning/
+│   ├── version_manager.py       (track versions)
+│   └── rollback.py              (revert bad versions)
+└── ab_testing.py               (gradual deployment)
+
+manifests/
+└── fine_tuning_config.yaml     (which models to tune, thresholds)
+```
+
+**Example workflow:**
+```
+Day 1:
+  - Deploy embedder v1.0 (baseline)
+  - F1 = 0.82 on validation set
+
+Week 1:
+  - Collect 50 user corrections
+  - Fine-tune embedder on these examples → v1.1
+  - A/B test v1.1 on 10% of traffic
+  - v1.1 F1 = 0.86 (improvement ✅)
+  - Deploy v1.1 to 100%
+
+Week 4:
+  - Monitor v1.1 performance → F1 drops to 0.79 (drift detected)
+  - Revert to v1.0 temporarily
+  - Investigate why drift occurred
+  - Fine-tune on latest feedback → v1.2
+  - Deploy v1.2
+
+Continuous improvement:
+  - Every 2 weeks: retrain on latest feedback
+  - Every quarter: evaluate vs v1.0 baseline
+  - Never deploy if < baseline performance
+```
+
+**Success criteria:**
+- ✅ Feedback collection > 80% of queries
+- ✅ Drift detection works (alerts on degradation)
+- ✅ Auto-fine-tuning improves F1 by > 2% per month
+- ✅ Zero regressions (all new models > baseline)
+
+---
+
+## V4 — Multi-Language Governance `[Q1 2027]`
+
+**What this version solves**: a deployment internal to a single team doesn't need formal
+governance, but one shared across multiple clients or in a regulated sector (banking,
+insurance, healthcare) absolutely does — per-tenant data isolation, proof of auditability,
+the ability to hold a risky answer for human review before returning it. This is the version
+that makes the framework eligible for regulated enterprise RFPs (see
+[docs/business-case.md](docs/business-case.md), section 4).
+
+### V4.0 — Multi-Tenant Policies + Environments
+
+- [ ] Policy-as-code: YAML rules, PolicyEngine, OPA integration (enhanced from V2)
 - [ ] Multi-environment manifests (dev/staging/prod)
-- [ ] Audit trail: structured logs per query, per agent action, per source access
 - [ ] Human-in-the-loop: review queue for high-risk answers
 - [ ] Risk profile per pipeline
 - [ ] Example: `examples/secure_rag/` extended
 
-**Point de vigilance** : tant que cette version n'est pas cochée, ne présentez jamais la
-gouvernance multi-tenant ou l'audit trail complet comme opérationnels face à un client ou un
-auditeur — voir [docs/onboarding.md](docs/onboarding.md), section 5.
+**Watch point**: until this version's boxes are checked, never present multi-tenant
+governance or the full audit trail as operational to a client or an auditor — see
+[docs/onboarding.md](docs/onboarding.md), section 5.
 
-## V5 — Multimodal `[Planned]`
+---
 
-**Ce que cette version résout** : beaucoup de documents utiles ne sont pas du texte pur — un
-rapport financier a des graphiques, un contrat a des tableaux, une réunion a un
-enregistrement audio. Les versions précédentes ne traitent que le texte extrait de ces
-documents, perdant l'information contenue dans une image, un tableau ou une piste audio.
+### V4.1 — Multi-Language + Cultural Reasoning `[NEW — 4 months]`
+
+**Purpose:** RAG that understands 20+ languages natively; Publicis global clients.
+
+**Implementation:**
+- `adapters/nlp/`: Language-aware processing
+  - `tokenizers/`: Language-specific tokenization (Arabic, Chinese, French, German, Spanish, etc.)
+  - `language_detector.py`: Auto-detect query language
+  - `script_handler.py`: Handle mixed scripts (Arabic + French, etc.)
+- `ingestion/chunkers/`: Language-aware chunking
+  - Respect sentence boundaries per language
+  - Don't split on punctuation that's mid-sentence in that language
+  - Handle right-to-left scripts (Arabic, Hebrew)
+- `adapters/embeddings/`: Multilingual embedders
+  - mxbai-embed-large (50+ languages)
+  - e5-multilingual (100+ languages)
+  - Keep separate embeddings per language group for quality
+- `generation/`: Cultural context in generation
+  - Query language → generation language (don't force translation)
+  - Cultural context injection (why this question matters in this culture)
+- `security/cultural_policies/`: Language + regulatory
+  - GDPR (EU countries) vs CCPA (US) vs CNIL (France only)
+  - Right to be forgotten language handling
+  - Cultural sensitivity rules per language/region
+
+**Modules:**
+```
+adapters/nlp/
+├── tokenizers/
+│   ├── arabic_tokenizer.py
+│   ├── chinese_tokenizer.py
+│   ├── german_tokenizer.py
+│   └── universal_tokenizer.py
+├── language_detector.py         (detect query language)
+└── script_handler.py            (mixed scripts)
+
+ingestion/chunkers/
+└── multilingual_chunker.py      (language-aware splitting)
+
+adapters/embeddings/
+├── multilingual_embeddings.py   (mxbai, e5)
+└── language_group_embedder.py   (separate per group)
+
+generation/
+└── multilingual_generator.py    (preserve language)
+
+security/
+├── cultural_policies/
+│   ├── gdpr_policy.yaml         (EU/France)
+│   ├── ccpa_policy.yaml         (USA)
+│   ├── cultural_sensitivity.yaml (language/region-specific)
+│   └── regulatory_router.py     (route by locale)
+└── language_awareness/
+    └── language_specific_guards.py
+```
+
+**Example workflow:**
+```
+Query: "Quelle est la meilleure gare pour voyager?" (French)
+
+1. Language detection: French
+2. Query routing: SNCF (French railway) context
+3. Chunking: Respect French sentence structure
+4. Embedding: mxbai-embed-large (French specialized)
+5. Retrieval: Filter to French-language documents
+6. Regulation check: CNIL compliance (France-specific)
+7. Generation: Claude in French (not translate + generate)
+8. Cultural context: Explain why "gare" in French context
+9. Output: answer delivered in French with cultural context
+
+vs English query:
+Query: "What's the best station to travel from?"
+
+1. Language detection: English
+2. Query routing: UK/US transport context
+3. Generation: English language
+4. Regulation: GDPR (UK) or CCPA (US)
+5. Output: Answer in English
+```
+
+**Success criteria:**
+- ✅ Language detection > 99% accuracy
+- ✅ Support 20+ languages natively
+- ✅ F1 in non-English languages > 0.80
+- ✅ Mixed-script queries handled correctly
+- ✅ Regulatory routing works per country
+
+---
+
+## V5 — Multimodal Intelligence `[Q2 2027]`
+
+### V5.0 — Images, Audio, Video, Tables + VLMs
+
+**What this version solves**: many useful documents aren't plain text — a financial report
+has charts, a contract has tables, a meeting has an audio recording. Earlier versions only
+process the text extracted from these documents, losing whatever information lives in an
+image, a table, or an audio track.
 
 - [ ] Multimodal parsers: image extraction (pymupdf), table extraction, audio transcription (Whisper), video segmentation
 - [ ] Multi-vector Qdrant index (text + image + table)
@@ -124,24 +597,55 @@ documents, perdant l'information contenue dans une image, un tableau ou une pist
 - [ ] Enriched citations: image references, timecodes
 - [ ] Example: multimodal QA on PDF reports with charts
 
-**État d'avancement réel** : c'est la version la moins avancée du projet à ce jour (voir le
-tableau d'implémentation dans
-[docs/architecture/structure.md](docs/architecture/structure.md)) — les modules dédiés
-(`multimodal/`, `vision/`, `tables/`, `audio/`) restent en grande partie à créer.
+**Real progress status**: this is the least advanced version of the project to date (see the
+implementation table in
+[docs/architecture/structure.md](docs/architecture/structure.md)) — the dedicated modules
+(`multimodal/`, `vision/`, `tables/`, `audio/`) are still largely unbuilt.
 
 ---
 
-## Milestones
+## Timeline & Milestones
 
-Ces jalons servent de repère à plus haut niveau que les checkboxes ci-dessus — ils marquent
-le moment où une version devient "démontrable" plutôt que "en cours de construction".
+These milestones are a higher-level marker than the checkboxes above — they flag the moment a
+version becomes "demonstrable" rather than "under construction".
 
-| Version | Target criteria |
-|---|---|
-| v0.1 | `examples/simple_qa/` runs end-to-end with a real LLM |
-| v0.2 | `pip install modular-rag[v1]` + all V1 checklist done |
-| v1.0 | V1 + evaluation benchmark, API, CLI, full docs |
-| v2.0 | V2 agentic + adaptive routing working |
-| v3.0 | GraphRAG + Neo4j adapter |
-| v4.0 | Policy engine + multi-tenant |
-| v5.0 | Multimodal ingestion + agents |
+| Version | Target | Key Success Metrics |
+|---|---|---|
+| **v1.0** | Q2 2026 | Hybrid RAG working, F1 > 0.75, examples running |
+| **v1.1** | Q2 2026 | All metrics implemented, regression detector active |
+| **v1.2** | Q3 2026 | Audit trail immutable, GDPR report < 10s |
+| **v2.0** | Q3 2026 | Multi-agent runtime, policies enforced |
+| **v2.1** | Q4 2026 | Team coordination working, consensus > 85% |
+| **v3.0** | Q4 2026 | GraphRAG queries work, 3-hop reasoning |
+| **v3.1** | Q1 2027 | Cost reduction > 50%, 70% cheap-path routing |
+| **v3.2** | Q1 2027 | Auto-fine-tuning improves F1 > 2% monthly |
+| **v4.0** | Q1 2027 | Multi-environment policies, prod-ready |
+| **v4.1** | Q2 2027 | 20+ languages, cultural reasoning |
+| **v5.0** | Q2 2027 | Multimodal QA, VLM integration |
+
+---
+
+## Key Differentiators vs Market
+
+| Feature | LangChain | Haystack | **This Framework** |
+|---|---|---|---|
+| Evaluation | External (Ragas) | Built-in | ✅ **Contract-enforced** |
+| Audit Trail | Manual | Limited | ✅ **GDPR/CCPA native** |
+| Policies | None | Limited | ✅ **Policy-as-Code** |
+| Multi-Agent | Bolted-on | Limited | ✅ **Team collaboration** |
+| Cost Optimization | None | None | ✅ **Auto-routing, 50%+ savings** |
+| Fine-Tuning | None | None | ✅ **Continuous improvement** |
+| Graph Memory | External | External | ✅ **Native, v3.0** |
+| Multi-Language | English-first | Limited | ✅ **20+ languages native** |
+| Multimodal | Partial | Partial | ✅ **Full, v5.0** |
+
+---
+
+## References
+
+- **ADR-0001**: Modular architecture with six planes
+- **ADR-0002**: Contracts and plugins pattern
+- **ADR-0003**: Security and governance (updated with Policy Engine)
+- **ADR-0004**: Evaluation-as-Contract (NEW)
+- **ADR-0005**: Cost optimization strategy (NEW)
+- **ADR-0006**: Continuous fine-tuning (NEW)

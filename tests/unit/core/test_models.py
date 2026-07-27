@@ -2,15 +2,12 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from modular_rag.core.enums import (
-    AgentRole,
-    ChunkingStrategy,
-    GraphRelation,
     Modality,
     PolicyAction,
     RetrievalMethod,
-    RoutingStrategy,
 )
 from modular_rag.core.ids import new_id, short_id
 from modular_rag.core.models.answer import Answer, Citation
@@ -21,7 +18,6 @@ from modular_rag.core.models.policy import Policy, PolicyRule
 from modular_rag.core.models.query import Query
 from modular_rag.core.models.retrieved import RetrievedChunk
 from modular_rag.core.models.trace import Trace, TraceStep
-
 
 # ---------------------------------------------------------------------------
 # IDs
@@ -71,7 +67,7 @@ def test_document_defaults():
 
 def test_document_is_frozen():
     doc = Document(source="a.txt", content="foo")
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         doc.content = "bar"  # type: ignore[misc]
 
 
@@ -100,7 +96,7 @@ def test_chunk_defaults():
 
 def test_query_frozen():
     q = Query(text="what is RAG?")
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         q.text = "other"  # type: ignore[misc]
 
 

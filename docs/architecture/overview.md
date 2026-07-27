@@ -4,30 +4,30 @@
 
 ---
 
-## 1. Objectif
+## 1. Purpose
 
-Ce framework fournit un **context OS** pour systèmes RAG et agentiques : un plan de contrôle sur les connaissances, l'orchestration, la mémoire, la gouvernance et le multimodal. Il est construit autour de trois piliers :
+This framework provides a **context OS** for RAG and agentic systems: a control plane over knowledge, orchestration, memory, governance, and multimodality. It is built around three pillars:
 
-1. **Orchestration déclarative** — les pipelines sont décrits en YAML (manifests), pas en Python impératif.
-2. **Retrieval composable** — chunking, embedding, indexation, fusion, reranking sont des contrats remplaçables.
-3. **Raisonnement agentique vérifiable** — plusieurs agents spécialisés remplacent le seul appel LLM monolithique.
+1. **Declarative orchestration** — pipelines are described in YAML (manifests), not in imperative Python.
+2. **Composable retrieval** — chunking, embedding, indexing, fusion, and reranking are swappable contracts.
+3. **Verifiable agentic reasoning** — several specialized agents replace the single monolithic LLM call.
 
 ---
 
-## 2. Principes directeurs
+## 2. Guiding principles
 
-| Principe | Implication |
+| Principle | Implication |
 |---|---|
-| **Modularité stricte** | Chaque capacité majeure est un contrat (`typing.Protocol`) |
-| **Faible couplage** | L'orchestrateur dépend d'interfaces, jamais d'implémentations concrètes |
-| **Évaluation native** | Toute brique a un protocole de mesure associé (`contracts/evaluation.py`) |
-| **Sécurité par défaut** | Filtrage des entrées et garde-fous en amont du raisonnement |
-| **Observabilité native** | Traces, provenance, scores, coûts et latence loggés à chaque étape |
-| **Progressivité** | Fonctions avancées (graph, gouvernance, multimodal) optionnelles jusqu'à stabilisation |
+| **Strict modularity** | Every major capability is a contract (`typing.Protocol`) |
+| **Loose coupling** | The orchestrator depends on interfaces, never on concrete implementations |
+| **Native evaluation** | Every building block has an associated measurement protocol (`contracts/evaluation.py`) |
+| **Secure by default** | Input filtering and guardrails run upstream of reasoning |
+| **Native observability** | Traces, provenance, scores, costs, and latency logged at every step |
+| **Progressive rollout** | Advanced features (graph, governance, multimodal) stay optional until stabilized |
 
 ---
 
-## 3. Six planes du système
+## 3. The system's six planes
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -57,54 +57,54 @@ section 3. Les cinq versions ne sont pas des lots indépendants — chacune s'ap
 pipeline construit par la précédente plutôt que de le remplacer.
 
 ### V1 — Core RAG
-**Ce que le framework permet :**
-- Ingestion de sources (fichiers, dossiers) avec parsing (PDF, Word, HTML, Markdown, texte brut).
-- Chunking optimisé (fixe, adaptatif par sections).
-- Recherche hybride dense + lexicale (vector + BM25) avec fusion RRF.
-- Reranking par cross-encoder.
-- Génération sourcée (citations, groundedness) via OpenAI ou Anthropic.
-- Sécurité de base : filtrage de requête, détection d'injection, redaction PII.
-- Évaluation native : exact match, recall@k, MRR.
-- Exposition via API HTTP (FastAPI) et CLI (`mrag ask`, `mrag ingest`).
-- Configuration reproductible par manifests YAML versionnés.
+**What the framework enables:**
+- Source ingestion (files, folders) with parsing (PDF, Word, HTML, Markdown, plain text).
+- Optimized chunking (fixed-size, section-adaptive).
+- Hybrid dense + lexical search (vector + BM25) with RRF fusion.
+- Cross-encoder reranking.
+- Grounded generation (citations, groundedness) via OpenAI or Anthropic.
+- Basic security: query filtering, injection detection, PII redaction.
+- Native evaluation: exact match, recall@k, MRR.
+- Exposure via HTTP API (FastAPI) and CLI (`mrag ask`, `mrag ingest`).
+- Reproducible configuration through versioned YAML manifests.
 
 ### V2 — Agentic + Adaptive
-**Ajouts :**
-- Routing adaptatif : LLM-only / simple RAG / agentic RAG / graph RAG selon la complexité.
-- Runtime multi-agents : coordinator, planner, retriever agent, extractor, synthesizer, validator.
-- Workflows multi-étapes (plan → retrieve → synthesize → critique → refine).
-- Sécurité multi-étapes : inspection des plans d'agents.
-- Traces d'exécution agentique (quel agent, quel outil, quelle durée).
+**Additions:**
+- Adaptive routing: LLM-only / simple RAG / agentic RAG / graph RAG depending on complexity.
+- Multi-agent runtime: coordinator, planner, retriever agent, extractor, synthesizer, validator.
+- Multi-step workflows (plan → retrieve → synthesize → critique → refine).
+- Multi-step security: inspection of agent plans.
+- Agentic execution traces (which agent, which tool, how long).
 
 ### V3 — Graph Memory
-**Ajouts :**
-- Extraction de graphe de connaissances depuis le corpus (entités, relations, communautés).
-- GraphRAG : interrogation du graphe + sous-graphe contextuel injecté dans le LLM.
-- Multi-hop reasoning explicite (A → B → C avec preuves).
-- Résumés hiérarchiques par communauté (Louvain).
-- Reasoning graphs comme mémoire réutilisable.
-- EvoRAG : renforcement / affaiblissement des arêtes par feedback.
+**Additions:**
+- Knowledge graph extraction from the corpus (entities, relations, communities).
+- GraphRAG: graph querying + contextual subgraph injected into the LLM.
+- Explicit multi-hop reasoning (A → B → C with evidence).
+- Hierarchical per-community summaries (Louvain).
+- Reasoning graphs as reusable memory.
+- EvoRAG: edge reinforcement / weakening driven by feedback.
 
 ### V4 — Governance
-**Ajouts :**
-- Policy-as-code : règles YAML versionnées dans Git, appliquées à l'exécution.
-- Multi-tenant : domaines de contexte séparés (finance, HR, legal…).
-- Multi-environment : dev / staging / prod avec politiques progressivement strictes.
-- Audit complet : qui a accédé à quoi, quand, avec quel résultat.
-- Human-in-the-loop : validation humaine pour les réponses sensibles.
-- Risk profiles par pipeline.
+**Additions:**
+- Policy-as-code: YAML rules versioned in Git, enforced at runtime.
+- Multi-tenant: separate context domains (finance, HR, legal…).
+- Multi-environment: dev / staging / prod with progressively stricter policies.
+- Full audit: who accessed what, when, with which result.
+- Human-in-the-loop: human validation for sensitive answers.
+- Per-pipeline risk profiles.
 
 ### V5 — Multimodal
-**Ajouts :**
-- Ingestion multimodale : texte, PDF avec images et tableaux, audio, vidéo.
-- Index multi-vecteur : texte + image (CLIP/Colpali) + tableaux + segments vidéo.
-- MG²-RAG : graphe multi-granularité cross-modal.
-- Agents spécialisés par modalité : text_agent, vision_agent, table_agent, video_agent.
-- Réponses enrichies : timecodes vidéo, références d'images, extraits de tableaux.
+**Additions:**
+- Multimodal ingestion: text, PDFs with images and tables, audio, video.
+- Multi-vector index: text + image (CLIP/Colpali) + tables + video segments.
+- MG²-RAG: multi-granularity cross-modal graph.
+- Modality-specialized agents: text_agent, vision_agent, table_agent, video_agent.
+- Enriched answers: video timecodes, image references, table excerpts.
 
 ---
 
-## 5. Flux d'exécution V1 (RAG simple)
+## 5. V1 execution flow (simple RAG)
 
 ```
 Query
@@ -133,9 +133,9 @@ Answer (text + citations + trace_id)
 
 ---
 
-## 6. Contrats fondateurs
+## 6. Founding contracts
 
-Les contrats de `src/modular_rag/contracts/` sont le cœur immuable du framework. Toute implémentation — interne ou externe — doit satisfaire ces Protocols :
+The contracts in `src/modular_rag/contracts/` are the framework's immutable core. Every implementation — internal or external — must satisfy these Protocols:
 
 | Contract | Role | V |
 |---|---|---|
@@ -156,45 +156,45 @@ Les contrats de `src/modular_rag/contracts/` sont le cœur immuable du framework
 
 ---
 
-## 7. Décisions d'architecture
+## 7. Architecture decisions
 
-Voir les ADR dans `docs/adr/` :
-- [ADR-0001](../adr/0001-modular-architecture.md) — Six planes, séparation contracts/implémentations
+See the ADRs in `docs/adr/`:
+- [ADR-0001](../adr/0001-modular-architecture.md) — Six planes, contracts/implementations separation
 - [ADR-0002](../adr/0002-contracts-and-plugins.md) — Protocols + Factory Registry
 - [ADR-0003](../adr/0003-security-and-governance.md) — Safety vs Security, policy-as-code
 
 ---
 
-## 8. Modèles de données
+## 8. Data models
 
-Les modèles du domaine sont définis dans `src/modular_rag/core/models/`. Ce sont des objets Pydantic v2 — pas d'ORM, pas de base de données. Voir `data-model.md` pour la documentation complète.
+The domain models are defined in `src/modular_rag/core/models/`. They are Pydantic v2 objects — no ORM, no database. See `data-model.md` for the full documentation.
 
-| Modèle | Fichier | Frozen | Usage |
+| Model | File | Frozen | Usage |
 |---|---|---|---|
-| `Document` | `document.py` | ✓ | Unité d'ingestion : source, contenu brut, métadonnées |
-| `Chunk` | `chunk.py` | ✗ | Sous-segment d'un Document, avec embedding optionnel |
-| `Query` | `query.py` | ✓ | Requête utilisateur + hint de routing |
-| `RetrievedChunk` | `retrieved.py` | ✓ | Chunk + score + rank + méthode de retrieval |
-| `Citation` | `answer.py` | ✗ | Pointeur d'une réponse vers un chunk source |
-| `Answer` | `answer.py` | ✗ | Texte généré + citations + trace_id |
-| `TraceStep` | `trace.py` | ✗ | Latence + tokens d'une étape du pipeline |
-| `Trace` | `trace.py` | ✗ | Audit complet d'une exécution (accumulé via `add_step()`) |
+| `Document` | `document.py` | ✓ | Ingestion unit: source, raw content, metadata |
+| `Chunk` | `chunk.py` | ✗ | Sub-segment of a Document, with optional embedding |
+| `Query` | `query.py` | ✓ | User query + routing hint |
+| `RetrievedChunk` | `retrieved.py` | ✓ | Chunk + score + rank + retrieval method |
+| `Citation` | `answer.py` | ✗ | Pointer from an answer to a source chunk |
+| `Answer` | `answer.py` | ✗ | Generated text + citations + trace_id |
+| `TraceStep` | `trace.py` | ✗ | Latency + tokens for one pipeline step |
+| `Trace` | `trace.py` | ✗ | Full audit of an execution (accumulated via `add_step()`) |
 | `PolicyRule` | `policy.py` | ✗ | Condition + action (allow/deny/redact/warn) |
-| `Policy` | `policy.py` | ✗ | Ensemble de règles scopées à un tenant |
-| `Metrics` | `metrics.py` | ✗ | Scores d'évaluation (recall@k, MRR, groundedness…) |
+| `Policy` | `policy.py` | ✗ | Set of rules scoped to a tenant |
+| `Metrics` | `metrics.py` | ✗ | Evaluation scores (recall@k, MRR, groundedness…) |
 
-**Invariants clés :**
-- `Document` et `Query` sont immutables (`frozen=True`). Toute modification produit une nouvelle instance.
-- `Chunk.token_estimate` est une propriété calculée (`len(content.split())`), pas stockée.
-- `Trace.add_step()` est la seule façon d'ajouter une étape — elle met à jour atomiquement les totaux `total_latency_ms`, `total_input_tokens`, `total_output_tokens`.
-- `Policy.sorted_rules()` retourne les règles triées par priorité décroissante.
-- `Metrics.summary()` retourne uniquement les champs non-None.
+**Key invariants:**
+- `Document` and `Query` are immutable (`frozen=True`). Any modification produces a new instance.
+- `Chunk.token_estimate` is a computed property (`len(content.split())`), not stored.
+- `Trace.add_step()` is the only way to add a step — it atomically updates the `total_latency_ms`, `total_input_tokens`, and `total_output_tokens` totals.
+- `Policy.sorted_rules()` returns the rules sorted by decreasing priority.
+- `Metrics.summary()` returns only the non-None fields.
 
 ---
 
-## 9. Wiring manifest → pipeline
+## 9. Manifest → pipeline wiring
 
-Le chemin complet entre un fichier YAML et un pipeline opérationnel :
+The complete path from a YAML file to an operational pipeline:
 
 ```
 manifests/presets/local-hybrid-rag.yaml
@@ -217,63 +217,63 @@ manifests/presets/local-hybrid-rag.yaml
   ▼ cli/main.py or api/routes.py → calls engine methods
 ```
 
-Pour câbler un nouveau composant :
-1. Implémenter le contrat correspondant dans `contracts/`.
-2. Ajouter la factory dans `orchestration/registry.py → _default_factories`.
-3. Référencer le type dans le manifest YAML : `chunker: {type: my_chunker, ...}`.
+To wire a new component:
+1. Implement the corresponding contract in `contracts/`.
+2. Add the factory in `orchestration/registry.py → _default_factories`.
+3. Reference the type in the manifest YAML: `chunker: {type: my_chunker, ...}`.
 
 ---
 
-## 10. Pipeline d'ingestion (V1 détail)
+## 10. Ingestion pipeline (V1 detail)
 
 ```
-Fichier (PDF / Markdown / texte brut)
+File (PDF / Markdown / plain text)
   │
   ▼ ingestion/parsers/
-  │   TextParser → Document  (pour .txt, .md, .html)
-  │   PDFParser  → Document  (pour .pdf, via PyMuPDF)
+  │   TextParser → Document  (for .txt, .md, .html)
+  │   PDFParser  → Document  (for .pdf, via PyMuPDF)
   │
   ▼ ingestion/normalizers/TextNormalizer.normalize(doc)
   │   • Collapse excessive newlines (3+ → 2)
   │   • Collapse excessive spaces (2+ → 1)
   │   • Strip leading/trailing whitespace
-  │   → nouveau Document (frozen → nouvelle instance)
+  │   → new Document (frozen → new instance)
   │
   ▼ ingestion/enrichers/MetadataEnricher.enrich(doc)
-  │   • Calcule word_count, lang, reading_level
-  │   • Fusionne avec metadata existante
-  │   → nouveau Document
+  │   • Computes word_count, lang, reading_level
+  │   • Merges with existing metadata
+  │   → new Document
   │
   ▼ contracts/chunking.Chunker.chunk(doc) → list[Chunk]
-  │   FixedSizeChunker  : fenêtres de N tokens avec overlap
-  │   AdaptiveChunker   : coupe sur les titres Markdown (##, ###)
+  │   FixedSizeChunker  : windows of N tokens with overlap
+  │   AdaptiveChunker   : splits on Markdown headings (##, ###)
   │
   ▼ Embedder.embed([c.content for c in chunks]) → list[list[float]]
-  │   → écrit embedding dans chaque Chunk en place
+  │   → writes the embedding into each Chunk in place
   │
   ▼ Indexer.index(chunks) → int
-      QdrantStore : upsert en tant que PointStruct (vector + payload)
-      BM25Retriever : reconstruit l'index BM25 sur le corpus
+      QdrantStore : upserts as PointStruct (vector + payload)
+      BM25Retriever : rebuilds the BM25 index over the corpus
 ```
 
-Note : L'embedding et l'indexation se font dans `RAGEngine.ingest()`, pas dans `ingest_path()`. La séparation est intentionnelle — `ingest_path()` est testable sans service externe.
+Note: Embedding and indexing happen in `RAGEngine.ingest()`, not in `ingest_path()`. The separation is intentional — `ingest_path()` is testable without any external service.
 
 ---
 
-## 11. Algorithme de retrieval hybride (RRF)
+## 11. Hybrid retrieval algorithm (RRF)
 
-Le retrieval hybride combine deux listes de résultats classées (vecteur dense + BM25 lexical) en une liste fusionnée via **Reciprocal Rank Fusion** :
+Hybrid retrieval combines two ranked result lists (dense vector + lexical BM25) into a single fused list via **Reciprocal Rank Fusion**:
 
 ```
 RRF_score(d) = Σᵢ  1 / (rrf_k + rankᵢ(d))
 
-  où :
-    rrf_k  = 60  (constante de lissage, standard de la littérature)
-    rankᵢ  = rang du document d dans la liste i (1-based)
-    Σ      = somme sur toutes les listes de résultats (vector, BM25)
+  where:
+    rrf_k  = 60  (smoothing constant, standard in the literature)
+    rankᵢ  = rank of document d in list i (1-based)
+    Σ      = sum over all result lists (vector, BM25)
 ```
 
-Exemple avec 2 listes :
+Example with 2 lists:
 ```
 document "Q4 revenue"
   rank_vector = 3  → 1 / (60 + 3) = 0.0159
@@ -281,31 +281,31 @@ document "Q4 revenue"
   RRF_score   = 0.0159 + 0.0164 = 0.0323
 ```
 
-Le ratio vecteur/BM25 dans le preset `local-hybrid-rag.yaml` est **0.7 / 0.3** : les résultats vectoriels ont plus de poids car ils capturent la sémantique, tandis que BM25 booste les correspondances exactes de termes techniques.
+The vector/BM25 ratio in the `local-hybrid-rag.yaml` preset is **0.7 / 0.3**: vector results carry more weight because they capture semantics, while BM25 boosts exact matches on technical terms.
 
-Après fusion, les chunks sont re-classés par `RRF_score` décroissant. Un reranker cross-encoder affine ensuite ce classement sur les top-k (défaut : 5).
+After fusion, chunks are re-ranked by decreasing `RRF_score`. A cross-encoder reranker then refines this ranking over the top-k (default: 5).
 
 ---
 
-## 12. Hiérarchie des erreurs
+## 12. Error hierarchy
 
-Toutes les exceptions du framework héritent de `ModularRAGError` (défini dans `core/errors.py`). L'arborescence complète :
+All framework exceptions inherit from `ModularRAGError` (defined in `core/errors.py`). The complete tree:
 
 ```
-ModularRAGError                     ← base de toutes les erreurs du framework
-├── ConfigurationError              ← manifest ou settings invalide
-│   └── ManifestError               ← YAML non chargeable ou non validable
-├── RegistryError                   ← composant introuvable dans le registre
-├── IngestionError                  ← parsing ou chunking échoué
-├── IndexingError                   ← écriture dans le vector/lexical store échouée
-├── RetrievalError                  ← opération de retrieval échouée
-├── GenerationError                 ← appel LLM échoué ou réponse inutilisable
-├── SecurityError                   ← guard bloque une requête ou une réponse
-│   └── PolicyViolationError        ← action pipeline viole une policy déclarée
-├── EvaluationError                 ← scoring ou benchmark échoué
-├── GraphError                      ← construction ou traversée du graphe échouée (V3)
-├── AgentError                      ← tâche agent échouée (V2)
-└── StorageError                    ← opération backend de stockage échouée
+ModularRAGError                     ← base of all framework errors
+├── ConfigurationError              ← invalid manifest or settings
+│   └── ManifestError               ← YAML cannot be loaded or validated
+├── RegistryError                   ← component not found in the registry
+├── IngestionError                  ← parsing or chunking failed
+├── IndexingError                   ← write to the vector/lexical store failed
+├── RetrievalError                  ← retrieval operation failed
+├── GenerationError                 ← LLM call failed or response unusable
+├── SecurityError                   ← guard blocks a query or an answer
+│   └── PolicyViolationError        ← pipeline action violates a declared policy
+├── EvaluationError                 ← scoring or benchmark failed
+├── GraphError                      ← graph construction or traversal failed (V3)
+├── AgentError                      ← agent task failed (V2)
+└── StorageError                    ← storage backend operation failed
 ```
 
-**Règle de gestion :** attraper l'exception la plus spécifique possible. N'attraper `ModularRAGError` qu'au niveau des handlers HTTP/CLI pour renvoyer une réponse d'erreur générique. Ne jamais avaler silencieusement une `SecurityError` — elle doit toujours être loggée.
+**Handling rule:** catch the most specific exception possible. Only catch `ModularRAGError` at the HTTP/CLI handler level to return a generic error response. Never silently swallow a `SecurityError` — it must always be logged.

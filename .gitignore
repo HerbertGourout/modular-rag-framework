@@ -1,41 +1,186 @@
-# Claude Code — personal project preferences (never commit)
-CLAUDE.local.md
+# .gitignore for Modular RAG Framework
+# Prevents accidental commits of sensitive files, build artifacts, and environment-specific data
 
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-.Python
-*.egg-info/
-dist/
-build/
-.eggs/
-
-# Virtual environments
-.venv/
-venv/
-env/
-
-# Environment variables
+---
+## SECRETS & CREDENTIALS — CRITICAL ⚠️
+---
+# Environment variables with sensitive data
 .env
 .env.local
+.env.*.local
+*.pem
+*.key
+secrets/
+credentials/
 
-# Test artifacts
+# Local Claude Code preferences (user-specific)
+.claude.local.md
+CLAUDE.local.md
+
+---
+## PYTHON BUILD & PACKAGES
+---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+pip-log.txt
+pip-delete-this-directory.txt
+
+---
+## VIRTUAL ENVIRONMENTS
+---
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+.venv.bak/
+
+---
+## TESTING & COVERAGE
+---
 .pytest_cache/
 .coverage
-htmlcov/
+.coverage.*
 coverage.xml
+htmlcov/
+junit.xml
+test-results/
 
-# Type checking
+---
+## TYPE CHECKING
+---
 .mypy_cache/
+.dmypy.json
+dmypy.json
 .ruff_cache/
+.pylint.d/
 
-# IDE
+---
+## DOCUMENTATION BUILD
+---
+docs/_build/
+site/
+
+---
+## DATABASE & CACHES (local development only)
+---
+*.db
+*.sqlite
+*.sqlite3
+.qdrant_storage/    # Local Qdrant vector store (dev only)
+cache/
+tmp/
+
+---
+## IDE & EDITOR CONFIGS (per-user, not project policy)
+---
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+*.sublime-project
+*.sublime-workspace
 
-# OS
-.DS_Store
-Thumbs.db
-*.Zone.Identifier
+---
+## OS-SPECIFIC FILES
+---
+.DS_Store             # macOS
+Thumbs.db             # Windows
+*.lnk                 # Windows shortcuts
+
+---
+## TEMPORARY FILES
+---
+*.tmp
+*.bak
+*.backup
+~$*                   # Temp files from Office/Docs
+.#*                   # Temp files from Emacs
+
+---
+## JUPYTER NOTEBOOKS (if used)
+---
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+---
+## LOGS
+---
+*.log
+logs/
+*.out
+
+---
+## CI/CD ARTIFACTS
+---
+.gitlab-ci/artifacts/
+.gitlab/ci-artifacts/
+
+---
+## NOTES FOR CONTRIBUTORS
+---
+# ✅ WHAT TO COMMIT:
+#   - pyproject.toml (dependencies specification)
+#   - src/ (source code)
+#   - tests/ (test suite)
+#   - docs/ (documentation)
+#   - manifests/presets/ (YAML pipeline configs)
+#   - scripts/ (utility scripts)
+#   - .claude/ (Claude Code customization)
+#   - .gitlab/ (CI/CD templates)
+#   - .gitignore, CONTRIBUTING.md, CLAUDE.md (project guidance)
+
+# ❌ NEVER COMMIT:
+#   - .env, .env.local (API keys, secrets)
+#   - venv/, .venv/ (regenerate with: pip install -e .[v1,dev])
+#   - __pycache__, .pytest_cache/, .coverage (build/test artifacts)
+#   - .mypy_cache/, .ruff_cache/ (tool artifacts)
+#   - manifests/production/ (V4+ scope, not in V1)
+#   - *.log, logs/ (runtime logs)
+#   - .claude.local.md (personal preferences)
+
+# WHY SECRETS ARE GITIGNORED:
+# Environment variables like MRAG_OPENAI_API_KEY, MRAG_QDRANT_URL
+# are user/machine-specific and MUST NEVER be committed to version control.
+#
+# Setup locally (each developer):
+#   1. Create .env with your values (template: see .env.example if exists)
+#   2. NEVER commit .env to version control
+#   3. For CI/CD: use GitLab CI/CD secrets instead
+#
+# Example .env:
+#   MRAG_OPENAI_API_KEY=sk-...
+#   MRAG_QDRANT_URL=http://localhost:6333
+
+# WHY VENV IS GITIGNORED:
+# Virtual environments are machine-specific and bulky.
+# Always regenerate from pyproject.toml:
+#   python -m venv .venv
+#   source .venv/bin/activate  # or .venv\Scripts\activate on Windows
+#   pip install -e .[v1,dev]
+
+# Windows WSL alternate-data-stream junk
+*:Zone.Identifier

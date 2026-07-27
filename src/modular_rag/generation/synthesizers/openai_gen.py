@@ -2,17 +2,22 @@ from __future__ import annotations
 
 import structlog
 
-from modular_rag.core.models.answer import Answer, Citation
+from modular_rag.core.models.answer import Answer
 from modular_rag.core.models.query import Query
 from modular_rag.core.models.retrieved import RetrievedChunk
 from modular_rag.core.models.trace import Trace, TraceStep
 from modular_rag.generation.citations.builder import build_citations
+from modular_rag.generation.validators.groundedness import GroundednessValidator
 
 log = structlog.get_logger(__name__)
 
+# Negative-rejection clause per arXiv:2404.10981 §7.1 (Negative Rejection is a
+# first-class responsible-generation metric): instructing the model to decline
+# when the context lacks the answer is a low-cost hallucination reduction for V1.
 _SYSTEM_PROMPT = """\
 You are a precise assistant. Answer the user's question using ONLY the provided context.
 Cite the source of each claim. If the context is insufficient, say so explicitly.
+If the context does not contain the answer, say you don't know — do not guess.
 """
 
 
@@ -22,6 +27,8 @@ class OpenAIGenerator:
     def __init__(
         self,
         model: str = "gpt-4o-mini",
+        # Low-variance engineering default, unsourced by the research corpus
+        # (docs/research/DIGEST-generation.md #7) — sweep during V1.1 evaluation.
         temperature: float = 0.1,
         max_tokens: int = 2048,
         api_key: str = "",
@@ -31,6 +38,7 @@ class OpenAIGenerator:
         self.max_tokens = max_tokens
         self.api_key = api_key
         self._client: object | None = None
+        self._groundedness = GroundednessValidator()
 
     def name(self) -> str:
         return "openai"
@@ -48,7 +56,8 @@ class OpenAIGenerator:
     def _build_context(self, chunks: list[RetrievedChunk]) -> str:
         parts = []
         for i, rc in enumerate(chunks, 1):
-            parts.append(f"[{i}] Source: {rc.chunk.metadata.get('source', 'unknown')}\n{rc.chunk.content}")
+            source = rc.chunk.metadata.get("source", "unknown")
+            parts.append(f"[{i}] Source: {source}\n{rc.chunk.content}")
         return "\n\n".join(parts)
 
     def generate(self, query: Query, context: list[RetrievedChunk], trace: Trace) -> Answer:
@@ -81,7 +90,10 @@ class OpenAIGenerator:
         text = response.choices[0].message.content or ""
         citations = build_citations(context)
         log.debug("openai.generated", tokens=usage.total_tokens, ms=latency_ms)
-        return Answer(query_id=query.id, text=text, citations=citations, model=self.model)
+        answer = Answer(query_id=query.id, text=text, citations=citations, model=self.model)
+        if self._groundedness.should_refuse(answer, context):
+            return self._groundedness.refusal_answer(answer)
+        return answer
 
     async def agenerate(self, query: Query, context: list[RetrievedChunk], trace: Trace) -> Answer:
         return self.generate(query, context, trace)
