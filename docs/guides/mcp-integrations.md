@@ -17,7 +17,7 @@ Model Context Protocol (MCP) allows Claude Code to interact with external system
 ### Step 1: Request an MCP Integration
 
 **Who**: Any team member can request an MCP integration.  
-**Where**: Create an issue on GitLab in the `modular-rag-framework` project.  
+**Where**: Create an issue on GitHub in the `modular-rag-framework` repository.  
 **Template**:
 
 ```markdown
@@ -178,7 +178,7 @@ Approval: Easy (read-only, safe namespaces)
 
 - **Write access to production**: src/modular_rag/core/, src/modular_rag/security/
 - **Secret access**: Any MCP that reads .env or credentials
-- **CI/CD pipeline**: Access to .gitlab-ci.yml or deployment configs
+- **CI/CD pipeline**: Access to `.github/workflows/` or deployment configs
 - **Unrestricted file system**: "All files" scope
 - **Unauditable**: MCP with no logging
 
@@ -237,7 +237,7 @@ If MCP needs API keys:
 
 ## Approval Template
 
-Copy this into your GitLab issue once security review is complete:
+Copy this into your GitHub issue once security review is complete:
 
 ```markdown
 ## ✅ MCP APPROVED

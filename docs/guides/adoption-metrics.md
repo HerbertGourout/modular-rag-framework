@@ -110,7 +110,7 @@ Adoption rate = (Active Claude users) / (Total developers) × 100%
 - Day 60: 5 out of 10 developers → 50% adoption
 - Day 90: 8 out of 10 developers → 80% adoption
 
-**Tool**: GitHub/GitLab user filter on PRs:
+**Tool**: GitHub user filter on PRs:
 ```bash
 # PRs mentioning Claude in last 30 days
 git log --all --grep="claude\|claude code\|ai-assisted" --since="30 days ago" --format="%aN" | sort -u | wc -l
@@ -177,10 +177,10 @@ Average = mean(all review times)
 
 **Why**: Clear rules + validation = fewer review comments
 
-**Tool**: GitLab API or manual tracking
+**Tool**: GitHub API or manual tracking
 ```bash
-# Example: track MR approval times
-glab mr list --all --recent --format "json" | jq '.[] | .created_at, .updated_at'
+# Example: track PR approval times
+gh pr list --state all --json createdAt,updatedAt
 ```
 
 ### 7. Architecture Violations

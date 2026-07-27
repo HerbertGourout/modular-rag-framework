@@ -655,7 +655,7 @@ User Response + Citation + Explanation
 
 ```bash
 # 1. Clone and setup
-git clone https://pscode.lioncloud.net/data_specialiste/advancedpublicisrag.git
+git clone https://github.com/HerbertGourout/modular-rag-framework.git
 cd modular-rag-framework
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[v1,dev]"

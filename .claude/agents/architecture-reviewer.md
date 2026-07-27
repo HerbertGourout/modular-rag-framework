@@ -239,7 +239,7 @@ Unhealthy Graph (Circular):
 - **ADRs**: Architecture decision records
 - **Rules**: `.claude/rules/*.md` (domain-specific)
 - **Tests**: Contract conformance tests verify Protocol compliance
-- **CI/CD**: `.gitlab-ci.yml` runs compliance checks
+- **CI/CD**: `.github/workflows/ci.yml` runs compliance checks
 
 ## Success Criteria
 

@@ -1,11 +1,11 @@
 ---
 name: full-check
-description: Run unit tests, contract conformance tests, and coverage before opening a merge request
+description: Run unit tests, contract conformance tests, and coverage before opening a pull request
 ---
 
 # Full Check
 
-Comprehensive local validation that mirrors the `lint` + `test:unit` + `test:contract` + `coverage` stages of `.gitlab-ci.yml` (minus integration/e2e, which need live services).
+Comprehensive local validation that mirrors the `lint` + `test-unit` + `test-contract` + `coverage` jobs of `.github/workflows/ci.yml` (minus integration/e2e, which need live services).
 
 ## What to do
 
@@ -25,4 +25,4 @@ Comprehensive local validation that mirrors the `lint` + `test:unit` + `test:con
 
 ## When to use
 
-Before pushing a branch / opening an MR. For Qdrant-backed or LLM-backed scopes, use `pytest tests/integration -m integration` and `pytest tests/e2e -m e2e` directly (see CLAUDE.md block 06) — those require live services and aren't part of this skill.
+Before pushing a branch / opening a PR. For Qdrant-backed or LLM-backed scopes, use `pytest tests/integration -m integration` and `pytest tests/e2e -m e2e` directly (see CLAUDE.md block 06) — those require live services and aren't part of this skill.

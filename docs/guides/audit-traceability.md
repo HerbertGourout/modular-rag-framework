@@ -112,9 +112,9 @@ git log --all --grep="security" --oneline
 
 ---
 
-## MR/PR Traceability
+## PR Traceability
 
-### Required MR Information
+### Required PR Information
 
 **Title**:
 ```
@@ -129,7 +129,7 @@ Examples:
 **Description** (use template from CONTRIBUTING.md):
 ```markdown
 ## Description
-What does this MR do?
+What does this PR do?
 
 ## Type of change
 - [ ] New feature
@@ -149,10 +149,10 @@ List affected modules
 Any other context
 ```
 
-### MR Approval Chain
+### PR Approval Chain
 
 ```
-1. Author creates MR (Draft if WIP)
+1. Author creates PR (Draft if WIP)
    ↓
 2. CI/CD runs automatically
    - Lint (ruff)
@@ -178,23 +178,23 @@ Any other context
    - Cleaned up automatically
 ```
 
-### Viewing MR History
+### Viewing PR History
 
 ```bash
-# List all MRs (GitLab CLI)
-glab mr list
+# List all PRs (GitHub CLI)
+gh pr list --state all
 
-# View specific MR with approval chain
-glab mr view 42
+# View specific PR with approval chain
+gh pr view 42
 
-# See all MRs touching security/
-glab mr list --labels "security"
+# See all PRs touching security/
+gh pr list --search "label:security"
 
-# See MRs by author
-glab mr list --author @username
+# See PRs by author
+gh pr list --author @username
 
-# Download MR as patch
-glab mr diff 42 > feature.patch
+# Download PR as patch
+gh pr diff 42 > feature.patch
 ```
 
 ---
@@ -207,7 +207,7 @@ glab mr diff 42 > feature.patch
 |------|------------|-----------------|
 | `.claude/settings.json` | Security team | Rare (permission changes) |
 | `.claude/.instructions.md` | Architecture team | Rare (rule changes) |
-| `.gitlab-ci.yml` | DevOps team | Occasional (test scope changes) |
+| `.github/workflows/ci.yml` | DevOps team | Occasional (test scope changes) |
 | `CONTRIBUTING.md` | Team lead | Occasional (process changes) |
 | `pyproject.toml` | Release manager | Regular (dependency updates) |
 | `docs/adr/` | Architecture team | As needed (decisions) |
@@ -232,7 +232,7 @@ git commit -m "chore: Update .claude/settings.json with new API restriction
 
 Reason: Prevent accidental V3 implementation in V1"
 
-# Push and create MR
+# Push and create PR
 git push origin fix/security-policy-update
 ```
 
@@ -285,7 +285,7 @@ Use this checklist for security audits and compliance reviews:
 ### Git Hygiene
 - [ ] Commits are atomic and descriptive
 - [ ] Branch named per convention (feature/, fix/, docs/)
-- [ ] MR description filled
+- [ ] PR description filled
 - [ ] All CI/CD checks pass
 - [ ] Code reviewed by 2+ people (if security)
 
@@ -339,10 +339,10 @@ For SOC2, GDPR, or other compliance:
 
 ```bash
 # Evidence 1: All config changes
-git log --oneline -- .claude/settings.json CONTRIBUTING.md .gitlab-ci.yml > config_history.txt
+git log --oneline -- .claude/settings.json CONTRIBUTING.md .github/workflows/ci.yml > config_history.txt
 
-# Evidence 2: All MR approvals (export from GitLab)
-glab mr list --state=merged --since="2026-01-01" > mr_approvals.txt
+# Evidence 2: All PR approvals (export from GitHub)
+gh pr list --state merged --search "created:>=2026-01-01" --json number,title,mergedAt,reviews > pr_approvals.json
 
 # Evidence 3: All security commits
 git log --all --grep="security\|guard\|policy" --oneline > security_commits.txt
@@ -383,7 +383,7 @@ chmod +x .git/hooks/pre-commit
 
 ### CI/CD Checks
 
-`.gitlab-ci.yml` should enforce:
+`.github/workflows/ci.yml` should enforce:
 
 ```yaml
 security_check:

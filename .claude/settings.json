@@ -61,7 +61,9 @@
       "Edit(CONTRIBUTING.md)",
       "Write(CONTRIBUTING.md)",
       "Edit(.gitlab-ci.yml)",
-      "Write(.gitlab-ci.yml)"
+      "Write(.gitlab-ci.yml)",
+      "Edit(.github/workflows/**)",
+      "Write(.github/workflows/**)"
     ]
   },
   "hooks": {

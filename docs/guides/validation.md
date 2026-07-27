@@ -305,26 +305,33 @@ vim src/modular_rag/security/filters/prompt_injection.py
 | **Integration** | `pytest tests/integration/ -m integration` | 3m | Qdrant |
 | **E2E** | `pytest tests/e2e/ -m e2e` | 5m | Qdrant + LLM key |
 
-### .gitlab-ci.yml alignment
+### .github/workflows/ci.yml alignment
+
+The lint, unit, and contract jobs below mirror the actual workflow in
+`.github/workflows/ci.yml`. Integration is illustrative — it isn't wired into CI yet since it
+needs a live Qdrant service:
+
 ```yaml
-stages:
-  - lint
-  - test
-  - integration
+jobs:
+  lint:
+    steps:
+      - run: ruff check src/ tests/ --select E,F,I
 
-lint:
-  script: ruff check src/ tests/ --select E,F,I
+  test-unit:
+    steps:
+      - run: pytest tests/unit/ -v
 
-test:unit:
-  script: pytest tests/unit/ -v
+  test-contract:
+    steps:
+      - run: pytest tests/contract/ -v
 
-test:contract:
-  script: pytest tests/contract/ -v
-
-integration:
-  script: pytest tests/integration/ -m integration -v
-  services:
-    - qdrant:latest
+  integration:  # not yet wired into CI — requires a live Qdrant service
+    services:
+      qdrant:
+        image: qdrant/qdrant:latest
+        ports: ["6333:6333"]
+    steps:
+      - run: pytest tests/integration/ -m integration -v
 ```
 
 ---

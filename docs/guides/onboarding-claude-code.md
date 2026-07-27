@@ -3,7 +3,7 @@
 Welcome! This guide walks you through setting up and using Claude Code for the first time on this project. By the end, you'll understand how to work efficiently with AI assistance while maintaining code quality and project standards.
 
 **Time estimate**: 20 minutes  
-**Required**: VS Code, GitHub/GitLab access, Python 3.11+
+**Required**: VS Code, GitHub access, Python 3.11+
 
 ---
 
@@ -20,7 +20,7 @@ Welcome! This guide walks you through setting up and using Claude Code for the f
 ### 2. Clone and Set Up the Project
 
 ```bash
-git clone https://pscode.lioncloud.net/data_specialiste/advancedpublicisrag.git
+git clone https://github.com/HerbertGourout/modular-rag-framework.git
 cd modular-rag-framework
 
 # Create virtual environment
@@ -72,7 +72,7 @@ cli/ + api/  →  app/  →  orchestration/  →  contracts/ + core/
 |------|---------|-----------|
 | [CLAUDE.md](../../CLAUDE.md) | Project rules (9 blocks) | ✅ YES |
 | [.claude/.instructions.md](./../.instructions.md) | Claude's mandatory rules | ✅ YES (sections 1-5) |
-| [CONTRIBUTING.md](../../CONTRIBUTING.md) | Git workflow, branching, MR process | ✅ YES |
+| [CONTRIBUTING.md](../../CONTRIBUTING.md) | Git workflow, branching, PR process | ✅ YES |
 | [.claude/settings.json](./../settings.json) | Permissions, hooks configuration | 🟡 REFERENCE ONLY |
 | [docs/guides/validation.md](validation.md) | Command reference | 🟡 REFERENCE ONLY |
 
@@ -177,15 +177,15 @@ Protocol: Implements Chunker.chunk() and Chunker.name()
 Tests: 5 unit tests covering edge cases
 "
 
-# Push to GitLab
+# Push to GitHub
 git push origin feature/word-count-chunker
 ```
 
-### Step 6: Create MR and Get Review
+### Step 6: Create PR and Get Review
 
-On GitLab:
-1. Create Merge Request (auto-filled with your branch)
-2. Fill MR template:
+On GitHub:
+1. Create Pull Request (auto-filled with your branch)
+2. Fill PR template:
    - Description: "Adds word-count-based text chunking"
    - Type: ✅ New feature
    - Scope: ingestion/chunkers/
@@ -214,7 +214,7 @@ On GitLab:
 |---------|-------------|-----------------|
 | Ask Claude to implement huge features at once | Creates messy commits, hard to review | Break into 3-4 smaller tasks |
 | Ignore validation errors | Code passes locally but fails in CI | Always run `./scripts/check.sh full` |
-| Mix bug fixes + features in one MR | Review becomes unclear | One MR = one topic (feature/ or fix/ branch) |
+| Mix bug fixes + features in one PR | Review becomes unclear | One PR = one topic (feature/ or fix/ branch) |
 | Ask Claude to implement V2+ features | Reserved for future phases | Stick to V1 scope (ingestion, retrieval, generation, eval, security) |
 | Use Claude as a code copilot only | Underuses AI capabilities | Use as agent + validator + reviewer + explorer |
 
@@ -231,7 +231,7 @@ On GitLab:
 3. **Validate** (with human): "Does this plan look right? Should I change anything?"
 4. **Implement**: "Now implement step 1: [task]"
 5. **Verify**: Run `./scripts/check.sh full`
-6. **Deliver**: Create MR
+6. **Deliver**: Create PR
 
 **Don't** jump straight to "implement the whole thing."
 
@@ -255,7 +255,7 @@ On GitLab:
 git checkout -b feature/chunker-v2
 # ... work ...
 # ... push ...
-# ... MR created ...
+# ... PR created ...
 
 # Feature 2 (new branch from main)
 git checkout main
@@ -273,7 +273,7 @@ Each branch = one topic. This makes reviews clean and easy to revert if needed.
 | Command | Time | Checks | When to Use |
 |---------|------|--------|-----------|
 | `/quick-check` | ~30s | Syntax + imports (ruff E,F,I) | After code edits, before commit |
-| `/full-check` | 2-5m | Syntax + unit + contract tests + coverage | Before MR, before merge |
+| `/full-check` | 2-5m | Syntax + unit + contract tests + coverage | Before PR, before merge |
 
 - Use **quick** while coding (fail-fast)
 - Use **full** before pushing (comprehensive validation)
@@ -338,7 +338,7 @@ Each branch = one topic. This makes reviews clean and easy to revert if needed.
 git checkout -b feature/feature-1  # Work on feature 1
 git commit...
 git push...
-# Create MR 1
+# Create PR 1
 
 git checkout main
 git checkout -b feature/feature-2  # Separate branch for feature 2
@@ -365,7 +365,7 @@ git checkout -b feature/feature-2  # Separate branch for feature 2
 
 - 📖 [CLAUDE.md](../../CLAUDE.md) — All project rules
 - 📖 [docs/architecture/overview.md](../architecture/overview.md) — Technical architecture
-- 📖 [CONTRIBUTING.md](../../CONTRIBUTING.md) — Git workflow + MR process
+- 📖 [CONTRIBUTING.md](../../CONTRIBUTING.md) — Git workflow + PR process
 - 📖 [docs/guides/validation.md](validation.md) — All validation commands
 - 📖 [.claude/AGENTS.md](../../.claude/AGENTS.md) — Human-readable reference for the 8 subagents (not auto-loaded by Claude Code itself — the agents work because of `.claude/agents/*.md`); the actual invocable commands are the skills under `.claude/skills/*/SKILL.md`
 
@@ -388,7 +388,7 @@ By the end of your first week, you should be able to:
 - [ ] Understand hexagonal layering and why it matters
 - [ ] Run validation scripts confidently (`quick`, `full`)
 - [ ] Know when to ask Claude vs. when to ask humans
-- [ ] Create a feature branch and MR without help
+- [ ] Create a feature branch and PR without help
 - [ ] Implement a small adapter (chunker, retriever, etc.)
 - [ ] Write unit tests for your code
 - [ ] Explain why cross-domain imports are forbidden
