@@ -25,10 +25,22 @@ class PipelineStateMachine:
     _TRANSITIONS: dict[PipelineState, list[PipelineState]] = {
         PipelineState.IDLE: [PipelineState.GUARDING_QUERY, PipelineState.RETRIEVING],
         PipelineState.GUARDING_QUERY: [PipelineState.RETRIEVING, PipelineState.ERROR],
-        PipelineState.RETRIEVING: [PipelineState.RERANKING, PipelineState.GENERATING, PipelineState.ERROR],
+        PipelineState.RETRIEVING: [
+            PipelineState.RERANKING,
+            PipelineState.GENERATING,
+            PipelineState.ERROR,
+        ],
         PipelineState.RERANKING: [PipelineState.GENERATING, PipelineState.ERROR],
-        PipelineState.GENERATING: [PipelineState.GUARDING_ANSWER, PipelineState.DONE, PipelineState.ERROR],
-        PipelineState.GUARDING_ANSWER: [PipelineState.EVALUATING, PipelineState.DONE, PipelineState.ERROR],
+        PipelineState.GENERATING: [
+            PipelineState.GUARDING_ANSWER,
+            PipelineState.DONE,
+            PipelineState.ERROR,
+        ],
+        PipelineState.GUARDING_ANSWER: [
+            PipelineState.EVALUATING,
+            PipelineState.DONE,
+            PipelineState.ERROR,
+        ],
         PipelineState.EVALUATING: [PipelineState.DONE, PipelineState.ERROR],
         PipelineState.DONE: [],
         PipelineState.ERROR: [],

@@ -19,6 +19,172 @@ is why the rules below are enforced rather than just suggested.
 5. If you use multiple AI providers, read [docs/guides/ai-engineering-workflow.md](docs/guides/ai-engineering-workflow.md)
    and [docs/guides/model-routing.md](docs/guides/model-routing.md).
 
+---
+
+## Git Workflow Strategy
+
+### Branch Naming
+
+All branches must start from `main` and follow this naming pattern:
+
+| Pattern | Example | Use case |
+|---------|---------|----------|
+| `feature/...` | `feature/vector-retriever` | New features, adapters, modules |
+| `fix/...` | `fix/import-circular-dependency` | Bug fixes |
+| `docs/...` | `docs/architecture-guide` | Documentation only (no code) |
+| `refactor/...` | `refactor/security-module` | Code restructuring, no new features |
+| `test/...` | `test/add-integration-coverage` | Test additions only |
+
+**Examples:**
+```bash
+# Feature branch
+git checkout -b feature/bm25-retriever
+
+# Bug fix
+git checkout -b fix/pii-redaction-overflow
+
+# Documentation
+git checkout -b docs/deployment-guide
+```
+
+### Commit Atomicity
+
+Each commit must be **atomic** and **self-contained**. A reviewer should be able to understand the change by reading the commit message alone.
+
+**Good commits:**
+```
+✅ Add BM25Retriever adapter + unit tests + contract conformance
+✅ Fix circular import in security module
+✅ Update CLAUDE.md with V2 scope clarification
+```
+
+**Bad commits:**
+```
+❌ WIP — still debugging
+❌ Update stuff
+❌ Mixed: add feature + fix bug + update docs
+```
+
+### Commit Message Format
+
+Follow conventional commits (simplified):
+
+```
+<type>: <description>
+
+<optional body — explain WHY, not WHAT>
+
+Fixes #<issue> (if applicable)
+```
+
+**Types**: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
+
+**Examples:**
+```
+feat: Add BM25Retriever with RRF fusion support
+
+Implements hybrid retrieval combining vector + lexical scoring.
+Uses reciprocal rank fusion for combining results.
+
+Adds:
+- BM25Retriever adapter in adapters/search/
+- Unit tests in tests/unit/adapters/
+- Contract conformance test
+
+Fixes #42
+```
+
+```
+fix: Prevent PII redaction regex DOS on large text
+
+PII pattern redaction was O(n²) for long documents.
+Switched to compiled regex with timeout guard.
+
+Fixes #128
+```
+
+### Merge Request (MR) Workflow
+
+#### 1. **Create MR early** (draft if WIP)
+```bash
+# Push branch
+git push origin feature/xyz
+
+# Create MR on GitLab (mark as Draft if incomplete)
+# Title: Clear, descriptive (e.g., "Add BM25 retriever with RRF fusion")
+# Description: Fill the template (see below)
+```
+
+#### 2. **MR Description Template**
+
+```markdown
+## Description
+What does this MR do? (1-2 sentences)
+
+## Type of change
+- [ ] New feature (addition without breaking change)
+- [ ] Breaking change (requires version bump)
+- [ ] Bug fix (fixes a bug, no new features)
+- [ ] Documentation (doc only, no code)
+- [ ] Test improvement (test coverage, no code)
+- [ ] Refactoring (code reorganization, no behavior change)
+
+## Scope
+List affected modules:
+- src/modular_rag/ingestion/chunkers/
+- src/modular_rag/contracts/
+- tests/unit/ingestion/
+
+## Checklist
+- [ ] Tests added/updated (unit + contract if applicable)
+- [ ] No cross-domain imports introduced
+- [ ] New adapter registered in `_default_factories.py`
+- [ ] `docs/` updated if applicable
+- [ ] ADR written if structural decision made
+- [ ] `CHANGELOG.md` updated
+
+## Notes
+Any other context (e.g., dependencies, breaking changes, etc.)
+```
+
+#### 3. **Validation before MR approval**
+
+**Automatic checks (CI/CD):**
+- ✅ Lint (ruff) passes
+- ✅ Unit tests pass
+- ✅ Contract tests pass
+- ✅ No merge conflicts
+
+**Manual review (required):**
+- ✅ Architecture compliance: does it follow hexagonal layering?
+- ✅ No cross-domain imports
+- ✅ CLAUDE.md rules respected
+- ✅ Code is readable and documented
+- ✅ Test coverage adequate
+
+**Approval flow:**
+```
+Author creates MR
+    ↓
+Automated CI/CD runs (lint + test + coverage)
+    ↓
+Code review (peer or maintainer)
+    ↓
+Approved → Merge to main (squash or rebase)
+    ↓
+Delete branch
+```
+
+### Squash vs. Merge Strategy
+
+- **Squash**: Use for feature branches with multiple commits → 1 clean commit to main
+- **Rebase**: Use for docs branches → preserve commit history
+- **Merge commit**: Avoid (creates messy history)
+
+**Recommendation**: Squash feature branches to keep `main` history clean.
+
+---
+
 ## Development setup
 
 ```bash
@@ -28,6 +194,8 @@ python -m venv .venv
 .venv\Scripts\activate        # Windows
 pip install -e .[v1,dev]
 ```
+
+---
 
 ## Code rules
 
@@ -55,6 +223,30 @@ for the worked examples of what breaks when a rule is skipped.
   at runtime — `typing.Protocol` gives no static guarantee on its own (see
   [docs/adr/0002-contracts-and-plugins.md](docs/adr/0002-contracts-and-plugins.md)).
 
+---
+
+## Validation Strategy
+
+Use the standardized validation script for all checks:
+
+```bash
+# After every change
+./scripts/check.sh quick        # Syntax + imports (~30s)
+
+# Before pushing
+./scripts/check.sh full         # Unit + contract tests (~2-5m)
+
+# Optional: with Qdrant
+./scripts/check.sh integration  # Add integration tests (~1-2m)
+
+# Pre-release
+./scripts/check.sh all          # All scopes (~10m)
+```
+
+See [docs/guides/validation.md](docs/guides/validation.md) for full reference.
+
+---
+
 ## Running tests
 
 ```bash
@@ -68,6 +260,8 @@ pytest tests/e2e             # full pipeline, requires LLM API key
 Claude Code users can run `/qa-v1` for the local V1 gate.
 Codex users should follow `AGENTS.md` and default to independent review unless
 asked to implement.
+
+---
 
 ## Adding a new component (example: new chunker)
 
@@ -86,13 +280,20 @@ asked to implement.
    ```
 5. Write tests: `tests/unit/ingestion/chunkers/test_my_chunker.py` + `tests/contract/test_chunker_conformance.py`.
 
-## Merge Request checklist
+---
 
+## Merge Request Checklist
+
+- [ ] Branch created from `main` with correct naming (`feature/...`, `fix/...`, etc.)
+- [ ] Commits are atomic and follow conventional format
 - [ ] New code has tests (unit + contract if applicable)
 - [ ] No cross-domain imports introduced
 - [ ] Local V1 gate run (`/qa-v1` or Ruff + unit + contract + layering audit)
 - [ ] High-risk AI-generated changes reviewed by a second provider or human reviewer
 - [ ] New adapter registered in `_default_factories.py`
+- [ ] `./scripts/check.sh full` passes locally
+- [ ] CI/CD (lint + test + coverage) passes
 - [ ] `docs/architecture/` updated if layering or contracts changed
 - [ ] ADR written if a structural decision was made
 - [ ] `CHANGELOG.md` updated under `[Unreleased]`
+- [ ] MR description filled (use template above)

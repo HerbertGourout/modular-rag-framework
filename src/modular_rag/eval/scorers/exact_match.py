@@ -16,7 +16,7 @@ class ExactMatchEvaluator:
         self,
         query: Query,
         answer: Answer,
-        expected: "str | Answer | None" = None,
+        expected: str | Answer | None = None,
         context: list[RetrievedChunk] | None = None,
     ) -> Metrics:
         if expected is None:
