@@ -265,6 +265,15 @@ asked to implement.
 
 ## Adding a new component (example: new chunker)
 
+```mermaid
+%%{init: {"theme": "base"}}%%
+flowchart LR
+    C1["1. Verify/extend the\nProtocol in contracts/"] --> C2["2. Implement the class\nin the domain folder"]
+    C2 --> C3["3. Register the factory in\norchestration/_default_factories.py"]
+    C3 --> C4["4. Select it by name\nin a manifest YAML"]
+    C4 --> C5["5. Write unit + contract tests"]
+```
+
 1. Verify `contracts/chunking.py` Chunker Protocol covers your interface (or extend it + write ADR).
 2. Create `src/modular_rag/ingestion/chunkers/my_chunker.py` implementing `chunk()` and `name()`.
 3. Register in `orchestration/_default_factories.py`:

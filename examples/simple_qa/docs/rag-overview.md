@@ -25,6 +25,14 @@ Large language models have several limitations that RAG addresses:
 
 A typical RAG pipeline consists of:
 
+```mermaid
+%%{init: {"theme": "base"}}%%
+flowchart LR
+    I["1. Ingestion\nParse, chunk, embed, and\nindex source documents"] --> R["2. Retrieval\nGiven a query, find the\nmost relevant chunks"]
+    R --> A["3. Augmentation\nCombine the query with\nretrieved context into a prompt"]
+    A --> G["4. Generation\nThe LLM generates an answer\ngrounded in retrieved context"]
+```
+
 1. **Ingestion**: Parse, chunk, embed, and index source documents.
 2. **Retrieval**: Given a query, find the most relevant chunks.
 3. **Augmentation**: Combine the query with retrieved context into a prompt.

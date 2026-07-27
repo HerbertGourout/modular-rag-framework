@@ -42,6 +42,15 @@ A cross-encoder reranker (e.g., `cross-encoder/ms-marco-MiniLM-L-6-v2`) takes
 bi-encoders but much more accurate because it can model query-document interaction.
 
 Typical pipeline:
+
+```mermaid
+%%{init: {"theme": "base"}}%%
+flowchart LR
+    Q([Query]) --> H["1. Retrieve top-K candidates\n(K=20) via hybrid retrieval"]
+    H --> RR["2. Rerank all K candidates\nwith the cross-encoder"]
+    RR --> Top["3. Keep top-k results\n(k=5) for generation"]
+```
+
 1. Retrieve top-K candidates (K=20) via hybrid retrieval.
 2. Rerank all K candidates with the cross-encoder.
 3. Keep top-k results (k=5) for generation.
