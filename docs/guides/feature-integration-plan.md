@@ -23,25 +23,33 @@
 
 ## 🔄 Dependency Graph
 
+```mermaid
+%%{init: {"theme": "base"}}%%
+flowchart TD
+    V10["V1.0 Core RAG"] --> V11["V1.1 Evaluation"]
+    V10 --> V12["V1.2 Audit"]
+    V10 --> V20["V2.0 Policies"]
+    V11 --> V32["V3.2 Fine-Tuning"]
+    V20 --> V21["V2.1 Teams"]
+    V21 --> V30["V3.0 Graphs"]
+    V30 --> V31["V3.1 Cost"]
+    V30 --> V32
+    V31 --> V40["V4.0 Governance"]
+    V32 --> V40
+    V40 --> V41["V4.1 Multi-Language"]
+    V40 --> V50["V5.0 Multimodal\n(also needs all prior versions)"]
+    V41 -.-> V50
 ```
-V1.0 (Core RAG)
-├── V1.1 (Evaluation)
-│   └── V3.2 (Fine-Tuning) ✓
-├── V1.2 (Audit) ✓
-└── V2.0 (Policies) ✓
-    └── V2.1 (Teams) ✓
-        └── V3.0 (Graphs) ✓
-            ├── V3.1 (Cost) ✓
-            └── V3.2 (FT) ✓
-                └── V4.0 (Governance) ✓
-                    └── V4.1 (MultiLang) ✓
 
-V5.0 (Multimodal)
-└── Independent (uses V4.0 + all prior)
-```
-
-**Critical path:** V1.0 → V1.1 → V1.2 → V2.0 → V2.1 → V3.0 → V3.1 → V3.2 → V4.0 → V4.1  
+**Critical path:** V1.0 → V1.1 → V1.2 → V2.0 → V2.1 → V3.0 → V3.1 → V3.2 → V4.0 → V4.1
 **Timeline:** 18 months Q2 2026 → Q2 2027
+
+> This graph duplicates, in a slightly different shape, the timeline in
+> [ADR-0004](../adr/0004-strategic-features-v1-v5.md#detailed-timeline) (which has the
+> canonical Gantt chart and success criteria) and the version checklist in
+> [ROADMAP.md](../../ROADMAP.md). If you're updating one, check whether the others need the
+> same update — these three documents describing the same 8-feature rollout have not yet been
+> consolidated into one source of truth.
 
 ---
 

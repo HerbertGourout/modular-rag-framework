@@ -13,28 +13,26 @@
 
 ## Guard chain (V1)
 
-```
-Query → BasicSecurityGuard.check_query()
-  ↓ allowed
-Retrieval → [chunks]
-  ↓
-Generation → Answer
-  ↓
-BasicSecurityGuard.check_answer()
-  ↓
-PatternRedactor.redact(answer.text)   [if enabled]
-  ↓
-Final Answer
+```mermaid
+%%{init: {"theme": "base"}}%%
+flowchart LR
+    Q([Query]) --> G1["BasicSecurityGuard.check_query()"]
+    G1 -->|allowed| Ret["Retrieval → chunks"]
+    Ret --> Gen["Generation → Answer"]
+    Gen --> G2["BasicSecurityGuard.check_answer()"]
+    G2 --> Red["PatternRedactor.redact(answer.text)\n[if enabled]"]
+    Red --> Final([Final Answer])
 ```
 
 ## Policy lifecycle (V4)
 
-```
-Git commit (policies/*.yaml)
-  → CI validation (policy linter)
-  → Pipeline loads PolicyEngine(policies)
-  → Every query/agent action evaluated against rules
-  → Violations logged to audit trail + SIEM
+```mermaid
+%%{init: {"theme": "base"}}%%
+flowchart LR
+    Commit["Git commit\n(policies/*.yaml)"] --> CI["CI validation\n(policy linter)"]
+    CI --> Load["Pipeline loads\nPolicyEngine(policies)"]
+    Load --> Eval["Every query/agent action\nevaluated against rules"]
+    Eval --> Log["Violations logged to\naudit trail + SIEM"]
 ```
 
 ## Risk levels
@@ -98,18 +96,15 @@ Patterns are applied in order. A string containing multiple PII types will have 
 
 ## Decision: when to enable security controls
 
-```
-Is this a development or local test environment?
-├── Yes → BasicSecurityGuard is optional; PatternRedactor off by default
-└── No
-    Is data sensitive (internal users, business data)?
-    ├── Yes → Enable BasicSecurityGuard + PatternRedactor
-    │          Set max_query_length = 2000 (tighter limit)
-    └── Is it public-facing or regulated (GDPR, HIPAA, PCI)?
-        └── Yes → Enable all of the above
-                  + AdversarialDetector (V2)
-                  + PolicyEngine with tenant-scoped rules (V4)
-                  + Set require_review for high-risk answers (confidence < 0.7)
+```mermaid
+%%{init: {"theme": "base"}}%%
+flowchart TD
+    Q1{"Is this a development\nor local test environment?"}
+    Q1 -->|Yes| A1["BasicSecurityGuard optional;\nPatternRedactor off by default"]
+    Q1 -->|No| Q2{"Is data sensitive\n(internal users, business data)?"}
+    Q2 -->|Yes| A2["Enable BasicSecurityGuard + PatternRedactor\nSet max_query_length = 2000 (tighter limit)"]
+    Q2 -->|No| Q3{"Public-facing or regulated\n(GDPR, HIPAA, PCI)?"}
+    Q3 -->|Yes| A3["Enable all of the above\n+ AdversarialDetector (V2)\n+ PolicyEngine with tenant-scoped rules (V4)\n+ require_review for high-risk answers (confidence < 0.7)"]
 ```
 
 In the manifest, this maps to:

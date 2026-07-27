@@ -14,20 +14,13 @@ FastAPI application is stateless — it holds no data of its own — so the vect
 (persistent knowledge) and the LLM API (the reasoning step) are the only two components that
 actually need to survive a container restart.
 
-```
-                ┌─────────────────────────────────┐
-                │   Load Balancer / API Gateway    │
-                └───────────────┬─────────────────┘
-                                │
-                ┌───────────────▼─────────────────┐
-                │    FastAPI Application           │
-                │    (modular_rag.api)             │
-                └──┬────────────────────────┬─────┘
-                   │                        │
-        ┌──────────▼──────────┐   ┌────────▼────────────┐
-        │   Qdrant Vector DB  │   │  LLM API             │
-        │   (localhost:6333)  │   │  (OpenAI / Anthropic) │
-        └─────────────────────┘   └──────────────────────┘
+```mermaid
+%%{init: {"theme": "base"}}%%
+flowchart TD
+    LB["Load Balancer / API Gateway"]
+    LB --> API["FastAPI Application\n(modular_rag.api)\nstateless"]
+    API --> Qdrant[("Qdrant Vector DB\n(localhost:6333)\npersistent")]
+    API --> LLM[("LLM API\n(OpenAI / Anthropic)")]
 ```
 
 ## Running the REST API server

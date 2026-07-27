@@ -555,6 +555,30 @@ class CulturalPolicyRouter:
 
 ## Detailed Timeline
 
+```mermaid
+%%{init: {"theme": "base"}}%%
+gantt
+    title Strategic features — V1 to V5 (18-month critical path)
+    dateFormat  YYYY-MM-DD
+    axisFormat  %b %Y
+    section V1 — Core RAG
+    Core RAG (V1.0)             :done, v10, 2026-04-01, 90d
+    Evaluation-as-Contract (V1.1) :v11, after v10, 30d
+    Compliance Audit Trail (V1.2) :v12, after v10, 60d
+    section V2 — Agentic + Governance
+    Policy Engine (V2.0)        :v20, after v12, 90d
+    Multi-Agent Teams (V2.1)    :v21, after v20, 90d
+    section V3 — Graph + Intelligence
+    GraphRAG (V3.0)             :v30, after v21, 90d
+    Cost Optimization (V3.1)    :v31, after v30, 60d
+    Continuous Fine-Tuning (V3.2) :v32, after v30, 90d
+    section V4 — Multi-Language Governance
+    Multi-Tenant Governance (V4.0) :v40, after v32, 60d
+    Multi-Language (V4.1)       :v41, after v40, 120d
+    section V5 — Multimodal
+    Multimodal Intelligence (V5.0) :v50, after v41, 90d
+```
+
 | Phase | Features | Target | Success Criteria |
 |---|---|---|---|
 | **Phase 1 (V1)** | Core RAG + Eval (1.1) + Audit (1.2) | Q2-Q3 2026 | F1>0.85, GDPR report<10s, golden sets ready |
@@ -562,6 +586,12 @@ class CulturalPolicyRouter:
 | **Phase 3 (V3)** | GraphRAG (3.0) + Cost (3.1) + FT (3.2) | Q4 2026-Q1 2027 | Cost reduction>50%, F1+2%/month |
 | **Phase 4 (V4)** | Multi-Lang (4.1) + Governance (4.0) | Q1-Q2 2027 | 20+ languages, regulatory routing |
 | **Phase 5 (V5)** | Multimodal (5.0) | Q2 2027 | VLM integration, image retrieval |
+
+> The Gantt chart's dates are illustrative (anchored to a Q2 2026 start) to render a
+> continuous critical path — treat relative durations and ordering as authoritative, not the
+> literal calendar dates. For the dependency structure between features (which one blocks
+> which), see [feature-integration-plan.md](../guides/feature-integration-plan.md),
+> "Dependency Graph."
 
 ---
 
