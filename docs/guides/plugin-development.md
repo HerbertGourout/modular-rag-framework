@@ -6,6 +6,17 @@ through the `ComponentRegistry` and selected by name in YAML manifests.
 
 ## The pattern (four steps)
 
+```mermaid
+%%{init: {"theme": "base"}}%%
+flowchart LR
+    S1["1. Check or extend\nthe contract"] --> S2["2. Implement\nthe component"]
+    S2 --> S3["3. Register in\n_default_factories.py"]
+    S3 --> S4["4. Use in\na manifest"]
+```
+
+The same recipe, applied to a chunker specifically, is in
+[CONTRIBUTING.md](../../CONTRIBUTING.md), "Adding a new component."
+
 ### 1. Check or extend the contract
 
 Every component type has a `typing.Protocol` in `src/modular_rag/contracts/`.

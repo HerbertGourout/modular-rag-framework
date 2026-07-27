@@ -153,6 +153,15 @@ is not an isolated module: it depends on the one before it, and there is no shor
 can't jump to V3 without V1 working, because V3's knowledge graph builds on the retrieval
 pipeline already built in V1).
 
+```mermaid
+%%{init: {"theme": "base"}}%%
+flowchart LR
+    V1["V1 — Core RAG\nanswer from documents"] -->|"adds multi-step\nreasoning on top of"| V2["V2 — Agentic\nmulti-step questions"]
+    V2 -->|"adds relationships\nbetween facts on top of"| V3["V3 — Graph Memory\nmulti-hop reasoning"]
+    V3 -->|"wraps governance\naround execution of"| V4["V4 — Governance\nregulated, multi-tenant"]
+    V4 -->|"extends ingestion + agents\nto non-text modalities"| V5["V5 — Multimodal\nimages, tables, audio, video"]
+```
+
 ### V1 — Core RAG: answering a question from documents
 
 **The problem solved.** A client has documents (PDFs, Word files, web pages, internal notes)

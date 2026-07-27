@@ -40,6 +40,24 @@ Health check. Returns HTTP 200 when the pipeline is loaded and ready.
 
 Submit a question and receive a grounded answer with citations.
 
+```mermaid
+%%{init: {"theme": "base"}}%%
+sequenceDiagram
+    participant C as Client
+    participant API as FastAPI (/answer)
+    participant E as RAGEngine
+
+    C->>API: POST /answer {question, k}
+    API->>E: engine.answer(question, k)
+    E-->>API: Answer (text + citations + trace_id)
+    API-->>C: 200 AnswerResponse
+    Note over API,C: 403 if SecurityError, 422 if validation fails,<br/>500 on LLM/Qdrant failure
+```
+
+For the full internal breakdown of `engine.answer()` (guard → retrieve → rerank →
+generate → guard → telemetry), see
+[runtime-flow.md](../architecture/runtime-flow.md), "V1 — Simple RAG (query path)."
+
 **Request body**
 
 ```json

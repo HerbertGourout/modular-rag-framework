@@ -17,6 +17,24 @@ a task. This keeps diffs readable and prevents conflicting design decisions.
 
 ## Standard Workflow
 
+```mermaid
+%%{init: {"theme": "base"}}%%
+sequenceDiagram
+    participant H as Human
+    participant CC as Claude Code
+    participant CX as Codex
+
+    H->>CC: 1. Define the goal and risk level
+    CC->>CC: 2. Read CLAUDE.md, implement the smallest safe change
+    CC->>CC: 3. Run /qa-v1 when the local environment is ready
+    CC->>CX: Hand off the diff
+    CX->>CX: 4. Read AGENTS.md, CLAUDE.md, and the Git diff
+    CX->>H: 5. Report review findings (no edits by default)
+    H->>H: 6. Accept or reject findings
+    H->>CC: 7. Chosen writer applies targeted fixes
+    CC->>H: 8. Local checks + docs updated, ready for PR
+```
+
 1. Human defines the goal and risk level.
 2. Claude Code reads `CLAUDE.md` and implements the smallest safe change.
 3. Claude Code runs `/qa-v1` when the local environment is ready.
@@ -24,7 +42,7 @@ a task. This keeps diffs readable and prevents conflicting design decisions.
 5. Codex reviews without editing by default.
 6. Human accepts or rejects findings.
 7. The chosen writer applies targeted fixes.
-8. Local checks and docs are updated before the GitLab MR.
+8. Local checks and docs are updated before the GitHub PR.
 
 ## Provider Responsibilities
 
@@ -238,7 +256,7 @@ Do not rewrite broad docs unless asked.
 
 ## Governance Checklist
 
-Before opening a GitLab MR:
+Before opening a GitHub PR:
 
 - One writer owns the final diff.
 - Codex has reviewed high-risk changes.

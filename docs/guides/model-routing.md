@@ -128,6 +128,16 @@ Ignore style unless it causes a behavior or maintainability defect.
 
 ## Escalation Rules
 
+```mermaid
+%%{init: {"theme": "base"}}%%
+flowchart TD
+    Start["New task"] --> Q1{"Any escalation trigger?\n• >1 domain module touched\n• contracts/, core/models/, or orchestration/ change\n• security/privacy/tenant/policy behavior change\n• migration or ADR required\n• unclear test failure after one pass\n• public API, manifest, or data-flow change\n• reviewer and writer disagree"}
+    Q1 -->|Yes| Premium["Premium tier"]
+    Q1 -->|No| Q2{"Any de-escalation signal?\n• pure docs, no architectural claim\n• mechanical formatting\n• small test fixture update\n• local typo/naming cleanup\n• summarization of existing docs"}
+    Q2 -->|Yes| Small["Small/fast tier"]
+    Q2 -->|No| Mid["Mid tier"]
+```
+
 Escalate from small or mid-tier to premium when any of these are true:
 
 - More than one domain module is touched.
