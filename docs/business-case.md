@@ -14,6 +14,19 @@ This framework is a **proprietary delivery accelerator** developed in-house by P
 
 This framework is proprietary IP that stays with Publicis Sapient at the end of every project, unlike a bespoke LangChain implementation delivered to the client.
 
+```mermaid
+%%{init: {"theme": "base"}}%%
+flowchart LR
+    P1["Client Project 1\nbuilds an adapter,\na manifest, a policy"] -->|"absorbed into"| FW[("Framework\n(shared IP)")]
+    FW -->|"4-8 weeks saved\non setup"| P2["Client Project 2\nstarts from a\nricher base"]
+    P2 -->|"adds its own\nadapter/manifest/policy"| FW
+    FW -->|"even faster\nstart"| P3["Client Project 3\n..."]
+    P3 -->|"compounds\nfurther"| FW
+```
+
+Each delivery makes the next one faster and the asset more valuable — the loop never resets
+to zero the way a client-owned, one-off LangChain build does.
+
 - **Savings per project**: 4 to 8 weeks of setup, security, observability, and governance are no longer rebuilt from scratch.
 - **Margin uplift**: the weeks saved on infrastructure are not lost — they are reallocated to billable business value.
 - **Premium pricing**: a proprietary framework justifies higher day rates than "we use LangChain like everyone else".
