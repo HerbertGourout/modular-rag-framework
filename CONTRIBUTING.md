@@ -103,23 +103,23 @@ Switched to compiled regex with timeout guard.
 Fixes #128
 ```
 
-### Merge Request (MR) Workflow
+### Pull Request (PR) Workflow
 
-#### 1. **Create MR early** (draft if WIP)
+#### 1. **Create PR early** (draft if WIP)
 ```bash
 # Push branch
 git push origin feature/xyz
 
-# Create MR on GitLab (mark as Draft if incomplete)
+# Create PR on GitHub (mark as Draft if incomplete)
 # Title: Clear, descriptive (e.g., "Add BM25 retriever with RRF fusion")
 # Description: Fill the template (see below)
 ```
 
-#### 2. **MR Description Template**
+#### 2. **PR Description Template**
 
 ```markdown
 ## Description
-What does this MR do? (1-2 sentences)
+What does this PR do? (1-2 sentences)
 
 ## Type of change
 - [ ] New feature (addition without breaking change)
@@ -147,7 +147,7 @@ List affected modules:
 Any other context (e.g., dependencies, breaking changes, etc.)
 ```
 
-#### 3. **Validation before MR approval**
+#### 3. **Validation before PR approval**
 
 **Automatic checks (CI/CD):**
 - ✅ Lint (ruff) passes
@@ -164,7 +164,7 @@ Any other context (e.g., dependencies, breaking changes, etc.)
 
 **Approval flow:**
 ```
-Author creates MR
+Author creates PR
     ↓
 Automated CI/CD runs (lint + test + coverage)
     ↓
@@ -188,8 +188,8 @@ Delete branch
 ## Development setup
 
 ```bash
-git clone https://pscode.lioncloud.net/data_specialiste/advancedpublicisrag.git
-cd advancedpublicisrag/modular-rag-framework
+git clone https://github.com/HerbertGourout/modular-rag-framework.git
+cd modular-rag-framework
 python -m venv .venv
 .venv\Scripts\activate        # Windows
 pip install -e .[v1,dev]
@@ -291,7 +291,7 @@ flowchart LR
 
 ---
 
-## Merge Request Checklist
+## Pull Request Checklist
 
 - [ ] Branch created from `main` with correct naming (`feature/...`, `fix/...`, etc.)
 - [ ] Commits are atomic and follow conventional format
@@ -305,4 +305,4 @@ flowchart LR
 - [ ] `docs/architecture/` updated if layering or contracts changed
 - [ ] ADR written if a structural decision was made
 - [ ] `CHANGELOG.md` updated under `[Unreleased]`
-- [ ] MR description filled (use template above)
+- [ ] PR description filled (use template above)

@@ -19,7 +19,7 @@ modular-rag-framework/
 ├── .claude/                      ← Claude Code skills, hooks, and settings
 ├── .codex/                       ← Codex project notes
 ├── AGENTS.md                     ← Codex instructions and reviewer strategy
-├── .gitlab/                      ← GitLab CI/CD templates
+├── .gitlab/                      ← Legacy GitLab CI/CD templates (repo now hosted on GitHub)
 ├── pyproject.toml                ← Python project configuration
 ├── README.md                     ← Pitch, vision, target API
 ├── CLAUDE.md                     ← Instructions for Claude Code
@@ -86,7 +86,7 @@ Architectural instructions for Claude Code. Contains:
 - Common commands (pytest, mrag, uvicorn)
 - The Claude Code workflows exposed by `.claude/skills/`
 - The post-edit-quality hook and the layering audit
-- Info on the private Publicis GitLab repo
+- Info on the GitHub repo
 
 See also [`docs/guides/claude-code.md`](../guides/claude-code.md) for the usage and
 maintenance guide for this configuration.

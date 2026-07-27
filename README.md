@@ -269,7 +269,7 @@ Track progress and milestones:
 6. If you use Claude Code and Codex together, follow
    [`docs/guides/ai-engineering-workflow.md`](docs/guides/ai-engineering-workflow.md)
    and [`docs/guides/model-routing.md`](docs/guides/model-routing.md).
-7. Open a GitLab MR into `main`.
+7. Open a GitHub PR into `main`.
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for coding, testing, and documentation guidelines.
 

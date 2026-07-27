@@ -19,8 +19,8 @@ conflating them makes troubleshooting slower.
 Clone the repository and install in editable mode:
 
 ```bash
-git clone https://pscode.lioncloud.net/data_specialiste/advancedpublicisrag.git
-cd advancedpublicisrag/modular-rag-framework
+git clone https://github.com/HerbertGourout/modular-rag-framework.git
+cd modular-rag-framework
 python -m venv .venv
 
 # Windows

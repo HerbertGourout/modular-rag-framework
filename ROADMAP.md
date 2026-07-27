@@ -35,8 +35,8 @@ architecture, including what isn't built yet), this file reflects the *real* sta
 unchecked box means the feature doesn't reliably exist yet, even if partial code for it
 already lives somewhere under `src/`.
 
-**How this document gets updated**: every Merge Request that delivers a feature listed here
-ticks the matching checkbox in that same MR — this is a step in the checklist described in
+**How this document gets updated**: every Pull Request that delivers a feature listed here
+ticks the matching checkbox in that same PR — this is a step in the checklist described in
 [CONTRIBUTING.md](CONTRIBUTING.md). [CHANGELOG.md](CHANGELOG.md) records the narrative detail
 of each change in parallel. For a non-technical explanation of what each version actually
 delivers, see [docs/onboarding.md](docs/onboarding.md), section 3.
@@ -184,7 +184,7 @@ self-correction loop when the answer isn't well enough supported by evidence.
 **Core agentic modules:**
 - [ ] Adaptive query router (LLM-only / simple / agentic / graph)
 - [ ] Multi-agent runtime: coordinator, planner, retriever agent, extractor, synthesizer, validator
-- [ ] Fix pre-existing layering debt before expanding agents/: `agents/validator/validator.py` imports `generation/validators/groundedness` (domain→domain, flagged in pre-MR architecture review 2026-07-12) — invert via a Protocol in `contracts/` or move the lexical-overlap helper to `core/`
+- [ ] Fix pre-existing layering debt before expanding agents/: `agents/validator/validator.py` imports `generation/validators/groundedness` (domain→domain, flagged in pre-PR architecture review 2026-07-12) — invert via a Protocol in `contracts/` or move the lexical-overlap helper to `core/`
 - [ ] Multi-step agentic workflow with plan → retrieve → synthesize → critique → refine
 - [ ] Agent plan inspection by security guard
 - [ ] Example: `examples/agentic_rag/`
