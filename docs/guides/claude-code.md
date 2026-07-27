@@ -37,7 +37,7 @@ Official references:
 | `/check-layering` | Runs `python scripts/check_layering.py`. | No |
 | `/run-simple-qa` | Runs the bundled example ingest + ask flow. | Qdrant + LLM key |
 
-Use `/qa-v1` before opening a GitLab MR. Use `/run-simple-qa` only when Qdrant is
+Use `/qa-v1` before opening a GitHub PR. Use `/run-simple-qa` only when Qdrant is
 available on `localhost:6333` and the required LLM API key is set.
 
 When pairing Claude Code with Codex, keep Claude Code as the default writer and use

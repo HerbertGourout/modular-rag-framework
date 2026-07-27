@@ -107,7 +107,7 @@ Your configuration is built on **three non-negotiable principles**:
 - **3 domain CLAUDE.md files** — security/, orchestration/, contracts/
 - **Standard commands** — /quick-check, /full-check, /add-component, etc.
 - **Standard validation** — scripts/check.sh (quick/full/integration/e2e/all)
-- **Standard git workflow** — CONTRIBUTING.md (branch naming, commit format, MR process)
+- **Standard git workflow** — CONTRIBUTING.md (branch naming, commit format, PR process)
 - **Standard permissions** — 3-bucket model in settings.json (deny/ask/allow)
 
 **What this means for you**:
@@ -152,7 +152,7 @@ Your security is protected by **7 independent layers**, each with a different co
 ```
 deny  → always blocked, never prompts (.env*, manifests/production/, .claude/rules/, adapters/{llms,auth,graphstores,search}/, benchmarks/)
   ↓
-ask   → prompts every time (contracts/, orchestration/, security/, adapters/{embeddings,vectorstores}/, core/, pyproject.toml, CONTRIBUTING.md, .gitlab-ci.yml)
+ask   → prompts every time (contracts/, orchestration/, security/, adapters/{embeddings,vectorstores}/, core/, pyproject.toml, CONTRIBUTING.md, .gitlab-ci.yml, .github/workflows/)
   ↓
 allow → auto-approved, no prompt (tests/, examples/, docs/, ingestion/, retrieval/, generation/, eval/, memory/)
 ```
@@ -257,7 +257,7 @@ src/modular_rag/
 **What it does**: Every external MCP integration reviewed before deployment.
 
 **Process**:
-1. Request MCP (GitLab issue)
+1. Request MCP (GitHub issue)
 2. Security review (7-point checklist)
 3. Scope definition (governance bookkeeping — see correction in mcp-integrations.md)
 4. Add the server to a project-root **`.mcp.json`** (not `.claude/settings.json` — `mcpServers` is not a recognized `settings.json` key); restrict its tools via `permissions.allow`/`ask`/`deny` in `settings.json` if needed
@@ -284,7 +284,7 @@ src/modular_rag/
 
 **Tracked**:
 - Git history (commits, MRs)
-- MR/PR approvals (approval chain)
+- PR approvals (approval chain)
 - Configuration versions (.claude/.instructions.md, settings.json, etc.)
 - Session logs (Claude Code usage)
 - CI/CD artifacts (lint, test, coverage)
@@ -293,7 +293,7 @@ src/modular_rag/
 - Git history: Indefinite
 - CI/CD logs: 90 days
 - Session logs: 30 days
-- MR approvals: Indefinite
+- PR approvals: Indefinite
 
 **Why it matters**: Complete audit trail for compliance and debugging
 
@@ -391,17 +391,17 @@ e2e          # Full pipeline (needs LLM API)
 all          # All checks (10 min)
 ```
 
-**CI/CD** (`.gitlab-ci.yml`):
+**CI/CD** (`.github/workflows/ci.yml`):
 ```yaml
-lint:       # ruff check (E,F,I,N,W,UP,B,C4) + mypy
-test:unit:  # pytest tests/unit/
-test:contract: # pytest tests/contract/
-coverage:   # pytest with coverage report
+lint:          # ruff check (E,F,I,N,W,UP,B,C4) + mypy
+test-unit:     # pytest tests/unit/
+test-contract: # pytest tests/contract/
+coverage:      # pytest with coverage report
 ```
 
 **Key insight**: Local `./scripts/check.sh full` ≈ CI/CD pipeline. Developers can validate before pushing.
 
-**Configuration**: `.gitlab-ci.yml` + `scripts/check.sh`
+**Configuration**: `.github/workflows/ci.yml` + `scripts/check.sh` (the legacy `.gitlab-ci.yml` mirrors the same jobs but is no longer the active pipeline)
 
 ---
 
@@ -421,9 +421,9 @@ coverage:   # pytest with coverage report
 | **.claude/rules/*.md** | Domain-specific rules | ✅ Path-scoped (`paths:` frontmatter) or always-on if no `paths:` — see Mechanism 2 above | Domain owners |
 | **.env.example** | Template environment vars | ❌ Read by developers, not by Claude Code | Any developer |
 | **.gitignore** | Git exclusions (documented) | ❌ Read by git, not by Claude Code | Any developer |
-| **CONTRIBUTING.md** | Git workflow + MR process | ❌ Reference only | Architecture team |
+| **CONTRIBUTING.md** | Git workflow + PR process | ❌ Reference only | Architecture team |
 | **scripts/check.sh** | Validation script | ❌ Executed via Bash when a skill or developer calls it | Architecture team |
-| **.gitlab-ci.yml** | CI/CD pipeline | ❌ Read by GitLab CI, not by Claude Code | DevOps/Architecture |
+| **.github/workflows/ci.yml** | CI/CD pipeline | ❌ Read by GitHub Actions, not by Claude Code | DevOps/Architecture |
 
 ### Documentation Files
 
@@ -625,13 +625,13 @@ Team:    ✅ Approved. Proceed.
 
 ### Step 6️⃣: DELIVER (Readable Commit or PR)
 
-**Goal**: Create clear commit/MR that others can understand and review.
+**Goal**: Create clear commit/PR that others can understand and review.
 
 **Actions**:
 - Create feature branch (feature/xyz)
 - Atomic commits with clear messages (conventional format)
-- Push to GitLab
-- Create MR with template filled
+- Push to GitHub
+- Create PR with template filled
 - Request review
 
 **Time**: 10-15 min
@@ -659,7 +659,7 @@ Fixes #42
 
 git push origin feature/bm25-retriever
 
-# Create MR on GitLab with template
+# Create PR on GitHub with template
 ```
 
 ---
@@ -670,7 +670,7 @@ git push origin feature/bm25-retriever
 
 **Daily Commands** (use frequently):
 - `/quick-check` — After code edits
-- `/full-check` — Before MR
+- `/full-check` — Before PR
 - `/validate-security` — For security-sensitive code
 
 **Development Commands** (use when starting new work):
@@ -718,7 +718,7 @@ Fix: Add import from modular_rag.core.models import Document
 - ✅ Contract conformance tests (tests/contract/)
 - ✅ Code coverage
 
-**When to use**: Before pushing MR
+**When to use**: Before pushing PR
 
 **Output**:
 ```
@@ -938,16 +938,16 @@ Week 4: 92% ✅ → Maintain
 ---
 
 #### 6. Code Review Time
-**Definition**: Average time from MR creation to approval
+**Definition**: Average time from PR creation to approval
 
 **Target**: -20% vs baseline (reduce from ~6h to ~5h)
 
 **How to track**:
 ```
-Track MR times in GitLab:
-- MR 1: Created Jun 20 10am, Approved Jun 20 4pm = 6 hours
-- MR 2: Created Jun 21 9am, Approved Jun 21 2pm = 5 hours
-- MR 3: Created Jun 22 10am, Approved Jun 22 3:30pm = 5.5 hours
+Track PR times in GitHub:
+- PR 1: Created Jun 20 10am, Approved Jun 20 4pm = 6 hours
+- PR 2: Created Jun 21 9am, Approved Jun 21 2pm = 5 hours
+- PR 3: Created Jun 22 10am, Approved Jun 22 3:30pm = 5.5 hours
 
 Average: 5.5 hours ✅ (vs 6h baseline)
 Improvement: 8.3% (target: 20%)
@@ -1125,7 +1125,7 @@ Result: Production-ready HybridRetriever in ~2 hours
 ```bash
 # Daily validation
 ./scripts/check.sh quick        # 30 sec → after edits
-./scripts/check.sh full         # 3 min → before MR
+./scripts/check.sh full         # 3 min → before PR
 ./scripts/check.sh all          # 10 min → pre-release
 
 # Claude commands (in chat)
@@ -1140,7 +1140,7 @@ git checkout -b feature/xyz     # Branch naming
 git add -A
 git commit -m "feat: description"  # Conventional format
 git push origin feature/xyz
-# Create MR on GitLab
+# Create PR on GitHub
 ```
 
 ### File Locations Cheat Sheet
@@ -1248,17 +1248,17 @@ In Slack or issue comment:
 ### I Found a Bug or Have an Idea
 
 **Report bug**:
-1. Create GitLab issue with details
+1. Create GitHub issue with details
 2. Tag: `@claude-code`, `bug`
 3. Include: Error message, steps to reproduce, expected vs actual
 
 **Suggest improvement**:
-1. Create GitLab issue with proposal
+1. Create GitHub issue with proposal
 2. Tag: `@claude-code`, `enhancement`
 3. Include: Problem statement, proposed solution, rationale
 
 **Feedback on these docs**:
-1. Create GitLab issue or comment on this file
+1. Create GitHub issue or comment on this file
 2. Be specific: What was confusing? What's missing?
 3. We improve based on team feedback
 
@@ -1285,6 +1285,6 @@ In Slack or issue comment:
 
 ---
 
-**Questions?** Slack: #dev-help | GitLab: @architecture | Docs: Read before asking
+**Questions?** Slack: #dev-help | GitHub: @architecture | Docs: Read before asking
 
 **Last Updated**: June 20, 2026 ✅

@@ -266,7 +266,7 @@ def test_retriever_latency(retriever, large_corpus):
 
 - **Tests**: `tests/unit/`, `tests/contract/`, `tests/integration/`, `tests/e2e/`
 - **Rules**: `.claude/rules/tests.md` (test conventions)
-- **CI/CD**: `.gitlab-ci.yml` (test stages)
+- **CI/CD**: `.github/workflows/ci.yml` (test jobs)
 - **Coverage**: Coverage reports in CI/CD output
 
 ## Success Criteria

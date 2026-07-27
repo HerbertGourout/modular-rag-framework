@@ -136,46 +136,48 @@ pytest tests/e2e/ -v -m e2e
 ./scripts/check.sh all      # Pre-release
 ```
 
-#### CI/CD: .gitlab-ci.yml (future alignment)
+#### CI/CD: `.github/workflows/ci.yml`
+
+The `lint`, `test-unit`, and `test-contract` jobs are wired into the real workflow today.
+`integration` below is illustrative — not yet wired in, since it needs a live Qdrant service:
 ```yaml
-stages:
-  - validate:quick
-  - validate:full
-  - validate:integration
-  - validate:e2e
+jobs:
+  lint:
+    steps:
+      - run: ./scripts/check.sh quick
+    timeout-minutes: 1
 
-quick:lint:
-  stage: validate:quick
-  script: ./scripts/check.sh quick
-  timeout: 1m
+  test-unit:
+    steps:
+      - run: pytest tests/unit/ -v
+    timeout-minutes: 5
 
-full:unit:
-  stage: validate:full
-  script: pytest tests/unit/ -v
-  timeout: 5m
+  test-contract:
+    steps:
+      - run: pytest tests/contract/ -v
+    timeout-minutes: 5
 
-full:contract:
-  stage: validate:full
-  script: pytest tests/contract/ -v
-  timeout: 5m
+  integration:  # not yet wired into CI
+    services:
+      qdrant:
+        image: qdrant/qdrant:latest
+        ports: ["6333:6333"]
+    steps:
+      - run: ./scripts/check.sh integration
+    timeout-minutes: 5
+    continue-on-error: true  # optional with live services
 
-integration:
-  stage: validate:integration
-  script: ./scripts/check.sh integration
-  services:
-    - qdrant:latest
-  timeout: 5m
-  allow_failure: true  # Optional with services
-
-e2e:
-  stage: validate:e2e
-  script: ./scripts/check.sh e2e
-  services:
-    - qdrant:latest
-  variables:
-    MRAG_OPENAI_API_KEY: $CI_OPENAI_KEY  # via CI/CD secret
-  timeout: 10m
-  allow_failure: true  # Optional, requires API key
+  e2e:  # not yet wired into CI
+    services:
+      qdrant:
+        image: qdrant/qdrant:latest
+        ports: ["6333:6333"]
+    env:
+      MRAG_OPENAI_API_KEY: ${{ secrets.MRAG_OPENAI_API_KEY }}
+    steps:
+      - run: ./scripts/check.sh e2e
+    timeout-minutes: 10
+    continue-on-error: true  # optional, requires API key
 ```
 
 ### Alignment checklist

@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e .[dev] || pip install -e .
+      - name: Lint with ruff (syntax, imports, naming)
+        run: ruff check src/modular_rag/ tests/ --select E,F,I,N,W,UP,B,C4 --output-format=concise
+      - name: Type check with mypy (warnings only, not blocking)
+        run: mypy src/modular_rag/ --no-error-summary || true
+
+  test-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e .[dev] || pip install -e .
+      - name: Run unit tests (no external services)
+        run: pytest tests/unit/ -v --tb=short
+
+  test-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e .[dev] || pip install -e .
+      - name: Run contract conformance tests
+        run: pytest tests/contract/ -v --tb=short
+
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [test-unit, test-contract]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e .[dev] || pip install -e .
+      - name: Run all tests with coverage
+        run: pytest tests/unit/ tests/contract/ --cov=src/modular_rag --cov-report=term-missing --cov-report=xml -v
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage.xml

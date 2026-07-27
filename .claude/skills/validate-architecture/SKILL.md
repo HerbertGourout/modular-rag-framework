@@ -20,7 +20,7 @@ Comprehensive workflow for validating architecture compliance, import rules, and
 - When adding components to multiple layers
 - When refactoring or restructuring code
 - When investigating import errors
-- Before creating merge request
+- Before creating a pull request
 
 ## Validation Checklist
 

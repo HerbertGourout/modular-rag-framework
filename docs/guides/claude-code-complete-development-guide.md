@@ -492,9 +492,9 @@ Adds:
 - tests/unit/adapters/search/test_bm25_retriever.py (80 lines)
 - tests/contract/test_bm25_retriever_conformance.py (40 lines)"
 
-# 3. Push and create MR
+# 3. Push and create PR
 git push origin feature/bm25-retriever
-# Open GitLab MR with checklist from CONTRIBUTING.md
+# Open GitHub PR with checklist from CONTRIBUTING.md
 ```
 
 #### Step 5.3: Address Review Feedback
