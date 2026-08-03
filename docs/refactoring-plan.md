@@ -236,6 +236,8 @@ and tested v1-to-v2 migration.
 **Lot 10:** Define separate versioned trace and compliance-audit events, correlation/causation,
 failure events, timing semantics, PII allowlists, retention metadata, and sink contracts. Provide
 in-memory test sinks before vendor integrations. Remove duplicate or ambiguous timing steps.
+Persist the audit event store in **PostgreSQL** (append-only table, not mutated in place) —
+resolves the previously undefined storage backend for the V1.2 compliance audit trail.
 
 ### Phase C — Enterprise correctness (Lots 11a-14)
 
@@ -246,6 +248,8 @@ yet. Blocks 11b, since identity/tenant propagation needs the classification to e
 **Lot 11b:** Propagate authenticated identity and tenant through `ExecutionContext`; enforce
 fail-closed policy before indexing, retrieval, and generation. Test cross-tenant and
 policy-engine failure paths (deny-by-default on policy-engine error, not allow-by-default).
+Target identity provider: **Keycloak** (OIDC) — resolves the previously open question on which
+auth adapter and claims mapping to build against.
 
 **Lot 11c:** Apply configured redaction before storage, logging, and external calls; emit audit
 evidence for every governed execution; support human review for high-risk outcomes. Depends on
@@ -253,7 +257,8 @@ evidence for every governed execution; support human review for high-risk outcom
 
 **Lot 12a:** Define document identity, idempotent ingestion, update, deletion, and tombstone
 semantics. This is the domain-level lifecycle contract, independent of any specific index
-implementation.
+implementation. The lifecycle/idempotency ledger itself is backed by **PostgreSQL**, consistent
+with Lot 10's audit-store choice.
 
 **Lot 12b:** Define index schema/version; make vector/lexical writes atomic or reconcilable;
 implement the reconciliation job that detects and repairs BM25/vector divergence. Separate
@@ -418,7 +423,6 @@ record dataset version, engine/model version, configuration, environment, and co
 |---|---|---|
 | Current external consumers of Python/API/CLI/manifests | Compatibility window cannot be finalized | Lot 0/4 owner inventory |
 | First external engine and pilot use case | Contract details and adapter scope remain provisional | Lot 6 ADR |
-| Target identity provider and authorization claims | Auth adapter and context mapping cannot be finalized | Before Lot 11b |
 | Target deployment platform and topology | Container, readiness, scaling, and rollback details remain open | Before Lot 16c |
 | Audit retention, immutability, residency, and legal requirements | Sink and schema policy remain provisional | Before Lot 10 acceptance |
 | SLOs, throughput, corpus scale, and cost budgets | Performance gates cannot be set | Before Lot 13/14 blocking gates |
@@ -428,6 +432,11 @@ record dataset version, engine/model version, configuration, environment, and co
 | Integration/e2e behavior | Requires confirmed Qdrant, engine services, credentials, and datasets | Lots 15-18 |
 | Full semantic content of all 56 PDFs | Inventoried/digested, not page-validated | Evidence-catalogue review in Lot 17 |
 | Delivery-pipeline assumption behind the business case | The 4-7 month programme cost (§4) is only justified if the assumed client-project volume is real | Confirm with delivery ownership before Lot 6 |
+
+Technology choices for specific lots that are candidates but **not yet committed** (pending
+ADR-0005 sign-off and/or the deployment-topology decision above) are tracked separately in
+[docs/refactoring/technology-candidates.md](refactoring/technology-candidates.md), not in this
+table — that file is a parking lot, not part of the approved plan.
 
 ### Analysis coverage notes
 
@@ -465,6 +474,7 @@ scope change, or an approved architecture decision — never as a silent in-plac
 | 2026-08-03 | Recorded Lot 0 baseline, decision authority, and evidence locations | COMPLETE |
 | 2026-08-03 | Drafted ADR-0005 (product boundary, capability ownership, native-adapter exit criteria) | PROPOSED — awaiting 4-person team sign-off |
 | 2026-08-03 | Added per-lot effort sizing and total-programme estimate; split Lots 11/12/16 into lettered sub-lots | COMPLETE |
+| 2026-08-03 | Selected Keycloak (Lot 11b identity provider) and PostgreSQL (Lot 10 audit store, Lot 12a lifecycle ledger) from an infra-stack compatibility review | COMPLETE |
 | Pending | Select the first external engine | Lot 6 |
 | Pending | Approve ADR-0005 and named lot owners | Lots 0-1 |
 | Pending | Decide final product/package name | Non-blocking |
@@ -478,3 +488,4 @@ scope change, or an approved architecture decision — never as a silent in-plac
 | 2026-08-03 | Lot 1 drafted: ADR-0005 created, status Proposed |
 | 2026-08-03 | Added per-lot effort sizing and a total-programme estimate; split Lots 11, 12, 16 into lettered sub-lots |
 | 2026-08-03 | Rewritten as a single final, consolidated plan: findings restated as current-state gaps rather than a comparison between prior drafts |
+| 2026-08-03 | Committed Keycloak (Lot 11b) and PostgreSQL (Lot 10, 12a) as the only two technology choices from an infra-stack review resolved now; resolved identity-provider open question; parked everything else in `docs/refactoring/technology-candidates.md` |
