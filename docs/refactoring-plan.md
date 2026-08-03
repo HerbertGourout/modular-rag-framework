@@ -1,233 +1,117 @@
-# Definitive Repository Refactoring Plan and Progress Tracker
+# Refactoring Plan — Engine-Agnostic Control Plane
 
-> **Document status:** Consolidated after the second contradictory audit; Lot 0 complete, Lot 1
-> (ADR-0005) drafted and awaiting team sign-off; Lots 11/12/16 subsequently split and sized for
-> a 4-person team (see §9). No implementation lot has started.  
-> **Last audit:** 2026-08-03  
-> **Target outcome:** Deploy compliant, measurable document-AI solutions faster,
-> independently of the underlying execution engine.  
-> **Migration principle:** Incremental, evidence-based, reversible, and releasable after
-> every accepted lot.
+> **Status:** Lot 0 complete; Lot 1 (product-boundary ADR) drafted, pending sign-off from all
+> 4 team members.
+> **Target outcome:** Deploy compliant, measurable document-AI solutions faster, independently
+> of the underlying execution engine.
+> **Migration principle:** Incremental, evidence-based, reversible, and releasable after every
+> accepted lot.
+> **Governing decision:** [ADR-0005](adr/0005-document-ai-control-plane-boundary.md) — product
+> boundary, owned vs. delegated capabilities, native-adapter exit criteria.
 
-This document supersedes the first version of the refactoring plan while retaining its
-validated decisions. It is the execution and progress-tracking source of truth. It does not
-replace the product roadmap, ADRs, release notes, or operational runbooks.
+This document is the execution and progress-tracking source of truth for the refactoring
+programme. It does not replace the product roadmap, ADRs, release notes, or operational
+runbooks. Baseline snapshot, decision authority, per-lot ownership, and the rules for changing
+this plan live in [docs/refactoring/lot-0-baseline.md](refactoring/lot-0-baseline.md).
 
-The plan may change only after a blocking discovery, a material scope change, or an approved
-architecture decision. Counts and repository observations below are a dated audit snapshot,
-not permanent acceptance criteria.
+Status values used throughout are `NOT STARTED`, `IN PROGRESS`, `BLOCKED`, `COMPLETE`, and
+`CANCELLED`. A lot is `COMPLETE` only when every acceptance-evidence item in §6 is linked.
 
-Status values used throughout the tracker are `NOT STARTED`, `IN PROGRESS`, `BLOCKED`,
-`COMPLETE`, and `CANCELLED`. A lot is `COMPLETE` only when all acceptance evidence is linked.
+---
 
-## 1. Executive summary of the second analysis
+## 1. Product boundary and target architecture
 
-The first plan chose the correct product direction: this package should be an enterprise
-document-AI delivery and control plane, not another general-purpose orchestration framework.
-It should own governance, measurement, normalized evidence, configuration, auditability, and
-engine portability while delegating generic agent runtimes, GraphRAG, multimodal execution,
-and workflow engines to specialized products. The native V1 implementation remains useful as
-a reference adapter, subject to explicit maintenance and exit criteria.
+### 1.1 Owned vs. delegated
 
-The second repository audit found that the first plan was strategically sound but not yet safe
-to execute unchanged. It placed CI hardening, telemetry schemas, and Claude configuration too
-late; did not fully cover data lifecycle, resilience, concurrency, metric correctness, public
-compatibility, supply-chain risk, or operational ownership; and proposed a baseline Git tag and
-possible PDF history migration without sufficient authorization and rollback constraints.
+The package owns engine-independent solution manifests, execution context, policy enforcement,
+tenant isolation, redaction boundaries, provenance, audit schemas, quality profiles, regression
+gates, cost/latency evidence, engine capability discovery, and normalized results/errors.
 
-The revised order therefore:
+It delegates generic orchestration, durable workflows, generic GraphRAG and agent memory,
+universal connector catalogues, multimodal model execution, and fine-tuning platform mechanics
+to a selected external engine. A delegated capability may be exposed through an adapter; it must
+not be reimplemented in core without an approved ADR showing why an adapter cannot meet the
+product outcome. Full rationale, capability tables, non-goals, and native-adapter exit criteria:
+[ADR-0005](adr/0005-document-ai-control-plane-boundary.md).
 
-1. records ownership, scope, compatibility surfaces, and a reproducible baseline;
-2. realigns Claude instructions before they steer implementation toward the obsolete V1-to-V5
-   framework roadmap;
-3. characterizes current behavior and corrects capability claims;
-4. validates the proposed engine boundary with an early, isolated engine-fit spike;
-5. establishes contracts, configuration, audit, governance, data lifecycle, quality, and
-   reliability foundations;
-6. proves portability with one external engine before retiring competing prototypes;
-7. closes with hardened interfaces, release evidence, and a representative pilot.
+### 1.2 Target architecture
 
-No production refactoring lot has started. Static compilation and strict layering checks pass;
-dynamic tests remain unverified because the audited environment has no project virtual
-environment and its available Python installation lacks the declared test tools.
+```mermaid
+flowchart TB
+    Interfaces["API / CLI / SDK"] --> Service["Document AI Solution Service"]
+    Service --> Control["Control Plane"]
+    Control --> Governance["Governance and audit"]
+    Control --> Quality["Quality and cost"]
+    Control --> Engine["DocumentEngine port"]
+    Engine --> Native["Native V1 adapter"]
+    Engine --> External["Selected external adapter"]
+    Control --> Infra["Secret / telemetry / audit adapters"]
+```
 
-## 2. Global evaluation of the first document
+Dependency direction is `interfaces -> service/control plane -> contracts/core`; infrastructure
+and engines implement contracts and never leak vendor types across the public boundary. Existing
+fine-grained component protocols (`Chunker`, `Retriever`, `Generator`, ...) remain native-adapter
+internals, not the cross-engine abstraction.
 
-| Dimension | Evaluation | Conclusion |
-|---|---|---|
-| Product direction | Strong | Retain without changing the agreed outcome |
-| Repository grounding | Good but incomplete | Retain findings and add omitted operational/data risks |
-| Architecture target | Sound at high level | Validate with compatibility inventory and engine-fit spike |
-| Execution order | Unsafe in places | Replace with the order in sections 9-12 |
-| Acceptance criteria | Uneven | Make evidence, owners, rollback, and compatibility explicit |
-| Test strategy | Broad but insufficiently semantic | Add metric, failure, concurrency, migration, and data tests |
-| Migration safety | Partial | Separate reversible code migration from data/history operations |
-| Progress tracking | Useful | Retain, with status and evidence per lot |
+### 1.3 Compatibility classes
 
-Overall verdict: **retain and substantially revise**, not restart from zero. The original 16
-lots are mapped to the revised programme in section 7.
+Every change must classify its impact on: Python imports and callable signatures; REST paths and
+schemas; CLI commands and exit codes; manifest schema; persisted vector/lexical data; trace and
+audit schemas; deployment configuration; and documented behavior. Compatibility is not promised
+until Lot 4 records the current surface and Lot 7 publishes a versioning/deprecation policy.
 
-## 3. Elements correctly covered
+### 1.4 Programme invariants
 
-The following conclusions from the first plan are validated by repository evidence:
+- The repository remains installable and the accepted offline suite passes after every lot.
+- No planned capability is described as delivered.
+- Governance and evaluation profiles are engine-neutral.
+- Production authorization failures are fail closed.
+- Raw secrets and unapproved sensitive content are absent from logs, traces, and audit events.
+- Destructive data or Git-history operations require separate approval and verified recovery.
+- File moves preserve compatibility facades until deprecation criteria are met.
+- Scientific sources inform explicit hypotheses; repository measurements decide acceptance.
 
-- The package must not compete directly with LangGraph, LlamaIndex, or Haystack.
-- Engine-independent governance and measurement are the durable product boundary.
-- Existing component-level protocols are suitable as native-engine internals, not as the
-  cross-engine business abstraction.
-- `RAGEngine` should first be preserved behind a native `DocumentEngine` adapter.
-- API, CLI, and examples must stop reading private container state.
-- Manifest schemas require explicit versioning, migration, capability validation, and secret
-  handling.
-- Tenant, evaluation, telemetry, redaction, and policy declarations are not currently wired
-  into an end-to-end enforced product guarantee.
-- A single external-engine pilot is preferable to integrating three engines concurrently.
-- Generic agent, graph-memory, and future-version prototypes require usage and compatibility
-  analysis before retention or retirement.
-- Research papers are valuable as decision evidence and evaluation inputs, not as an automatic
-  feature backlog.
-- Claims of stability, production readiness, security, and compliance must be backed by
-  executable evidence.
-- Characterization, conformance, migration, security, packaging, and business-regression tests
-  are necessary before release.
+---
 
-## 4. Incomplete or incorrect elements
+## 2. Current repository state and known gaps
 
-| Initial element | Problem found | Required correction |
-|---|---|---|
-| Create a baseline Git tag | Tag creation changes shared history and assumes authorization | Record the baseline commit SHA and evidence first; tag only after explicit release approval |
-| CI gates near programme end | Allows drift during the highest-risk phases | Establish offline CI in Lot 3 and ratchet gates continuously |
-| Claude cleanup near programme end | Current instructions and permissions actively steer obsolete scope and deny future adapter paths | Add a narrow interim realignment in Lot 2; perform full consolidation in Lot 17 |
-| Engine contracts before selection work | Risks designing an unvalidated lowest-common-denominator abstraction | Run a time-boxed, non-production engine-fit spike before freezing contracts |
-| Governance before audit foundation | Enforcement cannot produce stable compliance evidence without event semantics | Define versioned audit/trace schemas and sinks before the governed vertical slice |
-| Quality gates | Existing evaluator semantics were assumed usable | Correct metric names, formulas, identities, failure handling, and dataset rules first |
-| Deployment rollback | Covered binaries but not persisted index or audit compatibility | Add versioned index, replay, backup, restore, and forward/backward compatibility rules |
-| Research PDF migration | Could imply destructive Git history rewriting | Do not rewrite history in this programme; treat historical purge as separate approval |
-| Prototype retirement | Lacked a cost ceiling for keeping native V1 | Add ownership, support window, and explicit native-adapter exit criteria |
-| Progressive mypy | Too vague to enforce | Capture a baseline, forbid new errors, then reduce a recorded budget per lot |
+Findings below are tracked against the target in §1. Severity is one of `BLOCKING`, `CRITICAL`,
+`IMPORTANT`, `IMPROVEMENT`, or `OPTIONAL`. Every row names the lot that resolves it.
 
-## 5. Newly discovered repository elements
+| Area | Current gap | Severity | Resolved by |
+|---|---|---|---|
+| Product boundary | `CLAUDE.md`/`.claude/` instructions still encode the pre-ADR-0005 V1→V5 native-build roadmap | BLOCKING (scope drift) | Lot 2 |
+| Dynamic baseline | No reproducible test environment; declared test tools unavailable in the current one | BLOCKING (unsafe refactor) | Lot 3 |
+| Public compatibility | Multiple undocumented surfaces; API/CLI/examples read private container state | CRITICAL | Lot 4 |
+| Tenant isolation | Tenant is descriptive metadata, not an enforced storage filter | CRITICAL | Lot 11b |
+| Data deletion/update | Vector-store deletion is not mirrored in the mutable in-memory BM25 index; no idempotency/tombstone contract | CRITICAL | Lot 12a, 12b |
+| Audit semantics | No stable event schema or sink; compliance evidence cannot be guaranteed | CRITICAL | Lot 10 |
+| Metric correctness | `ExactMatchEvaluator` behaves like token-set F1, not exact match; answer precision/recall written into retrieval-named fields | CRITICAL | Lot 13 |
+| API security | No auth, rate limits, or request-size limits; internal exception strings and source content can leak to callers | CRITICAL | Lot 16a |
+| Manifest configuration | Component config accepts arbitrary dicts; no extra-field policy, precedence, interpolation, or secret-reference resolution | CRITICAL | Lot 9 |
+| Engine abstraction | Not yet validated against an external engine; risk of designing an unvalidated lowest-common-denominator port | IMPORTANT | Lot 6, 7 |
+| Resilience | External LLM/embedding/vector calls lack uniform timeout, retry, cancellation, and overload semantics | IMPORTANT | Lot 14 |
+| Concurrency | Sync work callable from async surfaces; mutable in-memory state has no documented concurrency guarantee | IMPORTANT | Lot 14 |
+| Trace semantics | Generation trace steps can overlap; failed executions may not persist complete evidence | IMPORTANT | Lot 10 |
+| Index migration | No index schema/version, rebuild, backup, or restore protocol | CRITICAL | Lot 12b, 12c |
+| Dependency reproducibility | No dependency lock/constraints; CI/declared-tooling mismatch | IMPORTANT | Lot 3 |
+| Versioning | Package version duplicated across files | IMPORTANT | Lot 16b |
+| Prototype retirement | Unknown external consumers of generic agents, graph memory, and other future-version stubs | IMPORTANT | Lot 17 |
+| Research assets | 56 research PDFs carry repository-size and redistribution/licensing risk | IMPORTANT | Lot 16b, 17 |
+| Ownership | Acceptance owners were undefined | IMPORTANT | Lot 0 (recorded, see `lot-0-baseline.md`) |
+| Documentation/sales claims | Delivered vs. planned behavior is mixed in docs and business-case material — e.g. multi-tenant isolation and audit-trail claims currently outrun what §1's gaps above actually enforce | CRITICAL | Lot 5 |
 
-### 5.1 Configuration and development agents
+---
 
-`CLAUDE.md`, `.claude/.instructions.md`, `.claude/.prompt.md`, `.claude/settings.json`,
-path rules, agents, skills, hooks, and module-level Claude files form an active implementation
-control system. They still encode the original sequential V1-to-V5 framework roadmap. Some
-permissions deny changes under adapter and benchmark paths needed by the new target. They must
-be aligned before implementation. `.claude/settings.local.json` is personal and remains
-untouched and untracked.
-
-### 5.2 Data lifecycle and index correctness
-
-- Vector-store deletion is not mirrored reliably in the mutable in-memory BM25 index.
-- Repeated ingestion, update semantics, idempotency, tombstones, and right-to-erasure are not
-  defined.
-- Embeddings are stored inside mutable chunk models, coupling domain data to an index strategy.
-- There is no index schema/version, rebuild, backup, restore, or migration protocol.
-- Free-form metadata has no classification or tenant/PII schema.
-
-### 5.3 Reliability, concurrency, and lifecycle
-
-- External LLM, embedding, and vector calls lack uniform timeout, retry, cancellation,
-  circuit-breaker, and overload semantics.
-- Startup and shutdown hooks do not own client/resource closure.
-- Async surfaces can call blocking implementations.
-- Mutable in-memory retrieval state and lazy model/client initialization lack documented
-  concurrency guarantees.
-- Broad exception handling silently degrades hybrid retrieval and can convert benchmark
-  failures into apparently valid empty metrics.
-
-### 5.4 Evaluation and trace correctness
-
-- `ExactMatchEvaluator` behaves like token-set F1 rather than exact match.
-- Answer precision/recall are written into retrieval-named fields.
-- Token sets discard frequency, and benchmark identity/failure semantics are ambiguous.
-- Generation trace steps can represent overlapping timings; retrieval timing and answer-guard
-  decisions are not consistently represented; failed executions may not persist complete
-  evidence.
-
-### 5.5 API, configuration, and compatibility
-
-- The documented FastAPI factory command cannot supply the required manifest argument.
-- Internal exception strings can be returned to callers.
-- Authentication, rate limits, request-size limits, tenant identity, and readiness semantics
-  are absent; retrieval responses expose source content without an authorization boundary.
-- Component configuration accepts arbitrary dictionaries and manifest extra-field policy,
-  environment precedence, interpolation, secret resolution, and compatibility policy are not
-  defined.
-- Package version is duplicated; public Python, REST, CLI, manifest, persisted-index, and audit
-  schema compatibility guarantees are not inventoried.
-
-### 5.6 Supply chain, legal, testing, and ownership
-
-- Reproducible dependency resolution, SBOM, vulnerability policy, third-party/model licence
-  review, and update policy are missing.
-- The 56 research PDFs are both a repository-size and redistribution/licensing concern.
-- Major app, orchestration, API, CLI, policy, telemetry, benchmark, lifecycle, and storage
-  behavior lacks direct tests.
-- There is no explicit CODEOWNERS/RACI mapping, threat model, data-classification policy,
-  support matrix, or owner for acceptance evidence.
-
-## 6. Gap matrix
-
-Severity is one of `BLOCKING`, `CRITICAL`, `IMPORTANT`, `IMPROVEMENT`, or `OPTIONAL`.
-
-| Analysed element | First plan | Repository state | Gap | Severity/impact | Correction |
-|---|---|---|---|---|---|
-| Product boundary | Defined | Old roadmap still dominates instructions | Strategy and implementation control conflict | BLOCKING: scope drift | ADR plus Claude interim realignment |
-| Dynamic baseline | Planned | Not executable in audited environment | Current behavior unproven | BLOCKING: unsafe refactor | Reproducible Python 3.11 environment and CI evidence |
-| Public compatibility | Implicit | Multiple undocumented surfaces and private access | Breakage cannot be measured | CRITICAL | Inventory and characterize every surface |
-| Tenant isolation | Planned | Tenant is descriptive, not a storage filter | Cross-tenant exposure | CRITICAL | Authenticated context plus fail-closed index/retrieval enforcement |
-| Data deletion/update | Missing | Vector/BM25 state can diverge | Stale or undeletable data | CRITICAL | Document lifecycle contract and atomic/reconcilable indexing |
-| Audit semantics | Planned after governance | No stable event schema/sink | Compliance evidence cannot be guaranteed | CRITICAL | Move audit foundation before governance |
-| Metric correctness | Assumed | Names and calculations are inconsistent | False release decisions | CRITICAL | Version metric definitions and test reference cases |
-| API security | Partial | No auth/rate limit; exception and content exposure | Data leakage/abuse | CRITICAL | Threat model, typed safe errors, auth and limits |
-| Manifest configuration | Planned | Arbitrary config and unresolved placeholders | Late failures/secret risk | CRITICAL | Strict schema, precedence, secret references, validation CLI |
-| Engine abstraction | Planned | Not validated against an external engine | Lock-in or weak abstraction | IMPORTANT | Early engine-fit spike then frozen v1 contract |
-| Resilience | Missing | No uniform external-call policy | Cascading failures/hangs | IMPORTANT | Timeout/retry/cancellation/overload contract |
-| Concurrency | Missing | Sync work and shared mutable state | Throughput and correctness risk | IMPORTANT | Concurrency model and load tests |
-| Trace semantics | Partial | Duplicate/incomplete steps and weak failure trace | Misleading evidence | IMPORTANT | Versioned trace semantics and failure-path tests |
-| Index migration | Missing | No schema or rebuild protocol | Irrecoverable rollout failure | CRITICAL | Versioned index, dual-read/write or rebuild strategy |
-| Dependency reproducibility | Partial | No lock/constraints and CI dependency mismatch | Non-repeatable builds | IMPORTANT | Supported Python matrix and reproducible constraints |
-| Versioning | Missing | Version duplicated in multiple files | Release inconsistency | IMPORTANT | Single version source and compatibility policy |
-| Prototype retirement | Planned | Unknown external consumers | Accidental contract break | IMPORTANT | Usage audit, deprecation window, restore evidence |
-| Research assets | Planned move | Large PDFs and unknown redistribution rights | Legal/history risk | IMPORTANT | Licence inventory; no history rewrite without separate approval |
-| Ownership | Missing | Acceptance owners undefined | Lots cannot be closed objectively | IMPORTANT | RACI/CODEOWNERS and evidence owner per lot |
-| Documentation claims | Planned | Delivered/planned behavior mixed | Trust and compliance risk | CRITICAL | Capability catalogue backed by tests |
-
-## 7. Decisions on the initial plan
-
-| Initial lot | Verdict | Repository-based decision |
-|---:|---|---|
-| 0 Product boundary | **Validated with adjustments** | Retain; add non-goals, ownership, compatibility classes, and native exit criteria |
-| 1 Reproducible baseline | **To replan** | Move before code changes; baseline SHA first, optional tag only with approval |
-| 2 Characterization | **To complete** | Add data lifecycle, metrics, failure, concurrency, and public-surface behavior |
-| 3 Capability truth | **Validated with adjustments** | Perform early and maintain continuously |
-| 4 Engine contracts | **To replan** | Precede by compatibility inventory and engine-fit spike |
-| 5 Native adapter | **Validated with adjustments** | Add cost/support ceiling and parity/error semantics |
-| 6 Manifest v2 | **Validated with adjustments** | Add strictness, precedence, interpolation, schema export, and index compatibility |
-| 7 Governance | **To replan** | Threat model and audit schema first; include lifecycle and fail-closed degradation |
-| 8 Quality plane | **To replace** | First repair metric semantics, then introduce profiles and gates |
-| 9 External adapter | **Validated with adjustments** | Split early selection spike from later production implementation |
-| 10 Telemetry/audit | **To replan** | Move schema and sink foundations before governance; keep vendor adapter later |
-| 11 Interfaces/deployment | **To complete** | Add API abuse controls, lifecycle, compatibility, supply-chain and licence evidence |
-| 12 Prototype retirement | **Validated with adjustments** | Require consumer inventory, deprecation, cost decision, and restoration test |
-| 13 Docs/research | **To replan** | Split early Claude alignment and late consolidation; prohibit implicit history rewrite |
-| 14 CI/release gates | **To replan** | Create baseline gates in Lot 3 and ratchet throughout; final hardening remains late |
-| 15 Pilot/closure | **Validated with adjustments** | Add data rollback, operational exercise, and explicit business/security sign-off |
-
-No initial lot is deleted outright. Redundant work is merged into revised lots; risky
-operations are conditional rather than silently removed.
-
-## 8. Additional risks
+## 3. Risks
 
 | Risk | Severity | Mitigation and stop condition |
 |---|---|---|
-| Claude automation implements the obsolete roadmap | Critical | Lot 2 must complete before architecture implementation |
+| Automation implements scope the ADR delegates away | Critical | Lot 2 must complete before further implementation |
 | Persisted vector and lexical indexes diverge | Critical | Block governed rollout until lifecycle reconciliation tests pass |
 | Empty/incorrect metrics allow regressions | Critical | Fail benchmark runs on infrastructure errors; version metric definitions |
 | Refactor breaks an unknown consumer | High | Surface inventory, telemetry/usage evidence where available, deprecation window |
-| Native V1 becomes a permanent second framework | High | Named owner, bounded feature policy, annual/phase exit decision |
+| Native V1 becomes a permanent second framework | High | Named owner, bounded feature policy, exit-criteria decision at Lot 17/18 |
 | External abstraction becomes lowest common denominator | High | Capabilities plus engine-specific extension envelope, proven by two adapters |
 | Async facade hides blocking work | High | Declare execution model and pass bounded concurrency tests |
 | Raw content, PII, or secrets enter logs/audit | Critical | Data classification, redaction boundaries, schema allowlists, negative tests |
@@ -236,20 +120,22 @@ operations are conditional rather than silently removed.
 | Dependency or model licence blocks commercial use | High | SBOM and licence gate before pilot |
 | CI is green while external capabilities are untested | High | Publish explicit offline/integration evidence classes and release requirements |
 | Repository history rewrite destroys recoverability | Critical | Out of scope unless separately approved, backed up, and executed as its own project |
+| The programme itself is not worth its cost | High | Confirm the delivery-project pipeline assumption behind the business case before committing full-team time past Lot 5 |
 
-## 9. Revised execution order
+---
+
+## 4. Execution order and sizing
 
 **Sizing convention:** T-shirt size plus a day/week range, assuming roughly **one or two of the
 four team members focused on that lot at a time** — not the whole team in parallel, since most
 lots are not internally parallelizable. S = 1-3 days, M = 3-8 days (about a week), L = 1.5-3
 weeks. Sizes are estimates for re-planning, not commitments; a lot that overruns its size by a
-wide margin is itself a signal to re-scope, not to silently keep going.
+wide margin is a signal to re-scope, not to silently keep going.
 
-Lots 11, 12, and 16 from the original 18-lot list are each split into lettered sub-lots (`11a-c`,
-`12a-c`, `16a-c`) because each bundled 3-5 separable deliverables under one acceptance gate,
-which made them too coarse to track or size honestly. No scope was removed — see
-`docs/refactoring/lot-0-baseline.md` change history for the split rationale. Sub-lots inherit
-their parent's priority and dependency direction unless stated otherwise.
+Lots 11, 12, and 16 are split into lettered sub-lots (`11a-c`, `12a-c`, `16a-c`) because each
+bundled 3-5 separable deliverables under one acceptance gate, which made them too coarse to
+track or size honestly. Sub-lots inherit their parent's priority and dependency direction unless
+stated otherwise.
 
 | Lot | Deliverable | Priority | Size | Status | Depends on |
 |---:|---|---|---|---|---|
@@ -281,75 +167,28 @@ their parent's priority and dependency direction unless stated otherwise.
 
 Ranges (e.g. `8-10`) list the earliest and latest lot whose evidence is required via the
 dependency chain, not necessarily every intermediate lot as a direct predecessor. `16a` and
-`16b` may run in parallel (neither touches the other's files); `16c` needs both finished.
-
-Lots 2 and 3 may run in parallel after Lot 1 if they do not edit the same files. Lot 5 may
-start during Lot 4 but cannot publish claims before baseline evidence exists. Every lot must
-land as one or more atomic, independently reversible changes.
+`16b` may run in parallel (neither touches the other's files); `16c` needs both finished. Lots 2
+and 3 may run in parallel after Lot 1 if they do not edit the same files. Lot 5 may start during
+Lot 4 but cannot publish claims before baseline evidence exists. Every lot must land as one or
+more atomic, independently reversible changes.
 
 **Rough total:** summing the midpoint of every lot/sub-lot above comes to roughly **125-130
 person-days** of focused work if done by one person sequentially. For a 4-person team working
-this alongside regular responsibilities (not full-time on the programme), with the limited
-parallelism noted above, expect **4-7 months of calendar time**, not weeks. If that horizon
-doesn't match business expectations, the fix is to cut scope (fewer owned capabilities in
-ADR-0005, or defer Phase C/D) — not to compress the estimate without compressing the work.
+this alongside regular responsibilities, with the limited parallelism noted above, expect
+**4-7 months of calendar time**, not weeks. Before committing past Lot 5, confirm the
+delivery-pipeline assumption the business case rests on (see §3, last risk row) — if fewer
+client engagements are actually in scope than assumed, cut Phase D scope rather than compress
+the estimate without compressing the work.
 
-## 10. Consolidated refactoring document
+---
 
-### 10.1 Product boundary
+## 5. Detailed plan by phase
 
-The package owns engine-independent solution manifests, execution context, policy enforcement,
-tenant isolation, redaction boundaries, provenance, audit schemas, quality profiles, regression
-gates, cost/latency evidence, engine capability discovery, and normalized results/errors.
-
-It delegates generic orchestration, durable workflows, generic GraphRAG and agent memory,
-universal connector catalogues, multimodal model execution, and fine-tuning platforms. A
-delegated capability may be exposed through an adapter; it must not be reimplemented in core
-without an approved ADR showing why an adapter cannot meet the product outcome.
-
-### 10.2 Target architecture
-
-```mermaid
-flowchart TB
-    Interfaces["API / CLI / SDK"] --> Service["Document AI Solution Service"]
-    Service --> Control["Control Plane"]
-    Control --> Governance["Governance and audit"]
-    Control --> Quality["Quality and cost"]
-    Control --> Engine["DocumentEngine port"]
-    Engine --> Native["Native V1 adapter"]
-    Engine --> External["Selected external adapter"]
-    Control --> Infra["Secret / telemetry / audit adapters"]
-```
-
-Dependency direction is `interfaces -> service/control plane -> contracts/core`; infrastructure
-and engines implement contracts and never leak vendor types across the public boundary. Existing
-fine-grained component protocols remain native-adapter internals.
-
-### 10.3 Compatibility classes
-
-Every change must classify its impact on: Python imports and callable signatures; REST paths and
-schemas; CLI commands and exit codes; manifest schema; persisted vector/lexical data; trace and
-audit schemas; deployment configuration; and documented behavior. Compatibility is not promised
-until Lot 4 records the current surface and Lot 7 publishes a versioning/deprecation policy.
-
-### 10.4 Programme invariants
-
-- The repository remains installable and the accepted offline suite passes after every lot.
-- No planned capability is described as delivered.
-- Governance and evaluation profiles are engine-neutral.
-- Production authorization failures are fail closed.
-- Raw secrets and unapproved sensitive content are absent from logs, traces, and audit events.
-- Destructive data or Git-history operations require separate approval and verified recovery.
-- File moves preserve compatibility facades until deprecation criteria are met.
-- Scientific sources inform explicit hypotheses; repository measurements decide acceptance.
-
-## 11. Detailed plan by phase
-
-### Phase A - Control and evidence (Lots 0-5)
+### Phase A — Control and evidence (Lots 0-5)
 
 **Lot 0:** Record baseline branch/commit SHA, dirty-worktree exclusions, decision authority,
-RACI/CODEOWNERS proposal, evidence locations, and plan-change rules. Do not tag, push, or alter
-remote state without authorization.
+ownership, evidence locations, and plan-change rules. Do not tag, push, or alter remote state
+without authorization.
 
 **Lot 1:** Approve an ADR for the product boundary, non-goals, target architecture, capability
 ownership, measurable outcomes, and native-adapter support/exit criteria. Package renaming is a
@@ -370,15 +209,15 @@ trace behavior, metrics, deletion/update, and hybrid fallback. Record existing q
 behavior without silently blessing it as the target.
 
 **Lot 5:** Correct README, roadmap, changelog, manifests, UUID/ULID statements, environment
-examples, test counts, API launch instructions, and compliance claims. Classify each manifest as
-runnable, experimental, or blueprint and validate runnable commands in CI.
+examples, test counts, API launch instructions, and compliance/business-case claims. Classify
+each manifest as runnable, experimental, or blueprint and validate runnable commands in CI.
 
-### Phase B - Architecture foundations (Lots 6-10)
+### Phase B — Architecture foundations (Lots 6-10)
 
-**Lot 6:** Use one representative use case to compare LangGraph, LlamaIndex, and Haystack against
-required ingest, answer, evidence, streaming, cancellation, governance interception, telemetry,
-and deployment capabilities. Build only disposable adapter spikes outside the production path.
-Select one engine through an ADR; do not integrate all three.
+**Lot 6:** Use one representative use case to compare at least two candidate engines (e.g.
+LangGraph, LlamaIndex, Haystack) against required ingest, answer, evidence, streaming,
+cancellation, governance interception, telemetry, and deployment capabilities. Build only
+disposable adapter spikes outside the production path. Select one engine through an ADR.
 
 **Lot 7:** Define versioned `DocumentEngine`, capabilities, normalized requests/results,
 `ExecutionContext`, evidence/citation, typed error, cancellation, and extension-envelope
@@ -398,7 +237,7 @@ and tested v1-to-v2 migration.
 failure events, timing semantics, PII allowlists, retention metadata, and sink contracts. Provide
 in-memory test sinks before vendor integrations. Remove duplicate or ambiguous timing steps.
 
-### Phase C - Enterprise correctness (Lots 11a-14)
+### Phase C — Enterprise correctness (Lots 11a-14)
 
 **Lot 11a:** Produce a threat model and a data-classification policy (public/internal/
 confidential/restricted, tenant/PII schema). Paper-and-fixture deliverable; no enforcement code
@@ -435,7 +274,7 @@ breaking, backpressure, overload, and graceful shutdown. Own and close clients/r
 lazy initialization and mutable indexes concurrency-safe or explicitly single-worker. Add fault,
 concurrency, soak, and bounded-load evidence.
 
-### Phase D - Portability and delivery (Lots 15-18)
+### Phase D — Portability and delivery (Lots 15-18)
 
 **Lot 15:** Implement the selected external adapter. It must pass the same semantic engine,
 governance, audit, migration, quality, cancellation, and failure tests as native V1. Express
@@ -462,7 +301,9 @@ evidence, concurrency, deployment, data migration, and rollback. Harden all appr
 remove expired shims, publish release evidence, and obtain architecture, security, operations,
 legal, and business-quality sign-off.
 
-## 12. Acceptance criteria by stage
+---
+
+## 6. Acceptance criteria by stage
 
 | Stage | Mandatory evidence |
 |---|---|
@@ -492,7 +333,9 @@ legal, and business-quality sign-off.
 | Lot 17 | Each removal has impact evidence, deprecation or non-use proof, and restoration path |
 | Lot 18 | Pilot and rollback exercise pass; mandatory gates green; named owners sign final evidence |
 
-## 13. Test and non-regression strategy
+---
+
+## 7. Test and non-regression strategy
 
 | Test class | Core evidence | Runs when |
 |---|---|---|
@@ -515,7 +358,9 @@ retry behavior matters. Integration and e2e suites must never be reported as pas
 Benchmark infrastructure failures fail the run; they do not produce empty metrics. Thresholds
 record dataset version, engine/model version, configuration, environment, and confidence limits.
 
-## 14. Migration and rollback strategy
+---
+
+## 8. Migration and rollback strategy
 
 1. **Checkpoint:** Record commit SHA, artifacts, schemas, dependency set, and test evidence before
    each lot. Tags and pushes require normal release authorization.
@@ -540,7 +385,9 @@ record dataset version, engine/model version, configuration, environment, and co
     audit evidence, data divergence, quality threshold breach, unrecoverable error-rate increase,
     or failed restore exercise.
 
-## 15. Final completeness checklist
+---
+
+## 9. Final completeness checklist
 
 - [ ] Product ADR, non-goals, owners, success measures, and plan-change rules are approved.
 - [ ] Claude and repository instructions express the same product boundary.
@@ -563,7 +410,9 @@ record dataset version, engine/model version, configuration, environment, and co
 - [ ] Representative pilot evidence is approved by named technical and business owners.
 - [ ] All expired compatibility shims are removed only after their support window.
 
-## 16. Remaining uncertainties and unverifiable points
+---
+
+## 10. Open questions and unresolved dependencies
 
 | Unknown | Effect | Resolution owner/milestone |
 |---|---|---|
@@ -575,19 +424,35 @@ record dataset version, engine/model version, configuration, environment, and co
 | SLOs, throughput, corpus scale, and cost budgets | Performance gates cannot be set | Before Lot 13/14 blocking gates |
 | Authoritative document source and deletion obligations | Rebuild/right-to-erasure design remains provisional | Before Lot 12a |
 | Research PDF and dependency/model redistribution rights | Release contents may need quarantine or replacement | Before Lot 16b/17 |
-| Dynamic current test results | Runtime baseline is unverified | Lot 3; dependencies unavailable during audit |
+| Dynamic current test results | Runtime baseline is unverified | Lot 3; dependencies unavailable in the current environment |
 | Integration/e2e behavior | Requires confirmed Qdrant, engine services, credentials, and datasets | Lots 15-18 |
-| Full semantic content of all 56 PDFs | PDFs were inventoried/digested, not page-validated during audit | Evidence-catalogue review in Lot 17 |
+| Full semantic content of all 56 PDFs | Inventoried/digested, not page-validated | Evidence-catalogue review in Lot 17 |
+| Delivery-pipeline assumption behind the business case | The 4-7 month programme cost (§4) is only justified if the assumed client-project volume is real | Confirm with delivery ownership before Lot 6 |
 
-### Audit evidence and analysis limits
+### Analysis coverage notes
 
-The audit covered all 382 tracked paths by inventory and classification, executable Python
-architecture, tests, manifests, dependency declarations, CI, scripts, primary documentation,
-Claude configuration, and research digests. Static Python compilation and strict layering passed.
-The 56 source PDFs were inventoried and their repository digests reviewed, but not all pages were
-manually validated. Empty placeholder files were classified but contain no analyzable behavior.
-Personal `.claude/settings.local.json` was deliberately excluded. Dynamic unit, contract,
-integration, e2e, performance, and security suites were not represented as passing.
+All 382 tracked repository paths are inventoried and classified: executable Python architecture,
+tests, manifests, dependency declarations, CI, scripts, primary documentation, Claude
+configuration, and research digests. Static Python compilation and strict layering currently
+pass. The 56 source PDFs are inventoried and their repository digests reviewed, but not all pages
+have been manually validated. Empty placeholder files are classified but contain no analyzable
+behavior. Personal `.claude/settings.local.json` is deliberately excluded from all of the above.
+Dynamic unit, contract, integration, e2e, performance, and security suites are **not** currently
+verified as passing — establishing that reproducibly is Lot 3's deliverable, not an assumption
+this plan makes going in.
+
+---
+
+## 11. Ownership and change control
+
+Decision authority, per-lot ownership, evidence locations, and the rule for when this plan may
+change are recorded in [docs/refactoring/lot-0-baseline.md](refactoring/lot-0-baseline.md) and
+are not duplicated here. In short: this plan changes only after a blocking discovery, a material
+scope change, or an approved architecture decision — never as a silent in-place edit.
+
+---
+
+## 12. Decision log and change history
 
 ### Decision log
 
@@ -597,19 +462,19 @@ integration, e2e, performance, and security suites were not represented as passi
 | 2026-08-03 | Do not compete directly with general-purpose orchestration/indexing frameworks | ACCEPTED |
 | 2026-08-03 | Retain V1 as a bounded native/reference adapter | ACCEPTED |
 | 2026-08-03 | Retain scientific work as evidence, hypotheses, and evaluation support | ACCEPTED |
-| 2026-08-03 | Consolidate the second contradictory audit into this definitive tracker | COMPLETE |
-| 2026-08-03 | Recorded Lot 0 baseline (commit `47ea77f`), decision authority, and evidence locations | COMPLETE |
+| 2026-08-03 | Recorded Lot 0 baseline, decision authority, and evidence locations | COMPLETE |
 | 2026-08-03 | Drafted ADR-0005 (product boundary, capability ownership, native-adapter exit criteria) | PROPOSED — awaiting 4-person team sign-off |
+| 2026-08-03 | Added per-lot effort sizing and total-programme estimate; split Lots 11/12/16 into lettered sub-lots | COMPLETE |
 | Pending | Select the first external engine | Lot 6 |
-| Pending | Approve the product ADR and named owners | Lots 0-1 |
+| Pending | Approve ADR-0005 and named lot owners | Lots 0-1 |
 | Pending | Decide final product/package name | Non-blocking |
+| Pending | Confirm delivery-pipeline volume behind the business case | Before Lot 6 |
 
 ### Change history
 
 | Date | Change |
 |---|---|
-| 2026-08-03 | Created the first repository refactoring plan and tracker |
-| 2026-08-03 | Consolidated the second contradictory audit; revised order; added Claude alignment, data lifecycle, metric correctness, resilience, compatibility, supply-chain, ownership, and safe rollback controls |
-| 2026-08-03 | Lot 0 executed: `docs/refactoring/lot-0-baseline.md` created (baseline SHA, decision authority, ownership table, evidence locations) |
-| 2026-08-03 | Lot 1 drafted: `docs/adr/0005-document-ai-control-plane-boundary.md` created, status Proposed, `docs/adr/_index.md` updated |
-| 2026-08-03 | Plan validation pass: added per-lot effort sizing and a total-programme estimate (~125-130 person-days, 4-7 months for a 4-person team); split Lots 11, 12, 16 into lettered sub-lots (11a-c, 12a-c, 16a-c) because each bundled 3-5 separable deliverables under one acceptance gate | COMPLETE |
+| 2026-08-03 | Lot 0 executed: baseline SHA, decision authority, ownership table, and evidence locations recorded |
+| 2026-08-03 | Lot 1 drafted: ADR-0005 created, status Proposed |
+| 2026-08-03 | Added per-lot effort sizing and a total-programme estimate; split Lots 11, 12, 16 into lettered sub-lots |
+| 2026-08-03 | Rewritten as a single final, consolidated plan: findings restated as current-state gaps rather than a comparison between prior drafts |
