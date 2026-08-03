@@ -18,6 +18,7 @@ full V1 → V5 journey in plain language.
 | Understand what the framework can do, without technical jargon | [onboarding.md](onboarding.md), section 3 |
 | Understand why this framework exists, to convince a client or a manager | [business-case.md](business-case.md) |
 | See what's delivered vs. planned, version by version | [../ROADMAP.md](../ROADMAP.md) |
+| Track the engine-agnostic refactoring programme | [refactoring-plan.md](refactoring-plan.md) |
 | Run the framework for the first time | [guides/getting-started.md](guides/getting-started.md) |
 | Install dependencies and configure the environment | [guides/installation.md](guides/installation.md) |
 | Understand the architecture in depth (layers, contracts, data flow) | [architecture/_index.md](architecture/_index.md) |
