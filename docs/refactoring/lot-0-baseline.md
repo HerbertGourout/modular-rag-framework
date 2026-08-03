@@ -6,7 +6,7 @@
 **Gates:** Lot 1 (Product-boundary ADR)
 
 This document is the Lot 0 deliverable required by
-[docs/refactoring-plan.md](../refactoring-plan.md#9-revised-execution-order) section 11, Phase A: a reproducible
+[docs/refactoring-plan.md](../refactoring-plan.md#4-execution-order-and-sizing) §5, Phase A: a reproducible
 baseline snapshot, explicit decision authority, and the rules under which the plan itself may
 change. It does not tag, push, or alter remote state — none of those require authorization
 beyond what is recorded here.
