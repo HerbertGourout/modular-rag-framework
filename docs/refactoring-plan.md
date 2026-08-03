@@ -1,7 +1,8 @@
 # Refactoring Plan — Engine-Agnostic Control Plane
 
-> **Status:** Lot 0 complete; Lot 1 (product-boundary ADR) drafted, pending sign-off from all
-> 4 team members.
+> **Status:** Lot 0 complete; Lot 1 (product-boundary ADR) drafted. Approval currently rests
+> solely with Herbert Gourout — the target team of up to 3 additional contributors is not yet
+> assembled.
 > **Target outcome:** Deploy compliant, measurable document-AI solutions faster, independently
 > of the underlying execution engine.
 > **Migration principle:** Incremental, evidence-based, reversible, and releasable after every
@@ -126,11 +127,14 @@ Findings below are tracked against the target in §1. Severity is one of `BLOCKI
 
 ## 4. Execution order and sizing
 
-**Sizing convention:** T-shirt size plus a day/week range, assuming roughly **one or two of the
-four team members focused on that lot at a time** — not the whole team in parallel, since most
-lots are not internally parallelizable. S = 1-3 days, M = 3-8 days (about a week), L = 1.5-3
-weeks. Sizes are estimates for re-planning, not commitments; a lot that overruns its size by a
-wide margin is a signal to re-scope, not to silently keep going.
+**Sizing convention:** T-shirt size plus a day/week range, originally scoped assuming **one or
+two people focused on a lot at a time** out of a target team of up to 4. As of 2026-08-03 only
+one person (Herbert Gourout) is active, so sizes below are still valid per-lot effort estimates,
+but the parallel-lot opportunities noted further down (2+3, 16a+16b) are **not available** until
+a second person joins — they collapse to sequential work in the meantime. S = 1-3 days,
+M = 3-8 days (about a week), L = 1.5-3 weeks. Sizes are estimates for re-planning, not
+commitments; a lot that overruns its size by a wide margin is a signal to re-scope, not to
+silently keep going.
 
 Lots 11, 12, and 16 are split into lettered sub-lots (`11a-c`, `12a-c`, `16a-c`) because each
 bundled 3-5 separable deliverables under one acceptance gate, which made them too coarse to
@@ -173,12 +177,14 @@ Lot 4 but cannot publish claims before baseline evidence exists. Every lot must 
 more atomic, independently reversible changes.
 
 **Rough total:** summing the midpoint of every lot/sub-lot above comes to roughly **125-130
-person-days** of focused work if done by one person sequentially. For a 4-person team working
-this alongside regular responsibilities, with the limited parallelism noted above, expect
-**4-7 months of calendar time**, not weeks. Before committing past Lot 5, confirm the
-delivery-pipeline assumption the business case rests on (see §3, last risk row) — if fewer
-client engagements are actually in scope than assumed, cut Phase D scope rather than compress
-the estimate without compressing the work.
+person-days** of focused work done sequentially by one person — which, while solo, is also the
+realistic current-state estimate, not just a lower bound: there is no second person yet to absorb
+any of the parallel lots. Calendar duration depends entirely on how much of Herbert Gourout's
+time is actually allocated to this programme alongside other responsibilities; the original
+"4-7 months for a team of 4" framing no longer applies until additional people are confirmed.
+Before committing past Lot 5, confirm the delivery-pipeline assumption the business case rests
+on (see §3, last risk row) — if fewer client engagements are actually in scope than assumed, cut
+Phase D scope rather than compress the estimate without compressing the work.
 
 ---
 
@@ -472,7 +478,8 @@ scope change, or an approved architecture decision — never as a silent in-plac
 | 2026-08-03 | Retain V1 as a bounded native/reference adapter | ACCEPTED |
 | 2026-08-03 | Retain scientific work as evidence, hypotheses, and evaluation support | ACCEPTED |
 | 2026-08-03 | Recorded Lot 0 baseline, decision authority, and evidence locations | COMPLETE |
-| 2026-08-03 | Drafted ADR-0005 (product boundary, capability ownership, native-adapter exit criteria) | PROPOSED — awaiting 4-person team sign-off |
+| 2026-08-03 | Drafted ADR-0005 (product boundary, capability ownership, native-adapter exit criteria) | PROPOSED — approval rests with Herbert Gourout alone; team not yet assembled |
+| 2026-08-03 | Removed the multi-person approval gate from Lot 0/ADR-0005/plan; decision authority is sole (Herbert Gourout) until additional team members are actually onboarded | COMPLETE |
 | 2026-08-03 | Added per-lot effort sizing and total-programme estimate; split Lots 11/12/16 into lettered sub-lots | COMPLETE |
 | 2026-08-03 | Selected Keycloak (Lot 11b identity provider) and PostgreSQL (Lot 10 audit store, Lot 12a lifecycle ledger) from an infra-stack compatibility review | COMPLETE |
 | Pending | Select the first external engine | Lot 6 |
