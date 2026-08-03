@@ -37,33 +37,31 @@ that is Lot 3's deliverable (reproducible environment + CI gates).
 
 ## 2. Decision authority
 
+**Current state (2026-08-03): sole authority.** The team named in ADR-0005/§3 below is a target,
+not yet assembled — only Herbert Gourout is active. No decision in this plan is gated on
+sign-off from anyone else while that remains true. This table is revisited (and a
+second-approver rule reinstated where it makes sense) once additional team members are actually
+confirmed and onboarded — not before.
+
 | Decision class | Authority | Notes |
 |---|---|---|
-| ADR approval (product boundary, engine selection, contracts) | Full team consensus (4) | One blocking objection holds the ADR at `Proposed`. |
-| Lot acceptance (evidence sign-off per §12 of the plan) | Lot owner + one reviewer from the table below | Not the same person for both roles. |
-| Plan-change (scope, order, lot content) | Same as ADR approval | Per `docs/refactoring-plan.md` line 14: only after a blocking discovery, a material scope change, or an approved architecture decision. |
-| Destructive/irreversible action (tag, force-push, history rewrite, data purge) | Explicit, separate, written approval from the full team | Per plan §14 item 9-10. Never implied by lot acceptance. |
+| ADR approval (product boundary, engine selection, contracts) | Herbert Gourout, sole | No blocking-objection mechanism while there is one decision-maker. |
+| Lot acceptance (evidence sign-off per §12 of the plan) | Herbert Gourout, self-accepted | Two-person owner/reviewer split is reinstated once a second team member is active. |
+| Plan-change (scope, order, lot content) | Herbert Gourout, sole | Per `docs/refactoring-plan.md` line 14: only after a blocking discovery, a material scope change, or an approved architecture decision — the bar is about *why* the plan changes, not about collecting signatures. |
+| Destructive/irreversible action (tag, force-push, history rewrite, data purge) | Herbert Gourout, with explicit written confirmation in the moment | Per plan §14 item 9-10. Still requires a deliberate separate confirmation, not silent inclusion in a routine commit — solo authority is not a reason to skip that pause. |
 
 ## 3. Ownership (per lot, Phase A–D)
 
-Team: Herbert Gourout + 3 colleagues (4 total). Names/roles below are placeholders —
-**fill in before treating this section as binding**; the rest of the document does not depend
-on who is named here.
+Target team: Herbert Gourout + up to 3 colleagues, **not yet assembled**. Until someone else is
+actually onboarded, every lot's owner and reviewer is Herbert Gourout alone — the table below is
+not pretending otherwise with placeholder names.
 
 | Lot(s) | Phase | Owner | Reviewer |
 |---|---|---|---|
-| 0–1 | Control & ADR | Herbert Gourout | _TBD_ |
-| 2–3 | Claude realignment / CI baseline | _TBD_ | _TBD_ |
-| 4–5 | Characterization / capability truth | _TBD_ | _TBD_ |
-| 6–7 | Engine spike / contracts | _TBD_ | _TBD_ |
-| 8–10 | Native adapter / config / audit | _TBD_ | _TBD_ |
-| 11–14 | Governance / lifecycle / quality / reliability | _TBD_ | _TBD_ |
-| 15–16 | External adapter / hardening | _TBD_ | _TBD_ |
-| 17–18 | Retirement / pilot / closure | _TBD_ | _TBD_ |
+| 0–18 | All phases | Herbert Gourout | Herbert Gourout (self-review) |
 
-No formal RACI matrix beyond this table — a 4-person team does not need one. The owner is
-accountable for the lot's acceptance evidence; the reviewer confirms it before status moves to
-`COMPLETE` in `docs/refactoring-plan.md` §9.
+Re-split this table by phase once a second person is confirmed — see §2. Until then, a formal
+RACI or owner/reviewer split would just be documentation theater.
 
 ## 4. Evidence locations
 

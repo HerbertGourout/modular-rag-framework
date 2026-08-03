@@ -2,7 +2,8 @@
 
 **Status:** Proposed
 **Date:** 2026-08-03
-**Authors:** Herbert Gourout + AdvancedPublicisRAG team (4 contributors)
+**Authors:** Herbert Gourout (sole decision authority as of this date; target team of up to
+3 additional contributors not yet assembled)
 **Supersedes (partially):** [ADR-0004](0004-strategic-features-v1-v5.md) — see §5
 
 ---
@@ -17,9 +18,9 @@ to build a general-purpose agentic orchestration framework (the V2–V5 portion 
 [CLAUDE.md §09](../../CLAUDE.md#09--roadmap-v1--v5-with-strategic-features) and
 [ROADMAP.md](../../ROADMAP.md)) means competing directly with LangGraph, LlamaIndex, and
 Haystack on their core strength — orchestration breadth and ecosystem — with a fraction of
-their engineering resources. A 4-person team cannot out-execute those projects on generic
-agent runtimes, tool-calling frameworks, or GraphRAG traversal engines maintained by
-dozens-to-hundreds of contributors.
+their engineering resources. A team of this size — currently one person, with room to grow to a
+handful — cannot out-execute those projects on generic agent runtimes, tool-calling frameworks,
+or GraphRAG traversal engines maintained by dozens-to-hundreds of contributors.
 
 ADR-0004 already stated the right instinct — *"do not compete with LangChain on breadth;
 compete on depth in governance, compliance, evaluation, cost optimization, fine-tuning"* — but
@@ -192,9 +193,9 @@ V1 as a bounded, exit-criteria-bound reference adapter per §5.5.
 
 **Date:** 2026-08-03
 
-**Status:** Proposed — requires sign-off from all 4 team members (per
-[Lot 0 decision authority](../refactoring/lot-0-baseline.md#2-decision-authority)) before moving
-to Accepted and unblocking Lot 2.
+**Status:** Proposed — approval rests with Herbert Gourout alone (per
+[Lot 0 decision authority](../refactoring/lot-0-baseline.md#2-decision-authority)); no other
+team member currently gates the move to Accepted, since none is yet onboarded.
 
 **Next:** Lot 2 — narrow interim realignment of `CLAUDE.md` and `.claude/` instructions to stop
 steering implementation toward the delegated capabilities in §5.2.
