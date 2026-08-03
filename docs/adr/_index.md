@@ -59,6 +59,22 @@ Roadmap integrating 8 transformational capabilities across versions:
 
 ---
 
+### [ADR-0005: Document-AI Control Plane Product Boundary](0005-document-ai-control-plane-boundary.md)
+
+**Status:** Proposed  
+**Date:** 2026-08-03
+
+Redraws the product boundary: own engine-independent governance, audit, evaluation, tenant
+isolation, and manifest/config as the durable differentiator; delegate generic multi-agent
+orchestration, GraphRAG traversal, fine-tuning platform mechanics, and multimodal execution to
+a selected external engine via a new `DocumentEngine` port. Native V1 (`RAGEngine`) becomes a
+bounded reference adapter with explicit exit criteria, not the long-term core.
+
+**Key insight:** Partially supersedes ADR-0004 — V1.1/V1.2/V2.0 are retained natively; V2.1,
+V3.0, V3.2, and V5.0 are redirected from "build in-house" to "delegate via adapter."
+
+---
+
 ## Decision Making Process
 
 1. **Identification**: Problem identified in sprint planning, client feedback, or architecture review.
@@ -100,9 +116,10 @@ Roadmap integrating 8 transformational capabilities across versions:
 ## Version Scope
 
 - **ADR-0001, 0002, 0003**: Core architecture (V1-V5 stable)
-- **ADR-0004**: Feature roadmap (V1→V5 progression)
+- **ADR-0004**: Feature roadmap (V1→V5 progression) — partially superseded by ADR-0005
+- **ADR-0005**: Product boundary pivot — engine-independent control plane, delegated orchestration
 
-Future ADRs will be added as new major decisions arise (e.g., ADR-0005 for distributed deployment, ADR-0006 for multi-modal design, etc.).
+Future ADRs will be added as new major decisions arise (e.g., ADR-0006 for external engine selection per Lot 6, ADR-0007 for `DocumentEngine` contract freeze per Lot 7).
 
 ---
 
