@@ -1,9 +1,8 @@
 # Refactoring Plan — Engine-Agnostic Control Plane
 
-> **Status:** Phase A (Lots 0-5) COMPLETE, 2026-08-04. Phase B started: Lot 6 spike complete
-> (LangGraph vs. LlamaIndex, executed code, see `docs/refactoring/lot-6-spike/`),
-> [ADR-0006](adr/0006-external-engine-selection.md) recommends LangGraph — status `Proposed`,
-> pending Herbert Gourout's sign-off before Lot 7 starts.
+> **Status:** Phase A (Lots 0-5) COMPLETE. Lot 6 COMPLETE, 2026-08-04:
+> [ADR-0006](adr/0006-external-engine-selection.md) accepted — LangGraph is the selected
+> external engine. Lot 7 (`DocumentEngine` contracts) not started.
 > **Target outcome:** Deploy compliant, measurable document-AI solutions faster, independently
 > of the underlying execution engine.
 > **Migration principle:** Incremental, evidence-based, reversible, and releasable after every
@@ -153,7 +152,7 @@ stated otherwise.
 | 3 | Reproducible baseline and minimum CI gates | P0 | M (3-5d) | COMPLETE | 0 |
 | 4 | Public-surface inventory and characterization safety net | P0 | L (1.5-2wk) | COMPLETE | 3 |
 | 5 | Capability truth and runnable-manifest classification | P0 | S (2-3d) | COMPLETE | 1, 3 |
-| 6 | External-engine fit spike and selection ADR | P0 | M (1-1.5wk, time-boxed) | IN PROGRESS | 1, 4 |
+| 6 | External-engine fit spike and selection ADR | P0 | M (1-1.5wk, time-boxed) | COMPLETE | 1, 4 |
 | 7 | Engine-neutral contracts and compatibility policy | P0 | M (1wk) | NOT STARTED | 4, 6 |
 | 8 | Native V1 adapter and compatibility facade | P0 | M (1wk) | NOT STARTED | 7 |
 | 9 | Versioned solution configuration and secret resolution | P0 | M (1wk) | NOT STARTED | 7 |
@@ -490,10 +489,10 @@ scope change, or an approved architecture decision — never as a silent in-plac
 | 2026-08-04 | Lot 4 Part 1 (public surface: API, CLI, manifest loading, registry): 28 new characterization tests, 0% coverage before. Found and recorded a real bug: `POST /answer` never accepts its documented JSON body (forward-reference resolution failure, endpoint likely never worked via HTTP). Evidence in `docs/refactoring/lot-4-public-surface-part1.md`. | IN PROGRESS |
 | 2026-08-04 | Lot 4 Part 2 (metrics, deletion/update, hybrid fallback): 23 new/extended characterization tests. Found two more real gaps: BM25 silently drops relevant hits in small corpora (negative/zero IDF), and benchmark failures are recorded as indistinguishable from genuine null scores. Confirmed `RAGEngine` has no `delete()` at all. Evidence in `docs/refactoring/lot-4-part2-metrics-deletion-fallback.md`. Lot 4 as a whole is now COMPLETE. | COMPLETE |
 | 2026-08-04 | Lot 5: corrected delivered/security/compliance claims in README.md, docs/api/rest.md, docs/business-case.md against verified current behavior; classified all 5 manifest presets runnable/blueprint with `manifests/README.md`; added CI + check.sh validation that the one runnable manifest actually wires. Phase A (Lots 0-5) is now fully COMPLETE. Evidence in `docs/refactoring/lot-5-capability-truth.md`. | COMPLETE |
-| 2026-08-04 | Lot 6: executed spike comparing LangGraph and LlamaIndex Workflows against a governed-QA use case (real code, both installed and run, not a docs-only comparison). ADR-0006 drafted recommending LangGraph — Proposed, awaiting sign-off. Evidence in `docs/refactoring/lot-6-spike/`. | IN PROGRESS |
+| 2026-08-04 | Lot 6: executed spike comparing LangGraph and LlamaIndex Workflows against a governed-QA use case (real code, both installed and run, not a docs-only comparison). ADR-0006 accepted — LangGraph selected. Evidence in `docs/refactoring/lot-6-spike/`. Lot 6 COMPLETE. | COMPLETE |
 | 2026-08-03 | Added per-lot effort sizing and total-programme estimate; split Lots 11/12/16 into lettered sub-lots | COMPLETE |
 | 2026-08-03 | Selected Keycloak (Lot 11b identity provider) and PostgreSQL (Lot 10 audit store, Lot 12a lifecycle ledger) from an infra-stack compatibility review | COMPLETE |
-| Pending | Confirm ADR-0006 (LangGraph recommendation) or redirect | Lot 6, blocks Lot 7 |
+| 2026-08-04 | Accepted ADR-0006: LangGraph selected as the external engine, on Herbert Gourout's explicit delegation of the call to the spike evidence | ACCEPTED |
 | Pending | Decide final product/package name | Non-blocking |
 | Pending | Confirm delivery-pipeline volume behind the business case | Before Lot 6 |
 

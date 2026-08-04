@@ -1,9 +1,10 @@
 # ADR-0006 — External Engine Selection: LangGraph
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-08-04
-**Authors:** Herbert Gourout (drafted by Claude Code from an executed spike; recommendation
-requires Herbert Gourout's explicit sign-off before moving to Accepted — see §"Decision record")
+**Authors:** Herbert Gourout (drafted by Claude Code from an executed spike; accepted on
+Herbert Gourout's explicit delegation of the final call to the spike's own evidence and
+recommendation — see §"Decision record")
 
 ---
 
@@ -114,15 +115,13 @@ spike output.
 
 ## Decision record
 
-**Decision:** Recommend LangGraph as the Lot 7 `DocumentEngine` port's initial adapter target.
+**Decision:** LangGraph is the Lot 7 `DocumentEngine` port's initial adapter target.
 
 **Date:** 2026-08-04
 
-**Status:** Proposed. Per `docs/refactoring/lot-0-baseline.md` §2, Herbert Gourout is sole
-decision authority — but unlike ADR-0005 (whose substance was discussed at length before
-acceptance), this is a fresh technical recommendation from an executed spike he has not yet
-personally reviewed. Requires his explicit confirmation (or a redirect) before moving to
-`Accepted` and unblocking Lot 7.
+**Status:** Accepted. Herbert Gourout, sole decision authority
+(`docs/refactoring/lot-0-baseline.md` §2), reviewed the spike outcome and explicitly delegated
+the final call to the evidence and recommendation above (2026-08-04) rather than overriding it —
+recorded as acceptance, not silence.
 
-**Next:** Await confirmation, then Lot 7 (`DocumentEngine` contracts, engine-neutral, LangGraph
-as the first adapter).
+**Next:** Lot 7 (`DocumentEngine` contracts, engine-neutral, LangGraph as the first adapter).
