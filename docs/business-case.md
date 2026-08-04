@@ -60,10 +60,25 @@ Competitors (Accenture, Capgemini, Deloitte Digital) use LangChain, LlamaIndex, 
 
 Publicis Sapient works with banks, insurers, pharmaceutical players, and utilities — all subject to strict regulations (GDPR, DORA, NIS2, sector-specific). This framework addresses these constraints directly.
 
-- **Complete audit trail**: every retrieval, generation, and security decision is recorded in the `Trace`. A DPO can trace an answer back to its exact context.
+- **Audit trail — designed, not yet delivered**: every retrieval, generation, and security
+  decision is captured in a per-request `Trace` object, but today that `Trace` is discarded
+  after the request unless a `telemetry` component is wired — and the manifest schema doesn't
+  yet expose a way to configure one. Nothing is currently persisted for a DPO to query. This is
+  V1.2 scope (`docs/refactoring-plan.md` Lot 10); do not represent this as delivered to a client
+  or auditor until Lot 10 lands.
 - **Automatic PII redaction**: emails, phone numbers, IBANs, API keys removed before exposure — documentable in a DPIA.
-- **Multi-tenant isolation**: every client or business unit has its own policies and its own data, with no risk of cross-contamination.
+- **Multi-tenant isolation — descriptive only, not yet enforced**: the manifest schema has a
+  `tenant` field, but it is not wired into any storage-level filter or access check today — two
+  tenants sharing a deployment are not actually isolated at the data layer. This is Lot 11b
+  scope (`docs/refactoring-plan.md`); do not represent this as delivered until then.
 - **Safety vs Security explicitly separated**: a distinction regulators appreciate, and one that proves security is not an afterthought.
+
+> **2026-08-04 correction (Lot 5):** the two rows above were previously stated as delivered
+> capabilities. They are target-state design decisions with real code behind the *shape* of the
+> solution (a `Trace` model exists; a `tenant` field exists) but no enforcement or persistence
+> yet. Do not cite this document's audit-trail or tenant-isolation claims in a client-facing or
+> compliance context until the corresponding lots in `docs/refactoring-plan.md` are marked
+> `COMPLETE`.
 
 ---
 

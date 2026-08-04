@@ -1,3 +1,7 @@
+# Status: BLUEPRINT — `graph_store`, `planner`, and `agents` are declared but
+# ComponentRegistry.wire() never processes any of them (checked against
+# orchestration/registry.py); silently ignored, not an error. This manifest wires only its
+# V1 components today. See docs/refactoring-plan.md §2 and manifests/README.md.
 version: "1.0"
 id: graph-memory-rag
 description: "V3 GraphRAG pipeline — knowledge graph extraction, multi-hop reasoning, EvoRAG feedback."

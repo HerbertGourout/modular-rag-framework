@@ -1,3 +1,7 @@
+# Status: BLUEPRINT — will raise RegistryError immediately on wire(): `embedder.type:
+# multimodal` is not a registered factory (only "sentence-transformers" and
+# "openai-embeddings" are). Every other V5-only field below is equally unimplemented. See
+# docs/refactoring-plan.md §2 and manifests/README.md.
 version: "1.0"
 id: multimodal-rag
 description: "V5 multimodal pipeline — text + images + tables + audio/video ingestion and retrieval."

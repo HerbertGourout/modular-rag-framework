@@ -1,3 +1,5 @@
+# Status: RUNNABLE — only V1 components declared; every `type:` here is registered in
+# orchestration/_default_factories.py. Validated in CI (see docs/refactoring-plan.md Lot 5).
 version: "1.0"
 id: local-hybrid-rag
 description: "Local development pipeline — hybrid retrieval (vector + BM25), OpenAI generation."

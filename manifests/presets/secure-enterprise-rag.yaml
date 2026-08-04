@@ -1,3 +1,11 @@
+# Status: BLUEPRINT — two real breakages, not just unimplemented V4 scope: (1) `policies:`
+# references manifests/policies/no-pii-export.yaml and hr-data-restriction.yaml, neither of
+# which exists on disk, and ComponentRegistry.wire() never reads the `policies` field anyway;
+# (2) `indexer.config.url: "${QDRANT_URL}"` is never interpolated — load_manifest() does a
+# plain yaml.safe_load with no env-var substitution (that's Lot 9 scope), so this literal
+# string would be passed to QdrantStore as-is. `security`/`evaluation` types (`basic`/
+# `exact-match`) ARE real and would wire correctly. See docs/refactoring-plan.md §2 and
+# manifests/README.md.
 version: "1.0"
 id: secure-enterprise-rag
 description: "Enterprise pipeline with security guards, PII redaction, and audit telemetry."
