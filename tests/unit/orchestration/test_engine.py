@@ -225,3 +225,40 @@ def test_ingest_chunks_does_not_re_embed_chunks_that_already_have_an_embedding()
     engine.ingest_chunks([chunk])
 
     assert chunk.embedding == [9.9, 9.9]
+
+
+def test_rag_engine_exposes_no_delete_method() -> None:
+    """**Known gap, docs/refactoring-plan.md §2 ('Data deletion/update').**
+    `RAGEngine`'s public API is `ingest`, `ingest_chunks`, `answer`, `retrieve`
+    — there is no `delete()`. Removing a document today means bypassing the
+    engine entirely and reaching into `container.indexer.delete(ids)`
+    directly, which (see next test) doesn't touch the retriever's own
+    lexical state either. Characterized, not fixed here (Lot 12a/12b own
+    this).
+    """
+    engine, _ = _engine()
+
+    assert not hasattr(engine, "delete")
+
+
+def test_deleting_via_the_indexer_directly_does_not_touch_the_retrievers_lexical_state() -> None:
+    """Even bypassing RAGEngine and calling `container.indexer.delete(ids)`
+    directly (the only delete path that exists today) only removes the
+    chunk from the vector/persistent index. `container.retriever` — a
+    completely separate component holding its own copy of indexed chunks
+    for lexical search (e.g. BM25) — is never notified. This is the concrete
+    mechanism behind the documented gap "vector-store deletion is not
+    mirrored in the mutable in-memory BM25 index": there's no coordination
+    between the two at all, not even a hook to wire one up today.
+    """
+    retriever = _FakeRetriever()
+    engine, container = _engine(retriever=retriever)
+    chunk = Chunk(doc_id=new_id(), content="to be deleted")
+    engine.ingest_chunks([chunk])
+    assert chunk in container.indexer.indexed
+    assert chunk in retriever.indexed_via_bm25
+
+    container.indexer.delete([chunk.id])
+
+    assert chunk not in container.indexer.indexed  # gone from the vector/persistent side
+    assert chunk in retriever.indexed_via_bm25  # still present on the lexical side — stale

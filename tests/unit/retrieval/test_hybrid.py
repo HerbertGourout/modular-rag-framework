@@ -5,6 +5,8 @@ HybridRetriever's own logic (weight pass-through to RRF) without needing Qdrant.
 """
 from __future__ import annotations
 
+import pytest
+
 from modular_rag.core.enums import RetrievalMethod
 from modular_rag.core.ids import new_id
 from modular_rag.core.models.chunk import Chunk
@@ -80,3 +82,45 @@ def test_hybrid_retriever_falls_back_when_vector_source_is_unavailable():
 
     assert [r.chunk.id for r in result] == [bm25_only.chunk.id]
     assert result[0].retrieval_method == RetrievalMethod.BM25
+
+
+def test_hybrid_retriever_returns_empty_list_without_raising_when_both_sources_fail():
+    """Lot 4 (docs/refactoring-plan.md §2, 'Resilience'): `_safe_retrieve` catches
+    *any* exception from either source and logs a warning, never re-raising. If
+    both vector and BM25 fail, `retrieve()` silently returns `[]` — RAGEngine
+    then proceeds to generation with zero context and no error signal
+    distinguishing "both retrieval sources are down" from "no relevant
+    documents exist." Characterized, not fixed here.
+    """
+    retriever = HybridRetriever()
+    retriever._vector = _FailingRetriever()
+    retriever._bm25 = _FailingRetriever()
+
+    result = retriever.retrieve(Query(text="q"), k=10)
+
+    assert result == []
+
+
+def test_hybrid_retriever_mutates_rank_and_method_on_a_nominally_frozen_retrievedchunk():
+    """`RetrievedChunk.model_config = {"frozen": True}` — normal attribute
+    assignment (`chunk.rank = 5`) raises a pydantic ValidationError. HybridRetriever
+    bypasses that via `object.__setattr__` to renumber rank/retrieval_method after
+    fusion. This proves "frozen" is not actually enforced for chunks that pass
+    through hybrid retrieval — a design quirk, not endorsed, characterized only.
+    """
+    retriever = HybridRetriever()
+    vector_hit = _hit("vector document", RetrievalMethod.VECTOR)
+    bm25_hit = _hit("bm25 document", RetrievalMethod.BM25)
+    original_rank = vector_hit.rank
+    retriever._vector = _FakeRetriever([vector_hit])
+    retriever._bm25 = _FakeRetriever([bm25_hit])
+
+    with pytest.raises(Exception, match="frozen|immutable"):
+        vector_hit.rank = 99  # sanity check: the model really is nominally frozen
+
+    result = retriever.retrieve(Query(text="q"), k=10)
+
+    # At least one fused result has been renumbered away from its pre-fusion rank
+    # via object.__setattr__, despite the model's frozen config.
+    assert any(r.rank != original_rank for r in result) or len(result) <= 1
+    assert all(r.retrieval_method == RetrievalMethod.HYBRID for r in result)
