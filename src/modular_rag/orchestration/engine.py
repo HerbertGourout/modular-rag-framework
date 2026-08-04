@@ -5,6 +5,8 @@ import time
 import structlog
 
 from modular_rag.app.container import Container
+from modular_rag.contracts.chunking import Chunker
+from modular_rag.contracts.retrieval import Retriever
 from modular_rag.core.errors import SecurityError
 from modular_rag.core.models.answer import Answer
 from modular_rag.core.models.document import Document
@@ -25,6 +27,29 @@ class RAGEngine:
         self._router = QueryRouter()
 
     # -- public API --
+
+    @property
+    def manifest_id(self) -> str:
+        """Public accessor for the wired pipeline's manifest id. Added in Lot 8
+        (docs/refactoring-plan.md) specifically so callers (API, CLI) stop
+        reaching into the private `_c` container directly."""
+        return self._c.manifest.id
+
+    @property
+    def chunker(self) -> Chunker:
+        """Public accessor for the wired chunker. Ingestion entry points (CLI,
+        API) that parse files from disk need a `Chunker` instance to pass to
+        `ingestion.pipelines.default.ingest_path`/`ingest_directory` — this is
+        the supported way to get one, instead of `pipeline._c.chunker`."""
+        return self._c.chunker
+
+    @property
+    def retriever(self) -> Retriever:
+        """Public accessor for the wired retriever. Exists for callers that
+        need to introspect retrieval behavior directly (e.g.
+        examples/hybrid_search/ comparing vector-only vs. BM25-only vs. fused
+        results) instead of reaching into `pipeline._c.retriever`."""
+        return self._c.retriever
 
     def ingest(self, documents: list[Document]) -> int:
         """Chunk and index a list of documents. Returns the number of chunks indexed."""

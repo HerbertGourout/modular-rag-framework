@@ -1,8 +1,12 @@
-"""Characterization tests for cli/__init__.py (the `mrag` Typer app).
+"""Tests for cli/__init__.py (the `mrag` Typer app).
 
-Lot 4 (docs/refactoring-plan.md). Monkeypatches load_pipeline (and, for the
-ingest command, ingest_path) so no real adapters or files-on-disk parsing
-are exercised — this module only characterizes the CLI's own wiring.
+Monkeypatches load_pipeline (and, for the ingest command, ingest_path/
+ingest_directory) so no real adapters or files-on-disk parsing are
+exercised — this module only tests the CLI's own wiring. Originally
+written in Lot 4 as characterization tests documenting that `ingest`
+reached into `pipeline._c.chunker` directly; Lot 8 (docs/refactoring-plan.md)
+replaced that with a public `RAGEngine.chunker` property — these are now
+regression tests, not characterization.
 """
 from __future__ import annotations
 
@@ -20,18 +24,10 @@ from modular_rag.core.models.chunk import Chunk
 runner = CliRunner()
 
 
-class _FakeManifest:
-    id = "fake-pipeline"
-
-
-class _FakeContainer:
-    manifest = _FakeManifest()
-    chunker = object()
-
-
 class _FakePipeline:
     def __init__(self) -> None:
-        self._c = _FakeContainer()
+        self.manifest_id = "fake-pipeline"
+        self.chunker = object()
         self.ingested: list[Chunk] = []
 
     def ingest_chunks(self, chunks: list[Chunk]) -> int:
@@ -71,12 +67,11 @@ def test_ask_command_requires_the_manifest_option(tmp_path: Path) -> None:
     assert result.exit_code == 2
 
 
-def test_ingest_command_reports_chunk_count_and_uses_private_chunker_attr(
+def test_ingest_command_reports_chunk_count_via_public_chunker_property(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Characterizes: `ingest` reaches into `pipeline._c.chunker` directly —
-    same private-container access pattern as api/__init__.py. Not endorsed;
-    Lot 8 removes this."""
+    """Regression test: `ingest` now reads `pipeline.chunker` (a public
+    property since Lot 8), not `pipeline._c.chunker`."""
     manifest = tmp_path / "m.yaml"
     manifest.write_text("id: x\n", encoding="utf-8")
     doc_file = tmp_path / "doc.txt"

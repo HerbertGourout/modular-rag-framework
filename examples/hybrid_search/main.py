@@ -70,7 +70,11 @@ def cmd_search(question: str, k: int) -> None:
     # Reach into the already-wired HybridRetriever's sub-retrievers to compare
     # each method individually — read-only introspection for demo purposes,
     # not component wiring (that already happened inside load_pipeline()).
-    hybrid = pipeline._c.retriever
+    # `pipeline.retriever` is the public accessor (Lot 8); `_vector`/`_bm25`
+    # below are HybridRetriever's own internals, with no public equivalent —
+    # an intentional exception for this side-by-side demo, not a pattern to
+    # copy into production code.
+    hybrid = pipeline.retriever
     vector_results = hybrid._vector.retrieve(query, k=k)
     bm25_results = hybrid._bm25.retrieve(query, k=k)
     hybrid_results = pipeline.retrieve(question, k=k)

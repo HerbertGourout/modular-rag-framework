@@ -18,9 +18,9 @@ def ingest(
     """Parse, chunk, embed and index documents from a file or directory."""
     pipeline = load_pipeline(manifest)
     if path.is_dir():
-        chunks = ingest_directory(path, pipeline._c.chunker)
+        chunks = ingest_directory(path, pipeline.chunker)
     else:
-        chunks = ingest_path(path, pipeline._c.chunker)
+        chunks = ingest_path(path, pipeline.chunker)
     n = pipeline.ingest_chunks(chunks)
     typer.echo(f"Indexed {n} chunks from {path}.")
 
