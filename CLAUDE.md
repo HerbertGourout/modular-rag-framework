@@ -15,6 +15,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Production-grade modular RAG + agentic orchestration framework for Publicis enterprise use cases. Five-version progression: V1 (Core RAG) → V2 (Agentic) → V3 (Graph Memory) → V4 (Governance) → V5 (Multimodal).
 
+> **[ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md) (accepted 2026-08-04) changes what "V2-V5" means.** This package owns governance, audit, evaluation, config/manifests, tenant isolation, and portability natively. It delegates generic multi-agent orchestration (V2.1), GraphRAG traversal (V3.0), fine-tuning-platform mechanics (V3.2), and multimodal execution (V5.0) to a selected external engine via adapter — these are no longer native builds. See block 09 and the ADR for the full owned/delegated split. Full reconciliation of this document with the ADR is Lot 17 scope; this is an interim marker.
+
 **Non-negotiable priority**: preserve the V1 end-to-end path before adding V3+ features. New graph, governance, or multimodal work must not break `examples/simple_qa/`, unit tests, contract tests, or the local layering audit.
 
 ---
@@ -185,6 +187,14 @@ A change to a contract (`contracts/`) requires updating the matching `tests/cont
 ## 09 — Roadmap: V1 → V5 with Strategic Features
 
 <!-- Updated: 2026-06-20 — Integrated 8 strategic features across V1-V5 -->
+<!-- Superseded in part 2026-08-04 by ADR-0005 — see note below and block 01 -->
+
+> **ADR-0005 superseding note:** of the roadmap below, **V1.1, V1.2, and V2.0 are unchanged —
+> build natively as described.** **V2.1 (Multi-Agent Teams), V3.0 (GraphRAG), V3.2 (Fine-Tuning
+> Loop — except its drift-detection/evaluation trigger, which stays native), and V5.0
+> (multimodal execution)** are now delegated to a selected external engine via adapter, not
+> built from the native designs described below. Treat those four sections as historical design
+> intent, not an implementation target, until Lot 17 rewrites this document fully.
 
 Strategic roadmap integrating **8 high-value features** that make this framework incontournable (irreplaceable).
 See [ROADMAP.md](ROADMAP.md) for complete timeline and success criteria per version.
@@ -307,15 +317,18 @@ See [ROADMAP.md](ROADMAP.md) for complete timeline and success criteria per vers
 
 ---
 
-### Adapter Stubs (V2-V5 Scope)
-| Stub | Scope | Implementation Timeline | Notes |
+### Adapter Stubs
+| Stub | Scope | Status per ADR-0005 | Notes |
 |------|-------|--------------------------|-------|
-| `adapters/llms/` | V2 | Multi-model: GPT-4, GPT-3.5, local | Cost optimizer requires this |
-| `adapters/auth/` | V4 | OAuth, API key, tenant isolation | Policies (V2) → Auth (V4) |
-| `adapters/graphstores/` | V3 | Neo4j, ArangoDB | GraphRAG requires this |
-| `adapters/search/` | V2-V3 | Elasticsearch, Algolia | Multi-provider search |
+| `adapters/llms/` | Engine-delegation target | **Reachable now** (Lots 6/7/15) — permission moved deny→ask 2026-08-04 | Gateway/routing to the selected external engine and multi-model access, not a cost-optimizer-only concern |
+| `adapters/graphstores/` | Engine-delegation target | **Reachable now** (Lots 6/7/15) — permission moved deny→ask 2026-08-04 | Backs the external engine's GraphRAG capability if kept as a data-model adapter; traversal itself is delegated |
+| `adapters/search/` | Engine-delegation target | **Reachable now** (Lots 6/7/15) — permission moved deny→ask 2026-08-04 | Multi-provider search, e.g. OpenSearch per `docs/refactoring/technology-candidates.md` |
+| `adapters/auth/` | Not yet assigned | **Still deny** | ADR-0005 doesn't map this path to an owned capability yet; identity/tenant work (Lot 11b) currently targets Keycloak via `security/policies/`, not this directory. Revisit at Lot 11b, don't open speculatively. |
 
-**Rule**: Do NOT add implementations to these directories before their version. Leave `.gitkeep` files. They are reserved namespaces.
+**Rule**: these are adapter targets for the engine selected in Lot 6, wired through the
+`DocumentEngine` port (Lot 7) — not a native reimplementation of what they adapt to. Don't build
+generic orchestration/GraphRAG/multimodal logic inside them; they call out to the external
+engine or a specific vendor SDK.
 
 ---
 
@@ -347,6 +360,11 @@ See [ROADMAP.md](ROADMAP.md) for complete timeline and success criteria per vers
 ### Implementation Order (Do NOT Skip Versions)
 
 **CRITICAL**: Versions are sequential. Do not implement V3 features in V1.
+
+> This sequence still governs **native, owned** work (V1.1, V1.2, V2.0, and the parts of V3+ that
+> stay native per the ADR-0005 note above). It does **not** gate the engine-delegation lots
+> (`docs/refactoring-plan.md` Lots 6, 7, 15) — those can proceed once Phase A/B of the
+> refactoring plan reach them, independent of whether native V2.1/V3.0/V3.2/V5.0 have "started."
 
 ```
 V1 — V1.0 → V1.1 → V1.2 (complete V1 before V2)
@@ -396,12 +414,16 @@ Why sequences matter:
 
 | Capability | LangChain | Haystack | **This Framework** |
 |---|---|---|---|
-| Evaluation | External | Built-in | ✅ **Contract-enforced (V1.1)** |
-| Audit Trail | Manual logs | Limited | ✅ **GDPR-ready (V1.2)** |
-| Policies | None | Limited | ✅ **Policy-as-Code (V2.0)** |
-| Multi-Agent | Bolted-on | Limited | ✅ **Team collaboration (V2.1)** |
-| Cost Optimization | None | None | ✅ **Auto-routing (V3.1)** |
-| Fine-Tuning | None | None | ✅ **Continuous learning (V3.2)** |
-| Graph Memory | External | External | ✅ **Native GraphRAG (V3.0)** |
-| Multi-Language | English-first | Limited | ✅ **20+ languages (V4.1)** |
-| Multimodal | Partial | Partial | ✅ **Full VLM support (V5.0)** |
+| Evaluation | External | Built-in | ✅ **Contract-enforced (V1.1), native** |
+| Audit Trail | Manual logs | Limited | ✅ **GDPR-ready (V1.2), native** |
+| Policies | None | Limited | ✅ **Policy-as-Code (V2.0), native** |
+| Multi-Agent | Bolted-on | Limited | ⚙️ **Delegated to a selected external engine (V2.1)**, exposed via `DocumentEngine` |
+| Cost Optimization | None | None | ✅ **Auto-routing (V3.1), native** |
+| Fine-Tuning | None | None | ⚙️ **Drift detection/eval trigger native; fine-tuning execution delegated (V3.2)** |
+| Graph Memory | External | External | ⚙️ **Delegated GraphRAG traversal (V3.0)**; a native graph data model is possible pending Lot 6 evidence |
+| Multi-Language | English-first | Limited | ✅ **20+ languages (V4.1), native** |
+| Multimodal | Partial | Partial | ⚙️ **Delegated VLM execution (V5.0)**; parsing/citation enrichment may stay native |
+
+⚙️ = delegated per [ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md) — the
+differentiator is owning governance/audit/eval/portability *around* whichever engine is
+selected, not reimplementing the engine's own mechanics.

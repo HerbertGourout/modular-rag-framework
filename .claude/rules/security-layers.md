@@ -31,13 +31,15 @@ allow → auto-approved, no prompt
 | `**/.env*` | Secrets — API keys, credentials, tokens |
 | `**/*.local.md` | User-specific configuration |
 | `manifests/production/**` | Production configs (V4+ scope) |
-| `.claude/rules/**` | Architecture rules — breaking changes |
 | `.gitlab/**` | CI/CD pipeline configuration |
-| `src/modular_rag/adapters/llms/**` | LLM adapters (V2+ scope) |
-| `src/modular_rag/adapters/auth/**` | Auth adapters (V4+ scope) |
-| `src/modular_rag/adapters/graphstores/**` | Graph store adapters (V3+ scope) |
-| `src/modular_rag/adapters/search/**` | Search adapters (V2-V3 scope) |
+| `src/modular_rag/adapters/auth/**` | Not yet assigned a capability per ADR-0005; revisit at Lot 11b |
 | `benchmarks/**` | Benchmarks (V3+ scope) |
+
+**Changed 2026-08-04 (ADR-0005, Lot 2):** `.claude/rules/**` and
+`src/modular_rag/adapters/{llms,graphstores,search}/**` moved from `deny` to `ask` below — they
+are no longer "V2+/V3+ reserved" native-build stubs but reachable engine-delegation adapter
+targets (`docs/refactoring-plan.md` Lots 6/7/15). `adapters/auth/**` stays denied — see reason
+above.
 
 ### allow — Auto-Approved (no prompt)
 
@@ -56,11 +58,15 @@ allow → auto-approved, no prompt
 
 | Path | Rationale |
 |------|-----------|
+| `.claude/rules/**` | Architecture rules — breaking changes; moved from deny 2026-08-04 so Lot 2-style realignments are possible with confirmation |
 | `src/modular_rag/contracts/**` | Protocol definitions — breaking changes propagate everywhere |
 | `src/modular_rag/orchestration/**` | Registry, engine, router changes need approval |
 | `src/modular_rag/security/**` | Policies, guards, redaction rules need review |
 | `src/modular_rag/adapters/embeddings/**` | Embedding protocol implementations protected |
 | `src/modular_rag/adapters/vectorstores/**` | Vector store binding implementations protected |
+| `src/modular_rag/adapters/llms/**` | Engine-delegation adapter target (Lots 6/7/15) — protected, not blocked |
+| `src/modular_rag/adapters/graphstores/**` | Engine-delegation adapter target (Lots 6/7/15) — protected, not blocked |
+| `src/modular_rag/adapters/search/**` | Engine-delegation adapter target (Lots 6/7/15) — protected, not blocked |
 | `src/modular_rag/core/**` | Core models, exceptions, utilities protected |
 | `pyproject.toml` | Dependencies, versions, build config protected |
 | `CONTRIBUTING.md` | Development guidelines protected |
@@ -127,7 +133,7 @@ Use the `/validate-security` and `/validate-architecture` skills for manual vers
 | 06 | Testing and validation (scopes, markers, expectations) | 🟡 MEDIUM |
 | 07 | Security rules (never import between domains, Safety ≠ Security) | 🔴 CRITICAL |
 | 08 | Git and PR workflow (branch naming, MR checklist) | 🟡 MEDIUM |
-| 09 | Known stubs & V2+ scope (what NOT to implement) | 🔴 CRITICAL |
+| 09 | Roadmap — owned (native) vs. delegated (external engine) per ADR-0005 | 🔴 CRITICAL |
 
 ### Domain-Specific CLAUDE.md Files
 
@@ -166,8 +172,10 @@ src/modular_rag/
 ├── adapters/
 │   ├── embeddings/           ← Embedding implementations (ask)
 │   ├── vectorstores/         ← Vector store bindings (ask)
-│   ├── llms/                 ← LLM adapters (BLOCKED — V2+ scope)
-│   ├── auth/                 ← Auth adapters (BLOCKED — V4+ scope)
+│   ├── llms/                 ← Engine-delegation adapter target (ask, Lots 6/7/15)
+│   ├── graphstores/          ← Engine-delegation adapter target (ask, Lots 6/7/15)
+│   ├── search/               ← Engine-delegation adapter target (ask, Lots 6/7/15)
+│   ├── auth/                 ← Auth adapters (BLOCKED — not yet assigned, revisit Lot 11b)
 │   └── ...
 ├── security/                 ← Filters, policies, guards (ask)
 ├── ingestion/                ← Chunkers, parsers (allow)
@@ -204,8 +212,10 @@ examples/
 
 ### Rationale
 
-- **Blocked zones** (llms/, auth/, graphstores/, search/): Reserved namespaces prevent accidental V2+ implementation
-- **Ask-before zones** (contracts/, orchestration/, security/): Changes here propagate to entire framework
+- **Blocked zone** (auth/ only, as of 2026-08-04): not yet assigned a capability by ADR-0005
+- **Ask-before zones** (contracts/, orchestration/, security/, llms/, graphstores/, search/,
+  `.claude/rules/`): changes here propagate to the entire framework, or (for the three adapter
+  dirs) are engine-delegation targets that need confirmation rather than a hard block
 - **Allow zones** (ingestion/, retrieval/, generation/): New implementations are localized, safe
 - **Allow zones** (tests/, examples/, docs/): Zero friction on documentation and testing
 

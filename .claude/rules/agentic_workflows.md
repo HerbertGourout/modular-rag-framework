@@ -8,6 +8,15 @@ lastUpdated: "2026-06-22"
 
 # Règles — Agentic Workflows (V2+ Reserved)
 
+> **⚠️ Superseded by [ADR-0005](../../docs/adr/0005-document-ai-control-plane-boundary.md)
+> (accepted 2026-08-04).** Generic multi-agent orchestration, tool-calling, and multi-turn
+> coordination are now **delegated** to a selected external engine, not built natively from the
+> design below. Do not use this document as an implementation spec for `agents/`. It is retained
+> for historical context only; full retirement is decided in Lot 17 of
+> `docs/refactoring-plan.md`. If you land here to build something in `agents/`, it should be an
+> adapter that calls the external engine (`DocumentEngine` port, Lot 7), not the coordinator/
+> tool-use runtime described below.
+
 This file documents **patterns and design guidelines for agentic workflows**, which are V2+ scope. In V1, **no agentic workflow implementations are added**. This document serves as a design reference for future development.
 
 ---

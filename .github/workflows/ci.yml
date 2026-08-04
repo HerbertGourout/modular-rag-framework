@@ -18,16 +18,27 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: "pip"
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -e .[dev] || pip install -e .
+          pip install -e .[v1,dev]
       - name: Lint with ruff (syntax, imports, naming)
         run: ruff check src/modular_rag/ tests/ --select E,F,I,N,W,UP,B,C4 --output-format=concise
-      - name: Type check with mypy (warnings only, not blocking)
-        run: mypy src/modular_rag/ --no-error-summary || true
+      - name: Compilation check
+        run: python -m compileall -q src/modular_rag
+      - name: Hexagonal layering audit (strict)
+        run: python scripts/check_layering.py --strict
+      - name: Type check with mypy (ratcheted against .claude/mypy-baseline.txt)
+        run: |
+          MYPY_BASELINE=$(grep -v '^#' .claude/mypy-baseline.txt | grep -v '^$' | head -1)
+          MYPY_ERRORS=$(mypy src/modular_rag/ --no-error-summary 2>&1 | grep -c "error:" || true)
+          echo "mypy errors: $MYPY_ERRORS (baseline: $MYPY_BASELINE)"
+          if [ "$MYPY_ERRORS" -gt "$MYPY_BASELINE" ]; then
+            echo "::error::New mypy errors introduced ($MYPY_ERRORS > baseline $MYPY_BASELINE)"
+            exit 1
+          fi
 
   test-unit:
     runs-on: ubuntu-latest
@@ -36,12 +47,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: "pip"
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -e .[dev] || pip install -e .
+          pip install -e .[v1,dev]
       - name: Run unit tests (no external services)
         run: pytest tests/unit/ -v --tb=short
 
@@ -52,12 +63,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: "pip"
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -e .[dev] || pip install -e .
+          pip install -e .[v1,dev]
       - name: Run contract conformance tests
         run: pytest tests/contract/ -v --tb=short
 
@@ -69,12 +80,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: "pip"
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -e .[dev] || pip install -e .
+          pip install -e .[v1,dev]
       - name: Run all tests with coverage
         run: pytest tests/unit/ tests/contract/ --cov=src/modular_rag --cov-report=term-missing --cov-report=xml -v
       - name: Upload coverage report
@@ -83,3 +94,31 @@ jobs:
         with:
           name: coverage-report
           path: coverage.xml
+
+  build-and-smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [lint, test-unit, test-contract]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Build wheel
+        run: |
+          pip install --upgrade pip build
+          python -m build --wheel
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel
+          path: dist/*.whl
+      - name: Clean-install smoke test
+        run: |
+          python -m venv /tmp/smoke-venv
+          /tmp/smoke-venv/bin/pip install --upgrade pip
+          WHEEL_FILE=$(ls dist/*.whl)
+          /tmp/smoke-venv/bin/pip install "${WHEEL_FILE}[v1]"
+          /tmp/smoke-venv/bin/python -c "import modular_rag; print('import OK')"
+          /tmp/smoke-venv/bin/mrag version

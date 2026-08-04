@@ -8,6 +8,13 @@ lastUpdated: "2026-06-19"
 
 # Règles — édition du module agents
 
+> **⚠️ Superseded in part by [ADR-0005](../../docs/adr/0005-document-ai-control-plane-boundary.md)
+> (accepted 2026-08-04).** The "V2+ expands to full agent coordination" line below describes a
+> native `Coordinator`/`HierarchicalCoordinator` build that is now **delegated** to a selected
+> external engine instead. The V1 interface patterns in this file remain valid; the V2+
+> native-coordination sections are historical design reference only, not an implementation
+> target. Full retirement/rewrite is Lot 17 scope in `docs/refactoring-plan.md`.
+
 The agents module defines the interfaces and base patterns for agentic orchestration. In V1, this is **minimal scope** (interfaces only). V2+ expands to full agent coordination.
 
 ---

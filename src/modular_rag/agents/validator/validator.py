@@ -43,11 +43,11 @@ def _groundedness_score(answer_text: str, context: list[RetrievedChunk]) -> floa
     if not context or not answer_text:
         return 0.0
     answer_tokens = set(re.findall(r"\w+", answer_text.lower()))
-    context_tokens = set(
+    context_tokens = {
         token
         for retrieved in context
         for token in re.findall(r"\w+", retrieved.chunk.content.lower())
-    )
+    }
     if not answer_tokens:
         return 0.0
     return len(answer_tokens & context_tokens) / len(answer_tokens)

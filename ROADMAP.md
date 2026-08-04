@@ -1,5 +1,13 @@
 # Roadmap — Modular RAG V1 → V5 + Strategic Features
 
+> **[ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md) (accepted 2026-08-04)
+> supersedes part of this roadmap.** V1.1, V1.2, and V2.0 (Policy Engine) are unchanged — built
+> natively. **V2.1 (Multi-Agent Teams), V3.0 (GraphRAG), V3.2 (Fine-Tuning Loop mechanics —
+> except its drift-detection/evaluation trigger, which stays native), and V5.0 (multimodal
+> execution)** are now delegated to a selected external engine via adapter, not built from the
+> native task lists below. This is an interim marker (`docs/refactoring-plan.md` Lot 2); full
+> reconciliation of this document is Lot 17 scope.
+
 ## Version Progression Overview
 
 ```

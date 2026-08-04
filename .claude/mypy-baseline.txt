@@ -1,0 +1,8 @@
+# Mypy error-count baseline, established Lot 3 (docs/refactoring-plan.md), 2026-08-04.
+# CI fails only if `mypy src/modular_rag/ --no-error-summary | grep -c "error:"` exceeds this
+# number. Reduce this number deliberately as errors are fixed — never raise it to make a
+# regression pass. This is a count ratchet, not a line-by-line diff: mypy's own line numbers and
+# wording shift with unrelated refactors, so an exact-match diff would be noisy without adding
+# real signal. See docs/refactoring/lot-3-baseline-and-ci.md for the full error list captured
+# at baseline time.
+35

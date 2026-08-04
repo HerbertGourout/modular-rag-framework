@@ -1,6 +1,6 @@
 # ADR-0005 — Document-AI Control Plane: Product Boundary and Engine Delegation
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-08-03
 **Authors:** Herbert Gourout (sole decision authority as of this date; target team of up to
 3 additional contributors not yet assembled)
@@ -193,9 +193,8 @@ V1 as a bounded, exit-criteria-bound reference adapter per §5.5.
 
 **Date:** 2026-08-03
 
-**Status:** Proposed — approval rests with Herbert Gourout alone (per
-[Lot 0 decision authority](../refactoring/lot-0-baseline.md#2-decision-authority)); no other
-team member currently gates the move to Accepted, since none is yet onboarded.
+**Status:** Accepted 2026-08-04 by Herbert Gourout, sole decision authority per
+[Lot 0 decision authority](../refactoring/lot-0-baseline.md#2-decision-authority).
 
 **Next:** Lot 2 — narrow interim realignment of `CLAUDE.md` and `.claude/` instructions to stop
 steering implementation toward the delegated capabilities in §5.2.

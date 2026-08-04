@@ -23,3 +23,11 @@ tests/integration/   → requires Qdrant on localhost:6333
 tests/e2e/           → full pipeline with real LLM (not yet written)
 docs/architecture/   → overview, data-model, module-model, runtime-flow, security, structure
 ```
+
+> Per [ADR-0005](../docs/adr/0005-document-ai-control-plane-boundary.md) (accepted 2026-08-04):
+> `agents/`'s coordinator/planner/synthesizer/validator roles are delegated to a selected
+> external engine, not built natively — this directory hosts the adapter integration. The
+> `memory/` knowledge-graph entry may keep a native *data model*, but graph traversal/reasoning
+> execution is delegated; this is contingent on Lot 6 evidence, not decided yet. `adapters/`
+> now includes `llms`, `graphstores`, `search` as reachable engine-delegation targets
+> (Lots 6/7/15); `auth` remains unassigned pending Lot 11b.

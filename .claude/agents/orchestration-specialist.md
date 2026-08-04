@@ -55,13 +55,12 @@ Expert agent specializing in component orchestration, registry patterns, manifes
 - Configuration propagation
 - Hot reload capabilities
 
-### Multi-Agent Orchestration (V2+)
-- Agent coordination patterns
-- Task decomposition strategies
-- Parallel execution orchestration
-- State sharing between agents
-- Dependency resolution
-- Consensus mechanisms
+### Multi-Agent Orchestration — delegated per ADR-0005 (2026-08-04)
+Generic agent coordination, task decomposition, parallel execution orchestration, state sharing,
+dependency resolution, and consensus mechanisms are **delegated to the selected external engine**
+(Lot 6), not designed natively by this agent. This agent's job here is integration: build the
+`DocumentEngine` port (Lot 7) and the adapter that calls the external engine, not a native
+multi-agent runtime.
 
 ### Pipeline Composition
 - Multi-stage RAG pipelines
@@ -254,10 +253,16 @@ CLI overrides (--param value)
 Final Configuration
 ```
 
-## Multi-Agent Orchestration (V2+)
+## Multi-Agent Orchestration — delegated (ADR-0005)
 
-### Agent Coordination Patterns
+This agent-graph YAML is retained as **historical design reference only** — this exact
+coordination logic (planner/retriever/synthesizer/validator with `depends_on` chains) is now
+built by the selected external engine (Lot 6), not natively in this repo. The manifest-side
+equivalent going forward is a `DocumentEngine` capability declaration (Lot 7), not this agent
+graph.
+
 ```yaml
+# Superseded — do not implement this natively; kept for context only
 agents:
   - name: planner
     role: decompose_tasks

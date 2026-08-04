@@ -181,7 +181,7 @@ except VectorStoreUnavailableError:
 ## 4. FlowCompiler: State Graph Compilation
 
 ### Rule: Compile Query Flow to State Graph Before Execution
-The `FlowCompiler` converts a logical pipeline definition (manifest YAML) into an executable state machine. This is used for V2 agent orchestration but must be designed with V1 compatibility.
+The `FlowCompiler` converts a logical pipeline definition (manifest YAML) into an executable state machine. This routes to the `DocumentEngine` port (ADR-0005, Lot 7) rather than a native V2 agent-orchestration runtime — must be designed with V1 compatibility.
 
 ### Compilation Pattern
 ```python
@@ -423,15 +423,16 @@ def run(self, query: Query) -> Answer:
 - ✅ Observability: TraceStep emissions
 - ✅ Error handling: fallbacks + logging
 
-### V2 Orchestration (Future, Out of Scope)
-- ⏸️ StateMachine: full agent-based state graphs
-- ⏸️ FlowCompiler: dynamic flow compilation
-- ⏸️ Agent coordination (Coordinator, Planner, Retriever, Synthesizer agents)
-- ⏸️ Tool use patterns
-- ⏸️ Multi-turn interactions
+### Delegated per ADR-0005 (2026-08-04) — not a native V2 build
+- ⚙️ Agent coordination (Coordinator, Planner, Retriever, Synthesizer agents): delegated to the
+  selected external engine (Lot 6), routed through `StateMachine`/`FlowCompiler` to the
+  `DocumentEngine` port (Lot 7), not built as a native orchestration runtime
+- ⚙️ Tool use patterns, multi-turn interactions: same, engine-owned
+- ⚙️ Dynamic flow compilation: `FlowCompiler`'s job becomes routing to the external engine, not
+  compiling a native agent state graph
 
 ### Rule
-**Do not implement V2 orchestration features in V1.** Leave `StateMachine` and `FlowCompiler` as interfaces only. Focus on `RAGEngine` and `ComponentRegistry` for V1 completion.
+**Do not implement generic multi-agent orchestration natively.** Leave `StateMachine` and `FlowCompiler` as interfaces until Lot 7 defines the `DocumentEngine` port they route to. Focus on `RAGEngine` and `ComponentRegistry` for V1 completion in the meantime.
 
 ---
 

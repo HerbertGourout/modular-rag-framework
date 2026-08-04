@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import structlog
 from typing import Protocol
+
+import structlog
 
 from modular_rag.core.errors import RetrievalError
 from modular_rag.core.models.query import Query
