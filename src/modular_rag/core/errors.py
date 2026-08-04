@@ -55,3 +55,23 @@ class StorageError(ModularRAGError):
 
 class ManifestError(ConfigurationError):
     """Raised when a YAML manifest cannot be loaded or validated."""
+
+
+class EngineError(ModularRAGError):
+    """Base error for all DocumentEngine (contracts/engine.py) failures — the
+    delegation boundary defined by Lot 7, per ADR-0005 §5.2 / ADR-0006."""
+
+
+class EngineTimeoutError(EngineError):
+    """Raised when a DocumentEngine call exceeds its deadline."""
+
+
+class EngineCancelledError(EngineError):
+    """Raised when a DocumentEngine call is cancelled via its ExecutionContext's
+    CancellationToken."""
+
+
+class EngineCapabilityError(EngineError):
+    """Raised when a caller invokes a DocumentEngine method the adapter's
+    declared `capabilities` says it does not support (e.g. calling `astream`
+    on an engine that doesn't declare EngineCapability.STREAMING)."""

@@ -1,6 +1,17 @@
 from modular_rag.contracts.agents import Agent, AgentResult, AgentTask
 from modular_rag.contracts.chunking import Chunker
 from modular_rag.contracts.embeddings import Embedder
+from modular_rag.contracts.engine import (
+    CancellationToken,
+    DocumentEngine,
+    EngineCapability,
+    EngineRequest,
+    EngineResult,
+    EngineStep,
+    ExecutionContext,
+    GovernanceDecision,
+    GovernanceHook,
+)
 from modular_rag.contracts.evaluation import AnswerEngine, Evaluator
 from modular_rag.contracts.generation import Generator
 from modular_rag.contracts.indexing import Indexer
@@ -17,6 +28,15 @@ __all__ = [
     "Agent", "AgentResult", "AgentTask",
     "Chunker",
     "Embedder",
+    "CancellationToken",
+    "DocumentEngine",
+    "EngineCapability",
+    "EngineRequest",
+    "EngineResult",
+    "EngineStep",
+    "ExecutionContext",
+    "GovernanceDecision",
+    "GovernanceHook",
     "AnswerEngine",
     "Evaluator",
     "Generator",

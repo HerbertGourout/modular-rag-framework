@@ -1,8 +1,9 @@
 # Refactoring Plan — Engine-Agnostic Control Plane
 
-> **Status:** Phase A (Lots 0-5) COMPLETE. Lot 6 COMPLETE, 2026-08-04:
-> [ADR-0006](adr/0006-external-engine-selection.md) accepted — LangGraph is the selected
-> external engine. Lot 7 (`DocumentEngine` contracts) not started.
+> **Status:** Phase A (Lots 0-5) COMPLETE. Lots 6-7 COMPLETE, 2026-08-04:
+> [ADR-0006](adr/0006-external-engine-selection.md) accepted (LangGraph selected);
+> `contracts/engine.py` (`DocumentEngine` port) built with a fake engine and semantic
+> conformance suite. Lot 8 (native adapter) not started.
 > **Target outcome:** Deploy compliant, measurable document-AI solutions faster, independently
 > of the underlying execution engine.
 > **Migration principle:** Incremental, evidence-based, reversible, and releasable after every
@@ -153,7 +154,7 @@ stated otherwise.
 | 4 | Public-surface inventory and characterization safety net | P0 | L (1.5-2wk) | COMPLETE | 3 |
 | 5 | Capability truth and runnable-manifest classification | P0 | S (2-3d) | COMPLETE | 1, 3 |
 | 6 | External-engine fit spike and selection ADR | P0 | M (1-1.5wk, time-boxed) | COMPLETE | 1, 4 |
-| 7 | Engine-neutral contracts and compatibility policy | P0 | M (1wk) | NOT STARTED | 4, 6 |
+| 7 | Engine-neutral contracts and compatibility policy | P0 | M (1wk) | COMPLETE | 4, 6 |
 | 8 | Native V1 adapter and compatibility facade | P0 | M (1wk) | NOT STARTED | 7 |
 | 9 | Versioned solution configuration and secret resolution | P0 | M (1wk) | NOT STARTED | 7 |
 | 10 | Versioned trace/audit foundation | P0 | M (1wk) | NOT STARTED | 7, 9 |
@@ -490,6 +491,7 @@ scope change, or an approved architecture decision — never as a silent in-plac
 | 2026-08-04 | Lot 4 Part 2 (metrics, deletion/update, hybrid fallback): 23 new/extended characterization tests. Found two more real gaps: BM25 silently drops relevant hits in small corpora (negative/zero IDF), and benchmark failures are recorded as indistinguishable from genuine null scores. Confirmed `RAGEngine` has no `delete()` at all. Evidence in `docs/refactoring/lot-4-part2-metrics-deletion-fallback.md`. Lot 4 as a whole is now COMPLETE. | COMPLETE |
 | 2026-08-04 | Lot 5: corrected delivered/security/compliance claims in README.md, docs/api/rest.md, docs/business-case.md against verified current behavior; classified all 5 manifest presets runnable/blueprint with `manifests/README.md`; added CI + check.sh validation that the one runnable manifest actually wires. Phase A (Lots 0-5) is now fully COMPLETE. Evidence in `docs/refactoring/lot-5-capability-truth.md`. | COMPLETE |
 | 2026-08-04 | Lot 6: executed spike comparing LangGraph and LlamaIndex Workflows against a governed-QA use case (real code, both installed and run, not a docs-only comparison). ADR-0006 accepted — LangGraph selected. Evidence in `docs/refactoring/lot-6-spike/`. Lot 6 COMPLETE. | COMPLETE |
+| 2026-08-04 | Lot 7: built `contracts/engine.py` (`DocumentEngine` port, `EngineCapability`, `ExecutionContext`, `EngineRequest`/`Result`/`Step`, `GovernanceHook`, `CancellationToken`), `FakeDocumentEngine`, an 11-test semantic conformance suite, and the compatibility/deprecation policy doc. Zero vendor types in the contract; zero new mypy errors. Evidence in `docs/refactoring/lot-7-document-engine-contract.md`. Lot 7 COMPLETE. | COMPLETE |
 | 2026-08-03 | Added per-lot effort sizing and total-programme estimate; split Lots 11/12/16 into lettered sub-lots | COMPLETE |
 | 2026-08-03 | Selected Keycloak (Lot 11b identity provider) and PostgreSQL (Lot 10 audit store, Lot 12a lifecycle ledger) from an infra-stack compatibility review | COMPLETE |
 | 2026-08-04 | Accepted ADR-0006: LangGraph selected as the external engine, on Herbert Gourout's explicit delegation of the call to the spike evidence | ACCEPTED |
