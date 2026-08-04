@@ -101,6 +101,20 @@ def test_registering_the_same_role_and_type_twice_silently_overwrites() -> None:
     assert container.chunker == "second"
 
 
+def test_available_types_returns_the_registered_type_names_for_a_role() -> None:
+    reg = ComponentRegistry()
+    reg.register("chunker", "fixed", lambda cfg: object())
+    reg.register("chunker", "adaptive", lambda cfg: object())
+
+    assert reg.available_types("chunker") == frozenset({"fixed", "adaptive"})
+
+
+def test_available_types_returns_empty_frozenset_for_an_unknown_role() -> None:
+    reg = ComponentRegistry()
+
+    assert reg.available_types("does-not-exist") == frozenset()
+
+
 def test_default_registry_has_the_documented_builtin_type_names() -> None:
     """Construction only — does not invoke factories, so no network/model I/O happens
     (all adapters lazy-load per CLAUDE.md rule 7). Guards against a factory silently

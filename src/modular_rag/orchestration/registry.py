@@ -37,6 +37,12 @@ class ComponentRegistry:
         self._factories[role][type_name] = factory
         log.debug("registry.registered", role=role, type=type_name)
 
+    def available_types(self, role: str) -> frozenset[str]:
+        """Public introspection: which type names are registered for a role.
+        Added in Lot 9 (docs/refactoring-plan.md) so capability-validation
+        code doesn't need to reach into `_factories` directly."""
+        return frozenset(self._factories.get(role, {}))
+
     def _build(self, role: str, cfg: ComponentConfig | None) -> Any | None:
         if cfg is None:
             return None

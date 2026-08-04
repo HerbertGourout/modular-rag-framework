@@ -88,6 +88,53 @@ def test_ingest_command_reports_chunk_count_via_public_chunker_property(
     assert fake_pipeline.ingested == [fake_chunk]
 
 
+def test_validate_command_reports_ok_for_the_runnable_preset() -> None:
+    result = runner.invoke(app, ["validate", "manifests/presets/local-hybrid-rag.yaml"])
+
+    assert result.exit_code == 0
+    assert "OK:" in result.stdout
+
+
+def test_validate_command_reports_capability_errors_for_an_unregistered_type(
+    tmp_path: Path,
+) -> None:
+    bad_manifest = tmp_path / "bad.yaml"
+    bad_manifest.write_text(
+        "id: bad-pipeline\nembedder:\n  type: does-not-exist\n", encoding="utf-8"
+    )
+
+    result = runner.invoke(app, ["validate", str(bad_manifest)])
+
+    assert result.exit_code == 1
+    assert "does-not-exist" in result.stdout
+
+
+def test_validate_command_reports_invalid_for_unresolved_interpolation(
+    tmp_path: Path,
+) -> None:
+    bad_manifest = tmp_path / "bad.yaml"
+    bad_manifest.write_text(
+        "id: bad-pipeline\nindexer:\n  type: qdrant\n  config:\n    url: ${TOTALLY_UNSET_VAR}\n",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["validate", str(bad_manifest)])
+
+    assert result.exit_code == 1
+    assert "INVALID" in result.stdout
+
+
+def test_manifest_schema_command_prints_valid_json_schema() -> None:
+    import json
+
+    result = runner.invoke(app, ["manifest-schema"])
+
+    assert result.exit_code == 0
+    schema = json.loads(result.stdout)
+    assert schema["title"] == "PipelineManifest"
+    assert schema["additionalProperties"] is False
+
+
 def test_ingest_command_on_a_directory_uses_ingest_directory(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
