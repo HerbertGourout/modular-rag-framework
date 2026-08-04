@@ -1,9 +1,10 @@
 # Refactoring Plan — Engine-Agnostic Control Plane
 
-> **Status:** Phase A (Lots 0-5) COMPLETE. Lots 6-7 COMPLETE, 2026-08-04:
+> **Status:** Phase A (Lots 0-5) COMPLETE. Lots 6-8 COMPLETE, 2026-08-04:
 > [ADR-0006](adr/0006-external-engine-selection.md) accepted (LangGraph selected);
-> `contracts/engine.py` (`DocumentEngine` port) built with a fake engine and semantic
-> conformance suite. Lot 8 (native adapter) not started.
+> `contracts/engine.py` (`DocumentEngine` port); `NativeEngineAdapter` wraps `RAGEngine`;
+> private-container access removed repo-wide; the `/answer` routing bug from Lot 4 is fixed.
+> Lot 9 (versioned config) not started.
 > **Target outcome:** Deploy compliant, measurable document-AI solutions faster, independently
 > of the underlying execution engine.
 > **Migration principle:** Incremental, evidence-based, reversible, and releasable after every
@@ -90,7 +91,8 @@ Findings below are tracked against the target in §1. Severity is one of `BLOCKI
 | Audit semantics | No stable event schema or sink; compliance evidence cannot be guaranteed | CRITICAL | Lot 10 |
 | Metric correctness | `ExactMatchEvaluator` behaves like token-set F1, not exact match; answer precision/recall written into retrieval-named fields | CRITICAL | Lot 13 |
 | API security | No auth, rate limits, or request-size limits; internal exception strings and source content can leak to callers | CRITICAL | Lot 16a |
-| API routing bug (found in Lot 4) | `POST /answer` never accepts its documented JSON body — `from __future__ import annotations` plus a locally-scoped `QuestionRequest` class breaks FastAPI's forward-reference resolution, returning 422 on every documented call. Handler logic itself is fine when invoked directly. | CRITICAL | Lot 8 (interface cleanup) — regression test already red: `tests/unit/api/test_api.py::test_answer_route_does_not_accept_the_documented_json_body` |
+| ~~API routing bug (found in Lot 4)~~ | **RESOLVED in Lot 8** (2026-08-04): moved `QuestionRequest`/`AnswerResponse` to module level in `api/__init__.py`. `POST /answer` now returns 200 as documented — regression test: `tests/unit/api/test_api.py::test_answer_accepts_the_documented_json_body_and_returns_200`. | — | Lot 8 |
+| ~~Private-container access in api/cli~~ | **RESOLVED in Lot 8**: `RAGEngine` now exposes public `manifest_id`/`chunker`/`retriever` properties; `api/__init__.py`, `cli/__init__.py`, and `examples/hybrid_search/main.py` no longer reach into `pipeline._c`. | — | Lot 8 |
 | BM25 small-corpus scoring gap (found in Lot 4) | `rank_bm25`'s IDF term goes zero/negative when a query term appears in most/all documents of a small corpus (trivial with 1-2 chunks). `BM25Retriever`'s `score > 0` filter then silently drops a genuinely relevant, sometimes the *only*, matching document. Confirmed directly against `BM25Okapi`: negative score with 1 doc, zero with 2, correct ranking only from ~5 varied docs up. | CRITICAL | Lot 12b — regression test: `tests/unit/retrieval/test_bm25.py::test_retrieve_returns_no_hits_for_a_relevant_document_in_a_too_small_corpus` |
 | Benchmark failure-masking confirmed (Lot 4) | `BenchmarkRunner.run()` catches any `engine.answer()` exception and records a bare `Metrics()` (all-None) — indistinguishable from a genuinely null-scoring case. Confirms the §10.4 invariant ("infrastructure failures fail the run; they do not produce empty metrics") is not yet upheld. | CRITICAL | Lot 13 — regression test: `tests/unit/eval/test_benchmark.py::test_runner_swallows_engine_failures_into_indistinguishable_empty_metrics` |
 | Manifest configuration | Component config accepts arbitrary dicts; no extra-field policy, precedence, interpolation, or secret-reference resolution | CRITICAL | Lot 9 |
@@ -155,7 +157,7 @@ stated otherwise.
 | 5 | Capability truth and runnable-manifest classification | P0 | S (2-3d) | COMPLETE | 1, 3 |
 | 6 | External-engine fit spike and selection ADR | P0 | M (1-1.5wk, time-boxed) | COMPLETE | 1, 4 |
 | 7 | Engine-neutral contracts and compatibility policy | P0 | M (1wk) | COMPLETE | 4, 6 |
-| 8 | Native V1 adapter and compatibility facade | P0 | M (1wk) | NOT STARTED | 7 |
+| 8 | Native V1 adapter and compatibility facade | P0 | M (1wk) | COMPLETE | 7 |
 | 9 | Versioned solution configuration and secret resolution | P0 | M (1wk) | NOT STARTED | 7 |
 | 10 | Versioned trace/audit foundation | P0 | M (1wk) | NOT STARTED | 7, 9 |
 | 11a | Threat model and data-classification policy | P0 | S (2-3d) | NOT STARTED | 8-10 |
@@ -492,6 +494,7 @@ scope change, or an approved architecture decision — never as a silent in-plac
 | 2026-08-04 | Lot 5: corrected delivered/security/compliance claims in README.md, docs/api/rest.md, docs/business-case.md against verified current behavior; classified all 5 manifest presets runnable/blueprint with `manifests/README.md`; added CI + check.sh validation that the one runnable manifest actually wires. Phase A (Lots 0-5) is now fully COMPLETE. Evidence in `docs/refactoring/lot-5-capability-truth.md`. | COMPLETE |
 | 2026-08-04 | Lot 6: executed spike comparing LangGraph and LlamaIndex Workflows against a governed-QA use case (real code, both installed and run, not a docs-only comparison). ADR-0006 accepted — LangGraph selected. Evidence in `docs/refactoring/lot-6-spike/`. Lot 6 COMPLETE. | COMPLETE |
 | 2026-08-04 | Lot 7: built `contracts/engine.py` (`DocumentEngine` port, `EngineCapability`, `ExecutionContext`, `EngineRequest`/`Result`/`Step`, `GovernanceHook`, `CancellationToken`), `FakeDocumentEngine`, an 11-test semantic conformance suite, and the compatibility/deprecation policy doc. Zero vendor types in the contract; zero new mypy errors. Evidence in `docs/refactoring/lot-7-document-engine-contract.md`. Lot 7 COMPLETE. | COMPLETE |
+| 2026-08-04 | Lot 8: `NativeEngineAdapter` wraps `RAGEngine` behind `DocumentEngine` (empty capability set, honest not aspirational); `load_native_engine()` added alongside unchanged `load_pipeline()` compatibility route. Removed private `_c` container access from `api/__init__.py`, `cli/__init__.py`, and `examples/hybrid_search/main.py` via new `RAGEngine.manifest_id`/`.chunker`/`.retriever` public properties. Fixed the Lot 4 `/answer` 422 routing bug (module-level request/response models). Parity test proves adapter output matches direct `RAGEngine.answer()`. Evidence in `docs/refactoring/lot-8-native-adapter.md`. Lot 8 COMPLETE. | COMPLETE |
 | 2026-08-03 | Added per-lot effort sizing and total-programme estimate; split Lots 11/12/16 into lettered sub-lots | COMPLETE |
 | 2026-08-03 | Selected Keycloak (Lot 11b identity provider) and PostgreSQL (Lot 10 audit store, Lot 12a lifecycle ledger) from an infra-stack compatibility review | COMPLETE |
 | 2026-08-04 | Accepted ADR-0006: LangGraph selected as the external engine, on Herbert Gourout's explicit delegation of the call to the spike evidence | ACCEPTED |
