@@ -1,9 +1,11 @@
 # Refactoring Plan — Engine-Agnostic Control Plane
 
-> **Status:** Phase A Lots 0-4 complete (ADR-0005 accepted 2026-08-04; Claude config realigned;
-> reproducible env + CI established; public-surface characterization done — found 3 real bugs:
-> `POST /answer` never worked via HTTP, BM25 silently drops relevant hits in small corpora,
-> benchmark failures are indistinguishable from null scores). Lot 5 not started.
+> **Status:** Phase A (Lots 0-5) COMPLETE, 2026-08-04. ADR-0005 accepted; Claude config
+> realigned; reproducible env + CI established; public-surface characterization found 3 real
+> bugs (`POST /answer` never worked via HTTP, BM25 silently drops relevant hits in small
+> corpora, benchmark failures are indistinguishable from null scores); README/API docs/manifests/
+> business-case claims corrected against verified current behavior. Phase B (Lots 6-10) not
+> started.
 > **Target outcome:** Deploy compliant, measurable document-AI solutions faster, independently
 > of the underlying execution engine.
 > **Migration principle:** Incremental, evidence-based, reversible, and releasable after every
@@ -152,7 +154,7 @@ stated otherwise.
 | 2 | Interim Claude configuration realignment | P0 | S (1-2d) | COMPLETE | 1 |
 | 3 | Reproducible baseline and minimum CI gates | P0 | M (3-5d) | COMPLETE | 0 |
 | 4 | Public-surface inventory and characterization safety net | P0 | L (1.5-2wk) | COMPLETE | 3 |
-| 5 | Capability truth and runnable-manifest classification | P0 | S (2-3d) | NOT STARTED | 1, 3 |
+| 5 | Capability truth and runnable-manifest classification | P0 | S (2-3d) | COMPLETE | 1, 3 |
 | 6 | External-engine fit spike and selection ADR | P0 | M (1-1.5wk, time-boxed) | NOT STARTED | 1, 4 |
 | 7 | Engine-neutral contracts and compatibility policy | P0 | M (1wk) | NOT STARTED | 4, 6 |
 | 8 | Native V1 adapter and compatibility facade | P0 | M (1wk) | NOT STARTED | 7 |
@@ -489,6 +491,7 @@ scope change, or an approved architecture decision — never as a silent in-plac
 | 2026-08-04 | Completed Lot 3: `.venv` + `.[v1,dev]` install verified, `pytest-cov` gap closed, `uv` dependency lock added, mypy `python_version` bug fixed and baseline captured (35 errors), `scripts/check.sh` PIPESTATUS bug fixed and layering/compilation wired in, `.github/workflows/ci.yml` rewritten (compilation, layering, ratcheted mypy, wheel build, clean-install smoke test); evidence in `docs/refactoring/lot-3-baseline-and-ci.md` | COMPLETE |
 | 2026-08-04 | Lot 4 Part 1 (public surface: API, CLI, manifest loading, registry): 28 new characterization tests, 0% coverage before. Found and recorded a real bug: `POST /answer` never accepts its documented JSON body (forward-reference resolution failure, endpoint likely never worked via HTTP). Evidence in `docs/refactoring/lot-4-public-surface-part1.md`. | IN PROGRESS |
 | 2026-08-04 | Lot 4 Part 2 (metrics, deletion/update, hybrid fallback): 23 new/extended characterization tests. Found two more real gaps: BM25 silently drops relevant hits in small corpora (negative/zero IDF), and benchmark failures are recorded as indistinguishable from genuine null scores. Confirmed `RAGEngine` has no `delete()` at all. Evidence in `docs/refactoring/lot-4-part2-metrics-deletion-fallback.md`. Lot 4 as a whole is now COMPLETE. | COMPLETE |
+| 2026-08-04 | Lot 5: corrected delivered/security/compliance claims in README.md, docs/api/rest.md, docs/business-case.md against verified current behavior; classified all 5 manifest presets runnable/blueprint with `manifests/README.md`; added CI + check.sh validation that the one runnable manifest actually wires. Phase A (Lots 0-5) is now fully COMPLETE. Evidence in `docs/refactoring/lot-5-capability-truth.md`. | COMPLETE |
 | 2026-08-03 | Added per-lot effort sizing and total-programme estimate; split Lots 11/12/16 into lettered sub-lots | COMPLETE |
 | 2026-08-03 | Selected Keycloak (Lot 11b identity provider) and PostgreSQL (Lot 10 audit store, Lot 12a lifecycle ledger) from an infra-stack compatibility review | COMPLETE |
 | Pending | Select the first external engine | Lot 6 |

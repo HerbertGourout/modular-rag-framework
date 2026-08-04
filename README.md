@@ -1,8 +1,8 @@
 # Modular RAG Framework
 
-![Status](https://img.shields.io/badge/status-v1%20stable-brightgreen)
+![Status](https://img.shields.io/badge/status-pre--alpha-orange)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
-![Tests](https://img.shields.io/badge/tests-98%2F98%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-250%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-Apache%202.0-green)
 ![Built by Publicis Sapient](https://img.shields.io/badge/built%20by-Publicis%20Sapient-4a154b)
 
@@ -166,12 +166,25 @@ mrag ask "What is hybrid retrieval?" --manifest manifests/presets/local-hybrid-r
 
 ### REST API
 
+`create_app()` requires a manifest path argument, so plain `--factory` mode (which calls the
+factory with no arguments) does not work — wrap it in a one-line module instead:
+
 ```bash
-uvicorn modular_rag.api:create_app --factory --reload
+# server.py
+# from modular_rag.api import create_app
+# app = create_app("manifests/presets/local-hybrid-rag.yaml")
+
+uvicorn server:app --reload
 # GET  /health
-# POST /answer  {"question": "..."}
 # GET  /retrieve?q=...&k=10
 ```
+
+> **`POST /answer` does not currently work** — a known bug (`from __future__ import
+> annotations` combined with a locally-scoped request-model class breaks FastAPI's parameter
+> resolution) makes every documented call return `422`. See
+> [docs/refactoring-plan.md](docs/refactoring-plan.md) §2 and
+> `tests/unit/api/test_api.py::test_answer_route_does_not_accept_the_documented_json_body`.
+> `/health` and `/retrieve` work as documented.
 
 ---
 
@@ -223,7 +236,10 @@ pytest tests/e2e/ -v -m e2e
 - **Adaptive chunking** and **hybrid retrieval** (vector + BM25, RRF fusion).
 - **Security built-in**: prompt injection guard, PII redaction, policy enforcement.
 - **Built-in evaluation**: exact-match F1, recall@k, groundedness, latency, cost traces.
-- **Full observability**: every pipeline step emits tokens, latency, and metadata.
+- **Trace instrumentation**: every pipeline step emits a `TraceStep` (tokens, latency, metadata)
+  — but the `Trace` itself is discarded after each request unless a `telemetry` component is
+  wired, and the manifest schema does not currently expose one to configure. Not yet "full
+  observability" end-to-end; see [refactoring plan](docs/refactoring-plan.md) §2.
 - **No vendor lock-in**: swap LLMs, embedders, or vector stores via a single YAML line.
 - **Planned extensions**: agentic runtime (V2), graph memory (V3), governance (V4), multimodal (V5).
 
@@ -231,19 +247,21 @@ pytest tests/e2e/ -v -m e2e
 
 ## Project status
 
-**V1 is complete and end-to-end functional.**
+**V1's core pipeline (ingest → retrieve → generate) is functional end-to-end via the CLI and
+direct Python use. The REST API has one known-broken endpoint — see below.**
 
 | Component | Status |
 |---|---|
 | Core models & contracts | ✅ |
 | Ingestion (parsers, chunkers, normalizers) | ✅ |
-| Hybrid retrieval (BM25 + vector + RRF) | ✅ |
+| Hybrid retrieval (BM25 + vector + RRF) | ✅ (small-corpus BM25 scoring gap — see [refactoring plan](docs/refactoring-plan.md) §2) |
 | OpenAI & Anthropic generators | ✅ |
 | Security (guard + PII redactor) | ✅ |
-| Evaluation (exact-match, benchmarks) | ✅ |
-| REST API & CLI | ✅ |
-| YAML manifest wiring | ✅ |
-| Unit + contract tests (98/98) | ✅ |
+| Evaluation (exact-match, benchmarks) | ✅ (naming/failure-masking caveats — see [refactoring plan](docs/refactoring-plan.md) §2) |
+| CLI | ✅ |
+| REST API | ⚠️ `/health` and `/retrieve` work; `POST /answer` returns 422 (routing bug, see above) |
+| YAML manifest wiring | ✅ for `manifests/presets/local-hybrid-rag.yaml`; the other 4 presets are blueprints for unimplemented V2-V5 features — see [manifests/README.md](manifests/README.md) |
+| Unit + contract tests | ✅ 250 passing (202 unit + 48 contract) |
 | Integration tests (requires Qdrant) | ✅ |
 
 Track progress and milestones:

@@ -1,3 +1,7 @@
+# Status: BLUEPRINT — `planner` and `agents` are declared but ComponentRegistry.wire() never
+# processes either field (checked against orchestration/registry.py); they are silently
+# ignored, not an error. This manifest wires only its V1 components today. See
+# docs/refactoring-plan.md §2 and manifests/README.md.
 version: "1.0"
 id: agentic-rag
 description: "V2 agentic pipeline — adaptive routing, multi-agent (planner/retriever/synthesizer/validator)."

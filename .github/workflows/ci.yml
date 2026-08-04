@@ -39,6 +39,8 @@ jobs:
             echo "::error::New mypy errors introduced ($MYPY_ERRORS > baseline $MYPY_BASELINE)"
             exit 1
           fi
+      - name: Validate the runnable manifest (see manifests/README.md)
+        run: python -c "from modular_rag.app.bootstrap import load_pipeline; load_pipeline('manifests/presets/local-hybrid-rag.yaml'); print('local-hybrid-rag.yaml wires cleanly')"
 
   test-unit:
     runs-on: ubuntu-latest

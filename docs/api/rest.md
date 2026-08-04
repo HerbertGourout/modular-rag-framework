@@ -8,13 +8,28 @@ internal tool) is not written in Python, or that simply doesn't want heavy depen
 `create_app()` factory over the same `RAGEngine` the CLI uses — there is no separate business
 logic here, only request/response translation.
 
-Start it with:
+`create_app(manifest_path)` requires an argument, so bare `--factory` mode (which calls the
+factory with zero arguments) does not work. Wrap it in a one-line module instead:
+
+```python
+# server.py
+from modular_rag.api import create_app
+app = create_app("manifests/presets/local-hybrid-rag.yaml")
+```
 
 ```bash
-uvicorn modular_rag.api:create_app --factory --host 0.0.0.0 --port 8000
+uvicorn server:app --host 0.0.0.0 --port 8000
 ```
 
 Base URL: `http://localhost:8000`
+
+> **`POST /answer` is currently broken.** `api/__init__.py` combines `from __future__ import
+> annotations` with a `QuestionRequest` class scoped locally inside `create_app()`; FastAPI
+> cannot resolve the resulting forward-reference annotation and silently treats the request
+> body as an unresolvable query parameter instead. Every call shaped as documented below
+> returns `422`, not `200`. See [docs/refactoring-plan.md](../refactoring-plan.md) §2 and
+> `tests/unit/api/test_api.py::test_answer_route_does_not_accept_the_documented_json_body`
+> for the confirmed root cause. `/health` and `/retrieve` are unaffected and work as documented.
 
 ---
 
@@ -72,37 +87,27 @@ generate → guard → telemetry), see
 | `question` | `string` | Yes | The user question |
 | `k` | `integer` | No | Number of chunks to retrieve (default: 5) |
 
-**Response**
+**Response** (once the routing bug above is fixed — this is what the handler itself already
+builds correctly; verified by calling it directly, bypassing the broken route, in
+`tests/unit/api/test_api.py::test_answer_handler_logic_works_and_leaks_raw_exception_text`)
 
 ```json
 {
-  "answer": "The main conclusions of the Q3 report are...",
-  "citations": [
-    {
-      "source": "Q3-report.pdf",
-      "passage": "Revenue grew 12% year-over-year...",
-      "score": 0.92,
-      "page": 4
-    },
-    {
-      "source": "Q3-summary.md",
-      "passage": "Key highlights include a 15% reduction...",
-      "score": 0.87,
-      "page": null
-    }
-  ],
-  "trace_id": "a1b2c3d4",
-  "model": "gpt-4o-mini"
+  "text": "The main conclusions of the Q3 report are...",
+  "citations": [],
+  "trace_id": "a1b2c3d4"
 }
 ```
+
+`citations` is `list[dict]` built from `Citation.model_dump()` — populated only if the
+configured `Generator` actually attaches citations; there is no `model` field on the response.
 
 **Error responses**
 
 | Status | When |
 |---|---|
-| `403 Forbidden` | Security guard blocked the query (injection detected, query too long, policy violation) |
-| `422 Unprocessable Entity` | Invalid request body (e.g., missing `question`) |
-| `500 Internal Server Error` | LLM API failure, Qdrant unreachable, or unexpected exception |
+| `422 Unprocessable Entity` | Currently: *every* call, due to the routing bug above. Once fixed: invalid request body (e.g., missing `question`) |
+| `500 Internal Server Error` | LLM API failure, Qdrant unreachable, a security-guard block (`SecurityError`), or any other exception — `api/__init__.py`'s `except Exception` clause does not distinguish between them, and returns the raw exception text in `detail` (see [refactoring plan](../refactoring-plan.md) §2). There is no `403` response for guard blocks; that status is not used anywhere in this API. |
 
 ---
 
@@ -129,15 +134,16 @@ GET /retrieve?q=BM25+retrieval+model&k=5
 [
   {
     "chunk_id": "uuid-...",
-    "doc_id": "uuid-...",
-    "content": "BM25 is a probabilistic retrieval model based on term frequency...",
-    "source": "retrieval-methods.md",
     "score": 0.87,
-    "rank": 1,
-    "retrieval_method": "hybrid"
+    "content": "BM25 is a probabilistic retrieval model based on term frequency..."
   }
 ]
 ```
+
+Exactly these three fields — `chunk_id`, `score`, `content` (truncated to 300 characters). There
+is no `doc_id`, `source`, `rank`, or `retrieval_method` in the response today, despite earlier
+drafts of this document showing them; verified against `api/__init__.py`'s `/retrieve` handler
+and `tests/unit/api/test_api.py::test_retrieve_truncates_chunk_content_to_300_chars`.
 
 ---
 
@@ -175,7 +181,7 @@ response = client.post("/answer", json={
 response.raise_for_status()
 data = response.json()
 
-print(data["answer"])
+print(data["text"])
 for cit in data["citations"]:
     print(f"  [{cit['source']}] {cit['passage'][:80]}")
 ```

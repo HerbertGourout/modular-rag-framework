@@ -59,10 +59,10 @@ check_quick() {
 # Use: pre-merge, CI/CD, or before releasing
 # ============================================================================
 check_full() {
-    print_header "FULL CHECK — Compilation + Layering + Types + Unit + Contract (~2-5 min)"
+    print_header "FULL CHECK — Compilation + Layering + Types + Manifest + Unit + Contract (~2-5 min)"
 
     # Step 1: Ruff linting (syntax, imports, naming)
-    echo "Step 1/6: Linting code quality..."
+    echo "Step 1/7: Linting code quality..."
     if ruff check src/modular_rag/ tests/ --select E,F,I,N,W,UP,B,C4 --output-format=concise; then
         print_success "Ruff linting passed"
     else
@@ -72,7 +72,7 @@ check_full() {
 
     # Step 2: Compilation check
     echo ""
-    echo "Step 2/6: Compilation check..."
+    echo "Step 2/7: Compilation check..."
     if python -m compileall -q src/modular_rag; then
         print_success "Compilation check passed"
     else
@@ -82,7 +82,7 @@ check_full() {
 
     # Step 3: Strict layering audit
     echo ""
-    echo "Step 3/6: Hexagonal layering audit..."
+    echo "Step 3/7: Hexagonal layering audit..."
     if python scripts/check_layering.py --strict; then
         print_success "Layering audit passed"
     else
@@ -92,7 +92,7 @@ check_full() {
 
     # Step 4: Type checking (mypy), ratcheted against .claude/mypy-baseline.txt
     echo ""
-    echo "Step 4/6: Type checking (baseline-ratcheted)..."
+    echo "Step 4/7: Type checking (baseline-ratcheted)..."
     local mypy_baseline
     mypy_baseline="$(grep -v '^#' .claude/mypy-baseline.txt | grep -v '^$' | head -1)"
     local mypy_errors
@@ -104,9 +104,19 @@ check_full() {
         print_success "Type checking: $mypy_errors errors (baseline: $mypy_baseline)"
     fi
 
-    # Step 5: Unit tests (no external services)
+    # Step 5: Runnable-manifest validation (see manifests/README.md for the classification)
     echo ""
-    echo "Step 5/6: Running unit tests..."
+    echo "Step 5/7: Runnable manifest validation..."
+    if python -c "from modular_rag.app.bootstrap import load_pipeline; load_pipeline('manifests/presets/local-hybrid-rag.yaml'); print('local-hybrid-rag.yaml wires cleanly')"; then
+        print_success "Runnable manifest validation passed"
+    else
+        print_error "Runnable manifest validation failed"
+        return 1
+    fi
+
+    # Step 6: Unit tests (no external services)
+    echo ""
+    echo "Step 6/7: Running unit tests..."
     if pytest tests/unit/ -v --tb=short -q; then
         print_success "Unit tests passed"
     else
@@ -114,9 +124,9 @@ check_full() {
         return 1
     fi
 
-    # Step 6: Contract tests (Protocol conformance)
+    # Step 7: Contract tests (Protocol conformance)
     echo ""
-    echo "Step 6/6: Running contract conformance tests..."
+    echo "Step 7/7: Running contract conformance tests..."
     if pytest tests/contract/ -v --tb=short -q; then
         print_success "Contract tests passed"
     else
