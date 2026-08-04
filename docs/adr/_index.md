@@ -77,7 +77,7 @@ V3.0, V3.2, and V5.0 are redirected from "build in-house" to "delegate via adapt
 
 ### [ADR-0006: External Engine Selection — LangGraph](0006-external-engine-selection.md)
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-08-04
 
 Recommends LangGraph as the external engine the `DocumentEngine` port (Lot 7) adapts to, from an
@@ -135,7 +135,7 @@ contract regardless of which engine is picked.
 - **ADR-0001, 0002, 0003**: Core architecture (V1-V5 stable)
 - **ADR-0004**: Feature roadmap (V1→V5 progression) — partially superseded by ADR-0005
 - **ADR-0005**: Product boundary pivot — engine-independent control plane, delegated orchestration
-- **ADR-0006**: External engine selection (LangGraph) — Proposed, pending sign-off
+- **ADR-0006**: External engine selection (LangGraph) — Accepted
 
 Future ADRs will be added as new major decisions arise (e.g., ADR-0007 for `DocumentEngine` contract freeze per Lot 7).
 
