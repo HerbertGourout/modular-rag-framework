@@ -75,6 +75,23 @@ V3.0, V3.2, and V5.0 are redirected from "build in-house" to "delegate via adapt
 
 ---
 
+### [ADR-0006: External Engine Selection — LangGraph](0006-external-engine-selection.md)
+
+**Status:** Proposed  
+**Date:** 2026-08-04
+
+Recommends LangGraph as the external engine the `DocumentEngine` port (Lot 7) adapts to, from an
+executed spike comparing LangGraph and LlamaIndex Workflows against a governed-QA use case and
+an 8-dimension capability checklist. Full evidence in
+[`docs/refactoring/lot-6-spike/`](../refactoring/lot-6-spike/).
+
+**Key insight:** LangGraph wins on zero-instrumentation streaming, footprint, and structural
+legibility; loses clearly on cancellation (LlamaIndex has a native `cancel_run()` API) — the gap
+doesn't change the recommendation because Lot 7 has to build an engine-neutral cancellation
+contract regardless of which engine is picked.
+
+---
+
 ## Decision Making Process
 
 1. **Identification**: Problem identified in sprint planning, client feedback, or architecture review.
@@ -118,8 +135,9 @@ V3.0, V3.2, and V5.0 are redirected from "build in-house" to "delegate via adapt
 - **ADR-0001, 0002, 0003**: Core architecture (V1-V5 stable)
 - **ADR-0004**: Feature roadmap (V1→V5 progression) — partially superseded by ADR-0005
 - **ADR-0005**: Product boundary pivot — engine-independent control plane, delegated orchestration
+- **ADR-0006**: External engine selection (LangGraph) — Proposed, pending sign-off
 
-Future ADRs will be added as new major decisions arise (e.g., ADR-0006 for external engine selection per Lot 6, ADR-0007 for `DocumentEngine` contract freeze per Lot 7).
+Future ADRs will be added as new major decisions arise (e.g., ADR-0007 for `DocumentEngine` contract freeze per Lot 7).
 
 ---
 
