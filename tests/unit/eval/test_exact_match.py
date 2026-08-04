@@ -50,3 +50,22 @@ def test_no_expected_returns_none_scores():
     metrics = ExactMatchEvaluator().evaluate(q, a, expected=None)
     assert metrics.precision_at_k is None
     assert metrics.recall_at_k is None
+
+
+def test_class_named_exact_match_actually_computes_token_set_f1_not_exact_equality():
+    """Known naming/behavior mismatch (docs/refactoring-plan.md §2, 'Evaluation
+    and trace correctness'): despite the class name, this is token-set
+    precision/recall/F1 — not a strict string-equality exact-match check.
+    A prediction that reorders or repeats the gold tokens scores a perfect
+    1.0/1.0 here, which a real exact-match evaluator would never do.
+    """
+    q, a = _qa("What is RAG?", "Generation Augmented Retrieval Retrieval Retrieval")
+    metrics = ExactMatchEvaluator().evaluate(
+        q, a, expected="Retrieval Augmented Generation"
+    )
+
+    # Reordered AND repeated tokens still score a perfect match under set
+    # intersection — proof this isn't exact string/sequence equality.
+    assert a.text != "Retrieval Augmented Generation"
+    assert metrics.precision_at_k == 1.0
+    assert metrics.recall_at_k == 1.0
