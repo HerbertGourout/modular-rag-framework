@@ -62,7 +62,9 @@ Expert agent specializing in security guards, PII redaction, prompt injection pr
 - Response filtering
 
 ### Compliance & Governance
-- Policy-based access control (V2+)
+- Policy-based access control — **owned and current per ADR-0005 §5.1, not deferred to V2+**
+  (Policy Engine is one of the capabilities this package builds natively; see
+  `docs/refactoring-plan.md` Lot 11b)
 - Data classification (public, internal, confidential)
 - Audit trail maintenance
 - Regulatory compliance (GDPR, CCPA, SOC2)

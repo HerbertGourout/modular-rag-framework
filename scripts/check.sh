@@ -59,46 +59,71 @@ check_quick() {
 # Use: pre-merge, CI/CD, or before releasing
 # ============================================================================
 check_full() {
-    print_header "FULL CHECK — Unit + Contract Tests (~2-5 min)"
-    
+    print_header "FULL CHECK — Compilation + Layering + Types + Unit + Contract (~2-5 min)"
+
     # Step 1: Ruff linting (syntax, imports, naming)
-    echo "Step 1/4: Linting code quality..."
+    echo "Step 1/6: Linting code quality..."
     if ruff check src/modular_rag/ tests/ --select E,F,I,N,W,UP,B,C4 --output-format=concise; then
         print_success "Ruff linting passed"
     else
         print_error "Ruff linting failed"
         return 1
     fi
-    
-    # Step 2: Type checking (mypy)
+
+    # Step 2: Compilation check
     echo ""
-    echo "Step 2/4: Type checking..."
-    if mypy src/modular_rag/ --no-error-summary 2>/dev/null | grep -q "error:" && [[ ${PIPESTATUS[0]} -ne 0 ]]; then
-        print_warning "Type hints incomplete (not blocking)"
+    echo "Step 2/6: Compilation check..."
+    if python -m compileall -q src/modular_rag; then
+        print_success "Compilation check passed"
     else
-        print_success "Type checking passed"
+        print_error "Compilation check failed"
+        return 1
     fi
-    
-    # Step 3: Unit tests (no external services)
+
+    # Step 3: Strict layering audit
     echo ""
-    echo "Step 3/4: Running unit tests..."
+    echo "Step 3/6: Hexagonal layering audit..."
+    if python scripts/check_layering.py --strict; then
+        print_success "Layering audit passed"
+    else
+        print_error "Layering audit failed"
+        return 1
+    fi
+
+    # Step 4: Type checking (mypy), ratcheted against .claude/mypy-baseline.txt
+    echo ""
+    echo "Step 4/6: Type checking (baseline-ratcheted)..."
+    local mypy_baseline
+    mypy_baseline="$(grep -v '^#' .claude/mypy-baseline.txt | grep -v '^$' | head -1)"
+    local mypy_errors
+    mypy_errors="$(mypy src/modular_rag/ --no-error-summary 2>&1 | grep -c "error:" || true)"
+    if [[ "$mypy_errors" -gt "$mypy_baseline" ]]; then
+        print_error "Type checking: $mypy_errors errors, baseline is $mypy_baseline — new errors introduced"
+        return 1
+    else
+        print_success "Type checking: $mypy_errors errors (baseline: $mypy_baseline)"
+    fi
+
+    # Step 5: Unit tests (no external services)
+    echo ""
+    echo "Step 5/6: Running unit tests..."
     if pytest tests/unit/ -v --tb=short -q; then
         print_success "Unit tests passed"
     else
         print_error "Unit tests failed"
         return 1
     fi
-    
-    # Step 4: Contract tests (Protocol conformance)
+
+    # Step 6: Contract tests (Protocol conformance)
     echo ""
-    echo "Step 4/4: Running contract conformance tests..."
+    echo "Step 6/6: Running contract conformance tests..."
     if pytest tests/contract/ -v --tb=short -q; then
         print_success "Contract tests passed"
     else
         print_error "Contract tests failed"
         return 1
     fi
-    
+
     print_success "Full check completed"
     echo ""
 }

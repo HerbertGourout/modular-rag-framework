@@ -61,8 +61,8 @@ Roadmap integrating 8 transformational capabilities across versions:
 
 ### [ADR-0005: Document-AI Control Plane Product Boundary](0005-document-ai-control-plane-boundary.md)
 
-**Status:** Proposed  
-**Date:** 2026-08-03
+**Status:** Accepted  
+**Date:** 2026-08-03 (accepted 2026-08-04)
 
 Redraws the product boundary: own engine-independent governance, audit, evaluation, tenant
 isolation, and manifest/config as the durable differentiator; delegate generic multi-agent

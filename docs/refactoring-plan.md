@@ -1,8 +1,7 @@
 # Refactoring Plan — Engine-Agnostic Control Plane
 
-> **Status:** Lot 0 complete; Lot 1 (product-boundary ADR) drafted. Approval currently rests
-> solely with Herbert Gourout — the target team of up to 3 additional contributors is not yet
-> assembled.
+> **Status:** Phase A Lots 0-3 complete (ADR-0005 accepted 2026-08-04; Claude config realigned;
+> reproducible env + CI established). Lots 4-5 not started.
 > **Target outcome:** Deploy compliant, measurable document-AI solutions faster, independently
 > of the underlying execution engine.
 > **Migration principle:** Incremental, evidence-based, reversible, and releasable after every
@@ -144,9 +143,9 @@ stated otherwise.
 | Lot | Deliverable | Priority | Size | Status | Depends on |
 |---:|---|---|---|---|---|
 | 0 | Programme control, snapshot, ownership, and change policy | P0 | S (0.5-1d) | COMPLETE | - |
-| 1 | Product-boundary ADR, non-goals, and success measures | P0 | S (1-2d) | IN PROGRESS | 0 |
-| 2 | Interim Claude configuration realignment | P0 | S (1-2d) | NOT STARTED | 1 |
-| 3 | Reproducible baseline and minimum CI gates | P0 | M (3-5d) | NOT STARTED | 0 |
+| 1 | Product-boundary ADR, non-goals, and success measures | P0 | S (1-2d) | COMPLETE | 0 |
+| 2 | Interim Claude configuration realignment | P0 | S (1-2d) | COMPLETE | 1 |
+| 3 | Reproducible baseline and minimum CI gates | P0 | M (3-5d) | COMPLETE | 0 |
 | 4 | Public-surface inventory and characterization safety net | P0 | L (1.5-2wk) | NOT STARTED | 3 |
 | 5 | Capability truth and runnable-manifest classification | P0 | S (2-3d) | NOT STARTED | 1, 3 |
 | 6 | External-engine fit spike and selection ADR | P0 | M (1-1.5wk, time-boxed) | NOT STARTED | 1, 4 |
@@ -480,6 +479,9 @@ scope change, or an approved architecture decision — never as a silent in-plac
 | 2026-08-03 | Recorded Lot 0 baseline, decision authority, and evidence locations | COMPLETE |
 | 2026-08-03 | Drafted ADR-0005 (product boundary, capability ownership, native-adapter exit criteria) | PROPOSED — approval rests with Herbert Gourout alone; team not yet assembled |
 | 2026-08-03 | Removed the multi-person approval gate from Lot 0/ADR-0005/plan; decision authority is sole (Herbert Gourout) until additional team members are actually onboarded | COMPLETE |
+| 2026-08-04 | Accepted ADR-0005 (Lot 1 complete); started Lot 2 (Claude realignment) and Lot 3 (reproducible baseline + CI) | IN PROGRESS |
+| 2026-08-04 | Completed Lot 2: `CLAUDE.md`/`.claude/` realigned to ADR-0005 owned-vs-delegated split; decision record in `docs/refactoring/lot-2-claude-realignment.md` | COMPLETE |
+| 2026-08-04 | Completed Lot 3: `.venv` + `.[v1,dev]` install verified, `pytest-cov` gap closed, `uv` dependency lock added, mypy `python_version` bug fixed and baseline captured (35 errors), `scripts/check.sh` PIPESTATUS bug fixed and layering/compilation wired in, `.github/workflows/ci.yml` rewritten (compilation, layering, ratcheted mypy, wheel build, clean-install smoke test); evidence in `docs/refactoring/lot-3-baseline-and-ci.md` | COMPLETE |
 | 2026-08-03 | Added per-lot effort sizing and total-programme estimate; split Lots 11/12/16 into lettered sub-lots | COMPLETE |
 | 2026-08-03 | Selected Keycloak (Lot 11b identity provider) and PostgreSQL (Lot 10 audit store, Lot 12a lifecycle ledger) from an infra-stack compatibility review | COMPLETE |
 | Pending | Select the first external engine | Lot 6 |

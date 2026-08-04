@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+
 import structlog
 
 from modular_rag.contracts.evaluation import AnswerEngine, Evaluator

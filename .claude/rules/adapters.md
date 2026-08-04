@@ -384,18 +384,20 @@ src/modular_rag/adapters/
 │   └── mock_store.py
 ├── llms/
 │   ├── __init__.py
-│   └── .gitkeep              (V2 scope, stub)
+│   └── .gitkeep              (engine-delegation target, Lots 6/7/15 — see ADR-0005)
 ├── graphstores/
-│   └── .gitkeep              (V3 scope, stub)
+│   └── .gitkeep              (engine-delegation target, Lots 6/7/15 — see ADR-0005)
 └── auth/
-    └── .gitkeep              (V4 scope, stub)
+    └── .gitkeep              (not yet assigned, revisit at Lot 11b)
 ```
 
 ### Rules
 - Each adapter in its own file
 - `__init__.py` exports public classes
-- `.gitkeep` for future (V2+) stubs
-- One concrete adapter per directory (V1 scope)
+- `.gitkeep` for stubs not yet implemented
+- `llms/`, `graphstores/`, `search/` implement calls to the engine selected in Lot 6 (via the
+  `DocumentEngine` port, Lot 7) — they are not a native reimplementation of orchestration,
+  GraphRAG traversal, or search ranking. `auth/` stays a stub until Lot 11b assigns it scope.
 
 ---
 
