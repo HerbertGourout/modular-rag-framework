@@ -39,6 +39,53 @@ def ask(
 
 
 @app.command()
+def validate(
+    manifest: Path = typer.Argument(..., help="Pipeline manifest YAML to validate"),  # noqa: B008
+) -> None:
+    """Validate a manifest: schema + capability checks, no wiring/instantiation.
+
+    Added in Lot 9 (docs/refactoring-plan.md) — catches a typo'd or
+    unregistered component type, unresolved `${VAR}`/`secret://` reference,
+    or unknown field, before a full pipeline load fails deep in wiring.
+    """
+    from modular_rag.app.config_resolution import resolve_manifest, validate_capabilities
+    from modular_rag.core.errors import ConfigurationError
+    from modular_rag.orchestration.registry import ComponentRegistry
+
+    try:
+        # ConfigurationError is the base of ManifestError and covers
+        # interpolate()'s unresolved ${VAR}/secret:// failures too — both
+        # are "this manifest, as given, is invalid," not distinct cases.
+        pipeline_manifest = resolve_manifest(manifest)
+    except ConfigurationError as exc:
+        typer.echo(f"INVALID: {exc}")
+        raise typer.Exit(code=1) from exc
+
+    errors = validate_capabilities(pipeline_manifest, ComponentRegistry.default())
+    if errors:
+        typer.echo(f"INVALID: {manifest} — capability errors:")
+        for err in errors:
+            typer.echo(f"  - {err}")
+        raise typer.Exit(code=1)
+
+    typer.echo(
+        f"OK: {manifest} is valid "
+        f"(schema version {pipeline_manifest.version}, id={pipeline_manifest.id})"
+    )
+
+
+@app.command(name="manifest-schema")
+def manifest_schema() -> None:
+    """Print the PipelineManifest JSON Schema (for IDE tooling / diffing
+    against manifests/schema/pipeline-manifest.schema.json)."""
+    import json
+
+    from modular_rag.contracts.manifests import PipelineManifest
+
+    typer.echo(json.dumps(PipelineManifest.model_json_schema(), indent=2))
+
+
+@app.command()
 def version() -> None:
     """Print the framework version."""
     from modular_rag import __version__

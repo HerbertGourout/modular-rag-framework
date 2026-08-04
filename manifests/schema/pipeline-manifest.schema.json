@@ -1,0 +1,300 @@
+{
+  "$defs": {
+    "ComponentConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "config": {
+          "additionalProperties": true,
+          "title": "Config",
+          "type": "object"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "ComponentConfig",
+      "type": "object"
+    },
+    "EngineSelection": {
+      "additionalProperties": false,
+      "description": "Which `DocumentEngine` adapter (Lot 7/8) wires this pipeline. Optional \u2014\na manifest without this section defaults to the native adapter\n(`RAGEngine`), preserving v1 behavior exactly. Populating it is one of\nthe markers of a v2 manifest (`app/manifest_migration.py`).",
+      "properties": {
+        "adapter": {
+          "default": "native",
+          "title": "Adapter",
+          "type": "string"
+        },
+        "config": {
+          "additionalProperties": true,
+          "title": "Config",
+          "type": "object"
+        }
+      },
+      "title": "EngineSelection",
+      "type": "object"
+    },
+    "GovernanceSection": {
+      "additionalProperties": false,
+      "description": "Declarative governance intent. Schema only as of Lot 9 \u2014 actual\nfail-closed enforcement is Lot 11b, redaction/audit wiring is Lot 11c.\nSetting `tenant_enforcement: true` here does not, by itself, enforce\nanything yet.",
+      "properties": {
+        "tenant_enforcement": {
+          "default": false,
+          "title": "Tenant Enforcement",
+          "type": "boolean"
+        },
+        "policy_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Policy Refs",
+          "type": "array"
+        }
+      },
+      "title": "GovernanceSection",
+      "type": "object"
+    },
+    "ObservabilitySection": {
+      "additionalProperties": false,
+      "description": "Declarative telemetry-sink intent. Schema only as of Lot 9 \u2014 actual\nsink wiring (e.g. PostgreSQL-backed audit store) is Lot 10.",
+      "properties": {
+        "telemetry_sink": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Telemetry Sink"
+        },
+        "config": {
+          "additionalProperties": true,
+          "title": "Config",
+          "type": "object"
+        }
+      },
+      "title": "ObservabilitySection",
+      "type": "object"
+    },
+    "QualitySection": {
+      "additionalProperties": false,
+      "description": "Declarative quality-gate intent. Schema only as of Lot 9 \u2014 gate\nenforcement against these thresholds is Lot 13.",
+      "properties": {
+        "eval_profile": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Eval Profile"
+        },
+        "gates": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Gates",
+          "type": "object"
+        }
+      },
+      "title": "QualitySection",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "default": "1.0",
+      "title": "Version",
+      "type": "string"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "description": {
+      "default": "",
+      "title": "Description",
+      "type": "string"
+    },
+    "tenant": {
+      "default": "default",
+      "title": "Tenant",
+      "type": "string"
+    },
+    "environment": {
+      "default": "dev",
+      "title": "Environment",
+      "type": "string"
+    },
+    "chunker": {
+      "$ref": "#/$defs/ComponentConfig",
+      "default": {
+        "type": "adaptive",
+        "config": {}
+      }
+    },
+    "embedder": {
+      "$ref": "#/$defs/ComponentConfig",
+      "default": {
+        "type": "sentence-transformers",
+        "config": {}
+      }
+    },
+    "indexer": {
+      "$ref": "#/$defs/ComponentConfig",
+      "default": {
+        "type": "qdrant",
+        "config": {}
+      }
+    },
+    "retriever": {
+      "$ref": "#/$defs/ComponentConfig",
+      "default": {
+        "type": "hybrid",
+        "config": {}
+      }
+    },
+    "reranker": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ComponentConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "generator": {
+      "$ref": "#/$defs/ComponentConfig",
+      "default": {
+        "type": "openai",
+        "config": {}
+      }
+    },
+    "security": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ComponentConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "evaluation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ComponentConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "planner": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ComponentConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "agents": {
+      "items": {
+        "$ref": "#/$defs/ComponentConfig"
+      },
+      "title": "Agents",
+      "type": "array"
+    },
+    "graph_store": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ComponentConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "policies": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Policies",
+      "type": "array"
+    },
+    "modalities": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Modalities",
+      "type": "array"
+    },
+    "engine": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EngineSelection"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "governance": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GovernanceSection"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "quality": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/QualitySection"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "observability": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ObservabilitySection"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "id"
+  ],
+  "title": "PipelineManifest",
+  "type": "object"
+}
