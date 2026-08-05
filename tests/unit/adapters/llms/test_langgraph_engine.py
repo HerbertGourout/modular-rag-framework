@@ -26,7 +26,12 @@ from modular_rag.contracts.engine import (
 from modular_rag.contracts.manifests import ComponentConfig, PipelineManifest
 from modular_rag.contracts.security import GuardResult
 from modular_rag.core.enums import RetrievalMethod
-from modular_rag.core.errors import EngineCancelledError, EngineCapabilityError, SecurityError
+from modular_rag.core.errors import (
+    EngineCancelledError,
+    EngineCapabilityError,
+    PolicyViolationError,
+    SecurityError,
+)
 from modular_rag.core.ids import new_id
 from modular_rag.core.models.answer import Answer
 from modular_rag.core.models.chunk import Chunk
@@ -265,6 +270,37 @@ def test_tenant_policy_filters_cross_tenant_chunks_before_generation() -> None:
 
     assert len(generator.received_context) == 1
     assert generator.received_context[0].chunk.tenant_id == "acme-corp"
+
+
+def test_tenant_policy_denies_when_no_tenant_id_is_set_anywhere() -> None:
+    """Lot 18 regression test: found via the pilot-comparison script
+    (scripts/pilot_engine_comparison.py) that this adapter's retrieve node
+    only *filtered* chunks when query.tenant_id happened to be set, and
+    never actually denied a request that had no tenant_id at all — unlike
+    RAGEngine/NativeEngineAdapter, which fail closed (Lot 11b) before
+    retrieval ever runs. A tenant_policy-enabled deployment would have
+    silently answered an untenanted request through this adapter while
+    correctly denying the identical request through native."""
+    adapter = LangGraphEngineAdapter(_container(tenant_policy=TenantIsolationPolicy()))
+
+    with pytest.raises(PolicyViolationError, match="tenant_id"):
+        adapter.run(_request(), _context(tenant_id=None))
+
+
+def test_parity_with_native_adapter_on_a_missing_tenant_id() -> None:
+    """Both adapters raise PolicyViolationError for the identical missing-
+    tenant_id case — the same mechanism (Container.tenant_policy), so it
+    must behave identically, not just similarly (Lot 15's own acceptance
+    bar, the same standard test_parity_with_native_adapter_on_a_guard_denial
+    already holds the guard path to)."""
+    container = _container(tenant_policy=TenantIsolationPolicy())
+    native = NativeEngineAdapter(RAGEngine(container))
+    langgraph = LangGraphEngineAdapter(container)
+
+    with pytest.raises(PolicyViolationError):
+        native.run(_request(), _context(tenant_id=None))
+    with pytest.raises(PolicyViolationError):
+        langgraph.run(_request(), _context(tenant_id=None))
 
 
 def test_execution_context_tenant_id_propagates_when_query_has_none() -> None:

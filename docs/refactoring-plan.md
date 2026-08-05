@@ -79,6 +79,21 @@
 >   removal was explicitly confirmed by Herbert Gourout but twice denied by the permission
 >   system for reasons not visible from `.claude/settings.json` alone — left in place, not by
 >   decision. Evidence in `docs/refactoring/lot-17-prototype-retirement.md`.
+> - **Lot 18 — engineering scope COMPLETE, sign-off pending** (2026-08-05): new
+>   `scripts/pilot_engine_comparison.py`, run for real in this environment — found and fixed a
+>   genuine governance-parity bug (`LangGraphEngineAdapter._node_retrieve()` never enforced
+>   fail-closed tenant isolation for a query with no `tenant_id` at all, unlike native; 2 new
+>   regression tests). Nine-dimension native-vs-LangGraph comparison built from real evidence
+>   across Lots 6-17. Found and fixed a real CI gap: `langgraph` was never installed in the
+>   `test-unit`/`coverage` GitHub Actions jobs, so all 20 (now 22) real `langgraph`-backed tests
+>   would have failed `ModuleNotFoundError` on any actual CI run. Zero expired compatibility
+>   shims found (none was ever given a deprecation window in the first place). **This lot does
+>   not self-grant the architecture/security/operations/legal/business-quality sign-off its own
+>   acceptance bar names** — that authority is Herbert Gourout's alone per
+>   `docs/refactoring/lot-0-baseline.md` §2, and a self-signed approval would be a fabricated
+>   claim, not evidence. Evidence in `docs/refactoring/lot-18-pilot-and-closure.md`.
+> **Refactoring programme (Phase A-D, Lots 0-18): engineering work COMPLETE. Awaiting Herbert
+> Gourout's sign-off before this status block can honestly say "closed."**
 > **Target outcome:** Deploy compliant, measurable document-AI solutions faster, independently
 > of the underlying execution engine.
 > **Migration principle:** Incremental, evidence-based, reversible, and releasable after every
@@ -423,7 +438,7 @@ legal, and business-quality sign-off.
 | Lot 16b | Wheel/container builds reproducible; SBOM and licence gates pass, including the 56 PDFs |
 | Lot 16c | Deploy, backup, restore, and rollback commands are each executed at least once, not just documented — **not fully met**: this sandboxed environment has no `docker`/`psql`/`pg_dump`/reachable Qdrant/Postgres, so every command in `docs/guides/backup-restore.md` is correct-as-written against each system's own documented tooling but unexecuted here; the CI `container-build` job (Lot 16b) is the one piece that *is* actually executed, on every push. Closing this bar for real requires running the runbook against live infrastructure. |
 | Lot 17 | Each removal has impact evidence, deprecation or non-use proof, and restoration path |
-| Lot 18 | Pilot and rollback exercise pass; mandatory gates green; named owners sign final evidence |
+| Lot 18 | Pilot and rollback exercise pass; mandatory gates green; named owners sign final evidence — **partially met**: the pilot scenario ran for real and found+fixed a genuine tenant-isolation parity bug in the LangGraph adapter; rollback is proven (single manifest field); all local gates are green (`check.sh full`) and a real CI gap (`langgraph` missing from `test-unit`/`coverage`) was found and fixed. **Sign-off is not self-granted** — that is Herbert Gourout's to give per `docs/refactoring/lot-0-baseline.md` §2's sole decision authority, not something this lot can claim on his behalf. |
 
 ---
 
@@ -585,6 +600,7 @@ scope change, or an approved architecture decision — never as a silent in-plac
 | 2026-08-05 | Lot 16b: single version source (`__version__` reads installed package metadata), `scripts/check_licenses.py` licence gate + `.claude/license-baseline.txt`, CI `supply-chain` job (`pip-audit` — 0 known vulnerabilities across 209 packages; SBOM artifact), `Dockerfile`/`.dockerignore`/`docker/server.py` for an immutable container build verified by a new CI `container-build` job. Two findings escalated to Herbert Gourout rather than decided unilaterally: `pymupdf`'s AGPL-3.0/Artifex dual licence, and unverified per-paper redistribution rights on the 56 research PDFs (128MB, tracked in git history). Evidence in `docs/refactoring/lot-16b-supply-chain.md`. | COMPLETE (engineering scope) — 2 findings awaiting owner decision |
 | 2026-08-05 | Lot 16c: `docs/guides/backup-restore.md` (ledger/Postgres/Qdrant backup+restore, 3 rollback surfaces) and `scripts/loadtest_answer.py` (real load-test script). Corrected `docs/guides/deployment.md`'s stale/false claims, most materially that `app/settings.py`'s `Settings` class is never actually read anywhere — every `MRAG_*` env var claim in the prior doc was false. No command executed against live Postgres/Qdrant/Docker — this sandboxed environment has none available. Evidence in `docs/refactoring/lot-16c-deployment-runbooks.md`. | COMPLETE (documentation/tooling scope) — execution pending real infra |
 | 2026-08-05 | Lot 17: removed the entire dead agent/routing/planning prototype cluster after a full consumer/import search (zero test, zero consumer on every removed item — verified, not assumed); retained `memory/graph/knowledge_graph.py` with a documented caveat. Corrected stale/false documentation claims found while consolidating (six architecture/guide docs). New `docs/research/EVIDENCE-CATALOGUE.md` (56 files, 55 unique papers — one exact duplicate found via md5sum). `.gitlab-ci.yml`/`.gitlab/` removal confirmed by Herbert Gourout but blocked by the permission system for reasons not visible from settings.json — left in place. Evidence in `docs/refactoring/lot-17-prototype-retirement.md`. | COMPLETE — one sub-item blocked by the permission system |
+| 2026-08-05 | Lot 18: pilot-comparison script run for real, found and fixed a genuine tenant-isolation governance-parity bug in LangGraphEngineAdapter (2 new regression tests). Nine-dimension native-vs-LangGraph comparison from real programme evidence. Found and fixed a real CI gap (langgraph missing from test-unit/coverage jobs). Zero expired shims found. Sign-off explicitly not self-granted — reserved for Herbert Gourout. Evidence in `docs/refactoring/lot-18-pilot-and-closure.md`. | Engineering scope COMPLETE — sign-off pending |
 | 2026-08-03 | Added per-lot effort sizing and total-programme estimate; split Lots 11/12/16 into lettered sub-lots | COMPLETE |
 | 2026-08-03 | Selected Keycloak (Lot 11b identity provider) and PostgreSQL (Lot 10 audit store, Lot 12a lifecycle ledger) from an infra-stack compatibility review | COMPLETE |
 | 2026-08-04 | Accepted ADR-0006: LangGraph selected as the external engine, on Herbert Gourout's explicit delegation of the call to the spike evidence | ACCEPTED |
@@ -614,3 +630,4 @@ scope change, or an approved architecture decision — never as a silent in-plac
 | 2026-08-05 | Lot 16b executed: single version source, dependency licence gate + baseline, CI supply-chain job (pip-audit, SBOM), Dockerfile/container-build CI job. Two licence/legal findings (pymupdf AGPL, 56 research PDFs' redistribution rights) escalated for an owner decision, not resolved by this lot. |
 | 2026-08-05 | Lot 16c executed: backup/restore/rollback runbook, overload load-test script. Found and corrected stale/false claims in the pre-existing deployment guide, including that the Settings class is entirely unwired. No live-infra execution possible in this sandboxed environment. |
 | 2026-08-05 | Lot 17 executed: dead agent/routing/planning prototype cluster removed after full consumer search, knowledge_graph.py retained with a caveat, documentation consolidated, research evidence catalogue built, GitLab-asset removal blocked by the permission system. |
+| 2026-08-05 | Lot 18 executed: pilot scenario run for real (found+fixed a LangGraph tenant-isolation parity bug), nine-dimension engine comparison, CI langgraph-install gap found+fixed, zero expired shims, sign-off explicitly deferred to Herbert Gourout. Refactoring programme engineering work complete pending that sign-off. |
