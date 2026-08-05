@@ -25,11 +25,13 @@ class QdrantStore:
         collection: str = "mrag_default",
         vector_size: int = 384,
         api_key: str | None = None,
+        timeout: float = 30.0,
     ) -> None:
         self._url = url
         self._collection = collection
         self._vector_size = vector_size
         self._api_key = api_key
+        self._timeout = timeout
         self._client = None  # lazy
 
     def _get_client(self):
@@ -42,7 +44,13 @@ class QdrantStore:
                     "Install it with: pip install modular-rag[v1]"
                 ) from exc
 
-            self._client = QdrantClient(url=self._url, api_key=self._api_key)
+            # QdrantClient's own timeout param is int-seconds only (unlike
+            # openai/anthropic's float-seconds) — truncated here, not rounded,
+            # so a sub-second value never silently becomes a *longer* timeout
+            # than requested.
+            self._client = QdrantClient(
+                url=self._url, api_key=self._api_key, timeout=int(self._timeout)
+            )
             self._ensure_collection()
         return self._client
 
@@ -137,6 +145,15 @@ class QdrantStore:
 
     def name(self) -> str:
         return "qdrant"
+
+    def close(self) -> None:
+        """Release the underlying qdrant-client connection, if one was ever
+        opened (Lot 14, docs/refactoring-plan.md — "own and close clients/
+        resources"). A no-op when `_get_client()` was never called — closing
+        a resource that was never opened is not an error."""
+        if self._client is not None:
+            self._client.close()
+            self._client = None
 
     # ------------------------------------------------------------------
     # Retriever contract

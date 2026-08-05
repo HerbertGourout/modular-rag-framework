@@ -32,11 +32,13 @@ class OpenAIGenerator:
         temperature: float = 0.1,
         max_tokens: int = 2048,
         api_key: str = "",
+        timeout: float = 30.0,
     ) -> None:
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.api_key = api_key
+        self.timeout = timeout
         self._client: object | None = None
         self._groundedness = GroundednessValidator()
 
@@ -48,7 +50,7 @@ class OpenAIGenerator:
             try:
                 from openai import OpenAI
 
-                self._client = OpenAI(api_key=self.api_key or None)
+                self._client = OpenAI(api_key=self.api_key or None, timeout=self.timeout)
             except ImportError as exc:
                 raise ImportError("Install 'openai' (pip install modular-rag[v1]).") from exc
         return self._client
@@ -97,3 +99,11 @@ class OpenAIGenerator:
 
     async def agenerate(self, query: Query, context: list[RetrievedChunk], trace: Trace) -> Answer:
         return self.generate(query, context, trace)
+
+    def close(self) -> None:
+        """Release the underlying openai client, if one was ever opened
+        (Lot 14, docs/refactoring-plan.md — "own and close clients/
+        resources")."""
+        if self._client is not None:
+            self._client.close()  # type: ignore[attr-defined]
+            self._client = None

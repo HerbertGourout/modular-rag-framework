@@ -1,26 +1,19 @@
 # Refactoring Plan — Engine-Agnostic Control Plane
 
-> **Status:** Phase A (Lots 0-5) COMPLETE. Phase B (Lots 6-10) COMPLETE, 2026-08-05: ADR-0006
-> accepted (LangGraph selected); `contracts/engine.py` (`DocumentEngine` port) +
-> `NativeEngineAdapter`; strict versioned manifests; versioned `Trace`/`AuditEvent` schemas with a
-> PII/secret payload allowlist, `InMemoryAuditSink` + `PostgresAuditSink`. **Phase C (Lots
-> 11a-12c) COMPLETE**, 2026-08-05: tenant identity (`tenant_id` fields, fail-closed
-> `TenantIsolationPolicy`, real Keycloak `TokenVerifier`, Qdrant query-time filtering),
-> `PolicyEngine` deny-by-default, redaction + per-decision audit evidence, `HumanReviewGate`
-> (real, not yet triggered by any generator — Lot 13); document lifecycle (`LifecycleLedger`,
-> idempotent `ingest()`, `RAGEngine.delete_document()` — closing the "no delete() at all" gap from
-> Lot 4); index reconciliation (`IndexReconciler`, schema versioning) plus the BM25 small-corpus
-> scoring bug actually fixed (not just characterized); backup/restore (verified round-trip
-> exercise), `rebuild_document()`, and right-to-erasure proof (`erase_document()`). mypy baseline
-> ratcheted 35→34. Full detail in `docs/refactoring/lot-{6,7,8,9,10,11a,11b,11c,12a,12b,12c}-*.md`.
-> **Lot 13 COMPLETE** (2026-08-05): fixed `ExactMatchEvaluator` writing answer-level scores into
-> retrieval-scoped `precision_at_k`/`recall_at_k` fields, and gave it a genuine `exact_match`
-> field (it never checked literal equality before); `Metrics.failed`/`failure_reason` +
-> `BenchmarkRunner` no longer masks engine crashes as null scores; versioned `Metrics`/`GoldenSet`
-> schemas; `eval/quality_gate.py`'s report-only/blocking `QualityGate`. Evidence/policy/cost
-> fields exist as measurement capacity without a populating producer yet — recorded honestly, not
-> overclaimed. Detail in `docs/refactoring/lot-13-quality-measurement-plane.md`.
-> - Lot 14 not started.
+> **Status:** Phase A (Lots 0-5), Phase B (Lots 6-10, engine port + native adapter + versioned
+> manifests/trace/audit), and Phase C (Lots 11a-12c, tenant identity/fail-closed enforcement +
+> document lifecycle/reconciliation/erasure) are all **COMPLETE**. Full detail in
+> `docs/refactoring/lot-{0..13}-*.md` (one file per lot/sub-lot). Phase D in progress:
+> - **Lot 13 COMPLETE** (2026-08-05): corrected `Metrics` vocabulary (answer-scoped fields
+>   distinct from retrieval-scoped ones; genuine `exact_match`), fixed `BenchmarkRunner`'s
+>   failure-masking, versioned `Metrics`/`GoldenSet` schemas, report-only/blocking `QualityGate`.
+> - **Lot 14 COMPLETE** (2026-08-05): timeouts on all four external-SDK adapters (tested against
+>   the real installed SDKs); `core/resilience.py` (`retry_with_backoff`, `CircuitBreaker`, not
+>   auto-wired — policy is a per-adapter caller decision); `Container.close()` graceful shutdown;
+>   `threading.Lock` on the four in-memory reference stores' genuine read-then-write races
+>   (proven with real-thread concurrency tests). Sync/async semantics and cancellation status
+>   documented honestly as still-open rather than silently retrofit. mypy baseline steady at 34.
+> - Lot 15 not started.
 > **Target outcome:** Deploy compliant, measurable document-AI solutions faster, independently
 > of the underlying execution engine.
 > **Migration principle:** Incremental, evidence-based, reversible, and releasable after every
@@ -113,8 +106,8 @@ Findings below are tracked against the target in §1. Severity is one of `BLOCKI
 | ~~Benchmark failure-masking confirmed (Lot 4)~~ | **RESOLVED in Lot 13** (2026-08-05): `BenchmarkRunner.run()` now records `Metrics.for_failure(str(exc))` on an `engine.answer()` exception instead of a bare all-None `Metrics()`; `BenchmarkReport.failed_count`/`failure_rate` make crashed cases visible in aggregate, and `avg_*` properties explicitly exclude them. Upholds the §10.4 invariant. Regression test: `tests/unit/eval/test_benchmark.py::test_runner_records_engine_failures_as_failed_not_as_null_scores`. | — | Lot 13 |
 | ~~Manifest configuration~~ | **RESOLVED in Lot 9** (2026-08-04): `extra="forbid"` on `PipelineManifest`/`ComponentConfig`; `app/config_resolution.py` adds `${VAR}` interpolation, `secret://` resolution, precedence layering, capability dry-run validation, JSON schema export, and `mrag validate`. Component `config: dict` payload stays intentionally free-form (dynamic per adapter type). | — | Lot 9 |
 | Engine abstraction | Not yet validated against an external engine; risk of designing an unvalidated lowest-common-denominator port | IMPORTANT | Lot 6, 7 |
-| Resilience | External LLM/embedding/vector calls lack uniform timeout, retry, cancellation, and overload semantics | IMPORTANT | Lot 14 |
-| Concurrency | Sync work callable from async surfaces; mutable in-memory state has no documented concurrency guarantee | IMPORTANT | Lot 14 |
+| ~~Resilience~~ | **PARTIALLY RESOLVED in Lot 14** (2026-08-05): all four external-SDK adapters gained a `timeout` param (tested against the real installed SDKs); `core/resilience.py`'s `retry_with_backoff()`/`CircuitBreaker` exist as callable primitives, not auto-wired (policy is a per-adapter caller decision). **Still open**: cancellation (port exists, `NativeEngineAdapter` still declares it unsupported — unchanged since Lot 8) and overload/backpressure semantics (need live load-testing infra) — deferred to Lot 15/16c respectively. | IMPORTANT (residual) | Lot 15 (cancellation), Lot 16c (overload evidence) |
+| ~~Concurrency~~ | **RESOLVED in Lot 14** (2026-08-05): `InMemoryAuditSink`, `InMemoryLifecycleLedger`, `HumanReviewGate`, and `BM25Retriever` — the four in-memory reference stores with a genuine read-then-write race — now hold a `threading.Lock`, proven with real-thread concurrency tests. Sync/async execution semantics documented (only `HuggingFaceEmbedder.aembed()` truly non-blocking today; every other `a*` method is a sync-wrapped coroutine) rather than silently retrofit. | — | Lot 14 |
 | ~~Trace semantics~~ | **RESOLVED in Lot 10** (2026-08-05): removed the duplicate/overlapping "generate" `TraceStep` (generator self-instrumentation is now the only source); `Trace.failed`/`failure_reason` capture failed runs, which now still reach `telemetry.record_trace()` before the exception propagates. `TRACE_SCHEMA_VERSION = "1.1"`. | — | Lot 10 |
 | ~~Index migration~~ | **RESOLVED in Lot 12b/12c** (2026-08-05): `contracts/lifecycle.py`'s `INDEX_SCHEMA_VERSION` + `DocumentRecord.schema_version` gives index-schema versioning; `IndexReconciler` detects and repairs orphaned-id divergence; `RAGEngine.rebuild_document()` handles the missing-content direction reconciliation can't auto-repair; ledger backup/restore proven via a genuine round-trip exercise (fresh-instance restore, not a same-instance no-op). Production PostgreSQL/Qdrant-native backup tooling documented (not reimplemented) — owned by Lot 16c's runbooks as operational content. | — | Lot 12b, 12c |
 | Dependency reproducibility | No dependency lock/constraints; CI/declared-tooling mismatch | IMPORTANT | Lot 3 |
@@ -520,6 +513,7 @@ scope change, or an approved architecture decision — never as a silent in-plac
 | 2026-08-05 | Lot 12b: `INDEX_SCHEMA_VERSION`/`DocumentRecord.schema_version`; `Indexer.list_ids()` (`QdrantStore` via scroll API, `BM25Retriever`/`HybridRetriever` duck-typed); `contracts/reconciliation.py` (`DocumentDivergence`, `ReconciliationReport`, `RepairResult`) and `orchestration/reconciliation.py`'s `IndexReconciler` (`check()`/`repair()`, repairs orphans only, never fabricates missing content); `LifecycleLedger.list_active()`. Fixed the BM25 small-corpus IDF-floor scoring bug (Lot 4) by gating on lexical overlap instead of score sign. Found and fixed `QdrantStore` silently dropping `tenant_id` on index/retrieve (defeated Lot 11b's tenant isolation for the real vector-store path) and added Qdrant-level query-time tenant filtering. mypy baseline ratcheted 35→34. Evidence in `docs/refactoring/lot-12b-index-reconciliation.md`. | COMPLETE |
 | 2026-08-05 | Lot 12c: `LifecycleLedger.export_all()`/`restore_record()` (both implementations); `ingestion/lifecycle/backup.py` (`backup_ledger()`/`restore_ledger()`), proven via a genuine fresh-instance restore exercise, not a same-instance no-op; `RAGEngine.rebuild_document()` (forces re-chunk/re-embed/re-index, bypassing the idempotency skip — resolves `IndexReconciler`'s `unresolved_missing`); `contracts/erasure.py`'s `ErasureProof` + `RAGEngine.erase_document()` (re-verifies post-deletion absence from both stores, `bool \| None` semantics so "unverifiable" is never conflated with "confirmed clean"). Production PostgreSQL/Qdrant-native backup tooling documented, not reimplemented — deferred to Lot 16c. Evidence in `docs/refactoring/lot-12c-backup-restore-erasure.md`. **Phase C (Lots 11a-12c) now fully COMPLETE.** | COMPLETE |
 | 2026-08-05 | Lot 13: `Metrics` gained `schema_version`, answer-scoped `exact_match`/`answer_precision`/`answer_recall` (distinct from retrieval-scoped `precision_at_k`/`recall_at_k`), `policy_violations`, `failed`/`failure_reason`, and a `for_failure()` classmethod. Fixed `ExactMatchEvaluator` writing answer scores into retrieval-named fields and gave it genuine exact-match checking. Fixed `BenchmarkRunner.run()`'s failure-masking (§10.4 invariant). New `GoldenSet` (versioned, named `BenchmarkCase` collection) and `eval/quality_gate.py`'s `QualityGate` (report-only/blocking, fail-closed on a missing metric). Evidence/policy/cost `Metrics` fields recorded as capacity without a populating producer yet — not overclaimed. Evidence in `docs/refactoring/lot-13-quality-measurement-plane.md`. | COMPLETE |
+| 2026-08-05 | Lot 14: `timeout` param on `OpenAIGenerator`/`AnthropicGenerator`/`OpenAIEmbedder`/`QdrantStore`, tested against the real installed SDKs. New `core/resilience.py` (`retry_with_backoff`, `CircuitBreaker`) — not auto-wired into any adapter, left as a per-caller policy decision. `Container.close()` + `.close()` on all four SDK-backed adapters for graceful shutdown. `threading.Lock` added to `InMemoryAuditSink`/`InMemoryLifecycleLedger`/`HumanReviewGate`/`BM25Retriever`, each proven with real-thread concurrency tests against their genuine read-then-write races. Sync/async and cancellation status documented as still-open rather than silently retrofit; overload/soak evidence deferred to Lot 16c (needs live load-testing infra). Evidence in `docs/refactoring/lot-14-reliability-concurrency.md`. | COMPLETE |
 | 2026-08-03 | Added per-lot effort sizing and total-programme estimate; split Lots 11/12/16 into lettered sub-lots | COMPLETE |
 | 2026-08-03 | Selected Keycloak (Lot 11b identity provider) and PostgreSQL (Lot 10 audit store, Lot 12a lifecycle ledger) from an infra-stack compatibility review | COMPLETE |
 | 2026-08-04 | Accepted ADR-0006: LangGraph selected as the external engine, on Herbert Gourout's explicit delegation of the call to the spike evidence | ACCEPTED |
@@ -543,3 +537,4 @@ scope change, or an approved architecture decision — never as a silent in-plac
 | 2026-08-05 | Lot 12b executed: index schema version, IndexReconciler, BM25 small-corpus fix, QdrantStore tenant_id bug fix + query-time filtering. mypy baseline lowered to 34. |
 | 2026-08-05 | Lot 12c executed: ledger backup/restore (verified), rebuild_document(), erase_document() with post-deletion verification. Phase C complete. |
 | 2026-08-05 | Lot 13 executed: Metrics vocabulary fix, ExactMatchEvaluator fix, BenchmarkRunner failure-masking fix, GoldenSet, QualityGate. |
+| 2026-08-05 | Lot 14 executed: timeouts, retry/circuit-breaker primitives, Container.close(), thread-safety locks on in-memory stores. |
