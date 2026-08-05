@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from modular_rag.app.bootstrap import load_manifest, load_native_engine, load_pipeline
+from modular_rag.app.bootstrap import load_engine, load_manifest, load_native_engine, load_pipeline
 from modular_rag.contracts.engine import DocumentEngine
-from modular_rag.core.errors import ManifestError
+from modular_rag.core.errors import ConfigurationError, ManifestError
 from modular_rag.orchestration.engine import RAGEngine
 from modular_rag.orchestration.native_engine import NativeEngineAdapter
 
@@ -87,3 +87,82 @@ def test_load_native_engine_wraps_the_same_wiring_as_load_pipeline(tmp_path: Pat
 
     assert isinstance(engine, NativeEngineAdapter)
     assert isinstance(engine, DocumentEngine)
+
+
+_MINIMAL_MANIFEST = (
+    "id: my-pipeline\n"
+    "chunker:\n  type: fixed\n  config:\n    chunk_size: 100\n"
+    "embedder:\n  type: sentence-transformers\n  config: {}\n"
+    "indexer:\n  type: qdrant\n  config: {}\n"
+    "retriever:\n  type: vector\n  config: {}\n"
+    "generator:\n  type: openai\n  config: {}\n"
+)
+
+
+def test_load_engine_defaults_to_native_when_no_engine_section(tmp_path: Path) -> None:
+    manifest_file = tmp_path / "manifest.yaml"
+    manifest_file.write_text(_MINIMAL_MANIFEST, encoding="utf-8")
+
+    engine = load_engine(manifest_file)
+
+    assert isinstance(engine, NativeEngineAdapter)
+
+
+def test_load_engine_selects_native_explicitly(tmp_path: Path) -> None:
+    manifest_file = tmp_path / "manifest.yaml"
+    manifest_file.write_text(_MINIMAL_MANIFEST + "engine:\n  adapter: native\n", encoding="utf-8")
+
+    engine = load_engine(manifest_file)
+
+    assert isinstance(engine, NativeEngineAdapter)
+
+
+def test_load_engine_selects_langgraph(tmp_path: Path) -> None:
+    """Lot 15, docs/refactoring-plan.md — the same manifest's component
+    wiring, run through the second adapter instead of the first."""
+    from modular_rag.adapters.llms.langgraph_engine import LangGraphEngineAdapter
+
+    manifest_file = tmp_path / "manifest.yaml"
+    manifest_file.write_text(
+        _MINIMAL_MANIFEST + "engine:\n  adapter: langgraph\n", encoding="utf-8"
+    )
+
+    engine = load_engine(manifest_file)
+
+    assert isinstance(engine, LangGraphEngineAdapter)
+    assert isinstance(engine, DocumentEngine)
+
+
+def test_load_engine_raises_on_an_unknown_adapter_name(tmp_path: Path) -> None:
+    manifest_file = tmp_path / "manifest.yaml"
+    manifest_file.write_text(
+        _MINIMAL_MANIFEST + "engine:\n  adapter: some-future-engine\n", encoding="utf-8"
+    )
+
+    with pytest.raises(ConfigurationError, match="some-future-engine"):
+        load_engine(manifest_file)
+
+
+def test_a_v1_manifest_migrated_to_v2_and_switched_to_langgraph_loads_correctly(
+    tmp_path: Path,
+) -> None:
+    """Lot 15's "migration" acceptance bar: a real v1 manifest, migrated to
+    v2 (Lot 9's migrate_v1_to_v2), with engine.adapter overridden to
+    "langgraph", must be a loadable, valid configuration that selects the
+    second adapter — not just a schema that happens to accept the string."""
+    import yaml
+
+    from modular_rag.adapters.llms.langgraph_engine import LangGraphEngineAdapter
+    from modular_rag.app.config_resolution import migrate_v1_to_v2
+
+    v1 = yaml.safe_load(_MINIMAL_MANIFEST)
+    v1["version"] = "1.0"
+    v2 = migrate_v1_to_v2(v1)
+    v2["engine"]["adapter"] = "langgraph"
+
+    manifest_file = tmp_path / "migrated.yaml"
+    manifest_file.write_text(yaml.dump(v2), encoding="utf-8")
+
+    engine = load_engine(manifest_file)
+
+    assert isinstance(engine, LangGraphEngineAdapter)
