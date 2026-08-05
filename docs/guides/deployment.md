@@ -25,51 +25,61 @@ flowchart TD
 
 ## Running the REST API server
 
-```bash
-# Development
-uvicorn modular_rag.api:create_app --factory \
-        --reload \
-        --host 0.0.0.0 \
-        --port 8000
+`create_app()` requires a `manifest_path` argument, so bare `uvicorn ... --factory` (which calls
+the factory with zero arguments) does not work — see [rest.md](../api/rest.md). Use the
+one-line wrapper module instead:
 
-# Pass manifest path via environment variable
-MRAG_MANIFEST_PATH=manifests/presets/secure-enterprise-rag.yaml \
-uvicorn modular_rag.api:create_app --factory --host 0.0.0.0 --port 8000
+```bash
+# Development — server.py is the wrapper docker/server.py already provides
+# (MRAG_MANIFEST_PATH-configurable); reuse it locally too:
+MRAG_MANIFEST_PATH=manifests/presets/local-hybrid-rag.yaml \
+uvicorn server:app --app-dir docker --reload --host 0.0.0.0 --port 8000
 ```
 
 ## Docker
 
-### Dockerfile
+The [`Dockerfile`](../../Dockerfile) at the repo root (Lot 16b, `docs/refactoring-plan.md`) is
+the real, current build — a multi-stage immutable image: a `builder` stage produces a wheel from
+source, the `runtime` stage installs only that wheel (`[v1]` extra) into a slim non-root image,
+never the source tree, dev tooling, or `.claude/research-papers/` (excluded via
+[`.dockerignore`](../../.dockerignore)). [`docker/server.py`](../../docker/server.py) is the
+`create_app()` wrapper the image runs, configurable via `MRAG_MANIFEST_PATH`. Verified in CI by
+the `container-build` job (`.github/workflows/ci.yml`) — build + a real `docker run` + `/health`
+poll — since building it requires a live Docker daemon this repository's own sandboxed
+development environment does not always have.
 
-```dockerfile
-FROM python:3.11-slim
-
-WORKDIR /app
-COPY . .
-
-RUN pip install -e ".[v1]"
-
-ENV MRAG_MANIFEST_PATH=manifests/presets/secure-enterprise-rag.yaml
-
-EXPOSE 8000
-CMD ["uvicorn", "modular_rag.api:create_app", "--factory", \
-     "--host", "0.0.0.0", "--port", "8000"]
+```bash
+docker build -t modular-rag:local .
+docker run -d --name mrag-api -p 8000:8000 \
+    -e MRAG_MANIFEST_PATH=manifests/presets/local-hybrid-rag.yaml \
+    -e OPENAI_API_KEY="$OPENAI_API_KEY" \
+    modular-rag:local
 ```
+
+`OPENAI_API_KEY` above is the standard (not `MRAG_`-prefixed) variable the OpenAI SDK itself
+reads when a manifest's `generator.config`/`embedder.config` omits `api_key` — verified against
+`generation/synthesizers/openai_gen.py`'s `OpenAI(api_key=self.api_key or None, ...)`, which
+falls through to the SDK's own env lookup on `None`. `app/settings.py`'s `Settings` class
+declares `MRAG_OPENAI_API_KEY`/`MRAG_QDRANT_URL`/`MRAG_QDRANT_API_KEY` fields, but as of this
+writing nothing in `orchestration/_default_factories.py` actually constructs a `Settings()` or
+reads them — every adapter factory is `AdapterClass(**cfg.config)`, sourced only from the
+manifest. Qdrant's `url`/`api_key` have no SDK-level env fallback the way OpenAI's does, so they
+must be set explicitly in the manifest's `indexer.config` (or resolved via `resolve_manifest()`,
+Lot 9, if your entrypoint uses it). Wiring `Settings` into the factories is a real gap, not this
+guide's to fix — recorded here so this document doesn't repeat the same incorrect claim its
+previous version made.
 
 ### docker-compose.yml
 
 ```yaml
-version: "3.9"
-
 services:
   mrag-api:
     build: .
     ports:
       - "8000:8000"
     environment:
-      - MRAG_OPENAI_API_KEY=${OPENAI_API_KEY}
-      - MRAG_QDRANT_URL=http://qdrant:6333
-      - MRAG_MANIFEST_PATH=manifests/presets/secure-enterprise-rag.yaml
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - MRAG_MANIFEST_PATH=manifests/presets/local-hybrid-rag.yaml
     depends_on:
       - qdrant
 
@@ -84,9 +94,20 @@ volumes:
   qdrant_data:
 ```
 
+`local-hybrid-rag.yaml` hardcodes `indexer.config.url: "http://localhost:6333"` — inside this
+compose network that resolves to the `mrag-api` container itself, not the `qdrant` service, so
+this example as written will fail to reach Qdrant. Since there is no environment-variable
+override for it (see above), either edit the manifest's `url` to `http://qdrant:6333` before
+building the image, or mount a modified copy over `/app/manifests/presets/local-hybrid-rag.yaml`
+at `docker run`/compose time.
+
 ```bash
 docker-compose up -d
 ```
+
+For rollback (previous image tag, previous manifest revision, or reverting
+`engine.adapter` back to `"native"`), see
+[backup-restore.md](backup-restore.md#rollback).
 
 ## Multi-environment manifests
 
@@ -105,27 +126,33 @@ manifests/
 ```
 
 **This layering mechanism is V4 scope and not implemented yet** — the three folders above
-are currently stubs (see each folder's `_index.md`). Until it ships, use
-[`secure-enterprise-rag.yaml`](../../manifests/presets/secure-enterprise-rag.yaml) directly
-as your production manifest and adapt it by hand per environment. Once the mechanism exists,
-selecting an environment at runtime will look like this:
-
-```bash
-export MRAG_ENVIRONMENT=production
-export MRAG_MANIFEST_PATH=manifests/production/pipeline.yaml
-```
+are currently stubs (see each folder's `_index.md`). `secure-enterprise-rag.yaml` is
+**blueprint, not runnable today** — see [`manifests/README.md`](../../manifests/README.md):
+`wire()` never reads its `policies:` field (which also points at two files that don't exist),
+and its `${QDRANT_URL}` interpolation is never resolved by `load_pipeline()`/`create_app()`
+(both call the plain, non-interpolating `load_manifest()` — `${VAR}`/`secret://` resolution is
+`app/config_resolution.py`'s `resolve_manifest()`, wired into `mrag validate` and schema
+export, Lot 9, but not into the actual pipeline-loading path yet). Until a real production
+manifest exists, start from [`local-hybrid-rag.yaml`](../../manifests/presets/local-hybrid-rag.yaml)
+(the only preset proven to wire end-to-end, Lot 5) and add security components by hand — see
+the hardening list below, not the blueprint preset.
 
 ## Health check
 
 ```bash
 curl http://localhost:8000/health
-# {"status": "ok", "pipeline": "secure-enterprise-rag", "version": "0.x.y"}
+# {"status": "ok", "pipeline": "local-hybrid-rag"}
+
+curl http://localhost:8000/ready
+# {"status": "ready", "pipeline": "local-hybrid-rag"}
+# /ready (Lot 16a) reports the same wiring-succeeded evidence /health does today --
+# it does not probe live Qdrant/LLM connectivity. See docs/api/rest.md.
 ```
 
 ## Scaling
 
-- **Horizontal**: The `RAGEngine` is stateless — scale the API containers freely. The BM25 index must be rebuilt per-container on startup (or replaced with a shared search service in V4).
-- **Qdrant**: Use the Qdrant cluster mode for production workloads. Configure the URL and API key via `MRAG_QDRANT_URL` and `MRAG_QDRANT_API_KEY`.
+- **Horizontal**: The `RAGEngine` is stateless — scale the API containers freely. The BM25 index must be rebuilt per-container on startup (or replaced with a shared search service in V4). `RateLimitMiddleware`'s (Lot 16a) in-memory window is also per-process — each replica rate-limits independently, not against one shared counter; a Redis-backed limiter is the documented upgrade path if that matters at your scale.
+- **Qdrant**: Use the Qdrant cluster mode for production workloads.
 - **Embedding**: Consider a dedicated embedding service (e.g., Infinity, TEI) to avoid reloading the model on each container restart. Wire it via the `adapters/embeddings/` adapter.
 
 ## Security hardening for production
@@ -135,8 +162,12 @@ opt-in in V1 so that local iteration stays fast and frictionless. Before anythin
 client-facing goes live, work through this list explicitly rather than assuming a preset
 switch handles it:
 
-1. Enable `BasicSecurityGuard` and `PatternRedactor` in your manifest.
-2. Set `MRAG_QDRANT_API_KEY` — Qdrant supports API-key authentication.
-3. Put the API behind an authenticated reverse proxy (nginx, Traefik, or your API gateway).
-4. Use the `secure-enterprise-rag.yaml` preset as your base, or create a `manifests/production/` override.
-5. Set `MRAG_LOG_LEVEL=WARNING` in production to suppress debug trace output.
+1. Configure `create_app(..., token_verifier=...)` (Lot 16a) — `adapters/auth/keycloak_verifier.py`'s `KeycloakTokenVerifier` is the reference `TokenVerifier` implementation. Without one, `/answer` and `/retrieve` are unauthenticated. See [rest.md](../api/rest.md#authentication).
+2. Enable `BasicSecurityGuard` and `PatternRedactor` in your manifest, and a `tenant_policy` (`TenantIsolationPolicy`, Lot 11b) if serving more than one tenant.
+3. Tune `create_app(..., rate_limit_per_minute=..., max_body_bytes=...)` (Lot 16a) for your expected load — see [backup-restore.md](backup-restore.md#overload--soak-evidence-deferred-from-lot-14) for a load-test script to calibrate against.
+4. Set Qdrant's `api_key` in `indexer.config.api_key` if your Qdrant instance requires one — as a manifest literal, not an environment-variable reference: `load_pipeline()`/`create_app()` load the manifest via plain `load_manifest()` (no `${VAR}`/`secret://` interpolation), so a `${QDRANT_API_KEY}`-style reference here will not resolve at wiring time. Pre-render the manifest yourself, or use `resolve_manifest()` (Lot 9) if you build a custom entrypoint on top of it.
+5. Put the API behind an authenticated reverse proxy (nginx, Traefik, or your API gateway) as defense-in-depth on top of, not instead of, #1.
+6. Reduce log verbosity for production if needed — `app/settings.py`'s `Settings.log_level` field exists but, like the API-key fields above, nothing in this codebase currently constructs a `Settings()` or applies it (no `logging.basicConfig()`/`structlog.configure()` call reads it either); setting `MRAG_LOG_LEVEL` today has no effect. Configure `structlog`/stdlib `logging` directly in your own entrypoint if you need this before that gap is closed.
+
+For backup, restore, and rollback procedures once this is running, see
+[backup-restore.md](backup-restore.md).
