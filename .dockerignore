@@ -1,0 +1,26 @@
+# Keep the build context (and, more importantly, every image layer) free of
+# anything not needed to build the wheel or run the container (Lot 16b,
+# docs/refactoring-plan.md). The 128MB .claude/research-papers/ corpus in
+# particular must never end up in a distributed image.
+
+.git/
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+.claude/
+.github/
+docs/
+tests/
+examples/
+benchmarks/
+scripts/
+
+*.md
+!README.md
+CLAUDE.local.md
+.env
+.env.*

@@ -124,3 +124,47 @@ jobs:
           /tmp/smoke-venv/bin/pip install "${WHEEL_FILE}[v1]"
           /tmp/smoke-venv/bin/python -c "import modular_rag; print('import OK')"
           /tmp/smoke-venv/bin/mrag version
+
+  supply-chain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: "Install dependencies: every optional extra plus supply-chain tooling"
+        run: |
+          pip install --upgrade pip
+          pip install -e .[all,supply-chain]
+      - name: "Vulnerability scan: pip-audit against the installed environment"
+        run: pip-audit --skip-editable
+      - name: "Licence gate: scripts/check_licenses.py, see .claude/license-baseline.txt"
+        run: python scripts/check_licenses.py
+      - name: "Generate SBOM: CycloneDX, from the installed environment"
+        run: python -m cyclonedx_py environment --output-format json -o sbom.json
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.json
+
+  container-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [lint, test-unit, test-contract]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the immutable runtime image (Dockerfile, Lot 16b)
+        run: docker build -t modular-rag:ci .
+      - name: "Smoke test: run the image and hit /health"
+        run: |
+          docker run -d --name mrag-smoke -p 8000:8000 modular-rag:ci
+          for i in $(seq 1 20); do
+            if curl -sf http://localhost:8000/health; then break; fi
+            sleep 1
+          done
+          curl -sf http://localhost:8000/health
+          docker logs mrag-smoke
+          docker stop mrag-smoke
