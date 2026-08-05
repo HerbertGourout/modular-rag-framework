@@ -66,15 +66,17 @@ One of `ingestion/`, `retrieval/`, `generation/`, `security/`, `eval/`, `agents/
 
 ### EvoRAG
 The feedback mechanism (V3) that strengthens or weakens edges in the knowledge graph based
-on whether answers derived from them turned out to be correct — implemented by
-`GraphVersionManager.reinforce()`/`weaken()`/`prune()`. See
-[structure.md](architecture/structure.md), `memory/versioning/`.
+on whether answers derived from them turned out to be correct. Its implementation
+(`GraphVersionManager.reinforce()`/`weaken()`/`prune()`, `memory/versioning/`) was removed in
+Lot 17 (`docs/refactoring-plan.md`) — zero test coverage, zero consumers, and squarely in the
+delegated fine-tuning-execution territory ADR-0005 §5.2 assigns to the external engine. The
+concept remains a real V3 design reference; there is no code behind it today.
 
 ### Groundedness
 A measure of how well an answer's claims are supported by the retrieved context, typically
-computed as token overlap between the answer and the source chunks. Used both as an
-evaluation metric and, in V2, as a signal for the `ValidatorAgent` to trigger a
-self-correction loop. See [data-model.md](architecture/data-model.md), section 8 (`Metrics`).
+computed as token overlap between the answer and the source chunks. Used as an evaluation
+metric (`generation/validators/groundedness.py`). See
+[data-model.md](architecture/data-model.md), section 8 (`Metrics`).
 
 ### GraphRAG
 Retrieval-augmented generation that queries a knowledge graph (entities + relationships)

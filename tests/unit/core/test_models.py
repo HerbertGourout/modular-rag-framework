@@ -121,11 +121,6 @@ def test_query_frozen():
         q.text = "other"  # type: ignore[misc]
 
 
-def test_query_routing_hint_optional():
-    q = Query(text="explain chunking")
-    assert q.routing_hint is None
-
-
 def test_query_tenant_id_defaults_to_none():
     """Lot 11b, docs/refactoring-plan.md — additive field, existing callers unaffected."""
     assert Query(text="explain chunking").tenant_id is None

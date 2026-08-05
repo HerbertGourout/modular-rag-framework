@@ -1,5 +1,8 @@
 # Research Digests — State of the Art for Feature Design
 
+Per-paper index of all 56 files (55 unique — one duplicate, see below) and their digest status:
+[EVIDENCE-CATALOGUE.md](EVIDENCE-CATALOGUE.md) (Lot 17, `docs/refactoring-plan.md`).
+
 Actionable distillations of the arXiv corpus in `.claude/research-papers/`. **Every design decision
 (fusion weights, chunking parameters, guard patterns, metric choices, architectural patterns) must
 consult the matching digest and cite the arXiv id backing the choice** — see CLAUDE.md coding rule 08.

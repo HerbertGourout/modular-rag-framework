@@ -124,12 +124,24 @@ flowchart LR
 
 ## V2 agentic runtime
 
-The `Router` is the decision point that keeps V1 and V2 coexisting rather than V2 replacing
-V1: most questions still take the cheap, fast `simple_rag` path, and only questions the
-router judges complex enough are handed to the `CoordinatorAgent`. Inside that agentic path,
-the loop from `Validator` back to `RetAgent` is the self-correction mechanism described in
-[ROADMAP.md](../../ROADMAP.md) — if the draft answer isn't well-grounded in retrieved
-evidence, the system retrieves again rather than returning a weakly-supported answer.
+> **Historical design reference, not current behavior.** The classes this diagram names
+> (`QueryRouter`, `CoordinatorAgent`, `RetrieverAgent`, `ExtractorAgent`, `SynthesizerAgent`,
+> `ValidatorAgent`) were removed in Lot 17 (`docs/refactoring-plan.md`): `QueryRouter` was
+> constructed by `RAGEngine` but its classification output was never actually read anywhere,
+> and the five agent classes had zero consumers anywhere in the codebase. Per
+> [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) §5.2, generic multi-agent
+> orchestration is delegated to the selected external engine, not built natively along the
+> lines this diagram sketches. Kept here as a record of the original design intent, per Lot
+> 17's own "keep digests" instruction — not as a description of anything the framework does
+> today.
+
+The `Router` was meant to be the decision point that kept V1 and V2 coexisting rather than V2
+replacing V1: most questions would still take the cheap, fast `simple_rag` path, and only
+questions the router judged complex enough would be handed to the `CoordinatorAgent`. Inside
+that agentic path, the loop from `Validator` back to `RetAgent` was meant as the self-correction
+mechanism described in [ROADMAP.md](../../ROADMAP.md) — if the draft answer wasn't well-grounded
+in retrieved evidence, the system would retrieve again rather than return a weakly-supported
+answer.
 
 ```mermaid
 %%{init: {"theme": "base"}}%%

@@ -29,30 +29,12 @@ class ChunkingStrategy(StrEnum):
     SEMANTIC = "semantic"
 
 
-class RoutingStrategy(StrEnum):
-    LLM_ONLY = "llm_only"
-    SIMPLE_RAG = "simple_rag"
-    AGENTIC_RAG = "agentic_rag"
-    GRAPH_RAG = "graph_rag"
-    MULTIMODAL_RAG = "multimodal_rag"
-
-
 class PolicyAction(StrEnum):
     ALLOW = "allow"
     DENY = "deny"
     REDACT = "redact"
     WARN = "warn"
     REQUIRE_REVIEW = "require_review"
-
-
-class AgentRole(StrEnum):
-    COORDINATOR = "coordinator"
-    PLANNER = "planner"
-    RETRIEVER = "retriever"
-    EXTRACTOR = "extractor"
-    SYNTHESIZER = "synthesizer"
-    VALIDATOR = "validator"
-    CRITIC = "critic"
 
 
 class DataClassification(StrEnum):

@@ -1,6 +1,6 @@
 # Retrieval Strategies — Research Digest
 
-**Auto-distilled** from the 4 arXiv PDFs in [`.claude/research-papers/retrieval/`](../../.claude/research-papers/retrieval/) on **2026-07-12**.
+**Auto-distilled** from the 3 arXiv PDFs in [`.claude/research-papers/retrieval/`](../../.claude/research-papers/retrieval/), plus one paper cross-cited from `security/` (2603.21654 — see [EVIDENCE-CATALOGUE.md](EVIDENCE-CATALOGUE.md) for the provenance note), on **2026-07-12**.
 Purpose: provide literature backing (or corrections) for the currently-unsourced V1 retrieval defaults in
 [`fusion/rrf.py`](../../src/modular_rag/retrieval/fusion/rrf.py) (weighted RRF, `rrf_k=60`),
 [`retrievers/hybrid.py`](../../src/modular_rag/retrieval/retrievers/hybrid.py) (`vector_weight=0.7`/`bm25_weight=0.3`, `k*2` over-fetch),

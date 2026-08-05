@@ -108,16 +108,20 @@ print(chunk.token_estimate)  # 10
 
 **File**: `core/models/query.py`
 
-A Query represents a user's intent. Like `Document`, it is **immutable** — once constructed, the text and metadata are final. Routing decisions are recorded in `routing_hint` but never mutate the query.
+A Query represents a user's intent. Like `Document`, it is **immutable** — once constructed, the text and metadata are final.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `id` | `str` | `new_id()` | ULID — used to correlate with `Answer.query_id` and `Trace.query_id` |
 | `text` | `str` | required | The raw question text |
 | `modality` | `Modality` | `TEXT` | Modality of the question (text, image…) |
-| `routing_hint` | `RoutingStrategy \| None` | `None` | Optional override for the router (e.g. force `agentic_rag`) |
-| `metadata` | `dict[str, Any]` | `{}` | User-id, session-id, locale, tenant-id |
+| `tenant_id` | `str \| None` | `None` | Set once a caller authenticates (Lot 11b); fail-closed enforcement lives in `security/policies/tenant_isolation.py`, not on this model |
+| `metadata` | `dict[str, Any]` | `{}` | User-id, session-id, locale |
 | `created_at` | `datetime` | `utcnow()` | Request timestamp (UTC) |
+
+`routing_hint` (`RoutingStrategy | None`) was removed in Lot 17 (`docs/refactoring-plan.md`)
+along with `RoutingStrategy`/`QueryRouter` — the router that would have read it never actually
+influenced pipeline execution (zero consumers, verified before removal).
 
 **Invariants**
 - `frozen=True` — query text must not be mutated mid-pipeline (this would break trace correlation).
@@ -125,12 +129,11 @@ A Query represents a user's intent. Like `Document`, it is **immutable** — onc
 **Example**
 ```python
 from modular_rag.core.models.query import Query
-from modular_rag.core.enums import RoutingStrategy
 
 q = Query(
     text="What was our revenue growth in Q4 2025?",
-    metadata={"user_id": "u_123", "tenant": "finance"},
-    routing_hint=RoutingStrategy.SIMPLE_RAG,
+    metadata={"user_id": "u_123"},
+    tenant_id="finance",
 )
 ```
 
