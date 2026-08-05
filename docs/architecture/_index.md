@@ -15,6 +15,8 @@ client architect, this is where the answer lives — complemented by the "why" c
 | "What modules exist, and why can't they import from each other?" | [module-model.md](module-model.md) |
 | "What happens, step by step, when a query is processed?" | [runtime-flow.md](runtime-flow.md) |
 | "What attacks does the framework cover, and with what exact mechanisms?" | [security.md](security.md) |
+| "What are the assets, trust boundaries, and threats, and which are still open?" | [threat-model.md](threat-model.md) |
+| "How is data classified, and what's the PII/tenant schema?" | [data-classification-policy.md](data-classification-policy.md) |
 | "I want the exhaustive map of every file in the repo, with its role" | [structure.md](structure.md) |
 | "I want to visualize the roadmap and the flows as diagrams" | [roadmap-mermaid.md](roadmap-mermaid.md) |
 
