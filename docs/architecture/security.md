@@ -1,5 +1,9 @@
 # Security Architecture
 
+> See also [threat-model.md](threat-model.md) (assets, trust boundaries, STRIDE analysis) and
+> [data-classification-policy.md](data-classification-policy.md) (sensitivity levels, PII/tenant
+> schema) — both added in Lot 11a (`docs/refactoring-plan.md`).
+
 ## Attack surfaces (Secure RAG taxonomy)
 
 | Surface | Example | Defence |

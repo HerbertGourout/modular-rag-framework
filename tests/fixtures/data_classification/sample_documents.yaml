@@ -1,0 +1,71 @@
+# Worked examples for docs/architecture/data-classification-policy.md (Lot 11a,
+# docs/refactoring-plan.md). Paper-and-fixture deliverable: nothing in the codebase
+# reads this file today. It exists so Lot 11b/11c enforcement tests have agreed-upon
+# inputs instead of each lot inventing its own ad hoc examples.
+#
+# Fields:
+#   id              — stable identifier for referencing this example from tests
+#   tenant_id       — which tenant this example belongs to
+#   classification  — one of core.enums.DataClassification's values
+#   pii_categories  — list of core.enums.PIICategory values present, if any
+#                      (required, non-empty, when classification == restricted)
+#   content         — illustrative text (fabricated, not real PII)
+#   rationale       — why this example was classified this way
+
+documents:
+  - id: public-doc-1
+    tenant_id: acme-corp
+    classification: public
+    pii_categories: []
+    content: "Modular RAG Framework release notes: v0.0.1 adds hybrid retrieval."
+    rationale: >
+      Published documentation with no confidentiality obligation and no PII —
+      safe for any tenant or unauthenticated access.
+
+  - id: internal-doc-1
+    tenant_id: acme-corp
+    classification: internal
+    pii_categories: []
+    content: "Q3 internal retrieval-latency runbook: rerankers add ~40ms p95 in the local-hybrid-rag preset."
+    rationale: >
+      Internal operational detail — not confidential business information, not
+      PII, but not meant for external publication either.
+
+  - id: confidential-doc-1
+    tenant_id: acme-corp
+    classification: confidential
+    pii_categories: []
+    content: "Draft campaign strategy for client Northwind: Q4 budget allocation across three regions."
+    rationale: >
+      Business-sensitive content under an implied client confidentiality
+      obligation, but contains no personal data.
+
+  - id: restricted-doc-1
+    tenant_id: acme-corp
+    classification: restricted
+    pii_categories: [email, phone]
+    content: "Customer support ticket #4471 from jane.doe@example.com, callback number 06 12 34 56 78."
+    rationale: >
+      Contains directly identifying personal data (email, phone) — matches
+      security/redaction/patterns.py's email and phone_fr_local patterns.
+
+  - id: restricted-doc-2
+    tenant_id: other-tenant
+    classification: restricted
+    pii_categories: [iban, credit_card]
+    content: "Refund processed to IBAN FR7630006000011234567890189, card ending 4242."
+    rationale: >
+      Financial account data — restricted regardless of tenant; also the
+      cross-tenant fixture (different tenant_id than the other examples) for
+      Lot 11b's tenant-isolation tests.
+
+  - id: restricted-doc-3
+    tenant_id: acme-corp
+    classification: restricted
+    pii_categories: [api_key]
+    content: "Rotate this leaked key immediately: sk-test-abcdefghijklmnopqrstuvwx"
+    rationale: >
+      Secret material, not personal data, but still restricted per
+      data-classification-policy.md §1 ("regulated personal data or data
+      whose exposure creates legal/compliance exposure") — API keys carry the
+      latter, not the former.

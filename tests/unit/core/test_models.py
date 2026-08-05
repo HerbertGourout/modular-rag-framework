@@ -5,7 +5,9 @@ import pytest
 from pydantic import ValidationError
 
 from modular_rag.core.enums import (
+    DataClassification,
     Modality,
+    PIICategory,
     PolicyAction,
     RetrievalMethod,
 )
@@ -51,6 +53,19 @@ def test_retrieval_method_values():
 def test_policy_action_values():
     assert PolicyAction.DENY == "deny"
     assert PolicyAction.ALLOW == "allow"
+
+
+def test_data_classification_values():
+    """Lot 11a, docs/refactoring-plan.md — vocabulary only, no enforcement yet."""
+    assert DataClassification.PUBLIC == "public"
+    assert DataClassification.INTERNAL == "internal"
+    assert DataClassification.CONFIDENTIAL == "confidential"
+    assert DataClassification.RESTRICTED == "restricted"
+
+
+def test_pii_category_values():
+    assert PIICategory.EMAIL == "email"
+    assert PIICategory.API_KEY == "api_key"
 
 
 # ---------------------------------------------------------------------------
