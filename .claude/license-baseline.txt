@@ -1,0 +1,23 @@
+# Dependency licence-gate baseline (Lot 16b, docs/refactoring-plan.md).
+# Format: <package name, case-insensitive>=<reason accepted>
+# scripts/check_licenses.py fails on any non-permissive-licence dependency
+# NOT listed here. Adding an entry is a deliberate accept, not a default --
+# see docs/refactoring/lot-16b-supply-chain.md for how each one was reviewed.
+
+# AGPL-3.0 / Artifex Commercial dual license. Used for PDF parsing (`fitz`,
+# lazy-imported per .claude/.instructions.md section 4) in the v1 and v5
+# optional-dependency extras. AGPL's network-copyleft clause is a real
+# constraint for any commercial/enterprise deployment that distributes this
+# framework as a service -- flagged to Herbert Gourout in Lot 16b as a
+# decision requiring explicit sign-off (keep and accept the AGPL obligation,
+# obtain an Artifex commercial licence, or replace with a permissively
+# licensed PDF library such as pypdf/pdfplumber). Recorded here as a
+# currently-accepted risk, not a resolved one -- see the decision record for
+# the actual outcome once decided.
+pymupdf=AGPL-3.0/Artifex dual license; PDF parsing dependency; pending explicit accept/replace decision (Lot 16b)
+
+# LGPLv2+. Low risk: an indirect/transitive dependency (charset detection,
+# not linked/modified by this project's own code), and LGPL explicitly
+# permits normal dependency use without imposing LGPL terms on the
+# depending project, unlike GPL/AGPL's stronger copyleft.
+chardet=LGPLv2+; transitive dependency, standard dynamic-dependency use permitted under LGPL terms

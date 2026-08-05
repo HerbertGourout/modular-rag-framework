@@ -85,6 +85,14 @@ dev = [
     "respx>=0.21",
     "build>=1.2",
 ]
+# Supply-chain evidence (Lot 16b, docs/refactoring-plan.md — "SBOM,
+# vulnerability and licence gates"): scripts/check_licenses.py and CI's
+# supply-chain job. Not needed to run the framework itself.
+supply-chain = [
+    "pip-audit>=2.7",
+    "pip-licenses>=5.0",
+    "cyclonedx-bom>=6.0",
+]
 all = ["modular-rag[v1,v3,v4,v5,langgraph,dev]"]
 
 [project.scripts]

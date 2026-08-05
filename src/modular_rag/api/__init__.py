@@ -4,6 +4,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
+from modular_rag import __version__
 from modular_rag.api.errors import to_http_exception
 from modular_rag.api.middleware import MaxBodySizeMiddleware, RateLimitMiddleware
 from modular_rag.app.bootstrap import load_pipeline
@@ -61,7 +62,7 @@ def create_app(
 
     api = FastAPI(
         title="Modular RAG API",
-        version="0.0.1",
+        version=__version__,
         description="Production-grade RAG and agentic reasoning API.",
     )
     api.add_middleware(RateLimitMiddleware, requests_per_minute=rate_limit_per_minute)
