@@ -1,9 +1,15 @@
 # Refactoring Plan — Engine-Agnostic Control Plane
 
+> **New to this programme? Start at [docs/refactoring/README.md](refactoring/README.md)** —
+> a reading guide to all 18 lots, organized by why you're here, plus the honest "what's still
+> open" list. This document remains the authoritative plan/tracker (scope, gap matrix,
+> decision log); the guide is the entry point into it.
+
 > **Status:** Phase A (Lots 0-5), Phase B (Lots 6-10, engine port + native adapter + versioned
-> manifests/trace/audit), and Phase C (Lots 11a-12c, tenant identity/fail-closed enforcement +
-> document lifecycle/reconciliation/erasure) are all **COMPLETE**. Full detail in
-> `docs/refactoring/lot-{0..13}-*.md` (one file per lot/sub-lot). Phase D in progress:
+> manifests/trace/audit), Phase C (Lots 11a-12c, tenant identity/fail-closed enforcement +
+> document lifecycle/reconciliation/erasure), and Phase D (Lots 15-18, portability and
+> delivery) are all **engineering-COMPLETE** — final sign-off pending, see Lot 18 below. Full
+> detail in `docs/refactoring/lot-{0..18}-*.md` (one file per lot/sub-lot):
 > - **Lot 13 COMPLETE** (2026-08-05): corrected `Metrics` vocabulary (answer-scoped fields
 >   distinct from retrieval-scoped ones; genuine `exact_match`), fixed `BenchmarkRunner`'s
 >   failure-masking, versioned `Metrics`/`GoldenSet` schemas, report-only/blocking `QualityGate`.
