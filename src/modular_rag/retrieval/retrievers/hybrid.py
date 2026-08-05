@@ -37,6 +37,16 @@ class HybridRetriever:
     def name(self) -> str:
         return "hybrid"
 
+    def delete(self, ids: list[str]) -> None:
+        """Delegates to the owned lexical (`BM25Retriever`) side only. The
+        vector side is owned separately via `Container.indexer`
+        (`QdrantStore.delete()`), not by this retriever — `RAGEngine`
+        coordinates both (Lot 12a, docs/refactoring-plan.md)."""
+        self._bm25.delete(ids)
+
+    def clear(self) -> None:
+        self._bm25.clear()
+
     def retrieve(self, query: Query, k: int = 10) -> list[RetrievedChunk]:
         vector_hits = self._safe_retrieve(self._vector, query, k=k * 2, source="vector")
         bm25_hits = self._safe_retrieve(self._bm25, query, k=k * 2, source="bm25")

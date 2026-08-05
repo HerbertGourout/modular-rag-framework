@@ -28,6 +28,18 @@ class _FailingRetriever:
         raise RuntimeError("source unavailable")
 
 
+class _RecordingBM25:
+    def __init__(self) -> None:
+        self.deleted: list[str] = []
+        self.cleared = False
+
+    def delete(self, ids: list[str]) -> None:
+        self.deleted = ids
+
+    def clear(self) -> None:
+        self.cleared = True
+
+
 def _hit(content: str, method: RetrievalMethod) -> RetrievedChunk:
     chunk = Chunk(doc_id=new_id(), content=content)
     return RetrievedChunk(chunk=chunk, score=0.5, rank=1, retrieval_method=method)
@@ -99,6 +111,28 @@ def test_hybrid_retriever_returns_empty_list_without_raising_when_both_sources_f
     result = retriever.retrieve(Query(text="q"), k=10)
 
     assert result == []
+
+
+def test_delete_delegates_to_the_bm25_side_only():
+    """Lot 12a (docs/refactoring-plan.md): the vector side is owned by
+    Container.indexer separately; RAGEngine coordinates both."""
+    retriever = HybridRetriever()
+    bm25 = _RecordingBM25()
+    retriever._bm25 = bm25
+
+    retriever.delete(["chunk-1", "chunk-2"])
+
+    assert bm25.deleted == ["chunk-1", "chunk-2"]
+
+
+def test_clear_delegates_to_the_bm25_side_only():
+    retriever = HybridRetriever()
+    bm25 = _RecordingBM25()
+    retriever._bm25 = bm25
+
+    retriever.clear()
+
+    assert bm25.cleared is True
 
 
 def test_hybrid_retriever_mutates_rank_and_method_on_a_nominally_frozen_retrievedchunk():

@@ -83,30 +83,52 @@ def test_retrieve_excludes_zero_score_chunks() -> None:
     assert result == []
 
 
-def test_index_replaces_rather_than_appends_to_the_previous_corpus() -> None:
-    """A second index() call fully replaces `_chunks` — there is no
-    incremental add. Chunks from the first call are gone unless re-included."""
+def test_index_appends_to_the_previous_corpus() -> None:
+    """Fixed in Lot 12a (docs/refactoring-plan.md): a second `index()` call
+    used to fully replace `_chunks`, silently dropping the first batch. It
+    now appends and rebuilds — both batches stay searchable. Uses a diverse
+    base corpus (not a bare 2-document one) to stay clear of the separate
+    small-corpus IDF-floor gap characterized above."""
     retriever = BM25Retriever()
-    first = _chunk("first batch content about cats")
-    retriever.index([first])
+    first_batch = _diverse_corpus()
+    retriever.index(first_batch)
 
-    second = _chunk("second batch content about dogs")
+    second = _chunk("a brand new document about volcanic eruptions and lava flow")
     retriever.index([second])
 
-    result = retriever.retrieve(Query(text="cats"), k=10)
-    assert result == []  # `first` is no longer in the corpus at all
+    original = retriever.retrieve(Query(text="retrieval augmented generation"), k=10)
+    added = retriever.retrieve(Query(text="volcanic eruptions lava"), k=10)
+    assert original and original[0].chunk.id == first_batch[0].id
+    assert added and added[0].chunk.id == second.id
 
 
-def test_bm25_retriever_has_no_delete_method() -> None:
-    """Structural gap behind docs/refactoring-plan.md §2's 'Data deletion/
-    update' row: BM25Retriever implements `index()` but not `Indexer.delete()`
-    or `.clear()`. There is no way to remove a single chunk from the lexical
-    index short of re-calling `index()` with the full remaining corpus.
-    """
+def test_delete_removes_only_the_matching_chunk() -> None:
+    """Closes the structural gap behind docs/refactoring-plan.md §2's 'Data
+    deletion/update' row (Lot 12a)."""
     retriever = BM25Retriever()
+    corpus = _diverse_corpus()
+    retriever.index(corpus)
+    to_remove = corpus[0]  # the "retrieval augmented generation" doc
 
-    assert not hasattr(retriever, "delete")
-    assert not hasattr(retriever, "clear")
+    retriever.delete([to_remove.id])
+
+    removed_topic = retriever.retrieve(Query(text="retrieval augmented generation"), k=10)
+    still_present = retriever.retrieve(Query(text="python programming language"), k=10)
+    assert removed_topic == []
+    assert still_present and still_present[0].chunk.id == corpus[2].id
+
+
+def test_delete_on_empty_corpus_does_not_raise() -> None:
+    BM25Retriever().delete(["nonexistent-id"])  # must not raise
+
+
+def test_clear_empties_the_corpus() -> None:
+    retriever = BM25Retriever()
+    retriever.index(_diverse_corpus())
+
+    retriever.clear()
+
+    assert retriever.retrieve(Query(text="retrieval augmented generation"), k=10) == []
 
 
 @pytest.mark.asyncio

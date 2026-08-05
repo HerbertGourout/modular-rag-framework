@@ -8,14 +8,16 @@ import structlog
 from modular_rag.app.container import Container
 from modular_rag.contracts.audit import AuditEvent, AuditEventType
 from modular_rag.contracts.chunking import Chunker
+from modular_rag.contracts.lifecycle import DocumentStatus
 from modular_rag.contracts.retrieval import Retriever
 from modular_rag.contracts.review import ReviewItem
-from modular_rag.core.errors import SecurityError
+from modular_rag.core.errors import ConfigurationError, SecurityError
 from modular_rag.core.models.answer import Answer
 from modular_rag.core.models.document import Document
 from modular_rag.core.models.query import Query
 from modular_rag.core.models.retrieved import RetrievedChunk
 from modular_rag.core.models.trace import Trace, TraceStep
+from modular_rag.ingestion.lifecycle.hashing import content_hash, document_key
 from modular_rag.orchestration.router import QueryRouter
 from modular_rag.orchestration.state_machine import PipelineState, PipelineStateMachine
 
@@ -55,12 +57,76 @@ class RAGEngine:
         return self._c.retriever
 
     def ingest(self, documents: list[Document]) -> int:
-        """Chunk and index a list of documents. Returns the number of chunks indexed."""
-        all_chunks = []
+        """Chunk and index a list of documents. Returns the number of chunks indexed.
+
+        When a `lifecycle_ledger` is configured (Lot 12a, docs/refactoring-plan.md),
+        this becomes idempotent per document: re-ingesting a document whose
+        `(tenant_id, source)` key and content hash both match the ledger's
+        current record is a no-op (skipped entirely — no re-chunk, re-embed,
+        or re-index). Re-ingesting with the same key but *different* content
+        is treated as an update: the previous version's chunks are deleted
+        (via `_delete_chunk_ids`, covering both the vector index and the
+        retriever's lexical index) before the new chunks are indexed, and the
+        ledger record is versioned forward. Without a `lifecycle_ledger`,
+        behavior is unchanged from before this lot — always re-chunk and
+        re-index, no dedup/update tracking.
+        """
+        ledger = self._c.lifecycle_ledger
+        total = 0
         for doc in documents:
+            key = document_key(doc.source, doc.tenant_id) if ledger else None
+            if ledger and key is not None:
+                current_hash = content_hash(doc.content)
+                existing = ledger.get(key)
+                if (
+                    existing is not None
+                    and existing.status == DocumentStatus.ACTIVE
+                    and existing.content_hash == current_hash
+                ):
+                    log.debug("engine.ingest_skipped_unchanged", document_key=key)
+                    continue
+                if existing is not None and existing.chunk_ids:
+                    self._delete_chunk_ids(existing.chunk_ids)
             chunks = self._c.chunker.chunk(doc)
-            all_chunks.extend(chunks)
-        return self.ingest_chunks(all_chunks)
+            total += self.ingest_chunks(chunks)
+            if ledger and key is not None:
+                ledger.record_ingested(
+                    key, doc.tenant_id, content_hash(doc.content), [c.id for c in chunks]
+                )
+        return total
+
+    def delete_document(self, document_key: str) -> int:
+        """Delete a document (by its `lifecycle_ledger` key) and tombstone its
+        ledger record. Idempotent: deleting an already-tombstoned or unknown
+        key returns 0 without error. Requires a configured `lifecycle_ledger`
+        — raises `ConfigurationError` otherwise, since without one there is no
+        record of which chunk ids belong to this document to delete (Lot 12a,
+        docs/refactoring-plan.md — closes the gap named in §2's 'Data
+        deletion/update' row: previously `RAGEngine` had no `delete()` at
+        all)."""
+        ledger = self._c.lifecycle_ledger
+        if ledger is None:
+            raise ConfigurationError(
+                "delete_document() requires a configured Container.lifecycle_ledger."
+            )
+        record = ledger.get(document_key)
+        if record is None or record.status == DocumentStatus.TOMBSTONED:
+            return 0
+        self._delete_chunk_ids(record.chunk_ids)
+        ledger.tombstone(document_key)
+        log.info("engine.deleted_document", document_key=document_key, chunks=len(record.chunk_ids))
+        return len(record.chunk_ids)
+
+    def _delete_chunk_ids(self, ids: list[str]) -> None:
+        """Coordinate deletion across both the vector/persistent index and the
+        retriever's own lexical state — the exact coordination gap Lot 4
+        found ("no coordination mechanism to even build on yet")."""
+        if not ids:
+            return
+        self._c.indexer.delete(ids)
+        retriever = self._c.retriever
+        if hasattr(retriever, "delete"):
+            retriever.delete(ids)
 
     def ingest_chunks(self, chunks: list) -> int:
         """Embed and index pre-chunked content. Use when chunks are produced externally.

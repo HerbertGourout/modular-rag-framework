@@ -1,26 +1,25 @@
 # Refactoring Plan — Engine-Agnostic Control Plane
 
-> **Status:** Phase A (Lots 0-5) COMPLETE. Lots 6-10 COMPLETE, 2026-08-05:
-> [ADR-0006](adr/0006-external-engine-selection.md) accepted (LangGraph selected);
-> `contracts/engine.py` (`DocumentEngine` port); `NativeEngineAdapter`; private-container access
-> removed repo-wide; `/answer` routing bug fixed; strict versioned manifests (extra-field
-> policy, `${VAR}`/`secret://` interpolation, capability validation, JSON schema export,
-> `mrag validate`, tested v1↔v2 migration); duplicate generation-latency trace step removed,
-> versioned `Trace`/`AuditEvent` schemas, `AuditSink` Protocol with a PII/secret payload
-> allowlist, `InMemoryAuditSink` + `PostgresAuditSink`. Phase B (Lots 6-10) is now fully
-> COMPLETE. Phase C started 2026-08-05: Lot 11a COMPLETE (threat model, data-classification
-> policy, `DataClassification`/`PIICategory` vocabulary, classification fixtures — paper/fixture
-> only, no enforcement). Lot 11b COMPLETE (2026-08-05): `Query`/`Chunk`/`Document.tenant_id`;
-> `contracts/identity.py` (`TenantContext`, `TokenVerifier`); `KeycloakTokenVerifier` (real
-> RS256/JWKS verification, adapters/auth/ reopened); `TenantIsolationPolicy` (fail-closed
-> query/ingest/retrieval enforcement); `PolicyEngine` hardened to deny-by-default on evaluation
-> error; `ExecutionContext.tenant_id` now propagated through `NativeEngineAdapter`. Lot 11c
-> COMPLETE (2026-08-05): redaction applied to returned answers and audit payloads;
-> `GUARD_DECISION` audit events fire at every governance denial point (tenant, query-guard,
-> answer-guard) and on human-review flagging; `contracts/review.py` (`ReviewItem`, `ReviewQueue`)
-> and `HumanReviewGate` (real, in-memory, threshold 0.7 per security.md) — honestly documented as
-> not yet triggered by any real generator (Lot 13 territory). Lot 11 (11a-c) now fully COMPLETE.
-> Lots 12a-14 not started.
+> **Status:** Phase A (Lots 0-5) COMPLETE. Phase B (Lots 6-10) COMPLETE, 2026-08-05: ADR-0006
+> accepted (LangGraph selected); `contracts/engine.py` (`DocumentEngine` port) +
+> `NativeEngineAdapter`; strict versioned manifests; versioned `Trace`/`AuditEvent` schemas with a
+> PII/secret payload allowlist, `InMemoryAuditSink` + `PostgresAuditSink`. Full detail in
+> `docs/refactoring/lot-{6,7,8,9,10}-*.md`. Phase C in progress:
+> - **Lot 11 (11a-c) COMPLETE** — threat model + data-classification policy (paper/fixture);
+>   `Query`/`Chunk`/`Document.tenant_id` with fail-closed `TenantIsolationPolicy` and a real
+>   Keycloak `TokenVerifier` (`adapters/auth/`, real RS256/JWKS-verified); `PolicyEngine`
+>   deny-by-default on evaluation error; redaction + per-decision `GUARD_DECISION` audit events +
+>   `HumanReviewGate` (real but not yet triggered by any generator — Lot 13). Detail in
+>   `docs/refactoring/lot-11{a,b,c}-*.md`.
+> - **Lot 12a COMPLETE** (2026-08-05): `contracts/lifecycle.py` (`LifecycleLedger`,
+>   `DocumentRecord`) gives document identity, idempotent `ingest()` (skip-unchanged /
+>   update-deletes-old-chunks-first), and tombstone semantics, backed by
+>   `InMemoryLifecycleLedger` + `PostgresLifecycleLedger`. `RAGEngine.delete_document()` — the
+>   method that never existed before this lot — coordinates deletion across `Container.indexer`
+>   and the retriever's lexical state. `BM25Retriever.index()` now appends instead of silently
+>   replacing the corpus, and gained `delete()`/`clear()`; `HybridRetriever` delegates both to its
+>   BM25 side. Detail in `docs/refactoring/lot-12a-document-lifecycle.md`.
+> - Lots 12b-14 not started.
 > **Target outcome:** Deploy compliant, measurable document-AI solutions faster, independently
 > of the underlying execution engine.
 > **Migration principle:** Incremental, evidence-based, reversible, and releasable after every
@@ -103,7 +102,7 @@ Findings below are tracked against the target in §1. Severity is one of `BLOCKI
 | Dynamic baseline | No reproducible test environment; declared test tools unavailable in the current one | BLOCKING (unsafe refactor) | Lot 3 |
 | Public compatibility | Multiple undocumented surfaces; API/CLI/examples read private container state | CRITICAL | Lot 4 |
 | ~~Tenant isolation~~ | **PARTIALLY RESOLVED in Lot 11b** (2026-08-05): `tenant_id` is now a real, enforced field (`Query`/`Chunk`/`Document`), with fail-closed `TenantIsolationPolicy` (deny missing tenant on query/ingest, filter cross-tenant chunks before generation) and a real Keycloak `TokenVerifier`. **Still open**: no API/CLI authentication middleware calls the verifier yet (Lot 16a); filtering is post-retrieval, not a Qdrant-level query-time partition (flagged for Lot 12b evaluation). | IMPORTANT (residual) | Lot 16a (auth wiring), Lot 12b (evaluate query-time partitioning) |
-| Data deletion/update | Vector-store deletion is not mirrored in the mutable in-memory BM25 index; no idempotency/tombstone contract. Confirmed in Lot 4: `RAGEngine` has no `delete()` at all, and `BM25Retriever` implements no `delete()`/`clear()` either — there is no coordination mechanism to even build on yet. | CRITICAL | Lot 12a, 12b |
+| ~~Data deletion/update~~ | **RESOLVED in Lot 12a** (2026-08-05): `RAGEngine.delete_document()` coordinates deletion across `Container.indexer` and the retriever's lexical state; `BM25Retriever` now implements `delete()`/`clear()` and `index()` appends (previously silently replaced) the corpus; `HybridRetriever` delegates `delete()`/`clear()` to its BM25 side. `contracts/lifecycle.py` (`LifecycleLedger`, `DocumentRecord`) gives document identity, idempotent `ingest()` (skip-unchanged / update-with-old-chunk-deletion), and tombstone semantics, backed by `InMemoryLifecycleLedger` + `PostgresLifecycleLedger`. Residual: index-schema versioning and vector/lexical reconciliation-on-divergence remain Lot 12b's job. | — | Lot 12a |
 | ~~Audit semantics~~ | **RESOLVED in Lot 10** (2026-08-05): `contracts/audit.py` (`AuditEvent`, `AuditSink`, PII/secret payload allowlist enforced by a Pydantic validator); `InMemoryAuditSink` (reference) + `PostgresAuditSink` (durable, lazy-imported, append-only). `RAGEngine` records a `RUN_SUCCEEDED`/`RUN_FAILED` event on every run when an `audit_sink` is configured. Retention/residency/legal requirements remain open — see §10. | — | Lot 10 |
 | Metric correctness | `ExactMatchEvaluator` behaves like token-set F1, not exact match; answer precision/recall written into retrieval-named fields | CRITICAL | Lot 13 |
 | API security | No auth, rate limits, or request-size limits; internal exception strings and source content can leak to callers | CRITICAL | Lot 16a |
@@ -516,6 +515,7 @@ scope change, or an approved architecture decision — never as a silent in-plac
 | 2026-08-05 | Lot 11a: `docs/architecture/threat-model.md` (assets, trust boundaries, actors, STRIDE analysis, each threat cross-referenced to its owning lot) and `docs/architecture/data-classification-policy.md` (4 levels, tenant schema, PII schema); `DataClassification`/`PIICategory` vocabulary in `core/enums.py`; 6-example classification fixture plus 7 fixture-validity tests. Paper/fixture only, no enforcement code — Lot 11b implements against it. Evidence in `docs/refactoring/lot-11a-threat-model-data-classification.md`. | COMPLETE |
 | 2026-08-05 | Lot 11b: `Query`/`Chunk`/`Document.tenant_id` (additive); `contracts/identity.py` (`TenantContext`, `TokenVerifier`); `adapters/auth/keycloak_verifier.py` (`KeycloakTokenVerifier`, real RS256/JWKS verification, tested against a locally generated keypair — `pyjwt[crypto]` not declared in `pyproject.toml`, same opt-in-infra precedent as Postgres); `adapters/auth/**` permission reopened deny→ask. New `security/policies/tenant_isolation.py` (`TenantIsolationPolicy`, fail-closed) and `contracts.security.TenantPolicy` Protocol; `PolicyEngine.enforce_query()` now denies on evaluation error instead of silently skipping. `RAGEngine` enforces tenant identity before retrieval, filters cross-tenant chunks before generation, and denies ingestion of untenanted chunks; `NativeEngineAdapter` now propagates `ExecutionContext.tenant_id`. Known residual gaps (no API/CLI auth wiring yet, post-retrieval not query-time filtering) recorded in §2. Evidence in `docs/refactoring/lot-11b-identity-tenant-propagation.md`. | COMPLETE |
 | 2026-08-05 | Lot 11c: `Container.redactor`/`review_queue` (both optional); `RAGEngine` applies redaction to returned answer text and to `query_text_redacted` audit payloads; new `GUARD_DECISION` audit events fire at every governance denial point (tenant isolation, query guard, answer guard) and on human-review flagging, alongside the pre-existing generic run-level events. New `contracts/review.py` (`ReviewItem`, `ReviewQueue`) and `security/policies/human_review.py` (`HumanReviewGate`, threshold 0.7 per `docs/architecture/security.md`). Honestly documented: no real generator sets `Answer.confidence` today, so the gate is real but has no live trigger until Lot 13 wires a genuine confidence/quality signal. Evidence in `docs/refactoring/lot-11c-redaction-audit-human-review.md`. Lot 11 (11a-c) fully COMPLETE. | COMPLETE |
+| 2026-08-05 | Lot 12a: `contracts/lifecycle.py` (`LifecycleLedger`, `DocumentRecord`, `DocumentStatus`); `ingestion/lifecycle/` (`hashing.py`, `InMemoryLifecycleLedger`); `adapters/lifecycle/postgres_ledger.py` (`PostgresLifecycleLedger`). `RAGEngine.ingest()` now idempotent per document (skip-unchanged, update-deletes-old-chunks-first) when a ledger is configured; new `RAGEngine.delete_document()` — closing the exact "no delete() at all" gap from Lot 4 — coordinates deletion across `Container.indexer` and the retriever's lexical state. Fixed `BM25Retriever.index()` silently replacing (not appending to) its corpus on a second call, and added `delete()`/`clear()` to both `BM25Retriever` and `HybridRetriever`. Evidence in `docs/refactoring/lot-12a-document-lifecycle.md`. | COMPLETE |
 | 2026-08-03 | Added per-lot effort sizing and total-programme estimate; split Lots 11/12/16 into lettered sub-lots | COMPLETE |
 | 2026-08-03 | Selected Keycloak (Lot 11b identity provider) and PostgreSQL (Lot 10 audit store, Lot 12a lifecycle ledger) from an infra-stack compatibility review | COMPLETE |
 | 2026-08-04 | Accepted ADR-0006: LangGraph selected as the external engine, on Herbert Gourout's explicit delegation of the call to the spike evidence | ACCEPTED |
@@ -535,3 +535,4 @@ scope change, or an approved architecture decision — never as a silent in-plac
 | 2026-08-05 | Lot 11a executed: threat model, data-classification policy, classification/PII vocabulary, fixtures. Phase C started. |
 | 2026-08-05 | Lot 11b executed: tenant_id propagation, Keycloak token verifier, fail-closed tenant isolation and policy-engine hardening, wired into RAGEngine and NativeEngineAdapter. |
 | 2026-08-05 | Lot 11c executed: redaction wiring, per-decision GUARD_DECISION audit events, human-review gate. Lot 11 (11a-c) complete. |
+| 2026-08-05 | Lot 12a executed: document identity/idempotency ledger (in-memory + Postgres), RAGEngine.ingest() idempotency, new RAGEngine.delete_document(), BM25Retriever append/delete/clear fix. |
