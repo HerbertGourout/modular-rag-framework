@@ -29,10 +29,12 @@ class AnthropicGenerator:
         model: str = "claude-opus-4-7",
         max_tokens: int = 2048,
         api_key: str = "",
+        timeout: float = 30.0,
     ) -> None:
         self.model = model
         self.max_tokens = max_tokens
         self.api_key = api_key
+        self.timeout = timeout
         self._client: object | None = None
         self._groundedness = GroundednessValidator()
 
@@ -44,7 +46,9 @@ class AnthropicGenerator:
             try:
                 import anthropic
 
-                self._client = anthropic.Anthropic(api_key=self.api_key or None)
+                self._client = anthropic.Anthropic(
+                    api_key=self.api_key or None, timeout=self.timeout
+                )
             except ImportError as exc:
                 raise ImportError("Install 'anthropic' (pip install modular-rag[v1]).") from exc
         return self._client
@@ -92,3 +96,11 @@ class AnthropicGenerator:
 
     async def agenerate(self, query: Query, context: list[RetrievedChunk], trace: Trace) -> Answer:
         return self.generate(query, context, trace)
+
+    def close(self) -> None:
+        """Release the underlying anthropic client, if one was ever opened
+        (Lot 14, docs/refactoring-plan.md — "own and close clients/
+        resources")."""
+        if self._client is not None:
+            self._client.close()  # type: ignore[attr-defined]
+            self._client = None

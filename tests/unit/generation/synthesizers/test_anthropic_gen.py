@@ -146,3 +146,32 @@ def test_generation_params_are_passed_to_api():
 
 def test_name_is_stable_identifier():
     assert AnthropicGenerator().name() == "anthropic"
+
+
+def test_default_timeout_is_thirty_seconds():
+    assert AnthropicGenerator().timeout == 30.0
+
+
+def test_get_client_passes_timeout_to_the_real_anthropic_client():
+    """Lot 14 (docs/refactoring-plan.md — "timeouts"): constructs the real
+    `anthropic.Anthropic` client (no network call at construction time) and
+    checks its own `.timeout` attribute."""
+    generator = AnthropicGenerator(api_key="sk-test", timeout=5.0)
+
+    client = generator._get_client()
+
+    assert client.timeout == 5.0
+
+
+def test_close_releases_the_client_if_one_was_opened():
+    generator = AnthropicGenerator(api_key="sk-test")
+    generator._get_client()
+    assert generator._client is not None
+
+    generator.close()
+
+    assert generator._client is None
+
+
+def test_close_is_a_no_op_when_no_client_was_ever_opened():
+    AnthropicGenerator().close()  # must not raise

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import structlog
+
 from modular_rag.contracts.audit import AuditSink
 from modular_rag.contracts.chunking import Chunker
 from modular_rag.contracts.embeddings import Embedder
@@ -17,6 +19,8 @@ from modular_rag.contracts.security import Redactor, SecurityGuard, TenantPolicy
 from modular_rag.contracts.telemetry import Telemetry
 from modular_rag.core.errors import RegistryError
 
+log = structlog.get_logger(__name__)
+
 
 class Container:
     """Dependency-injection container: holds all wired components for one pipeline."""
@@ -29,6 +33,24 @@ class Container:
 
     def register(self, name: str, component: Any) -> None:
         self._store[name] = component
+
+    def close(self) -> None:
+        """Best-effort graceful shutdown (Lot 14, docs/refactoring-plan.md —
+        "own and close clients/resources"). Calls `.close()` on every
+        registered component that has one (duck-typed — most components,
+        e.g. chunkers, don't own a network resource and correctly have no
+        `close()` at all). A single component's failure to close is logged
+        and does not stop the rest from being closed — a partial shutdown
+        leaking one connection is better than one that leaks the rest too
+        because it stopped at the first error."""
+        for name, component in self._store.items():
+            close = getattr(component, "close", None)
+            if close is None:
+                continue
+            try:
+                close()
+            except Exception as exc:
+                log.warning("container.close_failed", component=name, error=str(exc))
 
     def _get(self, name: str) -> Any:
         if name not in self._store:

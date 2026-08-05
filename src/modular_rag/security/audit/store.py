@@ -5,19 +5,29 @@ mock — for tests and local/dev use before a durable backend
 """
 from __future__ import annotations
 
+import threading
+
 from modular_rag.contracts.audit import AuditEvent
 
 
 class InMemoryAuditSink:
     """Append-only: events are only ever appended, never mutated or removed,
     matching the `AuditSink` Protocol's intentionally missing update/delete
-    methods."""
+    methods.
+
+    Guarded by a `threading.Lock` (Lot 14, docs/refactoring-plan.md — "make
+    ... mutable indexes concurrency-safe"): a plain `list.append()` happens
+    to be atomic under CPython's GIL, but that's an implementation detail,
+    not a language guarantee this reference implementation should rely on
+    silently."""
 
     def __init__(self) -> None:
         self._events: list[AuditEvent] = []
+        self._lock = threading.Lock()
 
     def record(self, event: AuditEvent) -> None:
-        self._events.append(event)
+        with self._lock:
+            self._events.append(event)
 
     async def arecord(self, event: AuditEvent) -> None:
         self.record(event)
@@ -29,7 +39,9 @@ class InMemoryAuditSink:
     def events(self) -> list[AuditEvent]:
         """Read-only snapshot for tests/inspection — returns a copy so callers
         can't mutate the append-only log through the accessor."""
-        return list(self._events)
+        with self._lock:
+            return list(self._events)
 
     def events_for_correlation(self, correlation_id: str) -> list[AuditEvent]:
-        return [e for e in self._events if e.correlation_id == correlation_id]
+        with self._lock:
+            return [e for e in self._events if e.correlation_id == correlation_id]
