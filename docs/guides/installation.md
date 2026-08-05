@@ -42,12 +42,19 @@ dependencies into a CI image or a client's production container. Install only wh
 
 | Group | Install command | What it adds |
 |---|---|---|
-| `v1` | `pip install -e ".[v1]"` | Core RAG: Qdrant, rank-bm25, sentence-transformers, openai, anthropic, pymupdf |
-| `v3` | `pip install -e ".[v3]"` | Graph memory: networkx, spacy |
-| `v4` | `pip install -e ".[v4]"` | Governance: OPA bindings, policy validators |
-| `v5` | `pip install -e ".[v5]"` | Multimodal: PIL, whisper, timm |
-| `dev` | `pip install -e ".[dev]"` | Testing and linting: pytest, mypy, ruff, pytest-asyncio |
-| `all` | `pip install -e ".[all]"` | Everything |
+| `v1` | `pip install -e ".[v1]"` | Core RAG: fastapi, uvicorn, typer, pymupdf, python-docx, beautifulsoup4, sentence-transformers, openai, anthropic, qdrant-client, rank-bm25, cohere, tiktoken |
+| `v4` | `pip install -e ".[v4]"` | Observability: opentelemetry-sdk/api/exporter-otlp — not yet wired into any code (V4 not reached), declared ahead of that work |
+| `v5` | `pip install -e ".[v5]"` | Multimodal: pymupdf (already in `v1`), pillow, pytesseract — not yet wired into any code (V5 not reached) |
+| `langgraph` | `pip install -e ".[langgraph]"` | The external `DocumentEngine` adapter (Lot 15) — only needed if a manifest sets `engine.adapter: "langgraph"` |
+| `supply-chain` | `pip install -e ".[supply-chain]"` | `pip-audit`, `pip-licenses`, `cyclonedx-bom` — CI/audit tooling (Lot 16b), not needed to run the framework |
+| `dev` | `pip install -e ".[dev]"` | Testing and linting: pytest, pytest-asyncio, pytest-cov, mypy, ruff, httpx, respx, build |
+| `all` | `pip install -e ".[all]"` | `v1` + `v4` + `v5` + `langgraph` + `dev` (not `supply-chain` — opt-in audit tooling, see above) |
+
+There is no `v3` (Graph Memory) group — removed in Lot 17 (`docs/refactoring-plan.md`): its
+dependencies (neo4j, networkx, spacy, python-louvain) were never imported anywhere in
+`src/modular_rag/`, and backed the native GraphRAG build that
+[ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) §5.2 now delegates to the
+selected external engine instead.
 
 ## Running Qdrant locally (V1)
 

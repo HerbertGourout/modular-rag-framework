@@ -21,7 +21,6 @@ from modular_rag.core.models.query import Query
 from modular_rag.core.models.retrieved import RetrievedChunk
 from modular_rag.core.models.trace import Trace, TraceStep
 from modular_rag.ingestion.lifecycle.hashing import content_hash, document_key
-from modular_rag.orchestration.router import QueryRouter
 from modular_rag.orchestration.state_machine import PipelineState, PipelineStateMachine
 
 log = structlog.get_logger(__name__)
@@ -32,7 +31,6 @@ class RAGEngine:
 
     def __init__(self, container: Container) -> None:
         self._c = container
-        self._router = QueryRouter()
 
     # -- public API --
 

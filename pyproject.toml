@@ -30,6 +30,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# No "v3" (Graph Memory) group: removed in Lot 17 (docs/refactoring-plan.md). Its four
+# dependencies (neo4j, networkx, spacy, python-louvain) had zero imports anywhere in
+# src/modular_rag/ — verified before removal — and backed the native GraphRAG
+# traversal/community-detection build that ADR-0005 §5.2 delegates to the selected
+# external engine instead. See docs/refactoring/lot-17-prototype-retirement.md.
 # V1 — Core RAG
 v1 = [
     "fastapi>=0.111",
@@ -48,13 +53,6 @@ v1 = [
     # Opt-in subword token counting for chunkers (token_counter: "tiktoken" in manifests);
     # the default whitespace counter needs no dependency.
     "tiktoken>=0.7",
-]
-# V3 — Graph Memory
-v3 = [
-    "neo4j>=5.20",
-    "networkx>=3.3",
-    "spacy>=3.7",
-    "python-louvain>=0.16",
 ]
 # V4 — Observability / Governance
 v4 = [
@@ -93,7 +91,7 @@ supply-chain = [
     "pip-licenses>=5.0",
     "cyclonedx-bom>=6.0",
 ]
-all = ["modular-rag[v1,v3,v4,v5,langgraph,dev]"]
+all = ["modular-rag[v1,v4,v5,langgraph,dev]"]
 
 [project.scripts]
 mrag = "modular_rag.cli:app"

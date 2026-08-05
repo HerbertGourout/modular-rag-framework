@@ -55,11 +55,16 @@ Central project configuration. Replaces `setup.py` + `setup.cfg`.
 | Group | Command | What it adds |
 |---|---|---|
 | `v1` | `pip install -e ".[v1]"` | FastAPI, Uvicorn, Typer, pymupdf, docx, BS4, sentence-transformers, openai, anthropic, qdrant-client, rank-bm25, cohere, tiktoken |
-| `v3` | `pip install -e ".[v3]"` | neo4j, networkx, spacy, python-louvain (communities) |
-| `v4` | `pip install -e ".[v4]"` | opentelemetry-sdk, opentelemetry-api, opentelemetry-exporter-otlp |
-| `v5` | `pip install -e ".[v5]"` | pymupdf, pillow, pytesseract (vision) |
-| `dev` | `pip install -e ".[dev]"` | pytest, pytest-asyncio, mypy, ruff, httpx, respx |
-| `all` | `pip install -e ".[all]"` | Everything above |
+| `v4` | `pip install -e ".[v4]"` | opentelemetry-sdk, opentelemetry-api, opentelemetry-exporter-otlp (not yet wired into any code — V4 not reached) |
+| `v5` | `pip install -e ".[v5]"` | pymupdf, pillow, pytesseract (not yet wired into any code — V5 not reached) |
+| `langgraph` | `pip install -e ".[langgraph]"` | The external `DocumentEngine` adapter (Lot 15) |
+| `supply-chain` | `pip install -e ".[supply-chain]"` | pip-audit, pip-licenses, cyclonedx-bom (Lot 16b CI/audit tooling) |
+| `dev` | `pip install -e ".[dev]"` | pytest, pytest-asyncio, pytest-cov, mypy, ruff, httpx, respx, build |
+| `all` | `pip install -e ".[all]"` | `v1` + `v4` + `v5` + `langgraph` + `dev` (not `supply-chain`) |
+
+No `v3` (Graph Memory) group — removed in Lot 17 (`docs/refactoring-plan.md`): neo4j, networkx,
+spacy, and python-louvain were never imported anywhere in `src/modular_rag/`, and backed the
+native GraphRAG build ADR-0005 §5.2 now delegates to the selected external engine instead.
 
 **CLI entry point**: `mrag` → `modular_rag.cli:app` (command installed on the PATH)
 
@@ -157,17 +162,21 @@ src/modular_rag/
 
 #### `core/enums.py`
 
-7 `StrEnum` enums (values = Python strings, not integers):
+5 `StrEnum` enums (values = Python strings, not integers):
 
 | Enum | Values | Usage |
 |---|---|---|
 | `Modality` | text, image, table, audio, video, code | Content type of a Document/Chunk |
 | `RetrievalMethod` | vector, bm25, hybrid, graph, multimodal | How a RetrievedChunk was found |
 | `ChunkingStrategy` | fixed, sentence, paragraph, section, adaptive, semantic | Chunking strategy (in the manifest) |
-| `RoutingStrategy` | llm_only, simple_rag, agentic_rag, graph_rag, multimodal_rag | Strategy chosen by the Router |
 | `PolicyAction` | allow, deny, redact, warn, require_review | Action of a PolicyRule |
-| `AgentRole` | coordinator, planner, retriever, extractor, synthesizer, validator, critic | Role of a V2 agent |
 | `GraphRelation` | depends_on, causes, is_part_of, works_for, contradicts, supports, derives_from | Relation type in the V3 graph |
+
+`RoutingStrategy` and `AgentRole` were removed in Lot 17 (`docs/refactoring-plan.md`) along
+with the entire dead agent/routing/planning prototype cluster they only existed to support
+(zero real consumers — `QueryRouter` was constructed but its `.route()` output was never
+actually read by `RAGEngine`). See
+[docs/refactoring/lot-17-prototype-retirement.md](../refactoring/lot-17-prototype-retirement.md).
 
 
 #### `core/ids.py`
@@ -210,7 +219,8 @@ All Pydantic v2 `BaseModel`. No ORM, no DB mapping.
 
 **`query.py` → `Query`** (`frozen=True`)
 - Immutable user query. The text cannot change mid-pipeline (it would break correlation with the Trace).
-- Fields: `id`, `text`, `modality`, `routing_hint` (optional RoutingStrategy to force a strategy), `metadata`, `created_at`
+- Fields: `id`, `text`, `modality`, `tenant_id` (Lot 11b), `metadata`, `created_at`
+- `routing_hint` was removed in Lot 17 alongside `RoutingStrategy`/`QueryRouter` (see `core/enums.py` above).
 
 **`retrieved.py` → `RetrievedChunk`** (`frozen=True`)
 - Chunk wrapped with its retrieval metadata.
@@ -450,19 +460,19 @@ All Pydantic v2 `BaseModel`. No ORM, no DB mapping.
 
 ---
 
-### `agents/` — Multi-agent runtime (V2)
+### `agents/` — engine-delegation adapter integration (per ADR-0005 §5.2)
 
-**`agents/coordinator/coordinator.py` → `CoordinatorAgent`**
-- Init: `agents: dict[AgentRole, Agent]`
-- `execute_plan(plan, query)`: iterates over the `ExecutionPlan` steps, dispatches each step to the agent by role/name
-
-**`agents/retriever/retriever_agent.py` → `RetrieverAgent`**: Adapts a `Retriever` as an `Agent`. Init: `retriever: Retriever`, `k: int = 10`
-
-**`agents/extractor/extractor.py` → `ExtractorAgent`**: Named entity extraction via regex. Deduplicates, limits to 30 unique entities.
-
-**`agents/synthesizer/synthesizer.py` → `SynthesizerAgent`**: Concatenates the top-5 context chunks. Limits the draft to 2000 chars.
-
-**`agents/validator/validator.py` → `ValidatorAgent`**: Computes a local groundedness score via token overlap (does not import `generation/validators/groundedness.py` — cross-domain imports are forbidden here). Adds a warning if score < 0.05.
+**Removed in Lot 17** (`docs/refactoring-plan.md`): five pre-ADR-0005 native agent
+prototypes used to live here — `CoordinatorAgent`, `RetrieverAgent`, `ExtractorAgent`,
+`SynthesizerAgent`, `ValidatorAgent` — each with zero test coverage and zero consumers
+anywhere in the codebase (verified via a full dependency search before removal). They
+implemented exactly the generic multi-agent orchestration capability
+[ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) §5.2 delegates to the selected
+external engine, predating that decision. The directory now holds only `__init__.py`
+(docstring pointing here) and empty subdirectory stubs (`.gitkeep`), reserved for the actual
+adapter-integration code that calls the external engine — not yet built. Restoration path:
+git history. See
+[docs/refactoring/lot-17-prototype-retirement.md](../refactoring/lot-17-prototype-retirement.md).
 
 ---
 
@@ -479,12 +489,18 @@ All Pydantic v2 `BaseModel`. No ORM, no DB mapping.
   - `subgraph_for_query(entity_labels, hops)`: seed from labels → BFS expansion
   - `stats()`: {nodes, edges}
 - In-memory backend, swappable with the Neo4j adapter (future)
+- **Retained but flagged in Lot 17** (`docs/refactoring-plan.md`): `neighbours()`/
+  `subgraph_for_query()` are genuine multi-hop-traversal/sub-graph-selection logic — exactly
+  the GraphRAG capability ADR-0005 §5.2 delegates to the external engine, not a passive data
+  model. Kept (unlike the removed items on this page) because it has real test coverage
+  (`tests/unit/memory/test_knowledge_graph.py`) and the "data model vs. traversal" split is
+  explicitly recorded as undecided, not resolved by any lot to date. See the module's own
+  docstring and
+  [docs/refactoring/lot-17-prototype-retirement.md](../refactoring/lot-17-prototype-retirement.md).
 
-**`memory/versioning/graph_versioning.py` → `GraphVersionManager`** (EvoRAG)
-- `reinforce(source_id, target_id, delta=0.1)`: increases an edge's weight (positive feedback)
-- `weaken(source_id, target_id, delta=0.1)`: decreases the weight (negative feedback)
-- `prune(min_weight=0.1)`: removes edges below the threshold
-- Bounds: weight ∈ [0.0, 1.0]
+`memory/versioning/graph_versioning.py` (`GraphVersionManager`, EvoRAG edge reinforcement) was
+**removed in Lot 17** — zero test coverage, zero consumers, and squarely in the delegated
+fine-tuning-execution territory ADR-0005 §5.2 assigns to the external engine.
 
 ---
 
@@ -542,20 +558,17 @@ Maps `(role, type_name)` → `factory callable`.
 - `wire(manifest) → Container`: for each role in the manifest, calls `factory(config)`, stores in the Container
 - `default()`: classmethod that pre-loads `_default_factories`
 
-#### `orchestration/router.py` → `QueryRouter`
-Classifies each query into a `RoutingStrategy`:
-- `routing_hint` on the Query → direct override
-- Graph keywords → `GRAPH_RAG`
-- Agentic keywords OR >40 words → `AGENTIC_RAG`
-- <5 words → `LLM_ONLY`
-- Otherwise → `SIMPLE_RAG`
-
-#### `orchestration/flow_compiler.py` → `FlowCompiler`
-`compile(query, strategy) → ExecutionPlan` with step templates:
-- **LLM_ONLY**: [generate]
-- **SIMPLE_RAG**: [retrieve → rerank → generate]
-- **AGENTIC_RAG**: [plan → retrieve_agent → synthesizer_agent → validator_agent → output]
-- **GRAPH_RAG**: [graph_retrieve → retrieve → generate]
+`orchestration/router.py` (`QueryRouter`) and `orchestration/flow_compiler.py`
+(`FlowCompiler`) were **removed in Lot 17** (`docs/refactoring-plan.md`). Both were
+constructed as part of the same dead prototype cluster as `agents/`'s five classes: `RAGEngine`
+constructed a `QueryRouter` in `__init__` but never called `.route()` on it anywhere in the
+actual pipeline — the strategy it would have classified into never influenced execution, which
+always ran the same fixed guard→retrieve→rerank→generate sequence regardless.
+`FlowCompiler.compile()` had zero callers at all. `.claude/rules/orchestration.md`'s own
+(superseded) framing said `FlowCompiler`'s job "becomes routing to the `DocumentEngine` port" —
+that routing is exactly what `app/bootstrap.py`'s `load_engine()` (Lot 15) already does
+directly, without needing a compiler class in between. See
+[docs/refactoring/lot-17-prototype-retirement.md](../refactoring/lot-17-prototype-retirement.md).
 
 #### `orchestration/state_machine.py` → `PipelineStateMachine`
 States: `IDLE → GUARDING_QUERY → RETRIEVING → RERANKING → GENERATING → GUARDING_ANSWER → EVALUATING → DONE` (+ `ERROR`)
@@ -581,6 +594,15 @@ MRAG_NEO4J_URL, MRAG_NEO4J_USER, MRAG_NEO4J_PASSWORD
 ```
 
 `get_settings()`: singleton (a single `.env` read per process).
+
+**Found in Lot 16c, not yet fixed**: `get_settings()`/`Settings()` is never actually called
+anywhere in `orchestration/_default_factories.py` or the pipeline-loading path — every adapter
+factory is `AdapterClass(**cfg.config)`, sourced only from the manifest. Setting any `MRAG_*`
+env var above currently has zero effect on a running pipeline (the one exception: the OpenAI
+SDK's own standard, non-`MRAG_`-prefixed `OPENAI_API_KEY` env var works, because
+`OpenAIGenerator` passes `api_key=self.api_key or None` and the SDK falls through to its own
+lookup). See `docs/refactoring-plan.md`'s "Orphaned `Settings` class" gap-matrix row and
+[docs/guides/deployment.md](../guides/deployment.md).
 
 #### `app/container.py` → `Container`
 DI Container. Internal `_store: dict[str, Any]`.

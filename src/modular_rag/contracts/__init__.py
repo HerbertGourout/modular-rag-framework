@@ -1,4 +1,3 @@
-from modular_rag.contracts.agents import Agent, AgentResult, AgentTask
 from modular_rag.contracts.audit import (
     ALLOWED_PAYLOAD_KEYS,
     AUDIT_SCHEMA_VERSION,
@@ -35,7 +34,6 @@ from modular_rag.contracts.manifests import (
     QualitySection,
 )
 from modular_rag.contracts.parsing import Parser
-from modular_rag.contracts.planning import ExecutionPlan, ExecutionStep, Planner
 from modular_rag.contracts.reconciliation import (
     DocumentDivergence,
     ReconciliationReport,
@@ -50,7 +48,6 @@ from modular_rag.contracts.storage import Storage
 from modular_rag.contracts.telemetry import Telemetry
 
 __all__ = [
-    "Agent", "AgentResult", "AgentTask",
     "ALLOWED_PAYLOAD_KEYS", "AUDIT_SCHEMA_VERSION", "AuditEvent", "AuditEventType", "AuditSink",
     "Chunker",
     "Embedder",
@@ -74,7 +71,6 @@ __all__ = [
     "EngineSelection", "GovernanceSection", "ObservabilitySection", "QualitySection",
     "ManifestLoader", "PipelineManifest",
     "Parser",
-    "ExecutionPlan", "ExecutionStep", "Planner",
     "DocumentDivergence", "ReconciliationReport", "RepairResult",
     "Reranker",
     "Retriever",

@@ -80,15 +80,14 @@ src/modular_rag/
 │
 ├── memory/             ← Domain module: persistent knowledge graph (V3)
 │   └── graph/
-│       └── knowledge_graph.py KnowledgeGraph (in-memory, NetworkX backend)
+│       └── knowledge_graph.py KnowledgeGraph (in-memory, plain dict/list — not NetworkX,
+│                              despite an earlier version of this diagram; retained with a
+│                              caveat in Lot 17, see docs/refactoring-plan.md)
 │
-├── agents/             ← Domain module: multi-agent runtime (V2)
-│   ├── planner.py          LLMPlanner
-│   ├── coordinator.py      Coordinator (dispatches subtasks to agents)
-│   ├── retriever_agent.py  RetrieverAgent
-│   ├── extractor.py        ExtractorAgent
-│   ├── synthesizer.py      SynthesizerAgent
-│   └── validator.py        ValidatorAgent
+├── agents/             ← engine-delegation adapter integration (ADR-0005 §5.2), not a
+│                          native multi-agent runtime — the five prototype agent classes this
+│                          diagram used to list here were removed in Lot 17 (zero test
+│                          coverage, zero consumers; docs/refactoring-plan.md)
 │
 ├── observability/      ← Domain module: structured logging + telemetry
 │   └── telemetry.py        StructlogTelemetry, NullTelemetry
@@ -96,9 +95,9 @@ src/modular_rag/
 ├── orchestration/      ← Runtime logic: compiles manifests, runs pipelines
 │   ├── engine.py           RAGEngine (ingest, answer, retrieve)
 │   ├── registry.py         ComponentRegistry (_default_factories map)
-│   ├── router.py           Router (classifies query → RoutingStrategy)
-│   ├── flow_compiler.py    FlowCompiler (RoutingStrategy → ExecutionPlan)
 │   └── state_machine.py    StateMachine (tracks pipeline state transitions)
+│   # router.py/flow_compiler.py removed in Lot 17 — zero consumers; RAGEngine constructed a
+│   # QueryRouter but never called .route() on it. docs/refactoring-plan.md.
 │
 ├── app/                ← Process-level wiring
 │   ├── bootstrap.py        load_manifest() → wire() → RAGEngine
@@ -171,9 +170,14 @@ What each package exports from its `__init__.py` (what downstream code should im
 
 | Package | Public exports |
 |---|---|
-| `contracts/` | `Chunker`, `Embedder`, `Indexer`, `Retriever`, `Reranker`, `Generator`, `SecurityGuard`, `Redactor`, `GuardResult`, `Evaluator`, `Telemetry`, `Storage`, `Planner`, `Agent`, `AgentResult`, `ManifestLoader`, `PipelineManifest` |
+| `contracts/` | `Chunker`, `Embedder`, `Indexer`, `Retriever`, `Reranker`, `Generator`, `SecurityGuard`, `Redactor`, `GuardResult`, `Evaluator`, `Telemetry`, `Storage`, `ManifestLoader`, `PipelineManifest` |
 | `core/models/` | `Document`, `Chunk`, `Query`, `RetrievedChunk`, `Citation`, `Answer`, `TraceStep`, `Trace`, `PolicyRule`, `Policy`, `Metrics` |
-| `core/` | `Modality`, `RetrievalMethod`, `ChunkingStrategy`, `RoutingStrategy`, `PolicyAction`, `AgentRole`, `GraphRelation`, `ModularRAGError` (+ subclasses) |
+| `core/` | `Modality`, `RetrievalMethod`, `ChunkingStrategy`, `PolicyAction`, `GraphRelation`, `ModularRAGError` (+ subclasses) |
+
+`contracts.planning` (`Planner`/`ExecutionPlan`/`ExecutionStep`), `contracts.agents`
+(`Agent`/`AgentResult`/`AgentTask`), and `core.enums.RoutingStrategy`/`AgentRole` were removed
+in Lot 17 (`docs/refactoring-plan.md`) — zero consumers, superseded by ADR-0005 §5.2's
+delegation decision.
 | `ingestion/` | `TextParser`, `PDFParser`, `FixedSizeChunker`, `AdaptiveChunker`, `TextNormalizer`, `MetadataEnricher`, `ingest_path` |
 | `retrieval/` | `BM25Retriever`, `VectorRetriever`, `ReciprocRankFusion` |
 | `security/` | `BasicSecurityGuard`, `PatternRedactor` |

@@ -1,5 +1,16 @@
 # Extending the Framework with Agents (V2+ Guide)
 
+> **⚠️ Superseded by [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) (accepted
+> 2026-08-04).** Generic multi-agent orchestration is now **delegated** to a selected external
+> engine, not built natively along the lines this guide describes. The five prototype agent
+> classes it references (`CoordinatorAgent`, `RetrieverAgent`, `ExtractorAgent`,
+> `SynthesizerAgent`, `ValidatorAgent`) were removed in Lot 17
+> (`docs/refactoring-plan.md`) — zero test coverage, zero consumers anywhere in the codebase.
+> Retained here as a historical design reference, not an implementation guide: if you land here
+> to build something in `agents/`, it should be an adapter that calls the external engine
+> (`DocumentEngine` port, `contracts/engine.py`, Lot 7), not the coordinator/tool-use runtime
+> described below.
+
 This guide explains how to extend the Modular RAG Framework with agent-based orchestration when you're ready for V2+.
 
 ---

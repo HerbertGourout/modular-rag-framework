@@ -1,4 +1,21 @@
-"""In-memory knowledge graph using networkx (V3). Production adapter: neo4j."""
+"""In-memory knowledge graph data model (V3). Despite the module's original docstring, this
+is a plain Python dict/list implementation — it never actually imported or depended on
+`networkx` (the `v3` optional-dependency group's declared `networkx>=3.3` is unused by this
+file; corrected here, not removed from `pyproject.toml`, since that's a separate question from
+this docstring's own accuracy).
+
+Retained, not removed, in Lot 17 (docs/refactoring-plan.md) — with a caveat recorded
+honestly: `neighbours()`/`subgraph_for_query()` are genuine multi-hop-traversal/sub-graph-
+selection logic, which is exactly the GraphRAG capability ADR-0005 §5.2
+(docs/adr/0005-document-ai-control-plane-boundary.md) delegates to the selected external
+engine, not a passive data model. `docs/architecture/structure.md`'s own note hedges this as
+"contingent on Lot 6 evidence, not decided yet" — Lot 6 (the LangGraph/LlamaIndex Workflows
+spike, ADR-0006) never actually produced evidence bearing on this specific question, so it
+remains genuinely undecided, not resolved by this lot. This file differs from the agent/
+routing/planning cluster removed alongside it in one material way: it has real test coverage
+(`tests/unit/memory/test_knowledge_graph.py`), so it was not treated as a zero-evidence dead
+prototype. Still has zero consumers anywhere outside its own test — it is not wired into any
+retriever or pipeline today."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
