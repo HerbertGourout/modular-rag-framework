@@ -68,6 +68,12 @@ v5 = [
     "pillow>=10.3",
     "pytesseract>=0.3",
 ]
+# External engine delegation (ADR-0006, Lot 15) — LangGraphEngineAdapter
+# (adapters/llms/langgraph_engine.py). Optional: the native adapter (default)
+# needs none of this; only manifests with engine.adapter: "langgraph" do.
+langgraph = [
+    "langgraph>=1.2",
+]
 # Development
 dev = [
     "pytest>=8.2",
@@ -79,7 +85,7 @@ dev = [
     "respx>=0.21",
     "build>=1.2",
 ]
-all = ["modular-rag[v1,v3,v4,v5,dev]"]
+all = ["modular-rag[v1,v3,v4,v5,langgraph,dev]"]
 
 [project.scripts]
 mrag = "modular_rag.cli:app"
