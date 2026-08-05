@@ -37,7 +37,11 @@ class _FakeRetriever:
 
 
 class _FakeGenerator:
+    def __init__(self) -> None:
+        self.last_query: Query | None = None
+
     def generate(self, query, context, trace) -> Answer:
+        self.last_query = query
         return Answer(query_id=query.id, text=f"native answer to '{query.text}'")
 
     async def agenerate(self, query, context, trace) -> Answer:
@@ -48,6 +52,10 @@ class _FakeGenerator:
 
 
 def _rag_engine() -> RAGEngine:
+    return _rag_engine_and_container()[0]
+
+
+def _rag_engine_and_container() -> tuple[RAGEngine, Container]:
     manifest = PipelineManifest(
         id="native-adapter-test",
         chunker=ComponentConfig(type="fake"),
@@ -62,7 +70,7 @@ def _rag_engine() -> RAGEngine:
     container.register("indexer", object())
     container.register("retriever", _FakeRetriever())
     container.register("generator", _FakeGenerator())
-    return RAGEngine(container)
+    return RAGEngine(container), container
 
 
 def test_native_adapter_implements_document_engine_protocol() -> None:
@@ -147,6 +155,20 @@ def test_pre_cancelled_token_is_ignored_since_cancellation_is_not_declared() -> 
     result = adapter.run(EngineRequest(query=Query(text="anything")), context)
 
     assert result.text  # did not raise
+
+
+def test_run_propagates_execution_context_tenant_id_to_the_underlying_query() -> None:
+    """Lot 11b (docs/refactoring-plan.md): "Propagate authenticated identity
+    and tenant through ExecutionContext" — `context.tenant_id` must reach
+    the `Query` the wrapped `RAGEngine` actually processes, not be dropped
+    at the adapter boundary."""
+    rag_engine, container = _rag_engine_and_container()
+    adapter = NativeEngineAdapter(rag_engine)
+    context = ExecutionContext(tenant_id="acme-corp", correlation_id="c", request_id="r")
+
+    adapter.run(EngineRequest(query=Query(text="What is RAG?")), context)
+
+    assert container.generator.last_query.tenant_id == "acme-corp"
 
 
 def test_name_and_version_are_non_empty() -> None:

@@ -11,7 +11,7 @@ from modular_rag.contracts.indexing import Indexer
 from modular_rag.contracts.manifests import PipelineManifest
 from modular_rag.contracts.reranking import Reranker
 from modular_rag.contracts.retrieval import Retriever
-from modular_rag.contracts.security import SecurityGuard
+from modular_rag.contracts.security import SecurityGuard, TenantPolicy
 from modular_rag.contracts.telemetry import Telemetry
 from modular_rag.core.errors import RegistryError
 
@@ -78,3 +78,11 @@ class Container:
         observability), this receives `AuditEvent` (compliance evidence).
         Defaults to `None` so existing manifests/tests are unaffected."""
         return self._store.get("audit_sink")
+
+    @property
+    def tenant_policy(self) -> TenantPolicy | None:
+        """Optional fail-closed tenant-isolation boundary (Lot 11b,
+        docs/refactoring-plan.md). Defaults to `None` so existing
+        manifests/tests are unaffected, matching `guard`/`audit_sink`'s
+        precedent (Lots 8/10)."""
+        return self._store.get("tenant_policy")

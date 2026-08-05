@@ -48,7 +48,13 @@ class NativeEngineAdapter:
         # ignored, not silently honored. RAGEngine's own internal guard check
         # still runs as it always has, via the manifest-wired SecurityGuard —
         # a SecurityError from that path propagates to the caller unchanged.
-        answer = self._engine.answer(request.query.text)
+        #
+        # `context.tenant_id` IS consulted (Lot 11b, docs/refactoring-plan.md
+        # — "Propagate authenticated identity and tenant through
+        # ExecutionContext"): it is the authoritative identity source per
+        # ExecutionContext's own docstring, forwarded into RAGEngine.answer()
+        # so a configured Container.tenant_policy can enforce against it.
+        answer = self._engine.answer(request.query.text, tenant_id=context.tenant_id)
         metadata = {"trace_id": answer.trace_id} if answer.trace_id else {}
         return EngineResult(
             text=answer.text,

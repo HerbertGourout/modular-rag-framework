@@ -388,16 +388,20 @@ src/modular_rag/adapters/
 ├── graphstores/
 │   └── .gitkeep              (engine-delegation target, Lots 6/7/15 — see ADR-0005)
 └── auth/
-    └── .gitkeep              (not yet assigned, revisit at Lot 11b)
+    └── keycloak_verifier.py  (Keycloak OIDC token verification, lazy imports — Lot 11b)
 ```
 
 ### Rules
 - Each adapter in its own file
-- `__init__.py` exports public classes
+- `__init__.py` exports public classes (note: as of Lot 10, `adapters/` subdirectories in this
+  repo are plain namespace packages with no `__init__.py` — submodules are imported by their full
+  path, e.g. `from modular_rag.adapters.auth.keycloak_verifier import KeycloakTokenVerifier`)
 - `.gitkeep` for stubs not yet implemented
 - `llms/`, `graphstores/`, `search/` implement calls to the engine selected in Lot 6 (via the
   `DocumentEngine` port, Lot 7) — they are not a native reimplementation of orchestration,
-  GraphRAG traversal, or search ranking. `auth/` stays a stub until Lot 11b assigns it scope.
+  GraphRAG traversal, or search ranking. `auth/` implements `contracts/identity.py`'s
+  `TokenVerifier` Protocol against Keycloak specifically (Lot 11b) — tenant-isolation
+  *enforcement* against the verified identity lives in `security/policies/`, not here.
 
 ---
 

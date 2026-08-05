@@ -12,8 +12,6 @@
       "Write(manifests/production/**)",
       "Edit(.gitlab/**)",
       "Write(.gitlab/**)",
-      "Edit(src/modular_rag/adapters/auth/**)",
-      "Write(src/modular_rag/adapters/auth/**)",
       "Edit(benchmarks/**)",
       "Write(benchmarks/**)"
     ],
@@ -54,6 +52,8 @@
       "Write(src/modular_rag/adapters/graphstores/**)",
       "Edit(src/modular_rag/adapters/search/**)",
       "Write(src/modular_rag/adapters/search/**)",
+      "Edit(src/modular_rag/adapters/auth/**)",
+      "Write(src/modular_rag/adapters/auth/**)",
       "Edit(src/modular_rag/core/**)",
       "Write(src/modular_rag/core/**)",
       "Edit(pyproject.toml)",
@@ -82,7 +82,7 @@
   },
   "notes": {
     "permissionStrategy": "Real Claude Code 3-bucket model: deny (always blocked, no prompt) > ask (prompts every time) > allow (auto-approved, no prompt). Paths not matched by any rule fall back to Claude Code's defaultMode behavior.",
-    "tier_mapping": "deny == old 'denylist' (secrets, production configs, benchmarks, adapters/auth). allow == old 'dontAsk'+'acceptEdits' tiers merged (tests/examples/docs + safe domain modules — both are 'no prompt' in the real model, there's no separate dontAsk vs acceptEdits distinction). ask == old 'restrictedPaths' (contracts, orchestration, security, adapters/embeddings, adapters/vectorstores, adapters/llms, adapters/graphstores, adapters/search, core, .claude/rules, and a few root config files). Per ADR-0005 (2026-08-04), adapters/llms|graphstores|search moved from deny to ask: they are now delegation-adapter targets for Lots 6/7/15, not V2+/V3+ reserved namespaces. adapters/auth stays denied — no ADR-0005 capability is assigned to it yet. .claude/rules/** moved from deny to ask so Lot 2's realignment edits (and future ones) are possible with confirmation, not hard-blocked.",
+    "tier_mapping": "deny == old 'denylist' (secrets, production configs, benchmarks). allow == old 'dontAsk'+'acceptEdits' tiers merged (tests/examples/docs + safe domain modules — both are 'no prompt' in the real model, there's no separate dontAsk vs acceptEdits distinction). ask == old 'restrictedPaths' (contracts, orchestration, security, adapters/embeddings, adapters/vectorstores, adapters/llms, adapters/graphstores, adapters/search, adapters/auth, core, .claude/rules, and a few root config files). Per ADR-0005 (2026-08-04), adapters/llms|graphstores|search moved from deny to ask: they are now delegation-adapter targets for Lots 6/7/15, not V2+/V3+ reserved namespaces. Per Lot 11b (2026-08-05, docs/refactoring-plan.md), adapters/auth also moved from deny to ask: identity/tenant propagation is now load-bearing work (Keycloak OIDC verifier), matching CLAUDE.md's own instruction to revisit at Lot 11b rather than opening it speculatively. .claude/rules/** moved from deny to ask so Lot 2's realignment edits (and future ones) are possible with confirmation, not hard-blocked.",
     "hooksLimitation": "The 'matcher' field matches on TOOL NAME only (e.g. 'Edit|Write'), not on file path. This hook therefore runs ruff over the whole src/modular_rag/+tests/ tree on every Edit or Write, regardless of which file changed — there is no native per-path hook filtering in Claude Code.",
     "removedFromV1": "Earlier versions of this file had invented, non-functional keys: 'denylists/noAskPaths/autoPaths/restrictedPaths' (replaced by the real allow/ask/deny above), 'futureHooks' and 'parallelization' (narrative-only, never read by Claude Code — see docs/guides/claude-code-parallelization-orchestration.md for that content as documentation), and a 'mcpServers' key (MCP servers are configured in a project-root .mcp.json file, not here; this project does not currently define any MCP server).",
     "moreInfo": "See CLAUDE.md (@-imports .claude/.instructions.md and .claude/.prompt.md), .claude/rules/*.md (path-scoped, auto-loaded by Claude Code when matching files are opened), and .claude/rules/security-layers.md (no path scoping — always loaded)."

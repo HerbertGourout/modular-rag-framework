@@ -13,12 +13,15 @@ from modular_rag.app.container import Container
 from modular_rag.contracts.audit import AuditEvent
 from modular_rag.contracts.manifests import ComponentConfig, PipelineManifest
 from modular_rag.contracts.security import GuardResult
-from modular_rag.core.errors import SecurityError
+from modular_rag.core.enums import RetrievalMethod
+from modular_rag.core.errors import PolicyViolationError, SecurityError
 from modular_rag.core.ids import new_id
 from modular_rag.core.models.answer import Answer
 from modular_rag.core.models.chunk import Chunk
+from modular_rag.core.models.retrieved import RetrievedChunk
 from modular_rag.core.models.trace import Trace, TraceStep
 from modular_rag.orchestration.engine import RAGEngine
+from modular_rag.security.policies.tenant_isolation import TenantIsolationPolicy
 
 
 class _FakeChunker:
@@ -82,6 +85,7 @@ class _FakeRetriever:
 class _FakeGenerator:
     def __init__(self, text: str = "fake answer") -> None:
         self._text = text
+        self.received_context: list = []
 
     def generate(self, query, context, trace: Trace) -> Answer:  # type: ignore[no-untyped-def]
         # Real generators (openai_gen.py, anthropic_gen.py) instrument
@@ -89,6 +93,7 @@ class _FakeGenerator:
         # mirrors that so tests exercise the real contract, not a shortcut.
         # RAGEngine deliberately does NOT add its own wrapping step (Lot 10,
         # docs/refactoring-plan.md) to avoid double-counting latency.
+        self.received_context = context  # captured for tenant-filtering assertions (Lot 11b)
         trace.add_step(TraceStep(name="fake_generate", metadata={}))
         return Answer(query_id=query.id, text=self._text)
 
@@ -147,6 +152,8 @@ def _engine(
     guard: _FakeGuard | None = None,
     telemetry: _FakeTelemetry | None = None,
     audit_sink: _FakeAuditSink | None = None,
+    tenant_policy: TenantIsolationPolicy | None = None,
+    generator: _FakeGenerator | None = None,
 ) -> tuple[RAGEngine, Container]:
     manifest = PipelineManifest(
         id="test-pipeline",
@@ -161,13 +168,15 @@ def _engine(
     container.register("embedder", _FakeEmbedder())
     container.register("indexer", _FakeIndexer())
     container.register("retriever", retriever or _FakeRetriever())
-    container.register("generator", _FakeGenerator())
+    container.register("generator", generator or _FakeGenerator())
     if guard is not None:
         container.register("guard", guard)
     if telemetry is not None:
         container.register("telemetry", telemetry)
     if audit_sink is not None:
         container.register("audit_sink", audit_sink)
+    if tenant_policy is not None:
+        container.register("tenant_policy", tenant_policy)
     return RAGEngine(container), container
 
 
@@ -296,13 +305,94 @@ def test_answer_records_a_run_failed_audit_event_when_guard_blocks_query() -> No
     assert event.payload["error_type"] == "SecurityError"
 
 
-def test_answer_uses_tenant_id_from_query_metadata_when_present() -> None:
+def test_answer_uses_tenant_id_from_query_when_present() -> None:
+    """Lot 11b (docs/refactoring-plan.md): `_audit()` now reads the real
+    `Query.tenant_id` field instead of the `query.metadata.get("tenant_id",
+    "unknown")` placeholder Lot 10 introduced before this field existed."""
     audit_sink = _FakeAuditSink()
     engine, _ = _engine(audit_sink=audit_sink)
 
-    engine.answer("What is RAG?", metadata={"tenant_id": "acme-corp"})
+    engine.answer("What is RAG?", tenant_id="acme-corp")
 
     assert audit_sink.recorded[0].tenant_id == "acme-corp"
+
+
+def test_answer_succeeds_without_tenant_policy_when_query_has_no_tenant_id() -> None:
+    """`tenant_policy` is optional (Lot 11b, docs/refactoring-plan.md) — an
+    unconfigured pipeline must behave exactly as before, no crash, no-op."""
+    engine, _ = _engine()
+
+    answer = engine.answer("What is RAG?")
+
+    assert answer.text == "fake answer"
+
+
+def test_answer_raises_when_tenant_policy_configured_and_query_has_no_tenant_id() -> None:
+    engine, _ = _engine(tenant_policy=TenantIsolationPolicy())
+
+    with pytest.raises(PolicyViolationError, match="tenant_id"):
+        engine.answer("What is RAG?")
+
+
+def test_answer_succeeds_when_tenant_policy_configured_and_query_has_a_tenant_id() -> None:
+    engine, _ = _engine(tenant_policy=TenantIsolationPolicy())
+
+    answer = engine.answer("What is RAG?", tenant_id="acme-corp")
+
+    assert answer.text == "fake answer"
+
+
+def _hit(tenant_id: str | None) -> RetrievedChunk:
+    chunk = Chunk(doc_id=new_id(), content="hit", tenant_id=tenant_id)
+    return RetrievedChunk(chunk=chunk, score=0.5, rank=1, retrieval_method=RetrievalMethod.HYBRID)
+
+
+def test_answer_filters_cross_tenant_chunks_before_generation() -> None:
+    """The concrete Lot 11b acceptance mechanism: cross-tenant content must
+    never reach the generator, not just be excluded from the final answer."""
+    retriever = _FakeRetriever(
+        hits=[_hit("acme-corp"), _hit("other-tenant"), _hit(None)]
+    )
+    generator = _FakeGenerator()
+    engine, _ = _engine(
+        retriever=retriever, generator=generator, tenant_policy=TenantIsolationPolicy()
+    )
+
+    engine.answer("What is RAG?", tenant_id="acme-corp")
+
+    assert len(generator.received_context) == 1
+    assert generator.received_context[0].chunk.tenant_id == "acme-corp"
+
+
+def test_answer_emits_a_tenant_filter_trace_step() -> None:
+    telemetry = _FakeTelemetry()
+    retriever = _FakeRetriever(hits=[_hit("acme-corp"), _hit("other-tenant")])
+    engine, _ = _engine(
+        retriever=retriever, telemetry=telemetry, tenant_policy=TenantIsolationPolicy()
+    )
+
+    engine.answer("What is RAG?", tenant_id="acme-corp")
+
+    step_names = [s.name for s in telemetry.recorded[0].steps]
+    assert "tenant_filter" in step_names
+
+
+def test_ingest_chunks_raises_when_tenant_policy_configured_and_chunk_has_no_tenant_id() -> None:
+    engine, _ = _engine(tenant_policy=TenantIsolationPolicy())
+    chunk = Chunk(doc_id=new_id(), content="hello world")
+
+    with pytest.raises(PolicyViolationError, match="tenant_id"):
+        engine.ingest_chunks([chunk])
+
+
+def test_ingest_chunks_succeeds_when_tenant_policy_configured_and_chunk_has_a_tenant_id() -> None:
+    engine, container = _engine(tenant_policy=TenantIsolationPolicy())
+    chunk = Chunk(doc_id=new_id(), content="hello world", tenant_id="acme-corp")
+
+    n = engine.ingest_chunks([chunk])
+
+    assert n == 1
+    assert chunk in container.indexer.indexed
 
 
 def test_retrieve_returns_raw_chunks_without_generation() -> None:

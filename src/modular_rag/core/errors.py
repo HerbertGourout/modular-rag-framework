@@ -37,6 +37,13 @@ class PolicyViolationError(SecurityError):
     """Raised when a pipeline action violates a declared policy."""
 
 
+class AuthenticationError(SecurityError):
+    """Raised when a bearer token fails identity verification (Lot 11b,
+    docs/refactoring-plan.md) — invalid signature, expired, wrong audience/
+    issuer, or missing required claims. Never caught and downgraded to an
+    anonymous/guest identity; verification failure must deny, not degrade."""
+
+
 class EvaluationError(ModularRAGError):
     """Raised when scoring or benchmark execution fails."""
 
