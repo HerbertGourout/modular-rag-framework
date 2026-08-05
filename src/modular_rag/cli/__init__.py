@@ -5,9 +5,30 @@ from pathlib import Path
 import typer
 
 from modular_rag.app.bootstrap import load_pipeline
+from modular_rag.core.errors import ConfigurationError, ModularRAGError, SecurityError
 from modular_rag.ingestion.pipelines.default import ingest_directory, ingest_path
 
 app = typer.Typer(name="mrag", help="Modular RAG Framework CLI")
+
+# Typed exit codes (Lot 16a, docs/refactoring-plan.md — "CLI exit codes").
+# Previously every failure mode (a typo'd manifest path, a security-guard
+# denial, an ingestion/retrieval crash, a genuine bug) surfaced identically
+# as an uncaught Python traceback with exit code 1 — a caller scripting
+# against this CLI (CI, a shell pipeline) could not distinguish "your input
+# was invalid" from "the framework broke" without parsing stderr text.
+EXIT_CONFIGURATION_ERROR = 2
+EXIT_SECURITY_DENIAL = 3
+EXIT_OPERATION_ERROR = 4
+
+
+def _exit_code_for(exc: Exception) -> int:
+    if isinstance(exc, ConfigurationError):
+        return EXIT_CONFIGURATION_ERROR
+    if isinstance(exc, SecurityError):
+        return EXIT_SECURITY_DENIAL
+    if isinstance(exc, ModularRAGError):
+        return EXIT_OPERATION_ERROR
+    return 1
 
 
 @app.command()
@@ -16,12 +37,16 @@ def ingest(
     manifest: Path = typer.Option(..., "--manifest", "-m", help="Pipeline manifest YAML"),  # noqa: B008
 ) -> None:
     """Parse, chunk, embed and index documents from a file or directory."""
-    pipeline = load_pipeline(manifest)
-    if path.is_dir():
-        chunks = ingest_directory(path, pipeline.chunker)
-    else:
-        chunks = ingest_path(path, pipeline.chunker)
-    n = pipeline.ingest_chunks(chunks)
+    try:
+        pipeline = load_pipeline(manifest)
+        if path.is_dir():
+            chunks = ingest_directory(path, pipeline.chunker)
+        else:
+            chunks = ingest_path(path, pipeline.chunker)
+        n = pipeline.ingest_chunks(chunks)
+    except Exception as exc:
+        typer.echo(f"ERROR: {exc}", err=True)
+        raise typer.Exit(code=_exit_code_for(exc)) from exc
     typer.echo(f"Indexed {n} chunks from {path}.")
 
 
@@ -29,10 +54,17 @@ def ingest(
 def ask(
     question: str = typer.Argument(..., help="Question to answer"),
     manifest: Path = typer.Option(..., "--manifest", "-m", help="Pipeline manifest YAML"),  # noqa: B008
+    tenant_id: str | None = typer.Option(
+        None, "--tenant-id", help="Tenant identity for a tenant_policy-enabled manifest"
+    ),
 ) -> None:
     """Answer a question using the configured RAG pipeline."""
-    pipeline = load_pipeline(manifest)
-    answer = pipeline.answer(question)
+    try:
+        pipeline = load_pipeline(manifest)
+        answer = pipeline.answer(question, tenant_id=tenant_id)
+    except Exception as exc:
+        typer.echo(f"ERROR: {exc}", err=True)
+        raise typer.Exit(code=_exit_code_for(exc)) from exc
     typer.echo(f"\n{answer.text}\n")
     for i, citation in enumerate(answer.citations, 1):
         typer.echo(f"  [{i}] {citation.source} (score={citation.score:.3f})")

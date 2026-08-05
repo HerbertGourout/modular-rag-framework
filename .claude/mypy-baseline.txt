@@ -7,4 +7,7 @@
 # at baseline time. Ratcheted 35 -> 34 in Lot 12b (2026-08-05): fixing the BM25
 # small-corpus retrieve() rewrite's type-narrowing incidentally resolved one
 # pre-existing error elsewhere; see docs/refactoring/lot-12b-index-reconciliation.md.
-34
+# Ratcheted 34 -> 31 in Lot 16a (2026-08-05): typed the pre-existing bare `dict`
+# return annotations in api/__init__.py (health/ready/retrieve, AnswerResponse.citations)
+# while adding the new /ready endpoint; see docs/refactoring/lot-16a-api-cli-hardening.md.
+31

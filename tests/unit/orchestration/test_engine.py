@@ -731,6 +731,37 @@ def test_retrieve_returns_raw_chunks_without_generation() -> None:
     assert result == [hit]
 
 
+def test_retrieve_raises_when_tenant_policy_configured_and_no_tenant_id_given() -> None:
+    """Lot 16a regression test: `retrieve()` previously built a bare `Query`
+    and never consulted `Container.tenant_policy` at all, unlike `answer()` —
+    a caller could retrieve any tenant's chunks through this method even on
+    a pipeline where `answer()` correctly denied the identical request."""
+    engine, _ = _engine(tenant_policy=TenantIsolationPolicy())
+
+    with pytest.raises(PolicyViolationError, match="tenant_id"):
+        engine.retrieve("What is RAG?")
+
+
+def test_retrieve_filters_cross_tenant_chunks() -> None:
+    retriever = _FakeRetriever(hits=[_hit("acme-corp"), _hit("other-tenant"), _hit(None)])
+    engine, _ = _engine(retriever=retriever, tenant_policy=TenantIsolationPolicy())
+
+    result = engine.retrieve("What is RAG?", tenant_id="acme-corp")
+
+    assert len(result) == 1
+    assert result[0].chunk.tenant_id == "acme-corp"
+
+
+def test_retrieve_succeeds_without_tenant_policy_when_no_tenant_id_given() -> None:
+    chunk = Chunk(doc_id=new_id(), content="hit")
+    hit = RetrievedChunk(chunk=chunk, score=0.5, rank=1, retrieval_method=RetrievalMethod.HYBRID)
+    engine, _ = _engine(retriever=_FakeRetriever(hits=[hit]))
+
+    result = engine.retrieve("What is RAG?")
+
+    assert result == [hit]
+
+
 def test_ingest_chunks_embeds_missing_embeddings_then_indexes_and_feeds_retriever() -> None:
     retriever = _FakeRetriever()
     engine, container = _engine(retriever=retriever)
