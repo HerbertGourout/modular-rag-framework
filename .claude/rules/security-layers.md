@@ -32,14 +32,17 @@ allow → auto-approved, no prompt
 | `**/*.local.md` | User-specific configuration |
 | `manifests/production/**` | Production configs (V4+ scope) |
 | `.gitlab/**` | CI/CD pipeline configuration |
-| `src/modular_rag/adapters/auth/**` | Not yet assigned a capability per ADR-0005; revisit at Lot 11b |
 | `benchmarks/**` | Benchmarks (V3+ scope) |
 
 **Changed 2026-08-04 (ADR-0005, Lot 2):** `.claude/rules/**` and
 `src/modular_rag/adapters/{llms,graphstores,search}/**` moved from `deny` to `ask` below — they
 are no longer "V2+/V3+ reserved" native-build stubs but reachable engine-delegation adapter
-targets (`docs/refactoring-plan.md` Lots 6/7/15). `adapters/auth/**` stays denied — see reason
-above.
+targets (`docs/refactoring-plan.md` Lots 6/7/15).
+
+**Changed 2026-08-05 (Lot 11b):** `src/modular_rag/adapters/auth/**` also moved from `deny` to
+`ask` below — identity/tenant propagation (Keycloak OIDC token verification) is now load-bearing
+work, per CLAUDE.md's own instruction to revisit this path at Lot 11b rather than opening it
+speculatively.
 
 ### allow — Auto-Approved (no prompt)
 
@@ -175,7 +178,7 @@ src/modular_rag/
 │   ├── llms/                 ← Engine-delegation adapter target (ask, Lots 6/7/15)
 │   ├── graphstores/          ← Engine-delegation adapter target (ask, Lots 6/7/15)
 │   ├── search/               ← Engine-delegation adapter target (ask, Lots 6/7/15)
-│   ├── auth/                 ← Auth adapters (BLOCKED — not yet assigned, revisit Lot 11b)
+│   ├── auth/                 ← Keycloak OIDC token verification (ask, Lot 11b)
 │   └── ...
 ├── security/                 ← Filters, policies, guards (ask)
 ├── ingestion/                ← Chunkers, parsers (allow)
@@ -212,10 +215,12 @@ examples/
 
 ### Rationale
 
-- **Blocked zone** (auth/ only, as of 2026-08-04): not yet assigned a capability by ADR-0005
+- **Blocked zone**: none inside `src/modular_rag/adapters/` as of 2026-08-05 — `auth/` (Lot 11b)
+  was the last one, moved to `ask`.
 - **Ask-before zones** (contracts/, orchestration/, security/, llms/, graphstores/, search/,
-  `.claude/rules/`): changes here propagate to the entire framework, or (for the three adapter
-  dirs) are engine-delegation targets that need confirmation rather than a hard block
+  auth/, `.claude/rules/`): changes here propagate to the entire framework, or (for the four
+  adapter dirs) are engine-delegation/identity targets that need confirmation rather than a hard
+  block
 - **Allow zones** (ingestion/, retrieval/, generation/): New implementations are localized, safe
 - **Allow zones** (tests/, examples/, docs/): Zero friction on documentation and testing
 

@@ -17,6 +17,8 @@ class Chunk(BaseModel):
     start_char: int = 0
     end_char: int = 0
     page: int | None = None
+    tenant_id: str | None = None  # Lot 11b: owning tenant; None (legacy/unclassified) is
+    # treated as inaccessible by tenant-isolation filtering, not implicitly public.
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     model_config = {"frozen": False}

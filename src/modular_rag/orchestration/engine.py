@@ -66,6 +66,11 @@ class RAGEngine:
 
         Also feeds the BM25 index inside HybridRetriever so lexical retrieval works.
         """
+        if self._c.tenant_policy:
+            # Lot 11b (docs/refactoring-plan.md): "enforce fail-closed policy before
+            # indexing" — checked before any embedding/indexing work starts, not after.
+            for chunk in chunks:
+                self._c.tenant_policy.enforce_ingest(chunk.tenant_id)
         for chunk in chunks:
             if chunk.embedding is None:
                 chunk.embedding = self._c.embedder.embed([chunk.content])[0]
@@ -142,12 +147,23 @@ class RAGEngine:
         event = AuditEvent(
             event_type=event_type,
             correlation_id=trace.id,
-            tenant_id=str(query.metadata.get("tenant_id", "unknown")),
+            tenant_id=query.tenant_id or "unknown",
             payload=payload,
         )
         self._c.audit_sink.record(event)
 
     def _run_steps(self, query: Query, trace: Trace, sm: PipelineStateMachine) -> Answer:
+        # 0. tenant isolation — identity check (Lot 11b, docs/refactoring-plan.md).
+        # No try/except here on purpose: any exception (missing tenant, or an
+        # unexpected error inside the policy itself) must propagate and block the
+        # run, not be swallowed into "proceed as allowed" — that is what
+        # "fail-closed" means for this checkpoint.
+        if self._c.tenant_policy:
+            # Not a PipelineStateMachine transition: PipelineState has no dedicated
+            # tenant-check state, and this must run before GUARDING_QUERY's own
+            # transition below fires. Tenant enforcement failure raises directly.
+            self._c.tenant_policy.enforce_query(query)
+
         # 1. security guard — query
         if self._c.guard:
             sm.transition(PipelineState.GUARDING_QUERY)
@@ -163,6 +179,18 @@ class RAGEngine:
         sm.transition(PipelineState.RETRIEVING)
         context = self._retrieve(query, k=self._c.manifest.retriever.config.get("k", 20))
         trace.add_step(TraceStep(name="retrieve", metadata={"chunks": len(context)}))
+
+        # 2b. tenant isolation — filter retrieved context (Lot 11b). `query.tenant_id`
+        # is guaranteed set here: step 0 already denied the run otherwise.
+        if self._c.tenant_policy:
+            before = len(context)
+            context = self._c.tenant_policy.filter_chunks(query.tenant_id, context)  # type: ignore[arg-type]
+            trace.add_step(
+                TraceStep(
+                    name="tenant_filter",
+                    metadata={"chunks_before": before, "chunks_after": len(context)},
+                )
+            )
 
         # 3. reranking
         if self._c.reranker and context:

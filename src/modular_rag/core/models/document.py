@@ -15,6 +15,8 @@ class Document(BaseModel):
     content: str
     modality: Modality = Modality.TEXT
     mime_type: str = "text/plain"
+    tenant_id: str | None = None  # Lot 11b: owning tenant; see Chunk.tenant_id for the
+    # fail-closed handling of an unset value once tenant-isolation enforcement is configured.
     metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

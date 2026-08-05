@@ -71,6 +71,7 @@ class AdaptiveChunker:
                 content=text[start:end],
                 start_char=start,
                 end_char=end,
+                tenant_id=document.tenant_id,
                 metadata={"source": document.source},
             )
             for start, end in spans

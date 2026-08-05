@@ -323,7 +323,7 @@ See [ROADMAP.md](ROADMAP.md) for complete timeline and success criteria per vers
 | `adapters/llms/` | Engine-delegation target | **Reachable now** (Lots 6/7/15) — permission moved deny→ask 2026-08-04 | Gateway/routing to the selected external engine and multi-model access, not a cost-optimizer-only concern |
 | `adapters/graphstores/` | Engine-delegation target | **Reachable now** (Lots 6/7/15) — permission moved deny→ask 2026-08-04 | Backs the external engine's GraphRAG capability if kept as a data-model adapter; traversal itself is delegated |
 | `adapters/search/` | Engine-delegation target | **Reachable now** (Lots 6/7/15) — permission moved deny→ask 2026-08-04 | Multi-provider search, e.g. OpenSearch per `docs/refactoring/technology-candidates.md` |
-| `adapters/auth/` | Not yet assigned | **Still deny** | ADR-0005 doesn't map this path to an owned capability yet; identity/tenant work (Lot 11b) currently targets Keycloak via `security/policies/`, not this directory. Revisit at Lot 11b, don't open speculatively. |
+| `adapters/auth/` | Keycloak OIDC token verification | **Reachable now** (Lot 11b) — permission moved deny→ask 2026-08-05 | Hosts the external binding (`KeycloakTokenVerifier`, implements `contracts/identity.py`'s `TokenVerifier`). Tenant-isolation *enforcement* (fail-closed policy against the verified identity) lives in `security/policies/`, not here — this directory is the OIDC/JWKS client only. |
 
 **Rule**: these are adapter targets for the engine selected in Lot 6, wired through the
 `DocumentEngine` port (Lot 7) — not a native reimplementation of what they adapt to. Don't build

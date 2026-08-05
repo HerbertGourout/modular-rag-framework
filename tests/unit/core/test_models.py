@@ -86,6 +86,11 @@ def test_document_is_frozen():
         doc.content = "bar"  # type: ignore[misc]
 
 
+def test_document_tenant_id_defaults_to_none():
+    """Lot 11b, docs/refactoring-plan.md — additive field, existing callers unaffected."""
+    assert Document(source="a.txt", content="foo").tenant_id is None
+
+
 # ---------------------------------------------------------------------------
 # Chunk
 # ---------------------------------------------------------------------------
@@ -102,6 +107,7 @@ def test_chunk_defaults():
     assert chunk.modality == Modality.TEXT
     assert chunk.embedding is None
     assert chunk.metadata == {}
+    assert chunk.tenant_id is None
 
 
 # ---------------------------------------------------------------------------
@@ -118,6 +124,11 @@ def test_query_frozen():
 def test_query_routing_hint_optional():
     q = Query(text="explain chunking")
     assert q.routing_hint is None
+
+
+def test_query_tenant_id_defaults_to_none():
+    """Lot 11b, docs/refactoring-plan.md — additive field, existing callers unaffected."""
+    assert Query(text="explain chunking").tenant_id is None
 
 
 # ---------------------------------------------------------------------------

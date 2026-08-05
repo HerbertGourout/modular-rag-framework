@@ -21,6 +21,7 @@ from modular_rag.contracts.engine import (
 )
 from modular_rag.contracts.evaluation import AnswerEngine, Evaluator
 from modular_rag.contracts.generation import Generator
+from modular_rag.contracts.identity import TenantContext, TokenVerifier
 from modular_rag.contracts.indexing import Indexer
 from modular_rag.contracts.manifests import (
     ComponentConfig,
@@ -36,7 +37,7 @@ from modular_rag.contracts.planning import ExecutionPlan, ExecutionStep, Planner
 from modular_rag.contracts.reranking import Reranker
 from modular_rag.contracts.retrieval import Retriever
 from modular_rag.contracts.secrets import SecretResolver
-from modular_rag.contracts.security import GuardResult, Redactor, SecurityGuard
+from modular_rag.contracts.security import GuardResult, Redactor, SecurityGuard, TenantPolicy
 from modular_rag.contracts.storage import Storage
 from modular_rag.contracts.telemetry import Telemetry
 
@@ -57,6 +58,7 @@ __all__ = [
     "AnswerEngine",
     "Evaluator",
     "Generator",
+    "TenantContext", "TokenVerifier",
     "Indexer",
     "ComponentConfig",
     "EngineSelection", "GovernanceSection", "ObservabilitySection", "QualitySection",
@@ -66,7 +68,7 @@ __all__ = [
     "Reranker",
     "Retriever",
     "SecretResolver",
-    "GuardResult", "Redactor", "SecurityGuard",
+    "GuardResult", "Redactor", "SecurityGuard", "TenantPolicy",
     "Storage",
     "Telemetry",
 ]

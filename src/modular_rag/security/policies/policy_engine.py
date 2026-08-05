@@ -21,7 +21,20 @@ class PolicyEngine:
     def enforce_query(self, query: Query) -> GuardResult:
         for policy in self._policies:
             for rule in policy.sorted_rules():
-                if self._evaluate(rule.condition, query.text):
+                try:
+                    matched = self._evaluate(rule.condition, query.text)
+                except Exception as exc:
+                    # Lot 11b (docs/refactoring-plan.md): "policy-engine errors deny
+                    # by default, never allow by default." A rule that fails to
+                    # evaluate (a future CEL/Rego condition parse error, e.g.) must
+                    # not be silently skipped as non-matching — that would let the
+                    # query through exactly when the engine is least sure about it.
+                    log.error("policy.evaluation_failed", rule=rule.name, error=str(exc))
+                    raise PolicyViolationError(
+                        f"Rule '{rule.name}' failed to evaluate — denied by default "
+                        f"(fail-closed)."
+                    ) from exc
+                if matched:
                     if rule.action == PolicyAction.DENY:
                         raise PolicyViolationError(f"Rule '{rule.name}' denied the query.")
                     if rule.action == PolicyAction.WARN:

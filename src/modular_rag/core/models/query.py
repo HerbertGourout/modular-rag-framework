@@ -14,6 +14,8 @@ class Query(BaseModel):
     text: str
     modality: Modality = Modality.TEXT
     routing_hint: RoutingStrategy | None = None
+    tenant_id: str | None = None  # Lot 11b: None until a caller authenticates; enforcement
+    # (deny-by-default when unset) lives in security/policies/tenant_isolation.py, not here.
     metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
