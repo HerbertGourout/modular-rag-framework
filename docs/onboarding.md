@@ -6,6 +6,17 @@
 > officer. It complements [`docs/business-case.md`](business-case.md) (the "commercial why")
 > and [`ROADMAP.md`](../ROADMAP.md) (the "what, checked off as it ships") by answering
 > "who does what, and how to find your way around."
+>
+> **If you specifically want to understand the 2026-08 engine-agnostic control-plane
+> refactoring programme** (ADR-0005's owned-vs-delegated pivot, 18 lots, Phase A-D) rather
+> than the framework in general, go straight to
+> [docs/refactoring/README.md](refactoring/README.md) instead — this document's V2/V3
+> sections below (§3) still describe the pre-ADR-0005 native-build intent for agentic
+> orchestration and graph memory, which that programme superseded (generic multi-agent
+> orchestration and GraphRAG traversal are now delegated to a selected external engine, not
+> built natively along the lines described below). Not rewritten here in full — see
+> `docs/refactoring/lot-17-prototype-retirement.md` for what was corrected and why a full
+> rewrite of this file wasn't this programme's job to do unprompted.
 
 ---
 
