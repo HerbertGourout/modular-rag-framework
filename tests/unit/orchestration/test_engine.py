@@ -14,12 +14,15 @@ from modular_rag.contracts.audit import AuditEvent
 from modular_rag.contracts.manifests import ComponentConfig, PipelineManifest
 from modular_rag.contracts.security import GuardResult
 from modular_rag.core.enums import RetrievalMethod
-from modular_rag.core.errors import PolicyViolationError, SecurityError
+from modular_rag.core.errors import ConfigurationError, PolicyViolationError, SecurityError
 from modular_rag.core.ids import new_id
 from modular_rag.core.models.answer import Answer
 from modular_rag.core.models.chunk import Chunk
+from modular_rag.core.models.document import Document
 from modular_rag.core.models.retrieved import RetrievedChunk
 from modular_rag.core.models.trace import Trace, TraceStep
+from modular_rag.ingestion.lifecycle.hashing import document_key
+from modular_rag.ingestion.lifecycle.in_memory_ledger import InMemoryLifecycleLedger
 from modular_rag.orchestration.engine import RAGEngine
 from modular_rag.security.policies.human_review import HumanReviewGate
 from modular_rag.security.policies.tenant_isolation import TenantIsolationPolicy
@@ -79,6 +82,10 @@ class _FakeRetriever:
 
     def index(self, chunks: list[Chunk]) -> None:
         self.indexed_via_bm25.extend(chunks)
+
+    def delete(self, ids: list[str]) -> None:
+        id_set = set(ids)
+        self.indexed_via_bm25 = [c for c in self.indexed_via_bm25 if c.id not in id_set]
 
     def name(self) -> str:
         return "fake-retriever"
@@ -159,6 +166,7 @@ def _engine(
     generator: _FakeGenerator | None = None,
     redactor: PatternRedactor | None = None,
     review_queue: HumanReviewGate | None = None,
+    lifecycle_ledger: InMemoryLifecycleLedger | None = None,
 ) -> tuple[RAGEngine, Container]:
     manifest = PipelineManifest(
         id="test-pipeline",
@@ -186,6 +194,8 @@ def _engine(
         container.register("redactor", redactor)
     if review_queue is not None:
         container.register("review_queue", review_queue)
+    if lifecycle_ledger is not None:
+        container.register("lifecycle_ledger", lifecycle_ledger)
     return RAGEngine(container), container
 
 
@@ -507,6 +517,103 @@ def test_answer_records_a_flagged_for_review_audit_event() -> None:
         and e.payload.get("guard_decision") == "flagged_for_review"
     ]
     assert len(flagged) == 1
+
+
+def test_ingest_without_a_lifecycle_ledger_always_reindexes() -> None:
+    """No lifecycle_ledger configured: behavior unchanged from before Lot 12a
+    — always chunk/embed/index, no dedup."""
+    engine, container = _engine()
+    doc = Document(source="a.txt", content="hello world")
+
+    n1 = engine.ingest([doc])
+    n2 = engine.ingest([doc])
+
+    assert n1 == 1
+    assert n2 == 1
+    assert len(container.indexer.indexed) == 2  # indexed twice, no idempotency
+
+
+def test_ingest_with_a_lifecycle_ledger_skips_unchanged_content() -> None:
+    ledger = InMemoryLifecycleLedger()
+    engine, container = _engine(lifecycle_ledger=ledger)
+    doc = Document(source="a.txt", content="hello world")
+
+    n1 = engine.ingest([doc])
+    n2 = engine.ingest([doc])  # same source, same content — idempotent no-op
+
+    assert n1 == 1
+    assert n2 == 0
+    assert len(container.indexer.indexed) == 1
+
+
+def test_ingest_with_a_lifecycle_ledger_reindexes_changed_content() -> None:
+    ledger = InMemoryLifecycleLedger()
+    engine, container = _engine(lifecycle_ledger=ledger)
+    v1 = Document(source="a.txt", content="version one")
+
+    engine.ingest([v1])
+    v2 = Document(source="a.txt", content="version two, completely different")
+    n2 = engine.ingest([v2])
+
+    assert n2 == 1
+    # old chunk was deleted before the new one was indexed — exactly one live chunk
+    assert len(container.indexer.indexed) == 1
+    assert container.indexer.indexed[0].content == "version two, completely different"
+
+
+def test_ingest_with_a_lifecycle_ledger_records_the_document():
+    ledger = InMemoryLifecycleLedger()
+    engine, _ = _engine(lifecycle_ledger=ledger)
+    doc = Document(source="a.txt", content="hello world")
+
+    engine.ingest([doc])
+
+    record = ledger.get(document_key("a.txt", None))
+    assert record is not None
+    assert len(record.chunk_ids) == 1
+
+
+def test_delete_document_without_a_lifecycle_ledger_raises() -> None:
+    engine, _ = _engine()
+
+    with pytest.raises(ConfigurationError):
+        engine.delete_document("some-key")
+
+
+def test_delete_document_removes_chunks_from_indexer_and_retriever() -> None:
+    ledger = InMemoryLifecycleLedger()
+    retriever = _FakeRetriever()
+    engine, container = _engine(lifecycle_ledger=ledger, retriever=retriever)
+    doc = Document(source="a.txt", content="hello world")
+    engine.ingest([doc])
+
+    key = document_key("a.txt", None)
+    removed = engine.delete_document(key)
+
+    assert removed == 1
+    assert container.indexer.indexed == []
+    assert retriever.indexed_via_bm25 == []
+
+
+def test_delete_document_is_idempotent() -> None:
+    ledger = InMemoryLifecycleLedger()
+    engine, _ = _engine(lifecycle_ledger=ledger)
+    doc = Document(source="a.txt", content="hello world")
+    engine.ingest([doc])
+
+    key = document_key("a.txt", None)
+    first = engine.delete_document(key)
+    second = engine.delete_document(key)  # already tombstoned
+
+    assert first == 1
+    assert second == 0
+
+
+def test_delete_document_on_unknown_key_returns_zero() -> None:
+    ledger = InMemoryLifecycleLedger()
+    engine, _ = _engine(lifecycle_ledger=ledger)
+
+    assert engine.delete_document("never-ingested") == 0
 
 
 def test_retrieve_returns_raw_chunks_without_generation() -> None:

@@ -8,6 +8,7 @@ from modular_rag.contracts.embeddings import Embedder
 from modular_rag.contracts.evaluation import Evaluator
 from modular_rag.contracts.generation import Generator
 from modular_rag.contracts.indexing import Indexer
+from modular_rag.contracts.lifecycle import LifecycleLedger
 from modular_rag.contracts.manifests import PipelineManifest
 from modular_rag.contracts.reranking import Reranker
 from modular_rag.contracts.retrieval import Retriever
@@ -101,3 +102,12 @@ class Container:
         """Optional human-review gate (Lot 11c, docs/refactoring-plan.md —
         "support human review for high-risk outcomes"). Defaults to `None`."""
         return self._store.get("review_queue")
+
+    @property
+    def lifecycle_ledger(self) -> LifecycleLedger | None:
+        """Optional document-identity/idempotency ledger (Lot 12a,
+        docs/refactoring-plan.md). Defaults to `None`: `RAGEngine.ingest()`
+        behaves exactly as before (no idempotency check, no update/delete
+        tracking) unless one is configured; `RAGEngine.delete_document()`
+        requires one and raises `ConfigurationError` otherwise."""
+        return self._store.get("lifecycle_ledger")

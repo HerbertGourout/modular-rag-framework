@@ -23,6 +23,7 @@ from modular_rag.contracts.evaluation import AnswerEngine, Evaluator
 from modular_rag.contracts.generation import Generator
 from modular_rag.contracts.identity import TenantContext, TokenVerifier
 from modular_rag.contracts.indexing import Indexer
+from modular_rag.contracts.lifecycle import DocumentRecord, DocumentStatus, LifecycleLedger
 from modular_rag.contracts.manifests import (
     ComponentConfig,
     EngineSelection,
@@ -61,6 +62,7 @@ __all__ = [
     "Generator",
     "TenantContext", "TokenVerifier",
     "Indexer",
+    "DocumentRecord", "DocumentStatus", "LifecycleLedger",
     "ComponentConfig",
     "EngineSelection", "GovernanceSection", "ObservabilitySection", "QualitySection",
     "ManifestLoader", "PipelineManifest",
