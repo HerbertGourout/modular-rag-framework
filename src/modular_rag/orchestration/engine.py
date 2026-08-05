@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import time
+from typing import Any
 
 import structlog
 
 from modular_rag.app.container import Container
+from modular_rag.contracts.audit import AuditEvent, AuditEventType
 from modular_rag.contracts.chunking import Chunker
 from modular_rag.contracts.retrieval import Retriever
 from modular_rag.core.errors import SecurityError
@@ -92,7 +94,60 @@ class RAGEngine:
     def _run(self, query: Query) -> Answer:
         trace = Trace(query_id=query.id, pipeline_id=self._c.manifest.id)
         sm = PipelineStateMachine(self._c.manifest.id)
+        try:
+            ans = self._run_steps(query, trace, sm)
+        except Exception as exc:
+            # Lot 10 (docs/refactoring-plan.md): a failed run used to skip
+            # telemetry entirely — nothing was recorded for a blocked query,
+            # a retrieval error, or a generation failure. `trace.failed`/
+            # `failure_reason` now capture that a run happened and why it
+            # didn't complete, and telemetry still gets the trace, before the
+            # original exception propagates unchanged to the caller.
+            trace.failed = True
+            trace.failure_reason = str(exc)
+            if self._c.telemetry:
+                self._c.telemetry.record_trace(trace)
+            self._audit(
+                query,
+                trace,
+                event_type=AuditEventType.RUN_FAILED,
+                payload={"error_type": type(exc).__name__},
+            )
+            log.warning("engine.failed", query_id=query.id, error=str(exc))
+            raise
+        if self._c.telemetry:
+            self._c.telemetry.record_trace(trace)
+        self._audit(
+            query,
+            trace,
+            event_type=AuditEventType.RUN_SUCCEEDED,
+            payload={"answer_length": len(ans.text), "citation_count": len(ans.citations)},
+        )
+        sm.transition(PipelineState.DONE)
+        log.info("engine.answered", query_id=query.id, latency_ms=trace.total_latency_ms)
+        return ans
 
+    def _audit(
+        self, query: Query, trace: Trace, *, event_type: AuditEventType, payload: dict[str, Any]
+    ) -> None:
+        """Record compliance-audit evidence for one run (Lot 10,
+        docs/refactoring-plan.md). No-op unless a Container-registered
+        `audit_sink` is present — mirrors `telemetry`'s optionality so
+        existing manifests/tests are unaffected. `tenant_id` reads from
+        `query.metadata` because `Query` has no dedicated tenant field yet;
+        full identity/tenant propagation via `ExecutionContext` is Lot 11b.
+        """
+        if not self._c.audit_sink:
+            return
+        event = AuditEvent(
+            event_type=event_type,
+            correlation_id=trace.id,
+            tenant_id=str(query.metadata.get("tenant_id", "unknown")),
+            payload=payload,
+        )
+        self._c.audit_sink.record(event)
+
+    def _run_steps(self, query: Query, trace: Trace, sm: PipelineStateMachine) -> Answer:
         # 1. security guard — query
         if self._c.guard:
             sm.transition(PipelineState.GUARDING_QUERY)
@@ -118,10 +173,17 @@ class RAGEngine:
             trace.add_step(TraceStep(name="rerank", latency_ms=(time.perf_counter() - t0) * 1000))
 
         # 4. generation
+        # No wrapping TraceStep here on purpose (Lot 10, docs/refactoring-plan.md):
+        # every registered Generator already calls `trace.add_step(...)` itself
+        # inside `generate()` (e.g. "openai_generate" with real token counts) —
+        # per the documented pattern in .claude/.instructions.md section 3
+        # ("Generation: in generate() method"). Adding a second wrapping step
+        # here duplicated the generator's own step under a different name
+        # ("generate" vs. e.g. "openai_generate") with an overlapping — not
+        # identical — time window, and silently double-counted generation
+        # latency into `trace.total_latency_ms`.
         sm.transition(PipelineState.GENERATING)
-        t0 = time.perf_counter()
         ans = self._c.generator.generate(query, context, trace)
-        trace.add_step(TraceStep(name="generate", latency_ms=(time.perf_counter() - t0) * 1000))
         ans = ans.model_copy(update={"trace_id": trace.id})
 
         # 5. security guard — answer
@@ -133,12 +195,6 @@ class RAGEngine:
             if result.modified_content:
                 ans = ans.model_copy(update={"text": result.modified_content})
 
-        # 6. telemetry
-        if self._c.telemetry:
-            self._c.telemetry.record_trace(trace)
-
-        sm.transition(PipelineState.DONE)
-        log.info("engine.answered", query_id=query.id, latency_ms=trace.total_latency_ms)
         return ans
 
     def _retrieve(self, query: Query, k: int) -> list[RetrievedChunk]:

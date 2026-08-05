@@ -1,4 +1,11 @@
 from modular_rag.contracts.agents import Agent, AgentResult, AgentTask
+from modular_rag.contracts.audit import (
+    ALLOWED_PAYLOAD_KEYS,
+    AUDIT_SCHEMA_VERSION,
+    AuditEvent,
+    AuditEventType,
+    AuditSink,
+)
 from modular_rag.contracts.chunking import Chunker
 from modular_rag.contracts.embeddings import Embedder
 from modular_rag.contracts.engine import (
@@ -35,6 +42,7 @@ from modular_rag.contracts.telemetry import Telemetry
 
 __all__ = [
     "Agent", "AgentResult", "AgentTask",
+    "ALLOWED_PAYLOAD_KEYS", "AUDIT_SCHEMA_VERSION", "AuditEvent", "AuditEventType", "AuditSink",
     "Chunker",
     "Embedder",
     "CancellationToken",

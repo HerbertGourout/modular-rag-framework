@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from modular_rag.contracts.audit import AuditSink
 from modular_rag.contracts.chunking import Chunker
 from modular_rag.contracts.embeddings import Embedder
 from modular_rag.contracts.evaluation import Evaluator
@@ -69,3 +70,11 @@ class Container:
     @property
     def telemetry(self) -> Telemetry | None:
         return self._store.get("telemetry")
+
+    @property
+    def audit_sink(self) -> AuditSink | None:
+        """Optional compliance-audit sink (Lot 10, docs/refactoring-plan.md).
+        Distinct from `telemetry`: telemetry receives `Trace` (performance
+        observability), this receives `AuditEvent` (compliance evidence).
+        Defaults to `None` so existing manifests/tests are unaffected."""
+        return self._store.get("audit_sink")
