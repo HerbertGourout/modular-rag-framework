@@ -235,10 +235,26 @@ class RAGEngine:
         query = Query(text=question, **query_kwargs)  # type: ignore[arg-type]
         return self._run(query)
 
-    def retrieve(self, question: str, k: int = 10) -> list[RetrievedChunk]:
-        """Return raw retrieved chunks without generating an answer."""
-        query = Query(text=question)
-        return self._retrieve(query, k)
+    def retrieve(
+        self, question: str, k: int = 10, tenant_id: str | None = None
+    ) -> list[RetrievedChunk]:
+        """Return raw retrieved chunks without generating an answer.
+
+        Applies the same tenant-isolation enforcement/filtering `answer()`
+        does (Lot 16a, docs/refactoring-plan.md — found while wiring API
+        auth to this method). Previously `retrieve()` built a `Query` with
+        no `tenant_id` and never consulted `Container.tenant_policy` at
+        all, so a caller could retrieve any tenant's chunks through this
+        method even on a pipeline where `answer()` correctly denied/filtered
+        the identical request.
+        """
+        query = Query(text=question, tenant_id=tenant_id)
+        if self._c.tenant_policy:
+            self._c.tenant_policy.enforce_query(query)
+        chunks = self._retrieve(query, k)
+        if self._c.tenant_policy:
+            chunks = self._c.tenant_policy.filter_chunks(query.tenant_id, chunks)  # type: ignore[arg-type]
+        return chunks
 
     # -- internal pipeline --
 
