@@ -57,5 +57,11 @@ class InMemoryLifecycleLedger:
         self._records[document_key] = record
         return record
 
+    def export_all(self) -> list[DocumentRecord]:
+        return list(self._records.values())
+
+    def restore_record(self, record: DocumentRecord) -> None:
+        self._records[record.document_key] = record
+
     def name(self) -> str:
         return "in-memory"

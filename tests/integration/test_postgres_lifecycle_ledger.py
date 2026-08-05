@@ -86,3 +86,34 @@ def test_list_active_excludes_tombstoned_records(ledger):
         ledger._get_connection().execute(
             "DELETE FROM document_lifecycle WHERE document_key = 'test-key-2'"
         )
+
+
+@pytest.mark.integration
+def test_export_all_includes_tombstoned_records(ledger):
+    """Lot 12c, docs/refactoring-plan.md."""
+    ledger._get_connection().execute(
+        "DELETE FROM document_lifecycle WHERE document_key = 'test-key-2'"
+    )
+    try:
+        ledger.record_ingested("test-key-1", "tenant-a", "hash-a", ["c1"])
+        ledger.record_ingested("test-key-2", "tenant-a", "hash-b", ["c2"])
+        ledger.tombstone("test-key-2")
+
+        keys = {r.document_key for r in ledger.export_all()}
+
+        assert {"test-key-1", "test-key-2"} <= keys
+    finally:
+        ledger._get_connection().execute(
+            "DELETE FROM document_lifecycle WHERE document_key = 'test-key-2'"
+        )
+
+
+@pytest.mark.integration
+def test_restore_record_writes_verbatim(ledger):
+    original = ledger.record_ingested("test-key-1", "tenant-a", "hash-a", ["c1"])
+
+    ledger.restore_record(original)
+
+    read = ledger.get("test-key-1")
+    assert read.version == original.version
+    assert read.created_at == original.created_at

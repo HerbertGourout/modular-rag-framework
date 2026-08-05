@@ -19,6 +19,7 @@ from modular_rag.contracts.engine import (
     GovernanceDecision,
     GovernanceHook,
 )
+from modular_rag.contracts.erasure import ErasureProof
 from modular_rag.contracts.evaluation import AnswerEngine, Evaluator
 from modular_rag.contracts.generation import Generator
 from modular_rag.contracts.identity import TenantContext, TokenVerifier
@@ -62,6 +63,7 @@ __all__ = [
     "ExecutionContext",
     "GovernanceDecision",
     "GovernanceHook",
+    "ErasureProof",
     "AnswerEngine",
     "Evaluator",
     "Generator",

@@ -50,6 +50,12 @@ SELECT document_key, tenant_id, content_hash, version, schema_version, status, c
 FROM document_lifecycle WHERE status = %s
 """
 
+_SELECT_ALL = """
+SELECT document_key, tenant_id, content_hash, version, schema_version, status, chunk_ids,
+       created_at, updated_at
+FROM document_lifecycle
+"""
+
 _UPSERT = """
 INSERT INTO document_lifecycle
     (document_key, tenant_id, content_hash, version, schema_version, status, chunk_ids,
@@ -108,6 +114,17 @@ class PostgresLifecycleLedger:
         except Exception as exc:
             raise StorageError(f"Failed to list active documents: {exc}") from exc
         return [self._row_to_record(row) for row in rows]
+
+    def export_all(self) -> list[DocumentRecord]:
+        conn = self._get_connection()
+        try:
+            rows = conn.execute(_SELECT_ALL).fetchall()
+        except Exception as exc:
+            raise StorageError(f"Failed to export document_lifecycle: {exc}") from exc
+        return [self._row_to_record(row) for row in rows]
+
+    def restore_record(self, record: DocumentRecord) -> None:
+        self._write(record)
 
     def record_ingested(
         self,
