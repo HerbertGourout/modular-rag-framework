@@ -196,10 +196,23 @@ class LangGraphEngineAdapter:
         t0 = time.perf_counter()
         self._check_cancelled(state["context"], state["context"].request_id)
         query = state["query"]
+
+        # Tenant isolation — identity check (Lot 11b), same fail-closed enforcement
+        # RAGEngine._run_steps() performs before retrieval. Found missing here via
+        # Lot 18's pilot-comparison script: a query with no tenant_id sailed through
+        # this adapter to a 200 while the identical request correctly raised
+        # SecurityError on native — this node previously only *filtered* chunks
+        # when query.tenant_id happened to be set, and never denied the ones where
+        # it wasn't. tenant_policy.enforce_query() raises PolicyViolationError
+        # (a SecurityError) for the identical reason Container.guard denial does
+        # below, so it propagates through _node_guard's raise-through path.
+        tenant_policy = self._c.tenant_policy
+        if tenant_policy:
+            tenant_policy.enforce_query(query)
+
         k = self._c.manifest.retriever.config.get("k", 20)
         chunks = self._c.retriever.retrieve(query, k=k)
 
-        tenant_policy = self._c.tenant_policy
         if tenant_policy and query.tenant_id:
             chunks = tenant_policy.filter_chunks(query.tenant_id, chunks)
 

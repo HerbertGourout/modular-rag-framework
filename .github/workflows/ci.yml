@@ -52,9 +52,15 @@ jobs:
           python-version: "3.12"
           cache: "pip"
       - name: Install dependencies
+        # langgraph is required here, not just [v1,dev]: tests/unit/adapters/llms/
+        # test_langgraph_engine.py runs LangGraphEngineAdapter.run()/.astream() for
+        # real (Lot 15), which lazy-imports the real langgraph package on first call
+        # (.claude/.instructions.md SS4) -- omitting it here previously meant this job
+        # would fail with ModuleNotFoundError on every push, undetected because it
+        # was never actually run against this workflow. Found and fixed in Lot 18.
         run: |
           pip install --upgrade pip
-          pip install -e .[v1,dev]
+          pip install -e .[v1,langgraph,dev]
       - name: Run unit tests (no external services)
         run: pytest tests/unit/ -v --tb=short
 
@@ -87,7 +93,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -e .[v1,dev]
+          pip install -e .[v1,langgraph,dev]
       - name: Run all tests with coverage
         run: pytest tests/unit/ tests/contract/ --cov=src/modular_rag --cov-report=term-missing --cov-report=xml -v
       - name: Upload coverage report
