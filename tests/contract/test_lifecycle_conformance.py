@@ -75,3 +75,27 @@ def test_list_active_excludes_tombstoned_records(ledger_factory: type) -> None:
     active = ledger.list_active()
 
     assert {r.document_key for r in active} == {"key-1"}
+
+
+@pytest.mark.parametrize("ledger_factory", LEDGERS)
+def test_export_all_includes_tombstoned_records(ledger_factory: type) -> None:
+    """Unlike list_active(), export_all() must not drop tombstone history —
+    Lot 12c, docs/refactoring-plan.md."""
+    ledger = ledger_factory()
+    ledger.record_ingested("key-1", "acme-corp", "hash-a", ["c1"])
+    ledger.record_ingested("key-2", "acme-corp", "hash-b", ["c2"])
+    ledger.tombstone("key-2")
+
+    exported = ledger.export_all()
+
+    assert {r.document_key for r in exported} == {"key-1", "key-2"}
+
+
+@pytest.mark.parametrize("ledger_factory", LEDGERS)
+def test_restore_record_writes_verbatim_without_bumping_version(ledger_factory: type) -> None:
+    ledger = ledger_factory()
+    original = ledger.record_ingested("key-1", "acme-corp", "hash-a", ["c1"])
+
+    ledger.restore_record(original)
+
+    assert ledger.get("key-1").version == original.version

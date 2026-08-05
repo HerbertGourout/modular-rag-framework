@@ -622,6 +622,102 @@ def test_delete_document_on_unknown_key_returns_zero() -> None:
     assert engine.delete_document("never-ingested") == 0
 
 
+def test_rebuild_document_without_a_lifecycle_ledger_raises() -> None:
+    engine, _ = _engine()
+
+    with pytest.raises(ConfigurationError):
+        engine.rebuild_document(Document(source="a.txt", content="hello world"))
+
+
+def test_rebuild_document_reindexes_even_when_content_is_unchanged() -> None:
+    """The whole point of rebuild vs. ingest: bypass the idempotency skip
+    (Lot 12c, docs/refactoring-plan.md — "rebuild-from-source"), because the
+    scenario is "the ledger says this is already indexed, but the store
+    doesn't actually have it" (e.g. resolving a reconciliation
+    RepairResult.unresolved_missing, Lot 12b)."""
+    ledger = InMemoryLifecycleLedger()
+    engine, container = _engine(lifecycle_ledger=ledger)
+    doc = Document(source="a.txt", content="hello world")
+    engine.ingest([doc])
+    # Simulate divergence: the store lost its chunk even though the ledger
+    # still thinks it's there (ingest() alone would skip this as "unchanged").
+    container.indexer.clear()
+    assert container.indexer.indexed == []
+
+    n = engine.rebuild_document(doc)
+
+    assert n == 1
+    assert len(container.indexer.indexed) == 1
+
+
+def test_rebuild_document_deletes_old_chunks_before_indexing_new_ones() -> None:
+    ledger = InMemoryLifecycleLedger()
+    engine, container = _engine(lifecycle_ledger=ledger)
+    doc = Document(source="a.txt", content="hello world")
+    engine.ingest([doc])
+    first_chunk_id = container.indexer.indexed[0].id
+
+    engine.rebuild_document(doc)
+
+    assert first_chunk_id not in [c.id for c in container.indexer.indexed]
+    assert len(container.indexer.indexed) == 1
+
+
+def test_erase_document_without_a_lifecycle_ledger_raises() -> None:
+    engine, _ = _engine()
+
+    with pytest.raises(ConfigurationError):
+        engine.erase_document("some-key")
+
+
+def test_erase_document_verifies_absence_from_both_stores() -> None:
+    ledger = InMemoryLifecycleLedger()
+    retriever = _FakeRetriever()
+    engine, container = _engine(lifecycle_ledger=ledger, retriever=retriever)
+    doc = Document(source="a.txt", content="hello world")
+    engine.ingest([doc])
+
+    proof = engine.erase_document(document_key("a.txt", None))
+
+    assert proof.verified_absent_from_vector is True
+    assert proof.verified_absent_from_lexical is True
+    assert proof.fully_verified is True
+    assert len(proof.chunk_ids_removed) == 1
+    assert proof.proof_hash
+
+
+def test_erase_document_reports_none_when_retriever_cannot_be_verified() -> None:
+    class _RetrieverWithoutListIds:
+        def retrieve(self, query, k: int = 10):  # type: ignore[no-untyped-def]
+            return []
+
+        async def aretrieve(self, query, k: int = 10):  # type: ignore[no-untyped-def]
+            return []
+
+        def name(self) -> str:
+            return "minimal"
+
+    ledger = InMemoryLifecycleLedger()
+    engine, _ = _engine(lifecycle_ledger=ledger, retriever=_RetrieverWithoutListIds())
+    doc = Document(source="a.txt", content="hello world")
+    engine.ingest([doc])
+
+    proof = engine.erase_document(document_key("a.txt", None))
+
+    assert proof.verified_absent_from_lexical is None
+    assert proof.fully_verified is True  # None doesn't count as a failure
+
+
+def test_erase_document_on_unknown_key_still_returns_a_proof_with_no_chunks() -> None:
+    ledger = InMemoryLifecycleLedger()
+    engine, _ = _engine(lifecycle_ledger=ledger)
+
+    proof = engine.erase_document("never-ingested")
+
+    assert proof.chunk_ids_removed == []
+    assert proof.verified_absent_from_vector is True
+
+
 def test_retrieve_returns_raw_chunks_without_generation() -> None:
     from modular_rag.core.enums import RetrievalMethod
     from modular_rag.core.models.retrieved import RetrievedChunk

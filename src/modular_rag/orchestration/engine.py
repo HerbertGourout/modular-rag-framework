@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import time
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -8,6 +10,7 @@ import structlog
 from modular_rag.app.container import Container
 from modular_rag.contracts.audit import AuditEvent, AuditEventType
 from modular_rag.contracts.chunking import Chunker
+from modular_rag.contracts.erasure import ErasureProof
 from modular_rag.contracts.lifecycle import DocumentStatus
 from modular_rag.contracts.retrieval import Retriever
 from modular_rag.contracts.review import ReviewItem
@@ -116,6 +119,82 @@ class RAGEngine:
         ledger.tombstone(document_key)
         log.info("engine.deleted_document", document_key=document_key, chunks=len(record.chunk_ids))
         return len(record.chunk_ids)
+
+    def rebuild_document(self, document: Document) -> int:
+        """Force a full re-chunk/re-embed/re-index of `document`, bypassing
+        `ingest()`'s idempotency skip. Used to repair a document whose
+        indexed state has drifted from what `lifecycle_ledger` expects —
+        e.g. to resolve `orchestration.reconciliation.IndexReconciler`'s
+        `RepairResult.unresolved_missing` (Lot 12b), which cannot be
+        auto-repaired without the original document content (Lot 12c,
+        docs/refactoring-plan.md — "rebuild-from-source"). Requires a
+        configured `lifecycle_ledger` — raises `ConfigurationError`
+        otherwise, since without one there is no record to heal.
+        """
+        ledger = self._c.lifecycle_ledger
+        if ledger is None:
+            raise ConfigurationError(
+                "rebuild_document() requires a configured Container.lifecycle_ledger."
+            )
+        key = document_key(document.source, document.tenant_id)
+        existing = ledger.get(key)
+        if existing is not None and existing.chunk_ids:
+            self._delete_chunk_ids(existing.chunk_ids)
+        chunks = self._c.chunker.chunk(document)
+        n = self.ingest_chunks(chunks)
+        ledger.record_ingested(
+            key, document.tenant_id, content_hash(document.content), [c.id for c in chunks]
+        )
+        log.info("engine.rebuilt_document", document_key=key, chunks=n)
+        return n
+
+    def erase_document(self, document_key: str) -> ErasureProof:
+        """Delete a document and return verifiable proof of erasure (Lot 12c,
+        docs/refactoring-plan.md — "right-to-erasure proof"). Unlike
+        `delete_document()` (Lot 12a), this re-checks each store's
+        `list_ids()` *after* deletion to confirm the removed ids are
+        actually gone — proof, not just trust that the `delete()` calls
+        didn't raise. Requires a configured `lifecycle_ledger`, same as
+        `delete_document()`.
+        """
+        ledger = self._c.lifecycle_ledger
+        if ledger is None:
+            raise ConfigurationError(
+                "erase_document() requires a configured Container.lifecycle_ledger."
+            )
+        record = ledger.get(document_key)
+        chunk_ids = (
+            list(record.chunk_ids)
+            if record is not None and record.status == DocumentStatus.ACTIVE
+            else []
+        )
+        self.delete_document(document_key)
+
+        verified_vector = not (set(chunk_ids) & set(self._c.indexer.list_ids()))
+        retriever = self._c.retriever
+        verified_lexical: bool | None = None
+        if hasattr(retriever, "list_ids"):
+            verified_lexical = not (set(chunk_ids) & set(retriever.list_ids()))
+
+        tombstoned_at = datetime.now(UTC)
+        proof_hash = hashlib.sha256(
+            f"{document_key}:{sorted(chunk_ids)}:{tombstoned_at.isoformat()}".encode()
+        ).hexdigest()
+        proof = ErasureProof(
+            document_key=document_key,
+            chunk_ids_removed=chunk_ids,
+            verified_absent_from_vector=verified_vector,
+            verified_absent_from_lexical=verified_lexical,
+            tombstoned_at=tombstoned_at,
+            proof_hash=proof_hash,
+        )
+        log.info(
+            "engine.erasure_proof",
+            document_key=document_key,
+            verified_vector=verified_vector,
+            verified_lexical=verified_lexical,
+        )
+        return proof
 
     def _delete_chunk_ids(self, ids: list[str]) -> None:
         """Coordinate deletion across both the vector/persistent index and the

@@ -81,4 +81,19 @@ class LifecycleLedger(Protocol):
 
     def tombstone(self, document_key: str) -> DocumentRecord | None: ...
 
+    def export_all(self) -> list[DocumentRecord]:
+        """Every record regardless of status — including `TOMBSTONED` ones,
+        unlike `list_active()`. Added in Lot 12c (docs/refactoring-plan.md)
+        for `ingestion.lifecycle.backup.backup_ledger()`: a backup that
+        silently dropped tombstone history would make right-to-erasure proof
+        unverifiable after a restore."""
+        ...
+
+    def restore_record(self, record: DocumentRecord) -> None:
+        """Write a record back exactly as given — no version bump, no
+        `created_at`/`updated_at` recomputation, unlike `record_ingested()`
+        (which is for the normal ingest flow, not restore). Added in
+        Lot 12c for `ingestion.lifecycle.backup.restore_ledger()`."""
+        ...
+
     def name(self) -> str: ...

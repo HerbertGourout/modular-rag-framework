@@ -3,31 +3,17 @@
 > **Status:** Phase A (Lots 0-5) COMPLETE. Phase B (Lots 6-10) COMPLETE, 2026-08-05: ADR-0006
 > accepted (LangGraph selected); `contracts/engine.py` (`DocumentEngine` port) +
 > `NativeEngineAdapter`; strict versioned manifests; versioned `Trace`/`AuditEvent` schemas with a
-> PII/secret payload allowlist, `InMemoryAuditSink` + `PostgresAuditSink`. Full detail in
-> `docs/refactoring/lot-{6,7,8,9,10}-*.md`. Phase C in progress:
-> - **Lot 11 (11a-c) COMPLETE** — threat model + data-classification policy (paper/fixture);
->   `Query`/`Chunk`/`Document.tenant_id` with fail-closed `TenantIsolationPolicy` and a real
->   Keycloak `TokenVerifier` (`adapters/auth/`, real RS256/JWKS-verified); `PolicyEngine`
->   deny-by-default on evaluation error; redaction + per-decision `GUARD_DECISION` audit events +
->   `HumanReviewGate` (real but not yet triggered by any generator — Lot 13). Detail in
->   `docs/refactoring/lot-11{a,b,c}-*.md`.
-> - **Lot 12a COMPLETE** (2026-08-05): `contracts/lifecycle.py` (`LifecycleLedger`,
->   `DocumentRecord`) gives document identity, idempotent `ingest()` (skip-unchanged /
->   update-deletes-old-chunks-first), and tombstone semantics, backed by
->   `InMemoryLifecycleLedger` + `PostgresLifecycleLedger`. `RAGEngine.delete_document()` — the
->   method that never existed before this lot — coordinates deletion across `Container.indexer`
->   and the retriever's lexical state. `BM25Retriever.index()` now appends instead of silently
->   replacing the corpus, and gained `delete()`/`clear()`; `HybridRetriever` delegates both to its
->   BM25 side. Detail in `docs/refactoring/lot-12a-document-lifecycle.md`.
-> - **Lot 12b COMPLETE** (2026-08-05): `INDEX_SCHEMA_VERSION`/`DocumentRecord.schema_version`;
->   `Indexer.list_ids()` + `IndexReconciler` (`orchestration/reconciliation.py`) detects
->   vector/lexical divergence against the lifecycle ledger and repairs orphaned ids (never
->   fabricates missing content — hands that off to Lot 12c); the BM25 small-corpus scoring bug
->   (Lot 4) is now actually fixed, not just characterized; found and fixed a real bug where
->   `QdrantStore` silently dropped `tenant_id`, defeating Lot 11b's tenant isolation for the real
->   vector-store path, and added Qdrant-level query-time tenant filtering on top. mypy baseline
->   ratcheted 35→34. Detail in `docs/refactoring/lot-12b-index-reconciliation.md`.
-> - Lot 12c, 13, 14 not started.
+> PII/secret payload allowlist, `InMemoryAuditSink` + `PostgresAuditSink`. **Phase C (Lots
+> 11a-12c) COMPLETE**, 2026-08-05: tenant identity (`tenant_id` fields, fail-closed
+> `TenantIsolationPolicy`, real Keycloak `TokenVerifier`, Qdrant query-time filtering),
+> `PolicyEngine` deny-by-default, redaction + per-decision audit evidence, `HumanReviewGate`
+> (real, not yet triggered by any generator — Lot 13); document lifecycle (`LifecycleLedger`,
+> idempotent `ingest()`, `RAGEngine.delete_document()` — closing the "no delete() at all" gap from
+> Lot 4); index reconciliation (`IndexReconciler`, schema versioning) plus the BM25 small-corpus
+> scoring bug actually fixed (not just characterized); backup/restore (verified round-trip
+> exercise), `rebuild_document()`, and right-to-erasure proof (`erase_document()`). mypy baseline
+> ratcheted 35→34. Full detail in `docs/refactoring/lot-{6,7,8,9,10,11a,11b,11c,12a,12b,12c}-*.md`.
+> - Lots 13, 14 not started.
 > **Target outcome:** Deploy compliant, measurable document-AI solutions faster, independently
 > of the underlying execution engine.
 > **Migration principle:** Incremental, evidence-based, reversible, and releasable after every
@@ -123,7 +109,7 @@ Findings below are tracked against the target in §1. Severity is one of `BLOCKI
 | Resilience | External LLM/embedding/vector calls lack uniform timeout, retry, cancellation, and overload semantics | IMPORTANT | Lot 14 |
 | Concurrency | Sync work callable from async surfaces; mutable in-memory state has no documented concurrency guarantee | IMPORTANT | Lot 14 |
 | ~~Trace semantics~~ | **RESOLVED in Lot 10** (2026-08-05): removed the duplicate/overlapping "generate" `TraceStep` (generator self-instrumentation is now the only source); `Trace.failed`/`failure_reason` capture failed runs, which now still reach `telemetry.record_trace()` before the exception propagates. `TRACE_SCHEMA_VERSION = "1.1"`. | — | Lot 10 |
-| ~~Index migration~~ | **PARTIALLY RESOLVED in Lot 12b** (2026-08-05): `contracts/lifecycle.py`'s `INDEX_SCHEMA_VERSION` + `DocumentRecord.schema_version` gives index-schema versioning; `orchestration/reconciliation.py`'s `IndexReconciler` detects vector/lexical divergence (missing + orphaned ids) against the `LifecycleLedger`'s expected state, and repairs the orphaned-id direction automatically (pure deletion, no content fabrication). **Still open**: rebuild-from-source and backup/restore protocol — Lot 12c. | IMPORTANT (residual) | Lot 12c |
+| ~~Index migration~~ | **RESOLVED in Lot 12b/12c** (2026-08-05): `contracts/lifecycle.py`'s `INDEX_SCHEMA_VERSION` + `DocumentRecord.schema_version` gives index-schema versioning; `IndexReconciler` detects and repairs orphaned-id divergence; `RAGEngine.rebuild_document()` handles the missing-content direction reconciliation can't auto-repair; ledger backup/restore proven via a genuine round-trip exercise (fresh-instance restore, not a same-instance no-op). Production PostgreSQL/Qdrant-native backup tooling documented (not reimplemented) — owned by Lot 16c's runbooks as operational content. | — | Lot 12b, 12c |
 | Dependency reproducibility | No dependency lock/constraints; CI/declared-tooling mismatch | IMPORTANT | Lot 3 |
 | Versioning | Package version duplicated across files | IMPORTANT | Lot 16b |
 | Prototype retirement | Unknown external consumers of generic agents, graph memory, and other future-version stubs | IMPORTANT | Lot 17 |
@@ -525,6 +511,7 @@ scope change, or an approved architecture decision — never as a silent in-plac
 | 2026-08-05 | Lot 11c: `Container.redactor`/`review_queue` (both optional); `RAGEngine` applies redaction to returned answer text and to `query_text_redacted` audit payloads; new `GUARD_DECISION` audit events fire at every governance denial point (tenant isolation, query guard, answer guard) and on human-review flagging, alongside the pre-existing generic run-level events. New `contracts/review.py` (`ReviewItem`, `ReviewQueue`) and `security/policies/human_review.py` (`HumanReviewGate`, threshold 0.7 per `docs/architecture/security.md`). Honestly documented: no real generator sets `Answer.confidence` today, so the gate is real but has no live trigger until Lot 13 wires a genuine confidence/quality signal. Evidence in `docs/refactoring/lot-11c-redaction-audit-human-review.md`. Lot 11 (11a-c) fully COMPLETE. | COMPLETE |
 | 2026-08-05 | Lot 12a: `contracts/lifecycle.py` (`LifecycleLedger`, `DocumentRecord`, `DocumentStatus`); `ingestion/lifecycle/` (`hashing.py`, `InMemoryLifecycleLedger`); `adapters/lifecycle/postgres_ledger.py` (`PostgresLifecycleLedger`). `RAGEngine.ingest()` now idempotent per document (skip-unchanged, update-deletes-old-chunks-first) when a ledger is configured; new `RAGEngine.delete_document()` — closing the exact "no delete() at all" gap from Lot 4 — coordinates deletion across `Container.indexer` and the retriever's lexical state. Fixed `BM25Retriever.index()` silently replacing (not appending to) its corpus on a second call, and added `delete()`/`clear()` to both `BM25Retriever` and `HybridRetriever`. Evidence in `docs/refactoring/lot-12a-document-lifecycle.md`. | COMPLETE |
 | 2026-08-05 | Lot 12b: `INDEX_SCHEMA_VERSION`/`DocumentRecord.schema_version`; `Indexer.list_ids()` (`QdrantStore` via scroll API, `BM25Retriever`/`HybridRetriever` duck-typed); `contracts/reconciliation.py` (`DocumentDivergence`, `ReconciliationReport`, `RepairResult`) and `orchestration/reconciliation.py`'s `IndexReconciler` (`check()`/`repair()`, repairs orphans only, never fabricates missing content); `LifecycleLedger.list_active()`. Fixed the BM25 small-corpus IDF-floor scoring bug (Lot 4) by gating on lexical overlap instead of score sign. Found and fixed `QdrantStore` silently dropping `tenant_id` on index/retrieve (defeated Lot 11b's tenant isolation for the real vector-store path) and added Qdrant-level query-time tenant filtering. mypy baseline ratcheted 35→34. Evidence in `docs/refactoring/lot-12b-index-reconciliation.md`. | COMPLETE |
+| 2026-08-05 | Lot 12c: `LifecycleLedger.export_all()`/`restore_record()` (both implementations); `ingestion/lifecycle/backup.py` (`backup_ledger()`/`restore_ledger()`), proven via a genuine fresh-instance restore exercise, not a same-instance no-op; `RAGEngine.rebuild_document()` (forces re-chunk/re-embed/re-index, bypassing the idempotency skip — resolves `IndexReconciler`'s `unresolved_missing`); `contracts/erasure.py`'s `ErasureProof` + `RAGEngine.erase_document()` (re-verifies post-deletion absence from both stores, `bool \| None` semantics so "unverifiable" is never conflated with "confirmed clean"). Production PostgreSQL/Qdrant-native backup tooling documented, not reimplemented — deferred to Lot 16c. Evidence in `docs/refactoring/lot-12c-backup-restore-erasure.md`. **Phase C (Lots 11a-12c) now fully COMPLETE.** | COMPLETE |
 | 2026-08-03 | Added per-lot effort sizing and total-programme estimate; split Lots 11/12/16 into lettered sub-lots | COMPLETE |
 | 2026-08-03 | Selected Keycloak (Lot 11b identity provider) and PostgreSQL (Lot 10 audit store, Lot 12a lifecycle ledger) from an infra-stack compatibility review | COMPLETE |
 | 2026-08-04 | Accepted ADR-0006: LangGraph selected as the external engine, on Herbert Gourout's explicit delegation of the call to the spike evidence | ACCEPTED |
@@ -546,3 +533,4 @@ scope change, or an approved architecture decision — never as a silent in-plac
 | 2026-08-05 | Lot 11c executed: redaction wiring, per-decision GUARD_DECISION audit events, human-review gate. Lot 11 (11a-c) complete. |
 | 2026-08-05 | Lot 12a executed: document identity/idempotency ledger (in-memory + Postgres), RAGEngine.ingest() idempotency, new RAGEngine.delete_document(), BM25Retriever append/delete/clear fix. |
 | 2026-08-05 | Lot 12b executed: index schema version, IndexReconciler, BM25 small-corpus fix, QdrantStore tenant_id bug fix + query-time filtering. mypy baseline lowered to 34. |
+| 2026-08-05 | Lot 12c executed: ledger backup/restore (verified), rebuild_document(), erase_document() with post-deletion verification. Phase C complete. |
