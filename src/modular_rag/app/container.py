@@ -11,7 +11,8 @@ from modular_rag.contracts.indexing import Indexer
 from modular_rag.contracts.manifests import PipelineManifest
 from modular_rag.contracts.reranking import Reranker
 from modular_rag.contracts.retrieval import Retriever
-from modular_rag.contracts.security import SecurityGuard, TenantPolicy
+from modular_rag.contracts.review import ReviewQueue
+from modular_rag.contracts.security import Redactor, SecurityGuard, TenantPolicy
 from modular_rag.contracts.telemetry import Telemetry
 from modular_rag.core.errors import RegistryError
 
@@ -86,3 +87,17 @@ class Container:
         manifests/tests are unaffected, matching `guard`/`audit_sink`'s
         precedent (Lots 8/10)."""
         return self._store.get("tenant_policy")
+
+    @property
+    def redactor(self) -> Redactor | None:
+        """Optional PII/secret redactor (Lot 11c, docs/refactoring-plan.md —
+        "apply configured redaction before storage, logging, and external
+        calls"). Defaults to `None`, matching every other optional
+        component's precedent."""
+        return self._store.get("redactor")
+
+    @property
+    def review_queue(self) -> ReviewQueue | None:
+        """Optional human-review gate (Lot 11c, docs/refactoring-plan.md —
+        "support human review for high-risk outcomes"). Defaults to `None`."""
+        return self._store.get("review_queue")

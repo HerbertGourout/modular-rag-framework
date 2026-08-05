@@ -9,6 +9,7 @@ from modular_rag.app.container import Container
 from modular_rag.contracts.audit import AuditEvent, AuditEventType
 from modular_rag.contracts.chunking import Chunker
 from modular_rag.contracts.retrieval import Retriever
+from modular_rag.contracts.review import ReviewItem
 from modular_rag.core.errors import SecurityError
 from modular_rag.core.models.answer import Answer
 from modular_rag.core.models.document import Document
@@ -135,15 +136,21 @@ class RAGEngine:
     def _audit(
         self, query: Query, trace: Trace, *, event_type: AuditEventType, payload: dict[str, Any]
     ) -> None:
-        """Record compliance-audit evidence for one run (Lot 10,
-        docs/refactoring-plan.md). No-op unless a Container-registered
-        `audit_sink` is present — mirrors `telemetry`'s optionality so
-        existing manifests/tests are unaffected. `tenant_id` reads from
-        `query.metadata` because `Query` has no dedicated tenant field yet;
-        full identity/tenant propagation via `ExecutionContext` is Lot 11b.
+        """Record compliance-audit evidence for one run or one governance
+        decision (Lot 10/11c, docs/refactoring-plan.md). No-op unless a
+        Container-registered `audit_sink` is present — mirrors `telemetry`'s
+        optionality so existing manifests/tests are unaffected.
+
+        When a `redactor` is configured, `query_text_redacted` is added to
+        the payload — redaction applied *before* the text ever reaches audit
+        storage (Lot 11c: "apply configured redaction before storage").
+        Omitted entirely (not included unredacted) when no redactor is
+        configured, per the allowlist's own safety intent.
         """
         if not self._c.audit_sink:
             return
+        if self._c.redactor:
+            payload = {**payload, "query_text_redacted": self._c.redactor.redact(query.text)}
         event = AuditEvent(
             event_type=event_type,
             correlation_id=trace.id,
@@ -154,15 +161,24 @@ class RAGEngine:
 
     def _run_steps(self, query: Query, trace: Trace, sm: PipelineStateMachine) -> Answer:
         # 0. tenant isolation — identity check (Lot 11b, docs/refactoring-plan.md).
-        # No try/except here on purpose: any exception (missing tenant, or an
-        # unexpected error inside the policy itself) must propagate and block the
-        # run, not be swallowed into "proceed as allowed" — that is what
-        # "fail-closed" means for this checkpoint.
+        # Caught only to record audit evidence of the specific denial (Lot 11c:
+        # "emit audit evidence for every governed execution"), then always
+        # re-raised unchanged — this is not exception-swallowing. Fail-closed is
+        # preserved because the `raise` below is unconditional.
         if self._c.tenant_policy:
             # Not a PipelineStateMachine transition: PipelineState has no dedicated
             # tenant-check state, and this must run before GUARDING_QUERY's own
-            # transition below fires. Tenant enforcement failure raises directly.
-            self._c.tenant_policy.enforce_query(query)
+            # transition below fires.
+            try:
+                self._c.tenant_policy.enforce_query(query)
+            except Exception as exc:
+                self._audit(
+                    query,
+                    trace,
+                    event_type=AuditEventType.GUARD_DECISION,
+                    payload={"guard_decision": "denied", "error_type": type(exc).__name__},
+                )
+                raise
 
         # 1. security guard — query
         if self._c.guard:
@@ -173,6 +189,12 @@ class RAGEngine:
                 TraceStep(name="guard_query", latency_ms=(time.perf_counter() - t0) * 1000)
             )
             if not result.allowed:
+                self._audit(
+                    query,
+                    trace,
+                    event_type=AuditEventType.GUARD_DECISION,
+                    payload={"guard_decision": "denied", "guard_reason": result.reason or ""},
+                )
                 raise SecurityError(result.reason or "Query blocked by security guard.")
 
         # 2. retrieval
@@ -219,9 +241,42 @@ class RAGEngine:
             sm.transition(PipelineState.GUARDING_ANSWER)
             result = self._c.guard.check_answer(ans)
             if not result.allowed:
+                self._audit(
+                    query,
+                    trace,
+                    event_type=AuditEventType.GUARD_DECISION,
+                    payload={"guard_decision": "denied", "guard_reason": result.reason or ""},
+                )
                 raise SecurityError(result.reason or "Answer blocked by security guard.")
             if result.modified_content:
                 ans = ans.model_copy(update={"text": result.modified_content})
+
+        # 6. redaction — apply before the answer is returned to the caller (Lot 11c:
+        # "apply configured redaction before storage, logging, and external calls").
+        # No-op unless a `redactor` is configured, matching every other optional step.
+        if self._c.redactor:
+            ans = ans.model_copy(update={"text": self._c.redactor.redact(ans.text)})
+
+        # 7. human review — flag high-risk outcomes (Lot 11c). No-op unless a
+        # `review_queue` is configured. See security/policies/human_review.py's
+        # own docstring for the current, honest limits of what triggers this today.
+        if self._c.review_queue and self._c.review_queue.should_review(ans):
+            ans = ans.model_copy(update={"metadata": {**ans.metadata, "requires_review": True}})
+            self._c.review_queue.enqueue(
+                ReviewItem(
+                    answer_id=ans.id,
+                    query_id=query.id,
+                    tenant_id=query.tenant_id,
+                    reason="low confidence",
+                    confidence=ans.confidence,
+                )
+            )
+            self._audit(
+                query,
+                trace,
+                event_type=AuditEventType.GUARD_DECISION,
+                payload={"guard_decision": "flagged_for_review"},
+            )
 
         return ans
 
