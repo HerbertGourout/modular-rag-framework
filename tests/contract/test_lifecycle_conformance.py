@@ -63,3 +63,15 @@ def test_tombstone_sets_status_and_clears_chunk_ids(ledger_factory: type) -> Non
 @pytest.mark.parametrize("ledger_factory", LEDGERS)
 def test_ledger_has_a_name(ledger_factory: type) -> None:
     assert ledger_factory().name()
+
+
+@pytest.mark.parametrize("ledger_factory", LEDGERS)
+def test_list_active_excludes_tombstoned_records(ledger_factory: type) -> None:
+    ledger = ledger_factory()
+    ledger.record_ingested("key-1", "acme-corp", "hash-a", ["c1"])
+    ledger.record_ingested("key-2", "acme-corp", "hash-b", ["c2"])
+    ledger.tombstone("key-2")
+
+    active = ledger.list_active()
+
+    assert {r.document_key for r in active} == {"key-1"}

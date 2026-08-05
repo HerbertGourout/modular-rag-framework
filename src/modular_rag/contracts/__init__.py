@@ -35,6 +35,11 @@ from modular_rag.contracts.manifests import (
 )
 from modular_rag.contracts.parsing import Parser
 from modular_rag.contracts.planning import ExecutionPlan, ExecutionStep, Planner
+from modular_rag.contracts.reconciliation import (
+    DocumentDivergence,
+    ReconciliationReport,
+    RepairResult,
+)
 from modular_rag.contracts.reranking import Reranker
 from modular_rag.contracts.retrieval import Retriever
 from modular_rag.contracts.review import ReviewItem, ReviewQueue
@@ -68,6 +73,7 @@ __all__ = [
     "ManifestLoader", "PipelineManifest",
     "Parser",
     "ExecutionPlan", "ExecutionStep", "Planner",
+    "DocumentDivergence", "ReconciliationReport", "RepairResult",
     "Reranker",
     "Retriever",
     "ReviewItem", "ReviewQueue",

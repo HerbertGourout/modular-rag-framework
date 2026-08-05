@@ -65,6 +65,9 @@ class _FakeIndexer:
     def clear(self) -> None:
         self.indexed = []
 
+    def list_ids(self) -> list[str]:
+        return [c.id for c in self.indexed]
+
     def name(self) -> str:
         return "fake-indexer"
 
@@ -86,6 +89,9 @@ class _FakeRetriever:
     def delete(self, ids: list[str]) -> None:
         id_set = set(ids)
         self.indexed_via_bm25 = [c for c in self.indexed_via_bm25 if c.id not in id_set]
+
+    def list_ids(self) -> list[str]:
+        return [c.id for c in self.indexed_via_bm25]
 
     def name(self) -> str:
         return "fake-retriever"

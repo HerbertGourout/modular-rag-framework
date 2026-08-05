@@ -20,6 +20,12 @@ from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
+INDEX_SCHEMA_VERSION = "1.0"  # bumped when the *shape* of what's indexed changes in a
+# way reconciliation/migration needs to know about (e.g. embedding dimension change,
+# chunk field additions that affect indexing). Lot 12b, docs/refactoring-plan.md —
+# "Define index schema/version." Carried per-record, not globally, so a ledger can hold
+# documents indexed under different schema versions during a rolling migration.
+
 
 class DocumentStatus(StrEnum):
     ACTIVE = "active"
@@ -31,6 +37,7 @@ class DocumentRecord(BaseModel):
     tenant_id: str | None = None
     content_hash: str
     version: int = 1
+    schema_version: str = INDEX_SCHEMA_VERSION
     status: DocumentStatus = DocumentStatus.ACTIVE
     chunk_ids: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -55,6 +62,14 @@ class LifecycleLedger(Protocol):
     """
 
     def get(self, document_key: str) -> DocumentRecord | None: ...
+
+    def list_active(self) -> list[DocumentRecord]:
+        """Enumerate every `ACTIVE` record. Added in Lot 12b
+        (docs/refactoring-plan.md) so `orchestration.reconciliation.IndexReconciler`
+        can check the whole corpus, not just one document at a time — `get()`
+        alone can't answer "what should be indexed right now" across every
+        document."""
+        ...
 
     def record_ingested(
         self,

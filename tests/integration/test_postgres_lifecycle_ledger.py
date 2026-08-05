@@ -65,3 +65,24 @@ def test_tombstone_persists_status_and_clears_chunk_ids(ledger):
 @pytest.mark.integration
 def test_name_reports_postgres(ledger):
     assert ledger.name() == "postgres"
+
+
+@pytest.mark.integration
+def test_list_active_excludes_tombstoned_records(ledger):
+    """Lot 12b, docs/refactoring-plan.md."""
+    ledger._get_connection().execute(
+        "DELETE FROM document_lifecycle WHERE document_key = 'test-key-2'"
+    )
+    try:
+        ledger.record_ingested("test-key-1", "tenant-a", "hash-a", ["c1"])
+        ledger.record_ingested("test-key-2", "tenant-a", "hash-b", ["c2"])
+        ledger.tombstone("test-key-2")
+
+        active_keys = {r.document_key for r in ledger.list_active()}
+
+        assert "test-key-1" in active_keys
+        assert "test-key-2" not in active_keys
+    finally:
+        ledger._get_connection().execute(
+            "DELETE FROM document_lifecycle WHERE document_key = 'test-key-2'"
+        )
