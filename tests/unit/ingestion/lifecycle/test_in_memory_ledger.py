@@ -51,3 +51,19 @@ def test_tombstone_returns_none_for_unknown_key():
 
 def test_name_reports_in_memory():
     assert InMemoryLifecycleLedger().name() == "in-memory"
+
+
+def test_list_active_excludes_tombstoned_records():
+    """Lot 12b, docs/refactoring-plan.md."""
+    ledger = InMemoryLifecycleLedger()
+    ledger.record_ingested("key-1", "acme-corp", "hash-a", ["c1"])
+    ledger.record_ingested("key-2", "acme-corp", "hash-b", ["c2"])
+    ledger.tombstone("key-2")
+
+    active = ledger.list_active()
+
+    assert {r.document_key for r in active} == {"key-1"}
+
+
+def test_list_active_on_an_empty_ledger_returns_empty():
+    assert InMemoryLifecycleLedger().list_active() == []

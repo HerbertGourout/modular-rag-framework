@@ -66,3 +66,80 @@ def test_clear(store):
     store.clear()
     results = store.retrieve_by_vector([1.0, 0.0, 0.0, 0.0], k=10)
     assert results == []
+
+
+@pytest.mark.integration
+def test_list_ids_returns_every_indexed_chunk_id(store):
+    """Lot 12b (docs/refactoring-plan.md): added for
+    orchestration.reconciliation.IndexReconciler to detect divergence."""
+    chunks = [
+        _chunk("first", [1.0, 0.0, 0.0, 0.0]),
+        _chunk("second", [0.0, 1.0, 0.0, 0.0]),
+    ]
+    store.index(chunks)
+
+    ids = store.list_ids()
+
+    assert set(ids) == {c.id for c in chunks}
+
+
+@pytest.mark.integration
+def test_list_ids_reflects_deletion(store):
+    chunk = _chunk("to be deleted", [1.0, 0.0, 0.0, 0.0])
+    store.index([chunk])
+
+    store.delete([chunk.id])
+
+    assert chunk.id not in store.list_ids()
+
+
+@pytest.mark.integration
+def test_tenant_id_round_trips_through_index_and_retrieve(store):
+    """Lot 12b: tenant_id used to be dropped on index and never reconstructed
+    on retrieve, silently defeating Lot 11b's tenant-isolation filtering for
+    the real Qdrant path."""
+    chunk = Chunk(id=new_id(), doc_id="doc-1", content="tenant-scoped", tenant_id="acme-corp")
+    chunk.embedding = [1.0, 0.0, 0.0, 0.0]
+    store.index([chunk])
+
+    results = store.retrieve_by_vector([1.0, 0.0, 0.0, 0.0], k=1)
+
+    assert results[0].chunk.tenant_id == "acme-corp"
+
+
+@pytest.mark.integration
+def test_retrieve_by_vector_with_tenant_id_excludes_other_tenants(store):
+    """Lot 12b: query-time filtering follow-up to Lot 11b's tenant isolation
+    — evaluated and implemented, not just left as an open question."""
+    acme = Chunk(
+        id=new_id(), doc_id="doc-1", content="acme content", tenant_id="acme-corp"
+    )
+    acme.embedding = [1.0, 0.0, 0.0, 0.0]
+    other = Chunk(
+        id=new_id(), doc_id="doc-2", content="other content", tenant_id="other-tenant"
+    )
+    other.embedding = [1.0, 0.0, 0.0, 0.0]
+    store.index([acme, other])
+
+    results = store.retrieve_by_vector([1.0, 0.0, 0.0, 0.0], k=10, tenant_id="acme-corp")
+
+    ids = {r.chunk.id for r in results}
+    assert acme.id in ids
+    assert other.id not in ids
+
+
+@pytest.mark.integration
+def test_retrieve_by_vector_without_tenant_id_returns_all_tenants(store):
+    """Backward-compatible default: omitting tenant_id applies no filter,
+    matching pre-Lot-12b behavior exactly."""
+    acme = Chunk(id=new_id(), doc_id="doc-1", content="acme content", tenant_id="acme-corp")
+    acme.embedding = [1.0, 0.0, 0.0, 0.0]
+    other = Chunk(id=new_id(), doc_id="doc-2", content="other content", tenant_id="other-tenant")
+    other.embedding = [1.0, 0.0, 0.0, 0.0]
+    store.index([acme, other])
+
+    results = store.retrieve_by_vector([1.0, 0.0, 0.0, 0.0], k=10)
+
+    ids = {r.chunk.id for r in results}
+    assert acme.id in ids
+    assert other.id in ids

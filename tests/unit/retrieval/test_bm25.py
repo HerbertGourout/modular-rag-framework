@@ -48,19 +48,17 @@ def test_retrieve_ranks_by_term_overlap() -> None:
     assert result[0].chunk.id == corpus[0].id
 
 
-def test_retrieve_returns_no_hits_for_a_relevant_document_in_a_too_small_corpus() -> None:
-    """**Newly discovered, not in docs/refactoring-plan.md §2.** `rank_bm25`'s
-    IDF term can be zero or *negative* when a query term appears in most or
-    all documents of a small corpus — trivially likely with only 1-2 chunks
-    indexed (e.g. `examples/simple_qa/`'s small demo corpus, or any small
-    real deployment). `BM25Retriever.retrieve()` then filters those
-    non-positive scores out via `if score > 0`, so a document that is
-    genuinely the best (or only) match for the query silently returns zero
-    hits. Confirmed directly against rank_bm25: a 2-document corpus where the
-    query terms appear in only one doc still scores that doc `0.0`; a
-    1-document corpus scores its only doc *negative* (`-0.82`) for its own
-    content. Not fixed here — a candidate for Lot 12b (index/retrieval
-    correctness) or an upstream rank_bm25 IDF-floor workaround.
+def test_retrieve_returns_the_relevant_document_even_in_a_too_small_corpus() -> None:
+    """Fixed in Lot 12b (docs/refactoring-plan.md). `rank_bm25`'s IDF term can
+    be zero or *negative* when a query term appears in most or all documents
+    of a small corpus — trivially likely with only 1-2 chunks indexed (e.g.
+    `examples/simple_qa/`'s small demo corpus, or any small real deployment).
+    The old `score > 0` filter dropped a document that was genuinely the
+    best, or only, match for the query purely because of this IDF quirk
+    (confirmed directly against rank_bm25: a 1-document corpus scores its
+    only document *negative*, `-0.82`, for its own content). `retrieve()` now
+    gates on lexical term overlap instead of score sign, so this document is
+    correctly returned despite its negative BM25 score.
     """
     retriever = BM25Retriever()
     only_relevant_chunk = _chunk("retrieval augmented generation is a hybrid technique")
@@ -68,12 +66,15 @@ def test_retrieve_returns_no_hits_for_a_relevant_document_in_a_too_small_corpus(
 
     result = retriever.retrieve(Query(text="retrieval augmented generation"), k=10)
 
-    assert result == []  # the only document, despite being an exact topical match
+    assert len(result) == 1
+    assert result[0].chunk.id == only_relevant_chunk.id
+    assert result[0].score < 0  # genuinely negative BM25 score, included anyway
 
 
-def test_retrieve_excludes_zero_score_chunks() -> None:
-    """Only chunks with score > 0 are returned — a query with no term overlap
-    at all against a chunk yields no hit for it, not a zero-score hit."""
+def test_retrieve_excludes_chunks_with_no_lexical_overlap_at_all() -> None:
+    """A query sharing zero tokens with a chunk yields no hit for it,
+    regardless of what BM25's raw score would be — this is the overlap gate
+    that replaced the old (buggy) `score > 0` filter in Lot 12b."""
     retriever = BM25Retriever()
     only_chunk = _chunk("apples and oranges")
     retriever.index([only_chunk])
@@ -129,6 +130,25 @@ def test_clear_empties_the_corpus() -> None:
     retriever.clear()
 
     assert retriever.retrieve(Query(text="retrieval augmented generation"), k=10) == []
+
+
+def test_list_ids_reflects_the_current_corpus() -> None:
+    retriever = BM25Retriever()
+    corpus = _diverse_corpus()
+    retriever.index(corpus)
+
+    assert set(retriever.list_ids()) == {c.id for c in corpus}
+
+
+def test_list_ids_reflects_deletion() -> None:
+    retriever = BM25Retriever()
+    corpus = _diverse_corpus()
+    retriever.index(corpus)
+
+    retriever.delete([corpus[0].id])
+
+    assert corpus[0].id not in retriever.list_ids()
+    assert len(retriever.list_ids()) == len(corpus) - 1
 
 
 @pytest.mark.asyncio

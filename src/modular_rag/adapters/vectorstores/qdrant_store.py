@@ -82,6 +82,16 @@ class QdrantStore:
                         "start_char": chunk.start_char,
                         "end_char": chunk.end_char,
                         "page": chunk.page,
+                        # tenant_id persisted explicitly (Lot 12b, docs/refactoring-plan.md):
+                        # previously dropped here and never reconstructed in
+                        # retrieve_by_vector(), which silently defeated Lot 11b's
+                        # TenantIsolationPolicy.filter_chunks() for the real Qdrant
+                        # path (every chunk round-tripped through Qdrant came back
+                        # with tenant_id=None, indistinguishable from unclassified
+                        # content — fail-closed filtering then dropped it either way,
+                        # but for the wrong reason, and would incorrectly drop
+                        # legitimately tenant-scoped content too).
+                        "tenant_id": chunk.tenant_id,
                         **chunk.metadata,
                     },
                 )
@@ -104,6 +114,27 @@ class QdrantStore:
         client.delete_collection(collection_name=self._collection)
         self._ensure_collection()
 
+    def list_ids(self) -> list[str]:
+        """Enumerate every point id currently in the collection, via Qdrant's
+        scroll API (no vectors/payload fetched — id listing only). Added in
+        Lot 12b (docs/refactoring-plan.md) for `orchestration.reconciliation.IndexReconciler`
+        to detect divergence against the lexical index / lifecycle ledger."""
+        client = self._get_client()
+        ids: list[str] = []
+        offset = None
+        while True:
+            points, offset = client.scroll(
+                collection_name=self._collection,
+                limit=256,
+                offset=offset,
+                with_payload=False,
+                with_vectors=False,
+            )
+            ids.extend(str(p.id) for p in points)
+            if offset is None:
+                break
+        return ids
+
     def name(self) -> str:
         return "qdrant"
 
@@ -117,12 +148,32 @@ class QdrantStore:
             "Use VectorRetriever wired with QdrantStore and an Embedder instead."
         )
 
-    def retrieve_by_vector(self, vector: list[float], k: int = 10) -> list[RetrievedChunk]:
-        """Retrieve chunks by a pre-computed query vector."""
+    def retrieve_by_vector(
+        self, vector: list[float], k: int = 10, tenant_id: str | None = None
+    ) -> list[RetrievedChunk]:
+        """Retrieve chunks by a pre-computed query vector.
+
+        `tenant_id`, when given, applies a Qdrant payload filter so
+        cross-tenant chunks are excluded *at query time* rather than fetched
+        and discarded afterward (Lot 12b, docs/refactoring-plan.md —
+        evaluating the query-time-partitioning follow-up flagged in Lot 11b:
+        `security.policies.tenant_isolation.TenantIsolationPolicy.filter_chunks()`
+        remains the fail-closed backstop regardless — this is a
+        defense-in-depth/performance improvement on top of it, not a
+        replacement for it).
+        """
         client = self._get_client()
+        query_filter = None
+        if tenant_id is not None:
+            from qdrant_client.http.models import FieldCondition, Filter, MatchValue
+
+            query_filter = Filter(
+                must=[FieldCondition(key="tenant_id", match=MatchValue(value=tenant_id))]
+            )
         hits = client.search(
             collection_name=self._collection,
             query_vector=vector,
+            query_filter=query_filter,
             limit=k,
         )
         results = []
@@ -135,8 +186,21 @@ class QdrantStore:
                 start_char=payload.get("start_char"),
                 end_char=payload.get("end_char"),
                 page=payload.get("page"),
-                metadata={k: v for k, v in payload.items() if k not in
-                           {"doc_id", "content", "modality", "start_char", "end_char", "page"}},
+                tenant_id=payload.get("tenant_id"),
+                metadata={
+                    k: v
+                    for k, v in payload.items()
+                    if k
+                    not in {
+                        "doc_id",
+                        "content",
+                        "modality",
+                        "start_char",
+                        "end_char",
+                        "page",
+                        "tenant_id",
+                    }
+                },
             )
             results.append(
                 RetrievedChunk(

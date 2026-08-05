@@ -39,6 +39,9 @@ class _RecordingBM25:
     def clear(self) -> None:
         self.cleared = True
 
+    def list_ids(self) -> list[str]:
+        return ["bm25-id-1", "bm25-id-2"]
+
 
 def _hit(content: str, method: RetrievalMethod) -> RetrievedChunk:
     chunk = Chunk(doc_id=new_id(), content=content)
@@ -133,6 +136,13 @@ def test_clear_delegates_to_the_bm25_side_only():
     retriever.clear()
 
     assert bm25.cleared is True
+
+
+def test_list_ids_delegates_to_the_bm25_side_only():
+    retriever = HybridRetriever()
+    retriever._bm25 = _RecordingBM25()
+
+    assert retriever.list_ids() == ["bm25-id-1", "bm25-id-2"]
 
 
 def test_hybrid_retriever_mutates_rank_and_method_on_a_nominally_frozen_retrievedchunk():

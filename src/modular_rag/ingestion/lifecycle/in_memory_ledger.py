@@ -17,6 +17,9 @@ class InMemoryLifecycleLedger:
     def get(self, document_key: str) -> DocumentRecord | None:
         return self._records.get(document_key)
 
+    def list_active(self) -> list[DocumentRecord]:
+        return [r for r in self._records.values() if r.status == DocumentStatus.ACTIVE]
+
     def record_ingested(
         self,
         document_key: str,

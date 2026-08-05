@@ -47,6 +47,11 @@ class HybridRetriever:
     def clear(self) -> None:
         self._bm25.clear()
 
+    def list_ids(self) -> list[str]:
+        """Delegates to the lexical side only — see `delete()`'s docstring
+        for why (Lot 12b, docs/refactoring-plan.md)."""
+        return self._bm25.list_ids()
+
     def retrieve(self, query: Query, k: int = 10) -> list[RetrievedChunk]:
         vector_hits = self._safe_retrieve(self._vector, query, k=k * 2, source="vector")
         bm25_hits = self._safe_retrieve(self._bm25, query, k=k * 2, source="bm25")

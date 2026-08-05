@@ -40,6 +40,12 @@ class BM25Retriever:
         self._chunks = []
         self._bm25 = None
 
+    def list_ids(self) -> list[str]:
+        """Enumerate every chunk id currently in the corpus. Added in Lot 12b
+        (docs/refactoring-plan.md) so `orchestration.reconciliation.IndexReconciler`
+        can detect divergence against the vector index / lifecycle ledger."""
+        return [c.id for c in self._chunks]
+
     def _rebuild(self) -> None:
         if not self._chunks:
             self._bm25 = None
@@ -53,11 +59,32 @@ class BM25Retriever:
         self._bm25 = BM25Okapi(tokenized)
 
     def retrieve(self, query: Query, k: int = 10) -> list[RetrievedChunk]:
+        """Rank by BM25 score, but gate inclusion on genuine lexical overlap
+        rather than `score > 0` (fixed in Lot 12b, docs/refactoring-plan.md).
+
+        `rank_bm25`'s IDF term can be zero or negative when a query term
+        appears in most/all documents of a small corpus — trivially likely
+        with only 1-2 chunks indexed. The old `score > 0` filter then dropped
+        a chunk that is the best, or only, lexical match for the query
+        (confirmed directly against `BM25Okapi`: a 1-document corpus scores
+        its only document negative for its own content). Gating on whether
+        the query and chunk share at least one token instead keeps that
+        chunk while still excluding chunks with zero term overlap at all
+        (see tests/unit/retrieval/test_bm25.py's regression tests for both
+        directions).
+        """
         if self._bm25 is None or not self._chunks:
             return []
-        tokens = query.text.lower().split()
-        scores = self._bm25.get_scores(tokens)  # type: ignore[union-attr]
-        ranked = sorted(enumerate(scores), key=lambda x: x[1], reverse=True)[:k]
+        query_tokens = set(query.text.lower().split())
+        if not query_tokens:
+            return []
+        scores = self._bm25.get_scores(query.text.lower().split())  # type: ignore[attr-defined]
+        candidates = [
+            (idx, score)
+            for idx, score in enumerate(scores)
+            if query_tokens & set(self._chunks[idx].content.lower().split())
+        ]
+        candidates.sort(key=lambda pair: pair[1], reverse=True)
         return [
             RetrievedChunk(
                 chunk=self._chunks[idx],
@@ -65,8 +92,7 @@ class BM25Retriever:
                 rank=rank,
                 retrieval_method=RetrievalMethod.BM25,
             )
-            for rank, (idx, score) in enumerate(ranked, 1)
-            if score > 0
+            for rank, (idx, score) in enumerate(candidates[:k], 1)
         ]
 
     async def aretrieve(self, query: Query, k: int = 10) -> list[RetrievedChunk]:

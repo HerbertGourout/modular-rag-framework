@@ -4,5 +4,7 @@
 # regression pass. This is a count ratchet, not a line-by-line diff: mypy's own line numbers and
 # wording shift with unrelated refactors, so an exact-match diff would be noisy without adding
 # real signal. See docs/refactoring/lot-3-baseline-and-ci.md for the full error list captured
-# at baseline time.
-35
+# at baseline time. Ratcheted 35 -> 34 in Lot 12b (2026-08-05): fixing the BM25
+# small-corpus retrieve() rewrite's type-narrowing incidentally resolved one
+# pre-existing error elsewhere; see docs/refactoring/lot-12b-index-reconciliation.md.
+34

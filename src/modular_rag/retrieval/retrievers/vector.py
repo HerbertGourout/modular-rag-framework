@@ -12,7 +12,9 @@ log = structlog.get_logger(__name__)
 
 
 class _VectorStore(Protocol):
-    def retrieve_by_vector(self, vector: list[float], k: int = 10) -> list[RetrievedChunk]: ...
+    def retrieve_by_vector(
+        self, vector: list[float], k: int = 10, tenant_id: str | None = None
+    ) -> list[RetrievedChunk]: ...
 
 
 class VectorRetriever:
@@ -48,7 +50,10 @@ class VectorRetriever:
                 "VectorRetriever requires an embedder — wire one via the manifest embedder field."
             )
         query_vec: list[float] = self._embedder.embed([query.text])[0]  # type: ignore[union-attr]
-        chunks = self._get_store().retrieve_by_vector(query_vec, k=k)
+        # tenant_id passed through for query-time filtering when the store supports it
+        # (Lot 12b, docs/refactoring-plan.md) — TenantIsolationPolicy.filter_chunks()
+        # remains the fail-closed backstop regardless of whether the store honors this.
+        chunks = self._get_store().retrieve_by_vector(query_vec, k=k, tenant_id=query.tenant_id)
         log.debug("vector.retrieved", chunks=len(chunks), query_id=query.id)
         return chunks
 

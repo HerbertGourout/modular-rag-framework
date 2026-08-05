@@ -13,7 +13,7 @@ import json
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from modular_rag.contracts.lifecycle import DocumentRecord, DocumentStatus
+from modular_rag.contracts.lifecycle import INDEX_SCHEMA_VERSION, DocumentRecord, DocumentStatus
 from modular_rag.core.errors import StorageError
 
 if TYPE_CHECKING:
@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS document_lifecycle (
     tenant_id       TEXT,
     content_hash    TEXT NOT NULL,
     version         INTEGER NOT NULL,
+    schema_version  TEXT NOT NULL,
     status          TEXT NOT NULL,
     chunk_ids       JSONB NOT NULL,
     created_at      TIMESTAMPTZ NOT NULL,
@@ -38,18 +39,27 @@ CREATE INDEX IF NOT EXISTS idx_document_lifecycle_tenant ON document_lifecycle (
 """
 
 _SELECT = """
-SELECT document_key, tenant_id, content_hash, version, status, chunk_ids, created_at, updated_at
+SELECT document_key, tenant_id, content_hash, version, schema_version, status, chunk_ids,
+       created_at, updated_at
 FROM document_lifecycle WHERE document_key = %s
+"""
+
+_SELECT_ACTIVE = """
+SELECT document_key, tenant_id, content_hash, version, schema_version, status, chunk_ids,
+       created_at, updated_at
+FROM document_lifecycle WHERE status = %s
 """
 
 _UPSERT = """
 INSERT INTO document_lifecycle
-    (document_key, tenant_id, content_hash, version, status, chunk_ids, created_at, updated_at)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    (document_key, tenant_id, content_hash, version, schema_version, status, chunk_ids,
+     created_at, updated_at)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
 ON CONFLICT (document_key) DO UPDATE SET
     tenant_id = EXCLUDED.tenant_id,
     content_hash = EXCLUDED.content_hash,
     version = EXCLUDED.version,
+    schema_version = EXCLUDED.schema_version,
     status = EXCLUDED.status,
     chunk_ids = EXCLUDED.chunk_ids,
     updated_at = EXCLUDED.updated_at
@@ -91,6 +101,14 @@ class PostgresLifecycleLedger:
             return None
         return self._row_to_record(row)
 
+    def list_active(self) -> list[DocumentRecord]:
+        conn = self._get_connection()
+        try:
+            rows = conn.execute(_SELECT_ACTIVE, (DocumentStatus.ACTIVE.value,)).fetchall()
+        except Exception as exc:
+            raise StorageError(f"Failed to list active documents: {exc}") from exc
+        return [self._row_to_record(row) for row in rows]
+
     def record_ingested(
         self,
         document_key: str,
@@ -106,6 +124,7 @@ class PostgresLifecycleLedger:
             tenant_id=tenant_id,
             content_hash=content_hash,
             version=version,
+            schema_version=INDEX_SCHEMA_VERSION,
             status=DocumentStatus.ACTIVE,
             chunk_ids=list(chunk_ids),
             created_at=existing.created_at if existing else now,
@@ -138,6 +157,7 @@ class PostgresLifecycleLedger:
                     record.tenant_id,
                     record.content_hash,
                     record.version,
+                    record.schema_version,
                     record.status.value,
                     json.dumps(record.chunk_ids),
                     record.created_at,
@@ -156,6 +176,7 @@ class PostgresLifecycleLedger:
             tenant_id,
             content_hash,
             version,
+            schema_version,
             status,
             chunk_ids,
             created_at,
@@ -166,6 +187,7 @@ class PostgresLifecycleLedger:
             tenant_id=tenant_id,
             content_hash=content_hash,
             version=version,
+            schema_version=schema_version,
             status=DocumentStatus(status),
             chunk_ids=list(chunk_ids),
             created_at=created_at,
