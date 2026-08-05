@@ -203,6 +203,32 @@ def test_metrics_summary_omits_none():
     assert "ndcg" not in summary
 
 
+def test_metrics_summary_excludes_metadata_fields():
+    """Lot 13, docs/refactoring-plan.md: schema_version/failed/failure_reason
+    are metadata about the Metrics instance, not a scored quality dimension —
+    schema_version and failed both default to non-None values, so without an
+    explicit exclusion they'd appear in every summary()."""
+    m = Metrics(recall_at_k=0.8)
+    summary = m.summary()
+    assert "schema_version" not in summary
+    assert "failed" not in summary
+    assert "failure_reason" not in summary
+
+
+def test_metrics_defaults_schema_version():
+    from modular_rag.core.models.metrics import METRICS_SCHEMA_VERSION
+
+    assert Metrics().schema_version == METRICS_SCHEMA_VERSION
+
+
+def test_metrics_for_failure_sets_failed_and_reason_with_no_quality_fields():
+    m = Metrics.for_failure("engine exploded")
+    assert m.failed is True
+    assert m.failure_reason == "engine exploded"
+    assert m.answer_relevance is None
+    assert m.recall_at_k is None
+
+
 # ---------------------------------------------------------------------------
 # Policy & PolicyRule
 # ---------------------------------------------------------------------------
