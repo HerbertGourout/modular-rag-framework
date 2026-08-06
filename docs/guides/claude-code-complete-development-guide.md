@@ -1,8 +1,8 @@
 ---
 title: "Complete Claude Code Development Guide"
 description: "Comprehensive guide for building features with Claude Code while respecting all architecture, security, and validation rules"
-version: "1.0"
-lastUpdated: "2026-06-20"
+version: "1.1"
+lastUpdated: "2026-08-06"
 audience: ["Developers", "Architects", "Tech Leads"]
 ---
 
@@ -45,7 +45,9 @@ python -c "import modular_rag; print('✓ Ready')"
 
 # Copy environment template
 cp .env.example .env
-# Edit .env with your values (MRAG_OPENAI_API_KEY, etc.)
+# Edit .env with your values (OPENAI_API_KEY / ANTHROPIC_API_KEY — the SDKs' own
+# standard names, not MRAG_OPENAI_API_KEY: app/settings.py's MRAG_-prefixed
+# Settings class is declared but never actually read in the pipeline-wiring path)
 ```
 
 ### 2️⃣ Know the Three Core Rules (< 2 min)
@@ -96,6 +98,15 @@ You: [Review output] "Looks good, merge!"
 
 ## The Complete Workflow
 
+> **Renamed 2026-08-06** (documentation-utility pass): phases 2, 4, and 5 below were previously
+> called DESIGN, VALIDATE, and REVIEW — renamed to PLAN, VERIFY, and DELIVER to match the single
+> canonical 5-step scheme now defined in
+> [CLAUDE-CODE-COMPLETE-GUIDE.md § The 5-Step Workflow](./CLAUDE-CODE-COMPLETE-GUIDE.md#the-5-step-workflow).
+> The two files previously used different step counts (5 vs 6) and, worse, used "VALIDATE" for
+> two different things (a pre-coding plan-approval gate there, post-implementation testing
+> here) — resolved by merging into one scheme rather than maintaining two. Content below is
+> unchanged; only the phase names moved to match.
+
 ### Phase 1: EXPLORE (Understand Before Acting)
 
 **Goal**: Understand the problem, constraints, and existing patterns.
@@ -145,7 +156,7 @@ Ask Claude:
 
 ---
 
-### Phase 2: DESIGN (Architecture First)
+### Phase 2: PLAN (Architecture First)
 
 **Goal**: Design the component structure before writing code.
 
@@ -367,7 +378,7 @@ def test_bm25_retriever_implements_protocol():
 
 ---
 
-### Phase 4: VALIDATE (Testing & Checks)
+### Phase 4: VERIFY (Testing & Checks)
 
 **Goal**: Ensure code passes all validation gates.
 
@@ -439,7 +450,7 @@ Claude identifies missing methods or incorrect signatures.
 
 ---
 
-### Phase 5: REVIEW & ITERATE (Refinement)
+### Phase 5: DELIVER (Refinement, Commit & Review)
 
 **Goal**: Address feedback and finalize.
 
@@ -1488,10 +1499,10 @@ tests/contract/test_<name>_retriever_conformance.py
 **The Complete Workflow**:
 
 1. **EXPLORE** (5-15 min) — Understand problem, read docs, clarify requirements
-2. **DESIGN** (10-15 min) — Choose architecture, plan dependencies, design API
+2. **PLAN** (10-15 min) — Choose architecture, plan dependencies, design API
 3. **IMPLEMENT** (30-45 min) — Generate code, write tests, follow patterns
-4. **VALIDATE** (5-15 min) — Run checks, ensure all tests pass
-5. **REVIEW** (15-30 min) — Self-check, address feedback, commit
+4. **VERIFY** (5-15 min) — Run checks, ensure all tests pass
+5. **DELIVER** (15-30 min) — Self-check, address feedback, commit
 
 **Golden Rules**:
 - ✅ Hexagonal layering (one-directional dependencies)

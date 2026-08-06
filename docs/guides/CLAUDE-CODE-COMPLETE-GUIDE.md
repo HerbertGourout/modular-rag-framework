@@ -21,7 +21,7 @@
    - **[→ Plugins & Marketplaces (1,000 lines)](./claude-code-plugins-marketplaces.md)** — Team plugins
    - **[→ Advanced Configuration (800 lines)](./claude-code-advanced-config.md)** — Subagents, skills, hooks
    - **[→ Enterprise Deployment (600 lines)](./claude-code-enterprise-deployment.md)** — MDM, Group Policy
-7. [The 6-Step Workflow](#the-6-step-workflow)
+7. [The 5-Step Workflow](#the-5-step-workflow)
 8. [Available Commands](#available-commands)
 9. [Success Metrics & Tracking](#success-metrics--tracking)
 10. [Advanced: Sub-Agents](#advanced-sub-agents)
@@ -463,9 +463,9 @@ well past the real file size; see `docs/documentation-audit-2026-08.md`.)*
 
 | Guide | Size | Coverage | Audience |
 |-------|------|----------|----------|
-| **[claude-code-complete-development-guide.md](./claude-code-complete-development-guide.md)** | 1,511 lines | **COMPLETE WORKFLOW** from problem to commit — its own 5-phase framing, see the reconciliation note under "The 6-Step Workflow" below | All developers |
+| **[claude-code-complete-development-guide.md](./claude-code-complete-development-guide.md)** | 1,511 lines | **COMPLETE WORKFLOW** from problem to commit, code-heavy — uses the same 5-step names as [below](#the-5-step-workflow) | All developers |
 | ↳ 5-minute quick start | 5 min | Prerequisites, rules, commands | All |
-| ↳ 5-phase workflow | 30 min | EXPLORE → DESIGN → IMPLEMENT → VALIDATE → REVIEW | All |
+| ↳ 5-step workflow | 30 min | EXPLORE → PLAN → IMPLEMENT → VERIFY → DELIVER | All |
 | ↳ Architecture rules | 20 min | Hexagonal layering, imports, wiring, observability | All |
 | ↳ Pattern library | 30 min | Retrievers, guards, generators, metrics | Implementers |
 | ↳ Real-world examples | 40 min | BM25 retriever, PII detection with full code | Implementers |
@@ -498,23 +498,24 @@ well past the real file size; see `docs/documentation-audit-2026-08.md`.)*
 
 ---
 
-## The 6-Step Workflow
+## The 5-Step Workflow
 
-**Universal workflow** that applies regardless of task type (feature, bugfix, refactor).
+**Universal workflow** that applies regardless of task type (feature, bugfix, refactor). This is
+the canonical scheme — the single source of truth for step names and ordering in this project.
 
-> **Reconciliation note (2026-08-06):** `claude-code-complete-development-guide.md`'s own
-> "5-phase workflow" (EXPLORE → DESIGN → IMPLEMENT → VALIDATE → REVIEW) describes the same
-> overall process at a coarser grain, not a conflicting one. Read the two as governance-level
-> (this file's 6 steps: EXPLORE → PLAN → VALIDATE → IMPLEMENT → VERIFY → DELIVER) vs.
-> tactical/code-heavy (that file's 5 phases) framings of one workflow, not two competing
-> processes to choose between. The step-name mismatch (this file's "VALIDATE" is a
-> plan-approval gate before coding starts; the other file's "VALIDATE" is post-implementation
-> testing, closer to this file's "VERIFY") was a real inconsistency flagged in
-> `docs/documentation-audit-2026-08.md` — noted here rather than silently merged into one
-> renumbered scheme, since collapsing two independently-detailed, 1000+-line workflow
-> descriptions into a single step-by-step sequence risks introducing new errors faster than it
-> resolves the naming mismatch. If you're following one file's steps, finish with that file's
-> vocabulary rather than mixing terms from both.
+> **Merged 2026-08-06** (documentation-utility pass, replacing the 2026-08-06 reconciliation
+> note that only pointed out the mismatch instead of resolving it): this file previously had a
+> **6-step** scheme (EXPLORE → PLAN → VALIDATE → IMPLEMENT → VERIFY → DELIVER) while
+> `claude-code-complete-development-guide.md` had an independently-written **5-phase** scheme
+> (EXPLORE → DESIGN → IMPLEMENT → VALIDATE → REVIEW) — same underlying process, two different
+> step counts and a genuinely colliding term: "VALIDATE" meant a *pre-coding plan-approval gate*
+> here and *post-implementation testing* there. Resolved by collapsing to **5 canonical steps**
+> below; `claude-code-complete-development-guide.md`'s phase headers now use these same five
+> names (see the note at the top of its "Complete Workflow" section). The old standalone
+> plan-approval step didn't disappear — it's folded into step 2 (PLAN) as a conditional
+> sub-step, because this project currently has [sole decision authority](../../CLAUDE.md) (one
+> active contributor), so a separate multi-person sign-off gate doesn't apply today. Re-promote
+> it to its own step if the team grows and a real approval workflow is needed.
 
 ### Step 1️⃣: EXPLORE (Understand Before Acting)
 
@@ -546,9 +547,12 @@ well past the real file size; see `docs/documentation-audit-2026-08.md`.)*
 - Break task into 3-5 concrete steps
 - Estimate effort for each step
 - Identify risk areas
-- Get human approval before proceeding
+- **If working with a team**: share the plan, discuss the approach, get sign-off from the
+  architecture owner before proceeding. This project currently runs with sole decision
+  authority (one active contributor), so this sub-step is a no-op in practice today — it's kept
+  here for when the team grows, not as a ceremony to perform solo.
 
-**Time**: 5-10 min
+**Time**: 5-10 min (add 5-10 min more if a team sign-off round is actually needed)
 
 **Example**: BM25 retriever plan
 ```
@@ -562,21 +566,7 @@ Total: ~100 min
 Risk: BM25 algorithm complexity
 ```
 
----
-
-### Step 3️⃣: VALIDATE (Get Approval Before Implementation)
-
-**Goal**: Validate plan with human before starting coding.
-
-**Actions**:
-- Share plan with team
-- Discuss approach (will it work?)
-- Get sign-off from architecture owner
-- Address any concerns
-
-**Time**: 5-10 min (async, usually via comment/chat)
-
-**Example**:
+Team-sign-off example (only applicable once there's more than one active contributor):
 ```
 You:     Here's my plan for BM25Retriever...
 Team:    ✅ Looks good. One question: how will you handle ranking?
@@ -586,7 +576,7 @@ Team:    ✅ Approved. Proceed.
 
 ---
 
-### Step 4️⃣: IMPLEMENT (Code in Increments, One Topic at a Time)
+### Step 3️⃣: IMPLEMENT (Code in Increments, One Topic at a Time)
 
 **Goal**: Execute the plan incrementally, validating after each step.
 
@@ -628,7 +618,7 @@ Team:    ✅ Approved. Proceed.
 
 ---
 
-### Step 5️⃣: VERIFY (Lint, Test, Typecheck)
+### Step 4️⃣: VERIFY (Lint, Test, Typecheck)
 
 **Goal**: Ensure code quality before review.
 
@@ -655,7 +645,7 @@ Team:    ✅ Approved. Proceed.
 
 ---
 
-### Step 6️⃣: DELIVER (Readable Commit or PR)
+### Step 5️⃣: DELIVER (Readable Commit or PR)
 
 **Goal**: Create clear commit/PR that others can understand and review.
 
@@ -1268,12 +1258,17 @@ In Slack or issue comment:
 
 **Claude Code**:
 - [docs/guides/onboarding-claude-code.md](../../docs/guides/onboarding-claude-code.md) (first day)
-- [docs/guides/validation.md](../../docs/guides/validation.md) (commands)
+- [docs/guides/validation-protocol.md](../../docs/guides/validation-protocol.md) (commands)
 - [docs/guides/subagents-parallelization.md](../../docs/guides/subagents-parallelization.md) (advanced)
 
 **External**:
-- [Anthropic Claude Code docs](https://code.visualstudio.com/docs/copilot/overview)
-- [GitHub Copilot Chat](https://docs.github.com/en/copilot/using-github-copilot/getting-started-with-github-copilot)
+- [Claude Code](https://claude.com/claude-code) — Anthropic's official product page and install instructions
+
+*(Corrected 2026-08-06: the "Anthropic Claude Code docs" link previously pointed at VS Code's
+GitHub Copilot Chat documentation, and a separate "GitHub Copilot Chat" link was listed
+alongside it — both describe a different product from Claude Code. See
+[docs/documentation-audit-2026-08.md](../documentation-audit-2026-08.md) for the other instances
+of this conflation already fixed elsewhere in this repo.)*
 
 ---
 
@@ -1301,7 +1296,7 @@ In Slack or issue comment:
 **You're now equipped to**:
 - ✅ Understand why Claude Code is configured this way
 - ✅ Use commands confidently (/quick-check, /full-check, etc.)
-- ✅ Follow the 6-step workflow (Explore→Plan→Validate→Implement→Verify→Deliver)
+- ✅ Follow the 5-step workflow (Explore→Plan→Implement→Verify→Deliver)
 - ✅ Respect the 3 principles (Progressive, Standardized, Measured)
 - ✅ Navigate the 7-layer security model
 - ✅ Track adoption metrics and success criteria

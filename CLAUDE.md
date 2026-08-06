@@ -89,7 +89,9 @@ pytest tests/unit/ingestion/chunkers/test_fixed.py::test_short_text_single_chunk
 pytest tests/integration/ -v -m integration
 
 # E2E tests (requires Qdrant + LLM API key)
-export MRAG_OPENAI_API_KEY=sk-...
+export OPENAI_API_KEY=sk-...   # the SDK's own standard var — NOT MRAG_OPENAI_API_KEY
+                                # (app/settings.py's Settings class is orphaned; see
+                                # docs/guides/troubleshooting.md)
 pytest tests/e2e/ -v -m e2e
 ```
 

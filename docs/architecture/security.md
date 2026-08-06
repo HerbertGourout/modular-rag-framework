@@ -118,7 +118,7 @@ security:
   guard: basic
   redactor: null
 
-# secure-enterprise-rag.yaml  (production)
+# secure-enterprise-rag.yaml  (production intent — Blueprint, not runnable today; see manifests/README.md)
 security:
   guard: basic
   redactor: pattern

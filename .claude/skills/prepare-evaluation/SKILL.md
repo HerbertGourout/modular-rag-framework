@@ -7,6 +7,20 @@ description: Workflow for creating evaluation datasets, metrics, and test scenar
 
 _Originally authored as a workflow for `test-specialist`, invoked as `/prepare-evaluation`._
 
+> **Corrected 2026-08-06** (documentation-utility pass): step 3 previously referenced four
+> manifest files that don't exist (`local-vector-rag.yaml`, `local-bm25-rag.yaml`,
+> `local-hybrid-reranked-rag.yaml`, `local-hybrid-gpt4-rag.yaml`) — `manifests/presets/`
+> actually contains `local-hybrid-rag.yaml` (the only one confirmed Runnable end-to-end, see
+> `manifests/README.md`), plus `agentic-rag.yaml`, `graph-memory-rag.yaml`,
+> `multimodal-rag.yaml`, `secure-enterprise-rag.yaml` (all Blueprint, not wired end-to-end).
+> Step 4's `_load_pipeline()` also imported from the wrong module
+> (`modular_rag.orchestration.load_pipeline` doesn't exist); the real function is
+> `load_pipeline()` in `src/modular_rag/app/bootstrap.py`. Both fixed below. The rest of this
+> file (`EvaluationMetrics`, `EvaluationRunner`, golden-set JSON shape) is illustrative
+> scaffolding to build, not a claimed existing API — the real `eval/` package
+> (`eval/datasets/`, `eval/scorers/`, `eval/runners/`, `eval/quality_gate.py`, `eval/reports/`)
+> has its own, narrower shipped surface (`ExactMatchEvaluator` today); check there first before
+> assuming any of this section's classes already exist.
 
 Systematic workflow for creating comprehensive evaluation suites with datasets, metrics, and benchmarks.
 
@@ -162,29 +176,14 @@ EVALUATION_SCENARIOS = {
     "baseline": {
         "name": "Baseline Configuration",
         "config": "manifests/presets/local-hybrid-rag.yaml",
-        "description": "Standard hybrid retrieval + GPT-3.5"
+        "description": "Standard hybrid retrieval + OpenAIGenerator (default model gpt-4o-mini)"
     },
-    "vector_only": {
-        "name": "Vector Retrieval Only",
-        "config": "manifests/presets/local-vector-rag.yaml",
-        "description": "Vector retrieval without BM25"
-    },
-    "bm25_only": {
-        "name": "BM25 Retrieval Only",
-        "config": "manifests/presets/local-bm25-rag.yaml",
-        "description": "BM25 retrieval without vector"
-    },
-    "with_reranking": {
-        "name": "Hybrid with Cross-Encoder Reranking",
-        "config": "manifests/presets/local-hybrid-reranked-rag.yaml",
-        "description": "Hybrid + cross-encoder reranking"
-    },
-    "gpt4": {
-        "name": "Hybrid with GPT-4",
-        "config": "manifests/presets/local-hybrid-gpt4-rag.yaml",
-        "description": "Hybrid retrieval + GPT-4 generation"
-    }
 }
+# Additional scenarios (vector-only, BM25-only, reranked, alt-model) require their own manifest
+# files under manifests/presets/ — none of those variants ship today (only local-hybrid-rag.yaml
+# is Runnable end-to-end, see manifests/README.md). Copy local-hybrid-rag.yaml and change the
+# relevant component's `type`/`config` to build one, and confirm it still wires with
+# `load_pipeline(...)` before adding it here.
 
 # Save scenarios
 import json
@@ -301,8 +300,7 @@ class EvaluationRunner:
     
     def _load_pipeline(self, config_path: str):
         """Load RAG pipeline from config."""
-        # Implementation depends on your framework
-        from modular_rag.orchestration import load_pipeline
+        from modular_rag.app.bootstrap import load_pipeline
         return load_pipeline(config_path)
 ```
 

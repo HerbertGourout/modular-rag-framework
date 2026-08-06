@@ -1,20 +1,29 @@
 ---
 name: design-retriever-fusion
-description: Workflow for designing and implementing retriever fusion (vector + lexical + other)
+description: Workflow for tuning or extending retriever fusion (vector + lexical + other)
 ---
 
 # Design Retriever Fusion Skill
 
 _Originally authored as a workflow for `retrieval-specialist`, invoked as `/design-retriever-fusion`._
 
+> **Corrected 2026-08-06** (documentation-utility pass): this file previously presented fusion
+> as something to build from scratch — a `HybridRetriever(RetrieverProtocol)` with async-only
+> `retrieve(query: str, ...) -> list[SearchResult]`, and a hand-rolled `_rrf_fusion()` — none of
+> which matches reality. **Both already exist**: `HybridRetriever`
+> (`src/modular_rag/retrieval/retrievers/hybrid.py`) fuses `VectorRetriever` + `BM25Retriever`
+> today, and RRF itself lives in `reciprocal_rank_fusion()`
+> (`src/modular_rag/retrieval/fusion/rrf.py`, Cormack et al. 2009, weighted). This skill is for
+> **tuning the existing fusion weights or adding a third signal to it**, not writing fusion from
+> zero — rewritten below to point at the real code instead of reimplementing it.
 
-Systematic workflow for designing and implementing hybrid retriever fusion strategies.
+Systematic workflow for tuning and extending hybrid retriever fusion.
 
 ## State of the Art First (mandatory)
 
 Before choosing fusion weights, `rrf_k`, or reranking strategy, read the research digests and cite the arXiv id backing each parameter choice:
 
-- [docs/research/DIGEST-retrieval.md](../../../docs/research/DIGEST-retrieval.md) — over-fetch→rerank shape validated (retrieve ~20, keep 4-8); rrf_k=60 and 0.7/0.3 weights are unsourced defaults to tune on the golden set; dense-leg quality (hard negatives) outweighs fusion-constant tuning
+- [docs/research/DIGEST-retrieval.md](../../../docs/research/DIGEST-retrieval.md) — over-fetch→rerank shape validated (retrieve ~20, keep 4-8); `rrf_k=60` (the module-level default in `fusion/rrf.py`) and the 0.7/0.3 vector/BM25 weights (the constructor defaults in `hybrid.py`) are unsourced engineering priors to tune on the golden set; dense-leg quality (hard negatives) outweighs fusion-constant tuning
 - [docs/research/DIGEST-evaluation.md](../../../docs/research/DIGEST-evaluation.md) — fusion validation (BM25 closes the lexical gap), reranker regression metric (Δ nDCG@k before/after at small k), late-interaction cross-encoders
 - [docs/research/DIGEST-overviews.md](../../../docs/research/DIGEST-overviews.md) — hybrid+RRF SOTA confirmation (RankRAG +7.8% MRR@10, RAG-Fusion +9%), post-retrieval context filtering (FILCO)
 
@@ -22,10 +31,18 @@ If a design choice contradicts the digests, justify it explicitly in the MR.
 
 ## When to Use
 
-- Need better retrieval combining multiple signals
-- Have multiple retrievers (vector, BM25) to combine
-- Want to balance recall and precision
-- Need domain-specific ranking
+- Tuning `HybridRetriever`'s `vector_weight`/`bm25_weight` on a new domain's golden set
+- Adding a third ranked signal (e.g. a reranker pass, or a new retriever type) into the existing
+  RRF fusion
+- Diagnosing why fusion underperforms one of its individual legs
+
+## Existing Building Blocks
+
+| Component | File | Notes |
+|---|---|---|
+| `HybridRetriever` | `src/modular_rag/retrieval/retrievers/hybrid.py` | Sync `retrieve(query: Query, k: int) -> list[RetrievedChunk]`; owns a `VectorRetriever` + `BM25Retriever` internally, over-fetches `k*2` from each, falls back to whichever side is available if one errors |
+| `reciprocal_rank_fusion` | `src/modular_rag/retrieval/fusion/rrf.py` | `(lists: list[list[RetrievedChunk]], k, rrf_k=60, weights=None) -> list[RetrievedChunk]` — weighted RRF, Cormack et al. 2009 |
+| `RetrievedChunk` | `src/modular_rag/core/models/retrieved.py` | The real result type — there is no `SearchResult` class in this codebase |
 
 ## Retriever Types to Fuse
 
@@ -39,398 +56,135 @@ If a design choice contradicts the digests, justify it explicitly in the MR.
 
 ### 1. Assess Retriever Characteristics (10 min)
 
-**Profile each retriever:**
+**Profile each retriever** — note the real, synchronous `Retriever` signature
+(`retrieve(query: Query, k: int) -> list[RetrievedChunk]`); this is illustrative profiling code,
+not a Protocol requirement:
 
 ```python
-def profile_retriever(retriever, queries: list[str]):
+import statistics
+import time
+
+def profile_retriever(retriever, queries: list[Query]):
     """Understand retriever behavior."""
-    
-    results = {
-        "name": retriever.__class__.__name__,
-        "avg_top_score": [],
-        "avg_diversity": [],
-        "avg_latency": []
-    }
-    
+    latencies, top_scores = [], []
     for query in queries:
-        import time
-        start = time.time()
+        t0 = time.perf_counter()
         retrieved = retriever.retrieve(query, k=10)
-        latency = time.time() - start
-        
-        # Score distribution
-        scores = [r.score for r in retrieved]
-        results["avg_top_score"].append(scores[0] if scores else 0)
-        
-        # Diversity (lower = more similar results)
-        embeddings = [embed(r.text) for r in retrieved]
-        diversity = compute_diversity(embeddings)
-        results["avg_diversity"].append(diversity)
-        
-        results["avg_latency"].append(latency)
-    
-    # Compute averages
+        latencies.append(time.perf_counter() - t0)
+        top_scores.append(retrieved[0].score if retrieved else 0.0)
+
     return {
-        "name": results["name"],
-        "avg_top_score": statistics.mean(results["avg_top_score"]),
-        "avg_diversity": statistics.mean(results["avg_diversity"]),
-        "avg_latency": statistics.mean(results["avg_latency"])
+        "name": retriever.name(),
+        "avg_top_score": statistics.mean(top_scores),
+        "avg_latency_ms": statistics.mean(latencies) * 1000,
     }
-
-# Profile retrievers
-vector_profile = profile_retriever(vector_retriever, test_queries)
-bm25_profile = profile_retriever(bm25_retriever, test_queries)
-
-print(f"Vector: score={vector_profile['avg_top_score']:.2f}, latency={vector_profile['avg_latency']*1000:.0f}ms")
-print(f"BM25: score={bm25_profile['avg_top_score']:.2f}, latency={bm25_profile['avg_latency']*1000:.0f}ms")
 ```
 
-### 2. Choose Fusion Algorithm (15 min)
+### 2. Tune the Existing Fusion (15 min)
 
-**Algorithm comparison:**
+`HybridRetriever` already does RRF fusion via `reciprocal_rank_fusion()` — you're tuning its
+constructor args, not choosing between algorithms from scratch:
 
-#### Reciprocal Rank Fusion (RRF)
 ```python
-def reciprocal_rank_fusion(results_list: list[list[SearchResult]], k: float = 60):
-    """Fuse results using RRF formula: 1/(k + rank)"""
-    
-    fused_scores = {}
-    
-    for retriever_results in results_list:
-        for rank, result in enumerate(retriever_results, 1):
-            doc_id = result.doc_id
-            rrf_score = 1.0 / (k + rank)
-            
-            if doc_id not in fused_scores:
-                fused_scores[doc_id] = result
-            
-            fused_scores[doc_id].score += rrf_score
-    
-    # Sort by fused score
-    fused = sorted(fused_scores.items(), key=lambda x: x[1].score, reverse=True)
-    return [result for _, result in fused]
+# vector_weight / bm25_weight passed straight to HybridRetriever's constructor,
+# which forwards them as `weights=[vector_weight, bm25_weight]` to reciprocal_rank_fusion()
+retriever = HybridRetriever(vector_weight=0.7, bm25_weight=0.3, k=20, reranker_k=5)
 ```
 
-**Advantages:**
-- No parameter tuning needed
-- Works with any number of rankers
-- Doesn't require score normalization
+`reciprocal_rank_fusion()` itself takes `rrf_k` (the RRF smoothing constant, default 60 — this
+is the "no normalization needed" advantage of RRF over raw weighted-score combination) and
+`weights` (per-list multipliers). If you need a from-scratch weighted **score** (not rank)
+combination for comparison, note that requires score normalization first (RRF's main advantage
+is avoiding exactly that step) — do this only as an experiment, not a replacement, unless the
+golden-set numbers clearly favor it.
 
-#### Weighted Score Combination
+### 3. Add a Third Signal (Optional, 20 min)
+
+`reciprocal_rank_fusion()` already accepts an arbitrary number of ranked lists — adding a third
+signal (e.g. a graph retriever, if one is ever wired per
+[ADR-0005](../../../docs/adr/0005-document-ai-control-plane-boundary.md)'s delegation
+boundary) means extending `HybridRetriever.retrieve()` to gather a third list and pass
+`weights=[w1, w2, w3]`, not writing a new fusion function:
+
 ```python
-def weighted_combination(
-    vector_results: list[SearchResult],
-    bm25_results: list[SearchResult],
-    vector_weight: float = 0.6,
-    bm25_weight: float = 0.4
-):
-    """Combine scores with learned weights."""
-    
-    # Normalize scores to [0, 1]
-    vector_max = max((r.score for r in vector_results), default=1.0)
-    bm25_max = max((r.score for r in bm25_results), default=1.0)
-    
-    # Create score maps
-    vector_map = {r.doc_id: r.score / vector_max for r in vector_results}
-    bm25_map = {r.doc_id: r.score / bm25_max for r in bm25_results}
-    
-    # Combine
-    all_docs = set(vector_map.keys()) | set(bm25_map.keys())
-    fused_scores = {}
-    
-    for doc_id in all_docs:
-        v_score = vector_map.get(doc_id, 0.0)
-        b_score = bm25_map.get(doc_id, 0.0)
-        fused_scores[doc_id] = vector_weight * v_score + bm25_weight * b_score
-    
-    # Sort and return top-k
-    sorted_docs = sorted(fused_scores.items(), key=lambda x: x[1], reverse=True)
-    return sorted_docs[:10]
+# Inside a modified retrieve(): gather a third ranked list, then
+fused = reciprocal_rank_fusion(
+    [vector_hits, bm25_hits, third_hits],
+    k=k,
+    weights=[self.vector_weight, self.bm25_weight, self.third_weight],
+)
 ```
 
-**Advantages:**
-- Learnable weights
-- Can optimize for specific objectives
-- More flexible
-
-### 3. Implement Fusion Retriever (20 min)
-
-**Template:**
+### 4. Benchmark Against Baselines (20 min)
 
 ```python
-from modular_rag.contracts.retrieval import RetrieverProtocol, SearchResult
-from modular_rag.core.trace import Trace, TraceStep
+import statistics
 
-class HybridRetriever(RetrieverProtocol):
-    """Fuse vector and BM25 retrieval."""
-    
-    def __init__(
-        self,
-        vector_retriever: RetrieverProtocol,
-        bm25_retriever: RetrieverProtocol,
-        fusion_method: str = "rrf",
-        vector_weight: float = 0.6,
-        top_k: int = 10
-    ):
-        self.vector_retriever = vector_retriever
-        self.bm25_retriever = bm25_retriever
-        self.fusion_method = fusion_method
-        self.vector_weight = vector_weight
-        self.top_k = top_k
-    
-    async def retrieve(
-        self,
-        query: str,
-        k: int = 10,
-        **kwargs
-    ) -> list[SearchResult]:
-        """Retrieve using hybrid fusion."""
-        step = TraceStep(component="HybridRetriever", method="retrieve")
-        
-        try:
-            # 1. Get results from both retrievers (parallel)
-            import asyncio
-            vector_results, bm25_results = await asyncio.gather(
-                self.vector_retriever.retrieve(query, k=k),
-                self.bm25_retriever.retrieve(query, k=k)
-            )
-            
-            # 2. Fuse results
-            if self.fusion_method == "rrf":
-                fused = self._rrf_fusion(vector_results, bm25_results)
-            else:
-                fused = self._weighted_fusion(vector_results, bm25_results)
-            
-            # 3. Rerank with cross-encoder (optional)
-            if hasattr(self, 'reranker'):
-                fused = await self.reranker.rerank(query, fused, k=k)
-            
-            # 4. Track metrics
-            step.metadata = {
-                "vector_count": len(vector_results),
-                "bm25_count": len(bm25_results),
-                "fused_count": len(fused),
-                "fusion_method": self.fusion_method,
-                "top_score": fused[0].score if fused else 0.0
-            }
-            
-            return fused[:k]
-            
-        except Exception as e:
-            step.status = "error"
-            step.error = str(e)
-            raise
-        finally:
-            Trace.add_step(step)
-    
-    def _rrf_fusion(
-        self,
-        vector_results: list[SearchResult],
-        bm25_results: list[SearchResult],
-        k: float = 60
-    ) -> list[SearchResult]:
-        """Reciprocal Rank Fusion."""
-        fused_scores = {}
-        
-        for rank, result in enumerate(vector_results, 1):
-            doc_id = result.doc_id
-            rrf_score = 1.0 / (k + rank)
-            fused_scores[doc_id] = result
-            fused_scores[doc_id].score = rrf_score
-        
-        for rank, result in enumerate(bm25_results, 1):
-            doc_id = result.doc_id
-            rrf_score = 1.0 / (k + rank)
-            
-            if doc_id in fused_scores:
-                fused_scores[doc_id].score += rrf_score
-            else:
-                fused_scores[doc_id] = result
-                fused_scores[doc_id].score = rrf_score
-        
-        # Sort by fused score
-        fused = sorted(fused_scores.items(), key=lambda x: x[1].score, reverse=True)
-        return [result for _, result in fused]
-    
-    def _weighted_fusion(
-        self,
-        vector_results: list[SearchResult],
-        bm25_results: list[SearchResult]
-    ) -> list[SearchResult]:
-        """Weighted score combination."""
-        # Normalize scores
-        vector_max = max((r.score for r in vector_results), default=1.0)
-        bm25_max = max((r.score for r in bm25_results), default=1.0)
-        
-        vector_map = {r.doc_id: r.score / vector_max for r in vector_results}
-        bm25_map = {r.doc_id: r.score / bm25_max for r in bm25_results}
-        
-        # Combine with weights
-        fused_scores = {}
-        for doc_id in set(vector_map.keys()) | set(bm25_map.keys()):
-            v_score = vector_map.get(doc_id, 0.0)
-            b_score = bm25_map.get(doc_id, 0.0)
-            combined = self.vector_weight * v_score + (1 - self.vector_weight) * b_score
-            
-            # Find original result
-            for r in vector_results + bm25_results:
-                if r.doc_id == doc_id:
-                    result = r
-                    result.score = combined
-                    fused_scores[doc_id] = result
-                    break
-        
-        # Sort and return
-        fused = sorted(fused_scores.items(), key=lambda x: x[1].score, reverse=True)
-        return [result for _, result in fused]
-```
-
-### 4. Test Fusion Strategy (20 min)
-
-**Benchmark against baselines:**
-
-```python
-def benchmark_fusion(
-    vector_retriever,
-    bm25_retriever,
-    hybrid_retriever,
-    test_queries: list[str],
-    golden_set: dict
-):
-    """Compare retriever performance."""
-    
+def benchmark_fusion(retrievers: dict, test_queries: list[Query], golden_set: dict):
+    """Compare retriever performance (NDCG@10)."""
     results = {}
-    
-    for retriever_name, retriever in [
-        ("vector", vector_retriever),
-        ("bm25", bm25_retriever),
-        ("hybrid", hybrid_retriever)
-    ]:
-        scores = []
-        for query in test_queries:
-            retrieved = retriever.retrieve(query, k=10)
-            
-            # Calculate NDCG
-            ndcg = compute_ndcg(retrieved, golden_set[query])
-            scores.append(ndcg)
-        
-        results[retriever_name] = {
+    for name, retriever in retrievers.items():
+        scores = [
+            compute_ndcg(retriever.retrieve(q, k=10), golden_set[q.id])
+            for q in test_queries
+        ]
+        results[name] = {
             "avg_ndcg": statistics.mean(scores),
             "min_ndcg": min(scores),
-            "max_ndcg": max(scores)
+            "max_ndcg": max(scores),
         }
-    
     return results
-
-# Run benchmark
-benchmark_results = benchmark_fusion(
-    vector_retriever,
-    bm25_retriever,
-    hybrid_retriever,
-    test_queries,
-    golden_set
-)
-
-# Compare
-for name, metrics in benchmark_results.items():
-    print(f"{name}: NDCG@10 = {metrics['avg_ndcg']:.3f}")
 ```
 
-### 5. Optimize Fusion Weights (15 min)
+`compute_ndcg` isn't a shipped function — see `src/modular_rag/eval/scorers/` for the real
+scorer implementations (`ExactMatchEvaluator` today) before writing a new NDCG scorer, and add
+it there if it doesn't exist yet.
 
-**Learn weights from golden set:**
+### 5. Optimize Fusion Weights (15 min)
 
 ```python
 from scipy.optimize import minimize
 
-def learn_fusion_weights(
-    vector_results_list: list[list[SearchResult]],
-    bm25_results_list: list[list[SearchResult]],
-    golden_set: dict[str, list[str]]
-):
-    """Find optimal fusion weights."""
-    
+def learn_fusion_weights(vector_lists, bm25_lists, golden_set):
+    """Find the vector_weight that maximizes average NDCG (bm25_weight = 1 - vector_weight)."""
     def objective(weights):
-        """Objective: minimize (1 - average NDCG)."""
         vector_weight = weights[0]
-        bm25_weight = 1 - vector_weight
-        
-        total_ndcg = 0
-        
-        for query_id, (vector_results, bm25_results) in enumerate(
-            zip(vector_results_list, bm25_results_list)
-        ):
-            # Fuse with current weights
-            fused = weighted_combination(
-                vector_results,
-                bm25_results,
-                vector_weight=vector_weight
-            )
-            
-            # Compute NDCG
-            ndcg = compute_ndcg(fused, golden_set[query_id])
-            total_ndcg += ndcg
-        
-        return -(total_ndcg / len(vector_results_list))  # Minimize negative NDCG
-    
-    # Optimize
-    result = minimize(objective, x0=[0.5], bounds=[(0, 1)])
-    
-    optimal_weight = result.x[0]
-    return {"vector_weight": optimal_weight, "bm25_weight": 1 - optimal_weight}
+        fused_lists = [
+            reciprocal_rank_fusion([v, b], k=10, weights=[vector_weight, 1 - vector_weight])
+            for v, b in zip(vector_lists, bm25_lists)
+        ]
+        avg_ndcg = statistics.mean(
+            compute_ndcg(fused, golden_set[i]) for i, fused in enumerate(fused_lists)
+        )
+        return -avg_ndcg
 
-# Learn weights
-optimal_weights = learn_fusion_weights(
-    vector_results_by_query,
-    bm25_results_by_query,
-    golden_set
-)
-
-print(f"Optimal weights: vector={optimal_weights['vector_weight']:.2f}, bm25={optimal_weights['bm25_weight']:.2f}")
+    result = minimize(objective, x0=[0.7], bounds=[(0, 1)])
+    return {"vector_weight": result.x[0], "bm25_weight": 1 - result.x[0]}
 ```
 
-### 6. Add Reranking (Optional) (10 min)
+### 6. Reranking (Already Wired)
 
-**Use cross-encoder for precision:**
-
-```python
-class HybridRetrieverWithReranking(HybridRetriever):
-    def __init__(self, *args, reranker=None, reranker_k: int = 5, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.reranker = reranker
-        self.reranker_k = reranker_k
-    
-    async def retrieve(self, query: str, k: int = 10) -> list[SearchResult]:
-        # 1. Get fused results
-        fused = await super().retrieve(query, k=k*2)  # Get more for reranking
-        
-        # 2. Rerank top candidates
-        if self.reranker:
-            fused[:self.reranker_k] = await self.reranker.rerank(
-                query,
-                fused[:self.reranker_k]
-            )
-        
-        return fused[:k]
-```
+`HybridRetriever` takes `reranker_k` in its constructor and `CrossEncoderReranker` is already
+registered (`orchestration/_default_factories.py`, `reg.register("reranker", "cross-encoder",
+...)`) — reranking is a manifest-config concern (select the reranker in your YAML), not
+something to hand-build inside a retriever subclass.
 
 ## Fusion Algorithm Comparison
 
 | Algorithm | Complexity | Tuning | Performance |
 |-----------|-----------|--------|-------------|
-| RRF | O(n log n) | None | Good, stable |
-| Weighted | O(n log n) | 1 param | Better, needs data |
-| Learned | O(n) train | All | Best, overfitting risk |
+| RRF (shipped) | O(n log n) | `rrf_k`, per-list weights | Good, stable, no score normalization needed |
+| Weighted score combination | O(n log n) | Requires score normalization | Better only with reliable score scales, needs data |
+| Learned weights | O(n) train | All | Best, overfitting risk |
 
 ## Success Criteria
 
 ✅ Hybrid NDCG@10 > individual retrievers
 ✅ Fusion latency < 100ms
-✅ Fusion method documented
-✅ Weights optimized or justified
+✅ Weight choice documented and either research-cited or golden-set-justified
 ✅ Reranking (if used) improves precision
 ✅ Tested with golden set
 
 ## Time Estimate
 
-**Total:** 2-3 hours including design, implementation, and optimization
+**Total:** 1-2 hours for tuning existing fusion; 2-3 hours if adding a genuinely new third signal

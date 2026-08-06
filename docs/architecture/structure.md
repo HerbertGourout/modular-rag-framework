@@ -579,7 +579,12 @@ Hard-coded transition matrix. `transition(to)` validates and logs every state ch
 ### `app/` — Process-level wiring
 
 #### `app/settings.py` → `Settings`
-Pydantic-settings with the `MRAG_` prefix. Reads from `.env` + environment variables.
+Pydantic-settings with the `MRAG_` prefix. Reads from `.env` + environment variables — but this
+class is **orphaned**: nothing in the real pipeline-wiring path
+(`orchestration/_default_factories.py`, `app/bootstrap.py`) ever constructs `Settings()` or
+calls `get_settings()`. The fields below are declared but currently have no effect; e.g. the
+working OpenAI/Anthropic env vars are the SDKs' own standard `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`
+(read only when the manifest doesn't set `api_key` explicitly), not the `MRAG_`-prefixed names.
 
 ```
 MRAG_OPENAI_API_KEY, MRAG_ANTHROPIC_API_KEY
@@ -726,26 +731,35 @@ docs/
 
 ## `manifests/` — YAML configurations
 
+> **Runnable vs. Blueprint (see `manifests/README.md`):** only `local-hybrid-rag.yaml` wires
+> end-to-end via `ComponentRegistry.wire()` today. The other four are Blueprint — the YAML
+> fields exist and parse, but several referenced concepts (5 agents + coordinator,
+> `GraphPlanner`, EvoRAG feedback) describe the pre-Lot-17 native design and don't correspond to
+> any component the registry can actually instantiate now (that prototype cluster was removed —
+> zero consumers, see `docs/refactoring/lot-17-prototype-retirement.md`). Treat the "Notable"
+> column below as documentation of *intent*, not of wired behavior, for every row except
+> `local-hybrid-rag`.
+
 ```
 manifests/
 ├── presets/
-│   ├── local-hybrid-rag.yaml         ← V1 local dev (HuggingFace + Qdrant localhost + GPT-4o-mini)
-│   ├── secure-enterprise-rag.yaml    ← V1 prod (guard + policies + GPT-4o, temp=0.0)
-│   ├── agentic-rag.yaml              ← V2 (5 agents + coordinator + adaptive routing)
-│   ├── graph-memory-rag.yaml         ← V3 (GraphPlanner + NetworkX + EvoRAG feedback)
-│   └── multimodal-rag.yaml           ← V5 (CLIP + Whisper + claude-opus-4-7 + modality agents)
+│   ├── local-hybrid-rag.yaml         ← V1 local dev (HuggingFace + Qdrant localhost + GPT-4o-mini) — Runnable
+│   ├── secure-enterprise-rag.yaml    ← V1 prod (guard + policies + GPT-4o, temp=0.0) — Blueprint
+│   ├── agentic-rag.yaml              ← V2 (5 agents + coordinator + adaptive routing) — Blueprint, pre-Lot-17 design
+│   ├── graph-memory-rag.yaml         ← V3 (GraphPlanner + NetworkX + EvoRAG feedback) — Blueprint, pre-Lot-17 design
+│   └── multimodal-rag.yaml           ← V5 (CLIP + Whisper + claude-opus-4-7 + modality agents) — Blueprint
 ├── dev/                              ← Dev environment overrides (V4, currently empty)
 ├── staging/                          ← Staging overrides (V4, currently empty)
 └── production/                       ← Production overrides (V4, currently empty)
 ```
 
-| Manifest | Version | LLM | Embedder | Security | Notable |
-|---|---|---|---|---|---|
-| `local-hybrid-rag` | V1 | gpt-4o-mini | bge-small-en-v1.5 | none | Development, Qdrant localhost |
-| `secure-enterprise-rag` | V1 | gpt-4o | bge-base-en-v1.5 | BasicSecurityGuard + policies | max_query_length=2000, temp=0.0 |
-| `agentic-rag` | V2 | gpt-4o | bge-base-en-v1.5 | BasicSecurityGuard | k=30, rerank_k=10, 5 agents |
-| `graph-memory-rag` | V3 | gpt-4o | bge-base-en-v1.5 | BasicSecurityGuard | GraphPlanner, EvoRAG feedback |
-| `multimodal-rag` | V5 | claude-opus-4-7 | CLIP + bge-base | BasicSecurityGuard | multi-vector, modality agents |
+| Manifest | Version | Status | LLM | Embedder | Security | Notable |
+|---|---|---|---|---|---|---|
+| `local-hybrid-rag` | V1 | Runnable | gpt-4o-mini | bge-small-en-v1.5 | none | Development, Qdrant localhost |
+| `secure-enterprise-rag` | V1 | Blueprint | gpt-4o | bge-base-en-v1.5 | BasicSecurityGuard + policies | max_query_length=2000, temp=0.0 |
+| `agentic-rag` | V2 | Blueprint | gpt-4o | bge-base-en-v1.5 | BasicSecurityGuard | k=30, rerank_k=10, 5 agents (pre-Lot-17 design, not wired) |
+| `graph-memory-rag` | V3 | Blueprint | gpt-4o | bge-base-en-v1.5 | BasicSecurityGuard | GraphPlanner, EvoRAG feedback (pre-Lot-17 design, not wired) |
+| `multimodal-rag` | V5 | Blueprint | claude-opus-4-7 | CLIP + bge-base | BasicSecurityGuard | multi-vector, modality agents |
 
 ---
 

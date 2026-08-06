@@ -16,8 +16,9 @@ This example shows the minimal path from documents to answers using the
 cd modular-rag-framework
 pip install -e ".[v1]"
 
-# Set your API key
-export MRAG_OPENAI_API_KEY="sk-..."
+# Set your API key (the OpenAI SDK's own standard var — MRAG_OPENAI_API_KEY is
+# declared in app/settings.py but never read in the real pipeline-wiring path)
+export OPENAI_API_KEY="sk-..."
 
 # Start Qdrant
 docker run -d -p 6333:6333 qdrant/qdrant

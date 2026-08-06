@@ -234,31 +234,35 @@ examples/
 
 | Type | Examples | Risk | Handling |
 |------|----------|------|----------|
-| **API Keys** | `MRAG_OPENAI_API_KEY`, `HUGGINGFACE_TOKEN` | 🔴 CRITICAL | Never commit; use `.env` |
+| **API Keys** | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `HUGGINGFACE_TOKEN` | 🔴 CRITICAL | Never commit; use `.env` |
 | **Credentials** | Database passwords, OAuth tokens | 🔴 CRITICAL | Never commit; use `.env` |
-| **Connection Strings** | `MRAG_QDRANT_URL` with auth | 🔴 CRITICAL | Use environment variable |
+| **Connection Strings** | Qdrant URL with auth (set via manifest `config:`, not env) | 🔴 CRITICAL | Use environment variable for the secret, manifest for the URL |
 | **Encryption Keys** | Private keys, encryption secrets | 🔴 CRITICAL | Use key management service |
 | **PII** | SSN, credit card numbers, phone | 🔴 CRITICAL | Use security/redaction/ |
+
+> **Corrected 2026-08-06:** this section previously named `MRAG_OPENAI_API_KEY`/
+> `MRAG_QDRANT_URL`/etc. as the working variables. They aren't — `app/settings.py`'s `Settings`
+> class declares those `MRAG_`-prefixed fields, but nothing in the real pipeline-wiring path
+> (`orchestration/_default_factories.py`, `app/bootstrap.py`) ever constructs `Settings()` or
+> calls `get_settings()`. The only working credential env vars are the LLM SDKs' own standard
+> names (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`), read automatically when a manifest's
+> `generator.config.api_key` is left unset. Qdrant URL/collection and every other endpoint
+> config comes from the manifest's `config:` block directly, with no env-var fallback at all.
 
 ### .env Management
 
 **File**: `.env` (gitignored — never committed)
 
-**Purpose**: Local development only. Contains user-specific values.
+**Purpose**: Local development only. Holds the SDK-standard credential vars above; does **not**
+configure the pipeline itself (that's the manifest's job — see
+[manifests/README.md](../../manifests/README.md)).
 
-**Example** (`.env.example` — commits this as template):
+**Example** (`.env.example` — commit this as template):
 ```bash
-# Required for development
-MRAG_OPENAI_API_KEY=sk-...          # Your OpenAI API key
-MRAG_QDRANT_URL=http://localhost:6333  # Local Qdrant instance
-MRAG_QDRANT_TIMEOUT=30              # Connection timeout in seconds
-
-# Optional for advanced features
-MRAG_LOG_LEVEL=INFO                 # Logging verbosity
-MRAG_ENVIRONMENT=development         # environment (development|staging|production)
-
-# Security — used in tests only
-MRAG_TEST_MODE=true                 # Enable test safety measures
+# Required for development (SDK-standard names, read automatically by the
+# OpenAI/Anthropic client libraries — not custom MRAG_* vars)
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 **Setup (each developer)**:
@@ -267,7 +271,7 @@ MRAG_TEST_MODE=true                 # Enable test safety measures
 cp .env.example .env
 
 # 2. Edit with your values
-export MRAG_OPENAI_API_KEY=sk-your-key-here
+export OPENAI_API_KEY=sk-your-key-here
 
 # 3. Load in shell (bash)
 set -o allexport
@@ -292,14 +296,11 @@ logger.info(f"Connecting with key={api_key}")
 **✅ ALWAYS DO THIS:**
 ```python
 import os
-from dotenv import load_dotenv
 
-load_dotenv()  # Load .env
-
-# From environment
-API_KEY = os.getenv("MRAG_OPENAI_API_KEY")
+# From environment — the SDK's own standard name, not a custom MRAG_* var
+API_KEY = os.getenv("OPENAI_API_KEY")
 if not API_KEY:
-    raise ValueError("MRAG_OPENAI_API_KEY not set in .env")
+    raise ValueError("OPENAI_API_KEY not set in .env")
 
 # Never log secrets
 logger.info(f"Connecting to OpenAI (key: {API_KEY[:6]}...)")  # Partial exposure only

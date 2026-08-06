@@ -95,10 +95,17 @@ Prioritized, mapped to modules/ADRs. **[V1]** = actionable now; **[V2+]** = road
 6. **[V2+/V3] HaS speculative-retrieval as a caching layer, not a V1 retriever.** The draft-then-validate,
    two-channel design (2604.20452) maps cleanly onto the V3.1 `orchestration/query_cache.py` (hash/similarity
    cache) and a future speculative wrapper around `retrieval/`. Its plug-and-play, multi-hop amplification also
-   informs `flow_compiler.py`/`state_machine.py` for agentic V2. Keep out of V1 — it optimizes cost/latency,
-   which the roadmap defers to V3.1.
+   informs `orchestration/state_machine.py` and whatever routing/flow logic the selected external engine exposes
+   through the `DocumentEngine` port (per ADR-0005 — the native `router.py`/`flow_compiler.py` this note
+   originally pointed at were removed in Lot 17, zero consumers; see
+   `docs/refactoring/lot-17-prototype-retirement.md`). Keep out of V1 — it optimizes cost/latency, which the
+   roadmap defers to V3.1.
 
 7. **[V1, caution] Treat LLM-assisted query routing as utility, not a safety boundary.** 2604.11623's finding —
    governance must operate *below and independent of* probabilistic routing (guarantees hold even at 0% routing
-   accuracy) — is a design rule for `orchestration/router.py`: never let `QueryRouter` classification gate a
-   security decision. Encode this as a comment/ADR note now to prevent a future cross-layer coupling bug.
+   accuracy) — remains a live design rule even though the native `QueryRouter`/`orchestration/router.py` this
+   note originally named were removed in Lot 17 (zero consumers, never wired). Apply it wherever routing
+   decisions actually happen today: `TenantPolicy`/`SecurityGuard` enforcement in `RAGEngine.answer()` and in
+   `LangGraphEngineAdapter`'s graph nodes must never be gated by, or downstream of, a routing/classification
+   step — see the tenant-isolation bug found and fixed in `LangGraphEngineAdapter._node_retrieve()` (Lot 18,
+   `docs/refactoring-plan.md`) for a concrete instance of exactly this coupling failure mode.

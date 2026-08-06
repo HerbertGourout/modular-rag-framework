@@ -46,7 +46,8 @@ Claude Code uses a **5-level scope system** where higher levels override lower o
 - Personal overrides for THIS project ONLY
 - **NOT** committed to git (auto-gitignored)
 - Machine-specific settings
-- Example: `"env": {"MRAG_OPENAI_API_KEY": "sk-..."}`
+- Example: `"env": {"OPENAI_API_KEY": "sk-..."}` (the SDK's own standard var — not
+  `MRAG_OPENAI_API_KEY`, which `app/settings.py` declares but the pipeline never reads)
 
 **CLI Scope** (`--settings <file-or-json>`):
 - One-time override for a specific session
@@ -187,7 +188,7 @@ When Opus is overloaded → switch to Sonnet, then Haiku. (Use the alias `"opus"
 {
   "env": {
     "NODE_ENV": "development",
-    "MRAG_OPENAI_API_KEY": "${MRAG_OPENAI_API_KEY}",
+    "OPENAI_API_KEY": "${OPENAI_API_KEY}",
     "PYTHONUNBUFFERED": "1"
   },
   "autoUpdatesChannel": "stable",
@@ -522,7 +523,7 @@ Arrays concatenate and deduplicate across scopes:
 ```json
 {
   "env": {
-    "MRAG_OPENAI_API_KEY": "${MRAG_OPENAI_API_KEY}",
+    "OPENAI_API_KEY": "${OPENAI_API_KEY}",
     "NODE_ENV": "development"
   },
   "permissions": {

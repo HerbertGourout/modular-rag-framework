@@ -58,13 +58,17 @@ See [installation.md](installation.md), "Running Qdrant locally."
 
 ### `AuthenticationError` / `401` from OpenAI or Anthropic
 
-**Why**: `MRAG_OPENAI_API_KEY` or `MRAG_ANTHROPIC_API_KEY` is missing, expired, or set in a
-shell/session different from the one running `mrag`/`uvicorn`. `Settings` (in
-`app/settings.py`) reads these once per process — exporting the variable in a second
-terminal after the process already started won't help.
+**Why**: the standard SDK env vars (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY`) are missing,
+expired, or set in a shell/session different from the one running `mrag`/`uvicorn` — **not**
+`MRAG_OPENAI_API_KEY`/`MRAG_ANTHROPIC_API_KEY`. `app/settings.py`'s `Settings` class declares
+those `MRAG_*` names, but nothing in the real pipeline-wiring path (`app/bootstrap.py`,
+`orchestration/_default_factories.py`) ever constructs `Settings`/calls `get_settings()` — the
+generators fall through to the OpenAI/Anthropic SDK's own default env-var lookup whenever the
+manifest doesn't set `api_key` explicitly. `Settings` is effectively orphaned today.
 
-**Fix**: confirm the variable is set in the exact shell you're running from
-(`echo $env:MRAG_OPENAI_API_KEY` in PowerShell), then restart the process.
+**Fix**: confirm `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` is set in the exact shell you're running
+from (`echo $env:OPENAI_API_KEY` in PowerShell), then restart the process — restarting matters
+because the SDK client reads the env var once at construction time, not per request.
 
 ### Everything ingests fine, but `mrag ask` returns no relevant chunks / empty citations
 

@@ -7,6 +7,15 @@ description: Workflow for analyzing and optimizing document chunking for better 
 
 _Originally authored as a workflow for `ingestion-specialist`, invoked as `/optimize-chunking`._
 
+> **Corrected 2026-08-06** (documentation-utility pass): step 2's imports named two classes
+> that don't exist (`FixedChunker`, `SemanticChunker`) and a metrics module that doesn't exist
+> (`modular_rag.eval.metrics`). Fixed below to the real classes — `FixedSizeChunker` and
+> `AdaptiveChunker` (`src/modular_rag/ingestion/chunkers/`); there is no `SemanticChunker` in
+> this codebase. The rest of this file (benchmark harness, golden-set testing) is illustrative
+> pseudocode, not a claimed real API — `embed_batch`, `VectorStoreInMemory`, and
+> `compute_retrieval_quality`/`compute_ndcg` are examples to write, not existing functions;
+> `chunker.chunk()` takes a real `Document` object (`src/modular_rag/core/models/document.py`),
+> not a raw string.
 
 Systematic workflow for analyzing corpus characteristics and optimizing chunking strategy.
 
@@ -79,14 +88,16 @@ print(f"Max length: {stats['max_doc_length']} chars")
 
 ```python
 import pytest
-from modular_rag.ingestion.chunkers import FixedChunker, SemanticChunker
-from modular_rag.eval.metrics import compute_retrieval_quality
+from modular_rag.ingestion.chunkers.fixed import FixedSizeChunker
+from modular_rag.ingestion.chunkers.adaptive import AdaptiveChunker
+# compute_retrieval_quality is illustrative — write it against a real scorer in
+# eval/scorers/, or use ExactMatchEvaluator (the one shipped today) directly
 
 CHUNK_SIZES = [128, 256, 512, 1024]
 STRATEGIES = [
-    ("fixed_50_overlap", FixedChunker(512, overlap=50)),
-    ("fixed_100_overlap", FixedChunker(512, overlap=100)),
-    ("semantic", SemanticChunker()),
+    ("fixed_50_overlap", FixedSizeChunker(chunk_size=512, chunk_overlap=50)),
+    ("fixed_100_overlap", FixedSizeChunker(chunk_size=512, chunk_overlap=100)),
+    ("adaptive", AdaptiveChunker()),
 ]
 
 def benchmark_chunking(docs: list[str], queries: list[str]):

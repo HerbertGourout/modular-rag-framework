@@ -213,7 +213,15 @@ steps, an agent retrieves the information, an agent extracts the relevant facts,
 drafts an answer, an agent validates that the draft is well supported by the sources — and
 if it isn't, the loop retries the search before returning the final answer.
 
-**Status**: ⬜ planned — see [ROADMAP.md](../ROADMAP.md).
+> Per [ADR-0005](adr/0005-document-ai-control-plane-boundary.md) (accepted 2026-08-04),
+> this native five-agent design is **not** what gets built — generic multi-agent orchestration
+> is delegated to a selected external engine (LangGraph, see
+> [ADR-0006](adr/0006-external-engine-selection.md)) via the `DocumentEngine` port. The
+> policy-engine half of V2 (RBAC, tenant isolation) shipped natively and is current, not planned
+> — see [ROADMAP.md](../ROADMAP.md) V2.0.
+
+**Status**: ⚙️ multi-agent coordination delegated (adapter in place, `adapters/llms/`); policy
+engine ✅ shipped — see [ROADMAP.md](../ROADMAP.md).
 
 ### V3 — Graph Memory: understanding relationships between facts, not just their content
 
@@ -229,7 +237,12 @@ structured context alongside the usual text chunks. A feedback mechanism (EvoRAG
 strengthens or weakens the graph's relationships depending on whether the answers based on
 them turned out to be correct.
 
-**Status**: ⬜ planned — see [ROADMAP.md](../ROADMAP.md).
+> Per ADR-0005, GraphRAG **traversal** (the N-hop exploration and reasoning) is delegated to
+> the selected external engine, not built natively — a native graph *data model* may still be
+> kept (undecided, pending Lot 6 evidence). EvoRAG's edge-reinforcement feedback loop was
+> removed entirely in Lot 17 (`docs/refactoring-plan.md`): zero consumers, dead code.
+
+**Status**: ⬜ planned, and partly delegated per ADR-0005 — see [ROADMAP.md](../ROADMAP.md).
 
 ### V4 — Governance: making the system usable in a regulated context, at scale
 
