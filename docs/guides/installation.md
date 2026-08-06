@@ -84,22 +84,24 @@ The default manifest (`manifests/presets/local-hybrid-rag.yaml`) connects to `lo
 
 ## Environment variables
 
-Settings are read once per process by `app/settings.py` (a `pydantic-settings` model with
-the `MRAG_` prefix) — the manifest YAML configures *which components* are wired, while these
-environment variables configure *credentials and endpoints* that shouldn't live in a
-version-controlled YAML file. Keep secrets here, not in a manifest committed to Git.
+`app/settings.py` declares a `pydantic-settings` model (`Settings`) with these `MRAG_`-prefixed
+fields, but **it's orphaned**: nothing in the real pipeline-wiring path
+(`orchestration/_default_factories.py`, `app/bootstrap.py`) ever constructs `Settings()` or
+calls `get_settings()`. Setting any variable in the table below has **no effect** on the
+pipeline today. All real configuration goes through the manifest YAML instead — component
+`config:` blocks are passed straight to each adapter's constructor (`**cfg.config`).
 
-| Variable | Description | Default |
-|---|---|---|
-| `MRAG_OPENAI_API_KEY` | OpenAI API key | — |
-| `MRAG_ANTHROPIC_API_KEY` | Anthropic API key | — |
-| `MRAG_QDRANT_URL` | Qdrant server URL | `http://localhost:6333` |
-| `MRAG_QDRANT_COLLECTION` | Qdrant collection name | `mrag_default` |
-| `MRAG_EMBEDDING_MODEL` | HuggingFace embedding model name | `BAAI/bge-small-en-v1.5` |
-| `MRAG_ENVIRONMENT` | Runtime environment (`dev`/`staging`/`production`) | `dev` |
-| `MRAG_LOG_LEVEL` | Structlog level | `INFO` |
+| Variable (declared, not read) | What actually works instead |
+|---|---|
+| `MRAG_OPENAI_API_KEY` / `MRAG_ANTHROPIC_API_KEY` | `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` — the SDKs' own standard names, read automatically when the manifest's `generator.config.api_key` is left unset |
+| `MRAG_QDRANT_URL`, `MRAG_QDRANT_COLLECTION` | Set `url`/`collection` directly in the manifest's `indexer`/`retriever` `config:` block — there is no env-var fallback |
+| `MRAG_EMBEDDING_MODEL` | Set `model_name`/equivalent directly in the manifest's `embedder.config:` block |
+| `MRAG_ENVIRONMENT`, `MRAG_LOG_LEVEL` | No working equivalent today; these are aspirational fields for a future settings wiring pass |
 
-Create a `.env` file at the project root and export these variables, or set them in your shell before running the CLI or API server.
+Manifests are the source of truth for configuration (per [CLAUDE.md](../../CLAUDE.md) rule 03)
+— see [manifests/README.md](../../manifests/README.md) for the Runnable
+`local-hybrid-rag.yaml` preset as a starting template, and put secrets (API keys) in the
+environment variable the underlying SDK actually reads, never a manifest committed to Git.
 
 ## Verifying the installation
 

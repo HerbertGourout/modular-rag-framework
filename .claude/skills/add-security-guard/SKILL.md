@@ -5,6 +5,16 @@ description: Step-by-step workflow for implementing security guards (filters, de
 
 # Add Security Guard Skill
 
+> **Corrected 2026-08-06** (documentation-utility pass): this file previously described a
+> fictional `SecurityGuardProtocol`/`PolicyProtocol` with a `check(text) -> (bool, dict)`
+> signature, a `TraceStep(component=, method=)` constructor, and a `BUILT_IN_GUARDS` registry
+> dict — none of which exist. Rewritten below against the real `SecurityGuard` protocol and
+> `GuardResult` dataclass (`src/modular_rag/contracts/security.py`), the real directory layout
+> (`security/filters/`, `security/detectors/`, `security/redaction/`, `security/policies/`,
+> `security/audit/` — there is no `security/guards/` parent), and the real registration pattern
+> (`src/modular_rag/orchestration/_default_factories.py`), using `BasicSecurityGuard`
+> (`src/modular_rag/security/filters/basic_guard.py`) as the reference implementation.
+
 ## State of the Art First (mandatory)
 
 Before designing detection patterns or risk scoring, read [docs/research/DIGEST-security.md](../../../docs/research/DIGEST-security.md) and cite the arXiv id backing each choice. Key baselines from the corpus: corpus-poisoning markers (embedded imperatives, reasoning-directive text); risk-score-gated guard chains (always-on stacks cut retrieval recall 41-46%); reversible pseudonymization (placeholder+mapping) alongside destructive redaction for audit trails.
@@ -16,13 +26,18 @@ If a design choice contradicts the digest, justify it explicitly in the MR.
 Claude Code skills don't support typed/validated parameters in frontmatter; describe these to the agent in your invocation prompt instead:
 
 - `guard_type` (enum, required) — one of: ['filter', 'detector', 'policy']
-- `guard_name` (string, required) — pattern: `^[A-Z][a-zA-Z0-9]*(Filter|Detector|Policy)$`
+- `guard_name` (string, required) — pattern: `^[A-Z][a-zA-Z0-9]*(Guard|Detector|Filter)$`
 - `threat_category` (enum, required) — one of: ['injection', 'pii', 'toxicity', 'policy_violation']
 
 _Originally authored as a workflow for `security-specialist`, invoked as `/add-security-guard`._
 
+Guided workflow for implementing security guards (filters, detectors, policies) against the
+`SecurityGuard` contract.
 
-Guided workflow for implementing security guards (filters, detectors, policies) following SecurityGuardProtocol.
+**Safety vs. Security** — per [.claude/rules/security.md](../../rules/security.md): Safety
+(prompt injection, PII, toxicity) belongs in `security/filters/` or `security/redaction/`.
+Security (RBAC, tenant isolation, policy enforcement) belongs in `security/policies/`. Never mix
+the two in the same file.
 
 ## When to Use
 
@@ -34,37 +49,43 @@ Guided workflow for implementing security guards (filters, detectors, policies) 
 
 ## Guard Types
 
-### Filter (Block)
-Prevent malicious input before processing.
+### Filter/Detector (SecurityGuard protocol)
+
+Both filters (`security/filters/`) and detectors (`security/detectors/`) implement the same
+`SecurityGuard` protocol from `contracts/security.py`:
+
 ```python
-class PromptInjectionFilter(SecurityGuardProtocol):
-    def check(self, text: str) -> (bool, dict):
-        """Return (is_safe, metadata)."""
-        is_safe = not self._has_injection_patterns(text)
-        return is_safe, {"suspicious_patterns": [...]}
+def check_query(self, query: Query) -> GuardResult: ...
+def check_answer(self, answer: Answer) -> GuardResult: ...
+def name(self) -> str: ...
 ```
 
-### Detector (Identify)
-Identify and report security threats.
+`GuardResult` is a dataclass: `allowed: bool`, `reason: str | None`, `modified_content: str |
+None`, `risk_score: float`. There is no separate `PolicyProtocol` — the same `SecurityGuard`
+shape covers filters and detectors; policy engines (below) have their own, narrower API.
+
 ```python
-class PIIDetector(SecurityGuardProtocol):
-    def check(self, text: str) -> (bool, dict):
-        """Return (has_threat, metadata with locations)."""
-        pii_locations = self._find_pii(text)
-        has_pii = len(pii_locations) > 0
-        return not has_pii, {"pii": pii_locations}
+class PromptInjectionFilter:
+    def check_query(self, query: Query) -> GuardResult:
+        if self._has_injection_patterns(query.text):
+            return GuardResult(allowed=False, reason="Injection pattern matched", risk_score=0.9)
+        return GuardResult(allowed=True, reason="", risk_score=0.0)
+
+    def check_answer(self, answer: Answer) -> GuardResult:
+        return GuardResult(allowed=True, reason="", risk_score=0.0)  # no-op if query-only
+
+    def name(self) -> str:
+        return "prompt-injection-filter"
 ```
 
-### Policy (Enforce)
-Enforce role-based access control.
-```python
-class DataAccessPolicy(PolicyProtocol):
-    def evaluate(self, request: dict) -> bool:
-        """Return whether request is allowed."""
-        user_role = request.get("user_role")
-        data_class = request.get("data_classification")
-        return self._is_allowed(user_role, data_class)
-```
+### Policy (Enforce — `security/policies/`)
+
+Policy enforcement uses its own real classes rather than a generic Protocol: see
+`PolicyEngine` (`security/policies/policy_engine.py`, evaluates a `list[Policy]` against a
+`Query`, fail-closed on evaluation errors, returns `GuardResult`) and `TenantPolicy`
+(`contracts/security.py`, the fail-closed tenant-isolation boundary with
+`enforce_query`/`enforce_ingest`/`filter_chunks`). A new access-control policy should extend one
+of these, not invent a new Protocol.
 
 ## Workflow Steps
 
@@ -84,259 +105,156 @@ class DataAccessPolicy(PolicyProtocol):
 
 ### 2. Create Implementation File (15 min)
 
-**File:** `src/modular_rag/security/guards/{guard_type}/{guard_name}.py`
+**File:** `src/modular_rag/security/filters/{guard_name}.py` (or `security/detectors/` if it's
+identifying rather than blocking — see the Safety-vs-Security split above)
 
-**Filter Pattern:**
 ```python
-from modular_rag.contracts.security import SecurityGuardProtocol
-from modular_rag.core.trace import Trace, TraceStep
+from __future__ import annotations
+
 import re
 
-class {GuardName}(SecurityGuardProtocol):
+from modular_rag.contracts.security import GuardResult
+from modular_rag.core.models.answer import Answer
+from modular_rag.core.models.query import Query
+
+_MALICIOUS_PATTERNS = [
+    re.compile(r"ignore (all )?(previous|prior|above) instructions", re.I),
+    # ... more patterns — see basic_guard.py's _INJECTION_PATTERNS for the full,
+    # research-cited pattern families (direct override, promotional imperative,
+    # reasoning-directive)
+]
+
+
+class {GuardName}:
     """{Description}"""
-    
-    MALICIOUS_PATTERNS = [
-        r"ignore previous instructions",
-        r"execute this command",
-        # ... more patterns
-    ]
-    
-    def check(self, text: str) -> tuple[bool, dict]:
-        step = TraceStep(component=self.__class__.__name__, method="check")
-        
-        try:
-            is_safe = self._is_safe(text)
-            
-            step.metadata = {
-                "input_length": len(text),
-                "is_safe": is_safe,
-                "reason": self._get_reason(text) if not is_safe else None
-            }
-            
-            return is_safe, step.metadata
-            
-        except Exception as e:
-            step.status = "error"
-            raise
-        finally:
-            Trace.add_step(step)
-    
-    def _is_safe(self, text: str) -> bool:
-        """Check if text is safe."""
-        # Check each pattern
-        for pattern in self.MALICIOUS_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
-                return False
-        return True
-    
-    def _get_reason(self, text: str) -> str:
-        """Explain why text is unsafe."""
-        for pattern in self.MALICIOUS_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
-                return f"Matched dangerous pattern: {pattern}"
-        return "Unknown reason"
+
+    def name(self) -> str:
+        return "{guard_name}"
+
+    def check_query(self, query: Query) -> GuardResult:
+        text = query.text
+        for pattern in _MALICIOUS_PATTERNS:
+            if pattern.search(text):
+                return GuardResult(
+                    allowed=False,
+                    reason=f"Matched pattern: {pattern.pattern[:40]}",
+                    risk_score=0.9,
+                )
+        return GuardResult(allowed=True, reason="", risk_score=0.0)
+
+    def check_answer(self, answer: Answer) -> GuardResult:
+        return GuardResult(allowed=True, reason="", risk_score=0.0)
 ```
 
-**Detector Pattern:**
-```python
-class PIIDetector(SecurityGuardProtocol):
-    """Detect PII in text."""
-    
-    PII_PATTERNS = {
-        "ssn": r"\d{3}-\d{2}-\d{4}",
-        "credit_card": r"\d{16}",
-        "email": r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b",
-        "phone": r"\(\d{3}\) \d{3}-\d{4}",
-    }
-    
-    def check(self, text: str) -> tuple[bool, dict]:
-        pii_found = self._find_all_pii(text)
-        
-        return len(pii_found) == 0, {
-            "has_pii": len(pii_found) > 0,
-            "pii_types": list(pii_found.keys()),
-            "locations": pii_found
-        }
-    
-    def _find_all_pii(self, text: str) -> dict:
-        """Find all PII in text."""
-        results = {}
-        for pii_type, pattern in self.PII_PATTERNS.items():
-            matches = list(re.finditer(pattern, text))
-            if matches:
-                results[pii_type] = [
-                    {"start": m.start(), "end": m.end(), "value": m.group()}
-                    for m in matches
-                ]
-        return results
-```
+`risk_score` scale, per `.claude/rules/security.md`: **0.9** = prompt injection, **0.8** =
+blocked term / poison marker, **0.5** = length exceeded, **0.0** = OK. Follow this scale for any
+new guard rather than inventing a new range.
+
+**Detector pattern** (PII, in `security/detectors/`) — see the real
+`security/redaction/patterns.py` for the PII regex families already in the codebase before
+writing new ones; extend that module rather than duplicating pattern lists.
 
 ### 3. Create Detection Patterns (15 min)
 
 **Good Pattern Design:**
 ```python
-# ✅ GOOD: Specific, tested patterns
-PATTERNS = {
-    "ssn": {
-        "pattern": r"\b(?!000|666|9\d{2})\d{3}-?(?!00)\d{2}-?(?!0000)\d{4}\b",
-        "examples": ["123-45-6789", "123456789"],
-        "false_positives": ["000-00-0000"],
-        "accuracy": 0.99
-    }
-}
+# ✅ GOOD: Specific, tested patterns, matching a verb/context pairing, not a bare keyword
+re.compile(r"you\s+(?:must|should)\s+(?:recommend|visit|use|cite)", re.I)
 
 # ❌ BAD: Overly broad patterns
-PATTERNS = {
-    "pii": r"\d+"  # Matches all numbers!
-}
+re.compile(r"\d+")  # Matches all numbers!
 ```
 
-### 4. Implement Redaction (10 min)
+### 4. Redaction (if applicable)
 
-**Pattern:**
-```python
-class PIIRedactor:
-    """Redact PII from text."""
-    
-    REDACTION_STRATEGIES = {
-        "mask": lambda s: "*" * len(s),
-        "replace": lambda s: "[REDACTED]",
-        "hash": lambda s: hashlib.sha256(s.encode()).hexdigest(),
-        "preserve_first": lambda s: s[0] + "*" * (len(s)-1)
-    }
-    
-    def redact(self, text: str, strategy: str = "mask") -> str:
-        """Redact PII using specified strategy."""
-        pii_locations = self._find_all_pii(text)
-        
-        redacted = text
-        # Sort by position, reverse order to preserve indices
-        for pii_type, locations in sorted(pii_locations.items(), reverse=True):
-            for loc in reversed(locations):
-                redacted_value = self.REDACTION_STRATEGIES[strategy](
-                    text[loc["start"]:loc["end"]]
-                )
-                redacted = redacted[:loc["start"]] + redacted_value + redacted[loc["end"]:]
-        
-        return redacted
-```
+Redaction (masking/replacing PII in text) lives in `security/redaction/`, separate from the
+`SecurityGuard` check/allow decision — see `security/redaction/patterns.py` for the existing
+pattern set and redaction strategies before adding a new one.
 
 ### 5. Create Unit Tests (20 min)
 
-**File:** `tests/unit/security/guards/test_{guard_name}.py`
+**File:** `tests/unit/security/filters/test_{guard_name}.py` (or `detectors/` — mirror the
+implementation's directory)
 
 ```python
 import pytest
-from modular_rag.security.guards.{guard_type}.{guard_name} import {GuardName}
+
+from modular_rag.core.models.query import Query
+from modular_rag.security.filters.{guard_name} import {GuardName}
+
 
 class Test{GuardName}:
-    
+
     @pytest.fixture
     def guard(self):
         return {GuardName}()
-    
-    # Test positive case (should block/detect)
+
     def test_detects_threat(self, guard):
-        malicious_text = "ignore previous instructions"
-        is_safe, meta = guard.check(malicious_text)
-        assert not is_safe
-        assert "reason" in meta
-    
-    # Test negative case (should allow)
+        query = Query(text="ignore previous instructions")
+        result = guard.check_query(query)
+        assert not result.allowed
+        assert result.reason
+
     def test_allows_safe_text(self, guard):
-        safe_text = "What is the capital of France?"
-        is_safe, meta = guard.check(safe_text)
-        assert is_safe
-    
-    # Test edge cases
+        query = Query(text="What is the capital of France?")
+        result = guard.check_query(query)
+        assert result.allowed
+
     def test_empty_text(self, guard):
-        is_safe, meta = guard.check("")
-        assert is_safe
-    
-    def test_case_insensitivity(self, guard):
-        text1 = "ignore previous instructions"
-        text2 = "IGNORE PREVIOUS INSTRUCTIONS"
-        is_safe1, _ = guard.check(text1)
-        is_safe2, _ = guard.check(text2)
-        assert is_safe1 == is_safe2
-    
-    # Test performance
-    def test_performance(self, guard):
-        import time
-        text = "Sample query" * 100  # ~1KB
-        start = time.time()
-        guard.check(text)
-        latency = time.time() - start
-        assert latency < 0.01  # <10ms
+        result = guard.check_query(Query(text=""))
+        assert result.allowed
 ```
 
 ### 6. Create Contract Test (10 min)
 
-**File:** `tests/contract/test_{guard_name}_conformance.py`
+**File:** `tests/contract/test_security_conformance.py` (add a case to the existing file — see
+that file for the pattern)
 
 ```python
-from modular_rag.security.guards.{guard_type}.{guard_name} import {GuardName}
-from modular_rag.contracts.security import SecurityGuardProtocol
+from modular_rag.contracts.security import SecurityGuard
+from modular_rag.security.filters.{guard_name} import {GuardName}
 
-def test_protocol_implementation():
-    """Verify {GuardName} implements SecurityGuardProtocol."""
-    assert issubclass({GuardName}, SecurityGuardProtocol)
-    assert hasattr({GuardName}, 'check')
 
-def test_check_return_type(guard):
-    """Verify check() returns (bool, dict)."""
-    is_safe, metadata = guard.check("test")
-    assert isinstance(is_safe, bool)
-    assert isinstance(metadata, dict)
+def test_{guard_name}_conforms_to_security_guard_protocol():
+    instance = {GuardName}()
+    assert isinstance(instance, SecurityGuard)
 ```
 
 ### 7. Register & Test (5 min)
 
-**Registry:**
+**File:** `src/modular_rag/orchestration/_default_factories.py` — add the import inside
+`register_defaults()` and one `reg.register(...)` line, following the existing `"guard"`/`"basic"`
+entry:
+
 ```python
-BUILT_IN_GUARDS = {
-    "{guard_name}": {GuardName},
-}
+from modular_rag.security.filters.{guard_name} import {GuardName}
+...
+reg.register("guard", "{guard_name}", lambda cfg: {GuardName}(**cfg.config))
 ```
 
 **Run tests:**
 ```bash
-pytest tests/unit/security/guards/test_{guard_name}.py -v
-pytest tests/contract/test_{guard_name}_conformance.py -v
+pytest tests/unit/security/filters/test_{guard_name}.py -v
+pytest tests/contract/test_security_conformance.py -v
 ./scripts/check.sh full
 ```
 
 ## Guard Chain Pattern
 
-**Combine multiple guards:**
-```python
-class GuardChain:
-    def __init__(self, guards: List[SecurityGuardProtocol]):
-        self.guards = guards
-    
-    def check(self, text: str) -> tuple[bool, dict]:
-        """Run all guards, stop at first failure."""
-        results = []
-        for guard in self.guards:
-            is_safe, meta = guard.check(text)
-            results.append((guard.__class__.__name__, is_safe, meta))
-            
-            if not is_safe:
-                return False, {"failed_guards": results}
-        
-        return True, {"passed_guards": [r[0] for r in results]}
-```
+Chaining multiple `SecurityGuard` instances is not a built-in class in this codebase today — if
+you need one, write it explicitly and add it under `security/filters/`, iterating
+`check_query`/`check_answer` over each guard and short-circuiting on the first
+`GuardResult(allowed=False, ...)`. Do not assume a `GuardChain` class already exists.
 
 ## Success Criteria
 
-✅ SecurityGuardProtocol fully implemented
+✅ `SecurityGuard` protocol fully implemented (`check_query`, `check_answer`, `name`)
+✅ `risk_score` follows the 0.9/0.8/0.5/0.0 scale
 ✅ Patterns tested for accuracy and false positives
-✅ <5ms latency per check
 ✅ Unit test coverage > 85%
 ✅ Contract conformance test passing
 ✅ Edge cases handled
-✅ Performance benchmarked
-✅ TraceStep emission complete
+✅ Registered in `_default_factories.py`
 
 ## Time Estimate
 

@@ -139,9 +139,11 @@ pip install -e ".[v1]"
 ### Run the example pipeline
 
 ```bash
-# Set your API key
-export MRAG_OPENAI_API_KEY=sk-...   # Linux/macOS
-$env:MRAG_OPENAI_API_KEY="sk-..."   # Windows PowerShell
+# Set your API key (the OpenAI SDK's own standard var, not a custom MRAG_* one —
+# app/settings.py's Settings class declares MRAG_OPENAI_API_KEY but it's never
+# read anywhere in the real pipeline-wiring path)
+export OPENAI_API_KEY=sk-...   # Linux/macOS
+$env:OPENAI_API_KEY="sk-..."   # Windows PowerShell
 
 # Ingest documents
 python examples/simple_qa/main.py ingest examples/simple_qa/docs/
@@ -227,7 +229,7 @@ docker run -p 6333:6333 qdrant/qdrant &
 pytest tests/integration/ -v -m integration
 
 # End-to-end pipeline (requires Qdrant + LLM API key)
-export MRAG_OPENAI_API_KEY=sk-...
+export OPENAI_API_KEY=sk-...
 pytest tests/e2e/ -v -m e2e
 ```
 

@@ -292,19 +292,20 @@ class OpenAIGenerator:
         self.api_key = api_key
         self.model = model
 
-# In orchestration/registry.py:
-@_register_factory("OpenAIGenerator", Generator)
-def create_openai_generator(config: dict) -> Generator:
-    api_key = config.get("api_key") or os.getenv("MRAG_OPENAI_API_KEY")
-    return OpenAIGenerator(api_key=api_key, model=config.get("model", "gpt-4"))
+# In orchestration/_default_factories.py, inside register_defaults():
+reg.register("generator", "openai", lambda cfg: OpenAIGenerator(**cfg.config))
+# api_key isn't read from a custom env var — if the manifest's config.api_key is left
+# unset, OpenAIGenerator passes None through and the SDK itself falls back to its own
+# standard OPENAI_API_KEY env var (app/settings.py's MRAG_-prefixed Settings class is
+# orphaned; nothing in this wiring path ever constructs it)
 
 # In manifests/my_pipeline.yaml:
 components:
   generator:
-    type: "OpenAIGenerator"
+    type: "openai"
     config:
-      model: "gpt-4"
-      # api_key comes from MRAG_OPENAI_API_KEY env var
+      model: "gpt-4o-mini"
+      # api_key omitted here on purpose — falls back to OPENAI_API_KEY in the environment
 ```
 
 ---

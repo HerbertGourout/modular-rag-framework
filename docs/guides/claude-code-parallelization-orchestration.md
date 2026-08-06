@@ -1,8 +1,19 @@
 # Claude Code Parallelization & Orchestration Guide
 
 **Version:** 1.0  
-**Target:** V1.x (basic parallelization), V2+ (full orchestration)  
-**Updated:** 2026-06-20
+**Target:** V1.x (basic parallelization); native multi-agent orchestration is delegated per ADR-0005  
+**Updated:** 2026-08-06
+
+> **Corrected 2026-08-06** (documentation-utility pass): §11 below used to claim
+> `.claude/settings.json` has a working `"parallelization": {"enabled": true, ...}` key. It
+> doesn't — that file's own `notes.removedFromV1` field says explicitly this key is
+> **"narrative-only, never read by Claude Code"** and points back at this document as its home
+> as illustrative content, not configuration. Fixed in §11. Separately, per
+> [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md), the "V2+ multi-agent
+> orchestration" sections (§4, §10, §13 Example 3, §14) describe a *delegated* capability
+> (handed to the selected external engine via the `DocumentEngine` port), not a native build
+> this framework will implement itself — retained below as historical design intent, not a
+> roadmap commitment.
 
 ---
 
@@ -519,14 +530,10 @@ Expected:
 
 ### Enable Parallelization
 
-Parallelization is enabled by default in `.claude/settings.json`:
-
-```json
-"parallelization": {
-  "enabled": true,
-  "mode": "semi-parallel"
-}
-```
+There is no setting to toggle: tool-level and component-level parallelization (§2-§3) are just
+`asyncio.gather()`/multi-call patterns in your own code and prompts — Claude Code has no
+`parallelization` config key. (An earlier version of this section, and of
+`.claude/settings.json`, claimed otherwise; see the correction note at the top of this file.)
 
 ### Use Pattern: Retriever Fusion
 

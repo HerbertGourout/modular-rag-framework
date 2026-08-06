@@ -285,19 +285,23 @@ logger.info(f"Using API key: {api_key}")  # ❌ Exposed!
 ### ✅ CORRECT
 ```python
 # ✅ Safe: just log that we loaded a key
-api_key = os.getenv("MRAG_SECURITY_API_KEY")
+api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
-    raise SecurityError("MRAG_SECURITY_API_KEY not set")
-logger.info("Loaded security API key from environment")  # ✅ Safe
+    raise SecurityError("OPENAI_API_KEY not set")
+logger.info("Loaded API key from environment")  # ✅ Safe
 ```
 
-### Environment Variables (Standard)
+### Environment Variables (Corrected 2026-08-06)
+
+There is no `MRAG_SECURITY_API_KEY`/`MRAG_AUTH_SECRET`/`MRAG_*` convention in this codebase —
+those don't exist anywhere in `src/`. The only credential env vars anything actually reads are
+the LLM SDKs' own standard names:
 ```bash
-# Use MRAG_* prefix for all sensitive config
-MRAG_SECURITY_API_KEY=your_key_here
-MRAG_OPENAI_API_KEY=your_openai_key_here
-MRAG_AUTH_SECRET=your_auth_secret_here
+OPENAI_API_KEY=your_openai_key_here
+ANTHROPIC_API_KEY=your_anthropic_key_here
 ```
+(`app/settings.py` declares a separate `MRAG_`-prefixed `Settings` class, but it's orphaned —
+nothing in the real pipeline-wiring path ever constructs it.)
 
 ---
 

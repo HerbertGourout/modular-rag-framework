@@ -41,12 +41,15 @@ Feature C (2h) ┘
 ```python
 FEATURES_TO_ANALYZE = {
     "retrieval": {
-        "components": ["vector_retriever", "bm25_retriever", "hybrid_retriever"],
+        # names match the real registered types in orchestration/_default_factories.py
+        # ("vector", "hybrid") — there is no standalone registered "bm25" retriever
+        # type, only via HybridRetriever internally
+        "components": ["vector", "hybrid"],
         "metrics": ["ndcg@10", "latency", "memory"],
         "queries": ["q1", "q2", "q3"]
     },
     "generation": {
-        "components": ["openai_generator", "anthropic_generator"],
+        "components": ["openai", "anthropic"],  # registered generator type names
         "metrics": ["token_count", "latency", "quality_score"],
         "prompts": ["prompt1", "prompt2"]
     },

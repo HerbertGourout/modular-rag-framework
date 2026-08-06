@@ -10,11 +10,13 @@ Copy this file to `CLAUDE.local.md` for personal project preferences. Do not com
 
 ## Environment
 
-Set only the keys you need in your shell, `.env`, or local profile:
+Set only the keys you need in your shell, `.env`, or local profile — use the SDKs' own standard
+names, not `MRAG_`-prefixed ones (`app/settings.py`'s `Settings` class declares those but they're
+never read anywhere in the real pipeline-wiring path):
 
 ```powershell
-$env:MRAG_OPENAI_API_KEY = "sk-..."
-$env:MRAG_ANTHROPIC_API_KEY = "sk-ant-..."
+$env:OPENAI_API_KEY = "sk-..."
+$env:ANTHROPIC_API_KEY = "sk-ant-..."
 ```
 
 ## Personal Workflow Notes

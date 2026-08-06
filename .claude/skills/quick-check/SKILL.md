@@ -17,7 +17,8 @@ Fast feedback loop for use after every code change, before committing.
 
 ```bash
 ./scripts/check.sh quick
-# same as: ruff check src/modular_rag/ tests/ --select E,F,I
+# same as: ruff check src/modular_rag/ tests/ --select E,F,I --fix-only --output-format=concise
+# note the --fix-only: this auto-fixes what ruff can (e.g. import order), it does not just report
 ```
 
 ## Checks covered

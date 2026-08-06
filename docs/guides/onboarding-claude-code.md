@@ -203,7 +203,7 @@ On GitHub:
 | Task | How | Command |
 |------|-----|---------|
 | Explore module structure | Ask Claude to map it | "Explore src/modular_rag/retrieval/ and list all classes" |
-| Implement a new adapter | Follow 6-step workflow | /add-component → implement → test → review |
+| Implement a new adapter | Follow 5-step workflow | /add-component → implement → test → review |
 | Debug a failing test | Ask Claude to analyze | "Why is this test failing? src/test_xyz.py:42" |
 | Refactor module code | Incremental changes | Work on 1 file at a time, validate after each |
 | Generate boilerplate | Ask for template | "Generate unit test template for Retriever" |
@@ -224,14 +224,14 @@ On GitHub:
 
 ### Q: I'm not sure about the requirement. What should I do?
 
-**A**: Use the 6-step workflow:
+**A**: Use the 5-step workflow (see
+[CLAUDE-CODE-COMPLETE-GUIDE.md § The 5-Step Workflow](CLAUDE-CODE-COMPLETE-GUIDE.md#the-5-step-workflow)):
 
 1. **Explore**: "Explore how X works in the codebase. Show me examples."
-2. **Plan**: "Break this task into 3-4 concrete steps."
-3. **Validate** (with human): "Does this plan look right? Should I change anything?"
-4. **Implement**: "Now implement step 1: [task]"
-5. **Verify**: Run `./scripts/check.sh full`
-6. **Deliver**: Create PR
+2. **Plan**: "Break this task into 3-4 concrete steps." (team sign-off if working with others)
+3. **Implement**: "Now implement step 1: [task]"
+4. **Verify**: Run `./scripts/check.sh full`
+5. **Deliver**: Create PR
 
 **Don't** jump straight to "implement the whole thing."
 

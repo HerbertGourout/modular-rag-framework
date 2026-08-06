@@ -2,10 +2,19 @@
 
 Complete guide to Model Context Protocol configuration, integration, and governance for Claude Code.
 
+> **Corrected 2026-08-06** (documentation-utility pass): this is generic MCP reference material,
+> not a description of this project's own configuration. In particular, the section that used
+> to be titled "Built-in MCP Servers" implied GitHub/Slack/Filesystem/Anthropic-Docs servers
+> ship pre-configured with Claude Code — they don't; every one of them still needs the same
+> `.mcp.json` setup steps as any other server, which is exactly what that section's own "Setup:"
+> instructions already showed, one paragraph below the misleading heading. Retitled below.
+> Confirmed via `.claude/settings.json`'s own note: **this project does not currently define
+> any MCP server** — nothing in this file describes an active integration here.
+
 **Table of Contents**
 1. [MCP Overview](#mcp-overview) — What is MCP
 2. [MCP Storage](#mcp-storage) — Where configs live
-3. [Built-in MCP Servers](#built-in-mcp-servers) — GitHub, Slack, etc.
+3. [Example MCP Server Configurations](#example-mcp-server-configurations) — GitHub, Slack, etc. — none pre-installed, all require the setup steps shown
 4. [Configuration by Scope](#configuration-by-scope) — User vs Project
 5. [MCP Governance](#mcp-governance) — Security & approval
 6. [Examples](#examples) — Real-world setups
