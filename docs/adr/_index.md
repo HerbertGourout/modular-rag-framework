@@ -42,7 +42,7 @@ Distinguishes Safety (prompt injection, PII) from Security (RBAC, policies, enfo
 
 ### [ADR-0004: Strategic Features (V1→V5)](0004-strategic-features-v1-v5.md)
 
-**Status:** Accepted  
+**Status:** Superseded (partial) — see ADR-0005  
 **Date:** 2026-06-20
 
 Roadmap integrating 8 transformational capabilities across versions:

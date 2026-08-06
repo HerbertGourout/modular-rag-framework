@@ -97,7 +97,23 @@ flowchart LR
 
 ## V2 — Agentic RAG
 
-The V2 router classifies each query and dispatches it to the right execution path. Simple queries go directly to the V1 pipeline; complex queries requiring multi-step reasoning go to the Coordinator, which spins up a team of specialised agents. The Validator can loop back to the Retriever Agent if groundedness is too low — this is the self-correction loop unique to agentic RAG.
+> **Historical design reference, not current behavior.** The components this section names
+> (`Router`, `Coordinator`, `Planner`, `Retriever Agent`, `Extractor`, `Synthesizer`,
+> `Validator`) were removed in Lot 17 (`docs/refactoring-plan.md`): the router was constructed
+> by `RAGEngine` but its classification output was never actually read anywhere, and the five
+> agent classes had zero consumers anywhere in the codebase. Per
+> [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) §5.2, generic multi-agent
+> orchestration is delegated to the selected external engine (LangGraph,
+> [ADR-0006](../adr/0006-external-engine-selection.md)) via the `DocumentEngine` port
+> (`contracts/engine.py`) — reached through `adapters/llms/langgraph_engine.py`'s
+> `LangGraphEngineAdapter`, not through the diagram below. Kept as a record of the original
+> design intent, not a description of anything the framework does today.
+
+The V2 router was meant to classify each query and dispatch it to the right execution path.
+Simple queries would go directly to the V1 pipeline; complex queries requiring multi-step
+reasoning would go to the Coordinator, which spun up a team of specialised agents. The Validator
+could loop back to the Retriever Agent if groundedness was too low — the self-correction loop
+this design intended for agentic RAG.
 
 ```mermaid
 flowchart TD
@@ -120,7 +136,19 @@ flowchart TD
 
 ## V3 — Graph RAG
 
-In V3, retrieval starts from the knowledge graph rather than the vector store. The Entity Extractor identifies named entities in the query; the Graph Retriever expands them to a local sub-graph; the Vector Retriever enriches with additional chunk context. The Context Builder merges both and feeds the Generator. This enables multi-hop reasoning (A → B → C) with explicit proof paths in the answer.
+> **Historical design reference, not current behavior.** Per ADR-0005 §5.2, GraphRAG traversal
+> and multi-hop reasoning are delegated to the selected external engine, not built as the native
+> pipeline diagrammed below. A native `KnowledgeGraph` data model does exist
+> (`memory/graph/knowledge_graph.py`) and is retained with a documented caveat — see its own
+> docstring and `docs/refactoring/lot-17-prototype-retirement.md` — but it is not wired into any
+> retriever or pipeline today, and the Entity Extractor/Graph Retriever/Context Builder
+> components below were never built.
+
+In V3's original design, retrieval would start from the knowledge graph rather than the vector
+store. The Entity Extractor would identify named entities in the query; the Graph Retriever
+would expand them to a local sub-graph; the Vector Retriever would enrich with additional chunk
+context. The Context Builder would merge both and feed the Generator — intended to enable
+multi-hop reasoning (A → B → C) with explicit proof paths in the answer.
 
 ```mermaid
 flowchart LR

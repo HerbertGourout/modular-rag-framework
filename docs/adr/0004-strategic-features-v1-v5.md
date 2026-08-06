@@ -1,8 +1,17 @@
 # ADR-0004 — Strategic Features: Making the Framework Incontournable (V1→V5)
 
-**Status:** Accepted  
+**Status:** Superseded (partial) — see [ADR-0005](0005-document-ai-control-plane-boundary.md)  
 **Date:** 2026-06-20  
 **Authors:** Herbert Gourout, Publicis Data & AI Specialists
+
+> **2026-08-04 update:** ADR-0005 accepted this file's own instruction to mark it
+> "Superseded (partial)" once ADR-0005 was itself accepted — done here. V1.1, V1.2, and V2.0
+> below are unchanged and still build natively. V2.1 (Multi-Agent Teams), V3.0 (GraphRAG), V3.2
+> (fine-tuning execution), and V5.0 (multimodal execution) are now delegated to a selected
+> external engine via adapter, not built from the native designs this document describes — see
+> ADR-0005 §5.2 for the full owned/delegated split. This document is retained as the historical
+> record of the original native-build intent, not as an implementation target for those four
+> items.
 
 ---
 
@@ -660,6 +669,8 @@ gantt
 
 **Date:** 2026-06-20
 
-**Status:** Accepted
+**Status:** Superseded (partial) — see ADR-0005 (accepted 2026-08-04). V1.1/V1.2/V2.0 unchanged;
+V2.1/V3.0/V3.2/V5.0 delegated to a selected external engine, not built natively as described
+above.
 
 **Next:** Start V1.1 (Evaluation-as-Contract) post-V1.0 completion. See ROADMAP.md for sprint planning.

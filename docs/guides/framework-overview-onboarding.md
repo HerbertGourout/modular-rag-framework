@@ -1,9 +1,20 @@
 # Modular RAG Framework — Complete Overview & Onboarding
 
-**For**: All team members (developers, architects, product managers, stakeholders)  
-**Purpose**: Understand what this framework is, why it exists, what it does now, and what's coming  
-**Updated**: June 21, 2026  
-**Status**: Vision Complete, V1.0 In Progress  
+**For**: All team members (developers, architects, product managers, stakeholders)
+**Purpose**: Understand what this framework is, why it exists, what it does now, and what's coming
+**Rewritten**: 2026-08-06 (documentation audit, `docs/documentation-audit-2026-08.md`)
+**Status**: V1 complete; a full 18-lot engine-agnostic control-plane refactoring programme
+(2026-08-03 → 2026-08-06) has also shipped — see [docs/refactoring/README.md](../refactoring/README.md)
+
+> **What changed in this rewrite**: the previous version (dated June 2026) described a native
+> V2 "multi-agent runtime (coordinator, planner, retriever, synthesizer, validator)" and native
+> V3 GraphRAG as forward roadmap items, with code sketches using classes
+> (`RetrieverProtocol`, `GPTGenerator`, `PiiFilter`...) that never existed in this codebase.
+> [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) (accepted 2026-08-04) redrew
+> that plan: this framework owns governance, audit, evaluation, tenant isolation, and
+> portability natively, and **delegates** generic multi-agent orchestration and GraphRAG
+> traversal to a selected external engine (LangGraph, [ADR-0006](../adr/0006-external-engine-selection.md))
+> via a vendor-neutral `DocumentEngine` port. This version reflects that split throughout.
 
 ---
 
@@ -13,29 +24,38 @@
 2. [Why This Framework Exists](#why-this-framework-exists)
 3. [What Is It?](#what-is-it)
 4. [Architecture at a Glance](#architecture-at-a-glance)
-5. [Current Status: V1 (Now)](#current-status-v1-now)
-6. [Upcoming Versions: V2-V5](#upcoming-versions-v2-v5)
+5. [Current Status](#current-status)
+6. [Owned vs. Delegated: V2-V5](#owned-vs-delegated-v2-v5)
 7. [Quick Start by Role](#quick-start-by-role)
 8. [Key Differentiators](#key-differentiators)
 9. [Business Impact](#business-impact)
-10. [Strategic Features Across Versions](#strategic-features-across-versions)
-11. [Get Started](#get-started)
+10. [Get Started](#get-started)
+11. [FAQ](#faq)
 
 ---
 
 ## Executive Summary
 
-**Modular RAG Framework** is a **production-grade, reusable foundation** for building enterprise Retrieval-Augmented Generation (RAG) systems.
+**Modular RAG Framework** is a production-grade, reusable foundation for building enterprise
+Retrieval-Augmented Generation (RAG) systems — an engine-neutral **control plane**: governance,
+audit, evaluation, tenant isolation, and portability owned natively, wrapped around whichever
+execution engine (native or a selected external one) actually runs a request.
 
-### In One Sentence
-A modular, protocol-driven, security-first RAG orchestration layer that reduces RAG delivery time by 4-8 weeks per project and compounds knowledge across implementations.
+### Key facts (verified against current code, not aspirational)
 
-### Key Stats
-- **Time Saved**: 4-8 weeks per project (setup + security + governance)
-- **Versions**: V1 (now) → V5 (2027), each adding strategic value
-- **Strategic Features**: 8 game-changing capabilities across V1-V5
-- **Current Release**: V1.0 (hybrid retrieval + basic security)
-- **Upcoming**: V1.1 (evaluation), V1.2 (compliance audit trail)
+- **V1 (Core RAG)**: complete — ingestion, hybrid retrieval (vector + BM25 + RRF), reranking,
+  generation, security guards, tenant isolation, audit trail, document lifecycle, quality gates,
+  API/CLI hardening, dependency/licence gates, an immutable container build.
+- **Engine abstraction**: complete — `contracts/engine.py`'s `DocumentEngine` port has two real
+  implementations (`NativeEngineAdapter`, wrapping the native pipeline; `LangGraphEngineAdapter`,
+  running the same governed components through a real LangGraph `StateGraph`), selectable per
+  manifest with no governance rewrite.
+- **V2.0's Policy Engine**: real and shipped (`security/policies/policy_engine.py`,
+  `TenantIsolationPolicy`) — not deferred, per ADR-0005 §5.1.
+- **V2.1 (multi-agent teams), V3.0 (GraphRAG), V3.2 (fine-tuning execution), V5.0 (multimodal
+  execution)**: delegated to the selected external engine, not native builds. A prior native
+  prototype for the agent roles existed and was removed (zero test coverage, zero consumers) in
+  the same refactoring programme that shipped the delegation port.
 
 ---
 
@@ -51,363 +71,154 @@ Most RAG projects start from scratch:
 - ❌ Tightly coupled to one LLM (locked to vendor)
 - ❌ No observability (black box in production)
 
-**Result**: Each project takes 12-16 weeks. Knowledge is lost between projects.
-
 ### The Solution
 
-A **reusable, governed, observable** foundation that:
+A reusable, governed, observable control plane that:
 - ✅ Orchestrates RAG components via YAML manifests (no Python wiring)
-- ✅ Enforces clean architecture (hexagonal layering)
-- ✅ Includes security by design (guards, redaction, policies)
-- ✅ Provides observability from day one (tracing, metrics)
-- ✅ Evaluation-as-Contract (every component measurable)
-- ✅ Supports multi-tenant policies and audit trails
-- ✅ Works with any LLM, any vector store, any chunker
-
-**Result**: 4-8 weeks saved per project. Reusable assets. Knowledge compounds.
+- ✅ Enforces clean architecture (hexagonal layering, checked in CI)
+- ✅ Includes security by design (guards, redaction, fail-closed tenant isolation)
+- ✅ Provides observability from day one (tracing, audit events)
+- ✅ Evaluation-as-contract (quality gates, versioned metrics)
+- ✅ Works with any LLM, any vector store, any chunker — and, since Lot 15, either the native
+  engine or a selected external one (LangGraph), behind the same port
 
 ### Business Impact
 
 | Dimension | Impact |
 |-----------|--------|
-| **Delivery** | 4-8 weeks faster per project |
-| **IP** | Reusable across all clients (Publicis keeps it) |
-| **Margins** | Freed time reallocated to business value |
-| **Differentiation** | "We have our own enterprise RAG framework" |
-| **Regulation** | GDPR/CCPA/DORA compliance built-in |
-| **Talent** | Attracts senior engineers |
+| **Delivery** | Faster per-project setup — security, audit, and evaluation are already built, not rebuilt each time |
+| **IP** | Reusable across projects (Publicis keeps it) |
+| **Differentiation** | An owned engine-neutral control plane, not a from-scratch build per client |
+| **Regulation** | GDPR/CCPA-relevant audit trail and tenant isolation built-in (see caveats in §5) |
 | **Knowledge** | Compounds across projects (adapters, manifests, policies) |
 
 ---
 
 ## What Is It?
 
-### Definition
-
-**Modular RAG Framework** = **Orchestration layer** + **Component protocols** + **Security policies** + **Observability** + **Governance**
+**Modular RAG Framework** = **Engine-neutral orchestration port** + **Component protocols** +
+**Security/governance policies** + **Observability** + **Audit**.
 
 It's **not**:
-- ❌ A direct competitor to LangChain (it uses open-source components)
-- ❌ A SaaS (it's self-hosted or managed by Publicis)
+- ❌ A competitor to LangChain/LlamaIndex on breadth of native agent/graph tooling — since
+  ADR-0005 it deliberately delegates that territory rather than rebuilding it
+- ❌ A SaaS (self-hosted)
 - ❌ A monolithic RAG implementation
 
 It **is**:
-- ✅ A metaframework for **composing** RAG components
-- ✅ Protocol-driven (Pydantic, Python Protocols)
-- ✅ Manifest-based (YAML for configuration)
+- ✅ A metaframework for composing RAG components behind stable contracts
+- ✅ Protocol-driven (Pydantic models, `typing.Protocol` interfaces)
+- ✅ Manifest-based (YAML configuration, `ComponentRegistry.wire()`)
 - ✅ Modular (swap any component without touching others)
-- ✅ Security-first (7 layers of defense)
-- ✅ Observable (tracing, metrics, audit trails)
+- ✅ Security-first (see [architecture/security.md](../architecture/security.md))
+- ✅ Observable (`TraceStep`, `AuditEvent`)
+- ✅ Engine-portable (native or LangGraph today, same governance either way)
 
-### Core Concepts
+### Core concepts
 
-#### 1. Hexagonal Layering
-```
-┌─────────────────────────────────────┐
-│   CLI / REST API / Webhooks         │  ← Entry points
-├─────────────────────────────────────┤
-│   App Bootstrap / Container / Config │  ← Initialization
-├─────────────────────────────────────┤
-│   Orchestration / Registry / Engine  │  ← Wiring & routing
-├─────────────────────────────────────┤
-│   Contracts / Core Models            │  ← Protocol layer
-├─────────────────────────────────────┤
-│  Ingestion | Retrieval | Generation │
-│  Security  | Eval  | Memory | Agents │  ← Domain modules
-├─────────────────────────────────────┤
-│   Adapters (Embeddings, VectorStores)│  ← External integrations
-└─────────────────────────────────────┘
-```
+**1. Hexagonal layering** — `core/` and `contracts/` at the bottom, domain modules
+(`ingestion/`, `retrieval/`, `generation/`, `security/`, `eval/`, `memory/`) depend only on
+those two, `adapters/` implements the contracts against real libraries, `orchestration/`/`app/`
+wire everything, `cli/`/`api/` are the entry points. Enforced by `scripts/check_layering.py`,
+not just documented. See [architecture/module-model.md](../architecture/module-model.md).
 
-**Rule**: Dependencies flow one direction. Domain modules never import from each other.
+**2. Protocol-first design** — every component implements a real Protocol before an
+implementation exists, e.g. `contracts/retrieval.py`'s `Retriever` → `VectorRetriever`,
+`BM25Retriever`, `HybridRetriever`; `contracts/generation.py`'s `Generator` →
+`OpenAIGenerator`, `AnthropicGenerator`.
 
-#### 2. Protocol-First Design
-Every component implements a **Protocol** before implementation:
-- `RetrieverProtocol` → VectorRetriever, BM25Retriever, GraphRetriever
-- `ChunkerProtocol` → FixedChunker, SemanticChunker, RecursiveChunker
-- `GeneratorProtocol` → GPTGenerator, ClaudeGenerator, LocalGenerator
-- `SecurityGuardProtocol` → PiiFilter, InjectionFilter, PolicyGuard
+**3. Manifest-driven wiring** — instead of Python instantiation, a manifest selects components
+by name:
 
-#### 3. Manifest-Driven Wiring
-Instead of:
-```python
-# ❌ Tightly coupled Python code
-vec_retriever = VectorRetriever(model="text-embedding-3-large")
-bm25_retriever = BM25Retriever(corpus=docs)
-retriever = HybridRetriever(vec=vec_retriever, bm25=bm25_retriever)
-generator = GPTGenerator(model="gpt-4")
-```
-
-You write:
 ```yaml
-# ✅ Configuration YAML
-retrievers:
-  vector:
-    type: vector_retriever
-    config:
-      model: text-embedding-3-large
-  bm25:
-    type: bm25_retriever
-  hybrid:
-    type: hybrid_retriever
-    composition: [vector, bm25]
-    fusion: rrf
-
-generator:
-  type: gpt_generator
+# manifests/presets/local-hybrid-rag.yaml (the one preset that actually wires end to end —
+# see manifests/README.md for why the other four don't yet)
+retriever:
+  type: hybrid
   config:
-    model: gpt-4
+    k: 20
+generator:
+  type: openai
+  config:
+    model: gpt-4o-mini
 ```
 
-#### 4. Evaluation-as-Contract
-Every component **must** implement evaluation metrics:
-- Retrievers: NDCG@k, MRR, latency
-- Generators: semantic similarity, factuality, cost/token
-- System: F1 on golden set, precision, recall
+**4. Evaluation-as-contract** — `eval/quality_gate.py`'s `QualityGate` runs report-only or
+blocking against versioned `Metrics` (answer-scoped and retrieval-scoped fields kept distinct,
+fixed in Lot 13 after finding they were conflated).
 
-#### 5. Observability Built-In
-Every operation emits a **TraceStep**:
-```python
-step = TraceStep(
-    component="HybridRetriever",
-    method="retrieve",
-    input={"query": "..."},
-    output={"count": 10, "time_ms": 85},
-    status="success"
-)
-Trace.add_step(step)  # Automatically traced
-```
+**5. Observability built-in** — every retrieval/generation/guard step emits a real `TraceStep`
+(`core/models/trace.py`); every governed run emits an `AuditEvent` when an `audit_sink` is
+configured (`contracts/audit.py`, Lot 10).
 
 ---
 
 ## Architecture at a Glance
 
-### The RAG Pipeline
-
 ```
 User Query
     ↓
-[SECURITY GUARDS]  ← Injection detection, PII filtering
+[TENANT ISOLATION]  ← fail-closed identity check (Lot 11b)
     ↓
-[INGESTION]        ← Parse documents, chunk, embed
+[SECURITY GUARD]    ← injection detection, policy check
     ↓
-[INDEXING]         ← Store in vector store + BM25 index
+[RETRIEVAL]         ← vector + BM25 + RRF fusion (hybrid)
     ↓
-[RETRIEVAL]        ← Vector + BM25 + reranking (hybrid)
+[RERANKING]         ← cross-encoder, if configured
     ↓
-[RANKING]          ← Cross-encoder reranking
+[GENERATION]        ← LLM synthesis with retrieved context, via native or LangGraph engine
     ↓
-[GENERATION]       ← LLM synthesis with retrieved context
+[SECURITY GUARD]    ← answer-side check
     ↓
-[SECURITY GUARDS]  ← PII redaction, toxicity check, policy evaluation
+[REDACTION]         ← if configured
     ↓
-[OBSERVABILITY]    ← TraceStep emission + metrics collection
+[AUDIT + TRACE]     ← AuditEvent + TraceStep emission
     ↓
-User Response + Citation + Explanation
+Answer + Citations
 ```
 
-### Component Relationships
-
-```
-┌─────────────────────────────────────────┐
-│        Orchestration Registry           │  ← Wires everything
-├─────────────────────────────────────────┤
-│  Ingestion    │    Retrieval    │  Gen  │
-│  ──────────   │    ────────     │  ──   │
-│  • Chunkers   │  • Vector       │ • GPT │
-│  • Parsers    │  • BM25         │ • LLM │
-│  • Extractors │  • Rerankers    │ • Sync│
-├─────────────────────────────────────────┤
-│ Security      │   Eval          │ Memory│
-│ ──────────    │   ────          │ ──────│
-│ • Guards      │ • Metrics       │ • CTX │
-│ • Policies    │ • Regression    │ • Conv│
-│ • Redaction   │ • Golden sets   │       │
-├─────────────────────────────────────────┤
-│           Observability                 │  ← Traces everything
-└─────────────────────────────────────────┘
-```
+For the exact step order and which steps are optional (gated on whether the component is
+configured), see `orchestration/CLAUDE.md` and
+[architecture/runtime-flow.md](../architecture/runtime-flow.md).
 
 ---
 
-## Current Status: V1 (Now)
+## Current Status
 
-### V1.0 — Hybrid Retrieval + Basic Security
-
-**Status**: 🟡 In Development (June 2026)
-
-**What Works**:
-- ✅ Hybrid retrieval (vector + BM25 + RRF fusion)
-- ✅ Cross-encoder reranking
-- ✅ Basic security guards (injection, redaction)
-- ✅ Protocol-first contracts
-- ✅ Manifest-based wiring
-- ✅ REST API + CLI
-- ✅ Observability tracing
-- ✅ Unit + contract tests
-- ✅ Examples: simple_qa (end-to-end)
-
-**What's Coming Soon**:
-- 🟡 Document parsers (PDF, Word, HTML, Markdown)
-- 🟡 More chunking strategies (semantic, recursive, domain-aware)
-- 🟡 Support for more LLMs (Claude, local models)
-
-**Success Criteria**:
-- ✅ E2E pipeline functional (ingest → retrieve → generate)
-- ✅ F1 > 0.75 on golden set
-- ✅ Zero unredacted PII in logs
-- ✅ example/simple_qa runs end-to-end
-
-**Time Frame**: Q2 2026
+V1 (Core RAG) is complete: hybrid retrieval, security guards, tenant isolation, audit trail,
+document lifecycle (identity/idempotency/delete), quality gates, a hardened API/CLI, a
+dependency/licence gate, and an immutable container build. On top of that, a full 18-lot
+refactoring programme validated the `DocumentEngine` port against a second, real, structurally
+different engine (LangGraph) and closed with a real pilot comparison. See
+[docs/refactoring/README.md](../refactoring/README.md) for the full evidence trail, including
+an honest list of what's still open (two escalated licence findings, an orphaned `Settings`
+class, a few commands never executed against live infrastructure in the sandboxed environment
+that built them).
 
 ---
 
-### V1.1 — Evaluation-as-Contract (1 month after V1.0)
+## Owned vs. Delegated: V2-V5
 
-**Status**: 🔴 Not Started (planned July 2026)
+Per [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) §5, every future version's
+scope splits into what this framework builds natively and what it delegates to the selected
+external engine via the `DocumentEngine` port:
 
-**Why It Matters**:
-- Currently: Components have no measurable quality
-- With V1.1: **Every component must implement metrics**
-- Impact: Prevents shipping low-quality systems; enables golden-set benchmarking
+| Version | Owned natively | Delegated to the external engine |
+|---|---|---|
+| **V2.0** | Policy Engine (real, shipped), tenant isolation (real, shipped) | — |
+| **V2.1** | — | Multi-agent teams / collaborative agent orchestration |
+| **V3.0** | A native `KnowledgeGraph` data model may be retained (undecided — see `memory/graph/knowledge_graph.py`'s own docstring) | GraphRAG traversal, multi-hop reasoning, community detection |
+| **V3.1** | Cost-routing/caching logic, if built | — |
+| **V3.2** | Drift detection / evaluation trigger | Fine-tuning execution itself |
+| **V4** | Multi-tenant policy layering, audit retention, human-in-the-loop review | — |
+| **V5.0** | Parsing/citation enrichment may stay native | VLM execution (image/video understanding) |
 
-**What It Includes**:
-- `contracts/evaluation.py`: MetricsProtocol for all components
-- `eval/metrics/`:
-  - Retrieval metrics (NDCG@k, MRR, latency, recall)
-  - Generation metrics (semantic similarity, factuality score, cost/query)
-  - System metrics (F1 on golden set, precision, coverage)
-- `eval/golden_sets/`:
-  - Finance domain Q&A
-  - Healthcare domain Q&A
-  - Manufacturing domain Q&A
-  - Default generic Q&A
-- `eval/regression_dashboard/`:
-  - Auto-detect performance drops
-  - Block merges if F1 < baseline
-  - Trend tracking
-
-**Success Criteria**:
-- ✅ All retrievers evaluated with NDCG@k
-- ✅ All generators evaluated with factuality score
-- ✅ Golden set coverage > 90%
-- ✅ Regression detector prevents regressions
-
-**Impact**: ~1-2 hours wasted on low-quality systems becomes visible immediately.
-
----
-
-### V1.2 — Compliance Audit Trail (2 months after V1.0)
-
-**Status**: 🔴 Not Started (planned August 2026)
-
-**Why It Matters**:
-- GDPR/CCPA/HIPAA require complete audit trails
-- Currently: Logs are mutable, incomplete, expose PII
-- With V1.2: **Immutable, GDPR-ready audit system**
-
-**What It Includes**:
-- `security/audit/`:
-  - Immutable event log (cannot delete or modify past events)
-  - Structured events (query, user, role, data_touched, timestamp)
-  - Data lineage tracking (source → processing → response)
-  - Access control logging (who accessed what, when, why)
-- `security/redaction/`:
-  - Log what was redacted (regex pattern, replacement)
-  - Never log full PII values
-- `security/compliance_reports/`:
-  - GDPR report: queries touching personal data (last 90 days)
-  - CCPA report: user data access + deletion request handling
-  - HIPAA report: healthcare data access trails
-  - Signed, timestamped exports
-
-**Success Criteria**:
-- ✅ Zero unredacted PII in logs
-- ✅ GDPR report generates < 10 seconds
-- ✅ Audit trail immutable (cannot delete)
-- ✅ Data lineage traceable (source → output)
-
-**Impact**: Compliance-ready from day one. No post-project audit nightmares.
-
----
-
-## Upcoming Versions: V2-V5
-
-### V2 — Agentic + Governance (Q3 2026)
-
-**Headline**: Multi-agent orchestration + policy-as-code governance
-
-**Key Features**:
-- Multi-agent runtime (coordinator, planner, retriever, synthesizer, validator)
-- **NEW - Policy Engine**: Define "who can access what" in YAML
-  - Role-based access control (analyst vs director)
-  - Data classification (public, internal, confidential)
-  - Multi-tenant isolation
-- Collaborative multi-agent teams (consensus scoring, conflict resolution)
-- Dynamic query routing (simple vs complex vs agentic)
-
-**Impact**: Enterprises can enforce governance policies without code changes.
-
----
-
-### V3 — Graph Memory + Cost Optimization (Q4 2026)
-
-**Headline**: Knowledge graphs + automatic cost optimization + continuous fine-tuning
-
-**Key Features**:
-- **GraphRAG**: Knowledge graph construction, multi-hop reasoning
-- **Cost Optimizer**: Route queries to cheapest path (GPT-3.5 if factual, GPT-4 if complex)
-  - Example: 10k queries/month: $300 → $41.50 (86% savings)
-- **Continuous Fine-Tuning**: Auto-retrain on user corrections (feedback loop)
-- **Model Versioning**: Track versions, rollback if performance drops
-
-**Impact**: Systems that learn and optimize themselves. No manual retuning needed.
-
----
-
-### V4 — Multi-Language Governance (Q1 2027)
-
-**Headline**: Global operations + regulatory routing + cultural awareness
-
-**Key Features**:
-- **Multi-Language Support**: 20+ languages natively (not English-first)
-- **Regulatory Routing**: Different policies for GDPR (EU), CCPA (US), CNIL (France)
-- **Cultural Context**: Language-aware generation, respect local nuances
-- **Multi-Environment**: Dev/staging/production manifests with policy inheritance
-
-**Impact**: One system works globally, respecting local regulations automatically.
-
----
-
-### V5 — Multimodal Intelligence (Q2 2027)
-
-**Headline**: Images, audio, video, tables + Vision Language Models
-
-**Key Features**:
-- **Multimodal Parsing**: PDF figures, tables, scanned documents, video transcription
-- **Multi-Vector Index**: Text + image + table vectors in same Qdrant
-- **VLM Integration**: Claude vision, GPT-4V for image understanding
-- **Modality-Aware Agents**: Text agent, vision agent, table agent, video agent
-- **Rich Citations**: Source images, timecodes for video, cell references for tables
-
-**Impact**: Answer complex questions using all data types, not just text.
-
----
-
-## Strategic Features Across Versions
-
-### 8 Game-Changing Capabilities
-
-| Feature | Version | Why It Matters | Timeline |
-|---------|---------|----------------|----------|
-| **Hybrid Retrieval** | V1.0 | 20-30% better retrieval quality | Q2 2026 ✅ |
-| **Evaluation Contract** | V1.1 | Know quality before shipping | July 2026 |
-| **Audit Trail** | V1.2 | GDPR compliance proven | August 2026 |
-| **Policy Engine** | V2.0 | Governance without code | Q3 2026 |
-| **Multi-Agent Teams** | V2.1 | Better answers via consensus | Q3 2026 |
-| **Cost Optimizer** | V3.1 | 70-80% cost reduction on queries | Q4 2026 |
-| **Continuous Learning** | V3.2 | Systems improve over time | Q4 2026 |
-| **Multimodal** | V5.0 | Handle all data types | Q2 2027 |
+The practical consequence: building "V2 agentic" or "V3 GraphRAG" support means writing an
+**adapter that calls the selected external engine** through the `DocumentEngine` port
+(`contracts/engine.py`), the same way `adapters/llms/langgraph_engine.py` does today — not a
+native coordinator/planner/retriever-agent runtime. A previous native prototype for exactly
+those five agent roles was built once and removed (`docs/refactoring/lot-17-prototype-retirement.md`)
+after a full consumer/test-coverage search found zero of either.
 
 ---
 
@@ -416,242 +227,89 @@ User Response + Citation + Explanation
 ### For Developers
 **Goal**: Build a RAG component quickly
 
-**Path**:
-1. Read [CLAUDE.md](../../CLAUDE.md) — Project rules (15 min)
-2. Read [getting-started.md](./getting-started.md) — Setup (20 min)
-3. Use `/add-retriever` skill to implement a new retriever (2 hours)
-4. Run tests and validate (30 min)
+1. Read [CLAUDE.md](../../CLAUDE.md) — project rules
+2. Read [getting-started.md](./getting-started.md) — setup
+3. Use the `/add-retriever` skill to implement a new retriever
+4. Run `./scripts/check.sh full` before opening a PR
 
-**Tools**: 
-- Invoke `@retrieval-specialist` for advice
-- Use `/design-retriever-fusion` for hybrid retrieval
-- Use `/validate-architecture` for compliance checks
-
-**Timeline**: Ship a production component in 3-4 hours.
-
----
+**Tools**: `@retrieval-specialist` subagent, `/design-retriever-fusion`, `/validate-architecture`.
 
 ### For Architects
 **Goal**: Understand design decisions and validate systems
 
-**Path**:
-1. Read this document (30 min)
-2. Read [ADR-0001: Modular Architecture](../adr/0001-modular-architecture.md) (20 min)
-3. Read [ADR-0002: Contracts and Plugins](../adr/0002-contracts-and-plugins.md) (20 min)
-4. Review [architecture/overview.md](../architecture/overview.md) (30 min)
+1. Read this document
+2. Read [ADR-0001](../adr/0001-modular-architecture.md), [ADR-0002](../adr/0002-contracts-and-plugins.md), and [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) (the last one is the one that changed the roadmap — read it even if you've read the others before)
+3. Review [architecture/overview.md](../architecture/overview.md)
 
-**Tools**:
-- Invoke `@architecture-reviewer` for compliance checks
-- Use `/validate-architecture` to verify new modules
-- Use `/parallel-feature-analysis` for system analysis
-
-**Timeline**: Master the architecture in 2 hours.
-
----
+**Tools**: `@architecture-reviewer` subagent, `/validate-architecture`, `/parallel-feature-analysis`.
 
 ### For Product Managers / Stakeholders
 **Goal**: Understand capabilities, roadmap, and impact
 
-**Path**:
-1. Read this document (20 min) ← You are here
-2. Read [business-case.md](../business-case.md) (10 min, French)
-3. Review [ROADMAP.md](../../ROADMAP.md) (15 min)
-
-**Key Questions Answered**:
-- ✅ What can it do today? → V1.0 features
-- ✅ What's coming? → V2-V5 timeline
-- ✅ Why do we need it? → Business case
-- ✅ How much time does it save? → 4-8 weeks/project
-
-**Timeline**: Understand the full strategy in 1 hour.
-
----
+1. Read this document ← you are here
+2. Read [business-case.md](../business-case.md)
+3. Review [ROADMAP.md](../../ROADMAP.md) — note its own ADR-0005 banner at the top
 
 ### For QA / Test Engineers
 **Goal**: Evaluate and benchmark components
 
-**Path**:
-1. Read [validation.md](./validation.md) (15 min)
-2. Read [validation-protocol.md](./validation-protocol.md) (20 min)
-3. Use `/prepare-evaluation` skill to create test suites (1.5 hours)
+1. Read [validation-protocol.md](./validation-protocol.md) (the canonical validation-tier reference)
+2. Use the `/prepare-evaluation` skill to create test suites
 
-**Tools**:
-- Use `@test-specialist` for test design
-- Use `/prepare-evaluation` for golden sets + metrics
-- Use `/parallel-feature-analysis` for benchmarking
-
-**Timeline**: Design comprehensive tests in 2 hours.
-
----
+**Tools**: `@test-specialist` subagent, `/prepare-evaluation`, `/parallel-feature-analysis`.
 
 ### For DevOps / Platform Teams
 **Goal**: Deploy, monitor, and scale the framework
 
-**Path**:
-1. Read [deployment.md](./deployment.md) (30 min)
-2. Read [observability.md](./observability.md) (20 min)
-3. Read [audit-traceability.md](./audit-traceability.md) (15 min)
+1. Read [deployment.md](./deployment.md)
+2. Read [backup-restore.md](./backup-restore.md)
+3. Read [observability.md](./observability.md)
 
-**Key Capabilities**:
-- ✅ Single docker-compose for dev
-- ✅ Kubernetes manifests for prod
-- ✅ OpenTelemetry integration (tracing)
-- ✅ Prometheus metrics (monitoring)
-- ✅ Audit trail (compliance)
-
-**Timeline**: Deploy and monitor in 1 day.
+**Verified current capabilities**: an immutable multi-stage `Dockerfile` (Lot 16b, CI-built and
+smoke-tested on every push), a manifest-driven `MRAG_MANIFEST_PATH`-configurable entrypoint
+(`docker/server.py`), and documented (not yet live-executed in this sandboxed environment)
+backup/restore/rollback runbooks — see `docs/guides/backup-restore.md` for the honesty note on
+what has and hasn't been run against real infrastructure.
 
 ---
 
 ## Key Differentiators
 
-### vs. LangChain
-| Aspect | LangChain | This Framework |
+### vs. LangChain / LlamaIndex
+
+| Aspect | LangChain / LlamaIndex | This Framework |
 |--------|-----------|-----------------|
-| **Architecture** | Monolithic, chains | Hexagonal, protocols |
+| **Architecture** | Imperative chains / pipelines | Hexagonal, protocol-driven, layering enforced in CI |
 | **Configuration** | Python code | YAML manifests |
-| **Evaluation** | External tools | Built-in metrics |
-| **Security** | No guardrails | 7-layer defense |
-| **Audit Trail** | Log files | Immutable event store |
-| **Multi-tenant** | Not supported | Built-in policies |
-| **Observability** | Manual tracing | Automatic TraceStep |
+| **Evaluation** | External tools (Ragas, etc.) | Built-in, contract-enforced quality gates |
+| **Audit trail** | Manual logging | Structured `AuditEvent`s, PII/secret payload allowlist |
+| **Multi-tenant** | Not a primary concern | Fail-closed tenant isolation, real Keycloak verifier |
+| **Agent/graph orchestration** | Native, broad | Delegated to a selected engine (LangGraph today) via a vendor-neutral port — the differentiator is the governance/audit/portability layer around it, not a competing native runtime |
+| **Observability** | Manual tracing | Automatic `TraceStep` + `AuditEvent` |
 
-### vs. LlamaIndex
-| Aspect | LlamaIndex | This Framework |
-|--------|-----------|-----------------|
-| **Focus** | Document indexing | Full pipeline orchestration |
-| **Extensibility** | Via Python | Via protocols + YAML |
-| **Governance** | None | Policies + RBAC |
-| **Cost Control** | Not provided | Route to cheapest model |
-| **Multi-LLM** | Limited | Swappable via config |
+### vs. Proprietary Cloud Solutions (Bedrock / Vertex AI)
 
-### vs. Proprietary Cloud Solutions
-| Aspect | Bedrock / VertexAI | This Framework |
+| Aspect | Cloud-native | This Framework |
 |--------|------------------|-----------------|
-| **Vendor Lock-in** | High (AWS/GCP only) | None (works anywhere) |
-| **On-Premise** | No | Yes |
-| **Customization** | Limited | Complete control |
-| **Cost Transparency** | Hidden in cloud pricing | Per-query metrics |
-| **Open Source** | Proprietary | Community contributions |
+| **Vendor lock-in** | High | None — works with any LLM/vector store; the execution engine itself is swappable (native/LangGraph) |
+| **On-premise** | Typically no | Yes |
+| **Cost transparency** | Often opaque | Per-query metrics, when configured |
 
 ---
 
 ## Business Impact
 
-### Time Savings
-- **V1**: 4-8 weeks saved on setup + security + governance
-- **V2**: Additional 2-3 weeks saved on agentic workflows
-- **V3**: Additional 1-2 weeks saved on cost optimization
-- **V4**: Additional 1 week saved on multi-language compliance
-- **V5**: Additional 1-2 weeks saved on multimodal handling
+*(Business framing below is a planning input, not a verified engineering claim — treat the
+numbers as estimates for discussion, not measured results.)*
 
-**Total by V5**: 10-16 weeks saved (>1 quarter of development time)
-
-### ROI Calculation
-- Development cost: ~3-4 months (1 lead + 2 senior engineers)
-- Cost per project: $300k (6-8 weeks × rate)
-- Payback: 1-2 projects
-- By 5 projects/year: 2-4x ROI
-
-### Compound Learning
-- Adapters built on project 1 → reused on projects 2-5
-- Policies created for project 1 → refined for projects 2-5
-- Golden sets → accumulated benchmarks
-- **Result**: Framework gets better and cheaper with each use
-
----
-
-## Strategic Features Across Versions
-
-### V1 — Core RAG (Q2 2026)
-
-**V1.0**: Hybrid retrieval + basic security
-- Chunking, embedding, vector + BM25 retrieval, reranking, generation
-- Security guards (PII redaction, injection detection)
-- REST API + CLI
-- Observability (tracing, metrics)
-
-**V1.1**: Evaluation-as-Contract (1 month after V1.0)
-- Every component measures its own quality
-- Golden sets for domain-specific benchmarking
-- Regression detection (block merges on degradation)
-
-**V1.2**: Compliance Audit Trail (2 months after V1.0)
-- Immutable audit logs (GDPR/CCPA/HIPAA ready)
-- Data lineage (source → response)
-- Compliance reports (auto-generate for audits)
-
----
-
-### V2 — Agentic + Governance (Q3 2026)
-
-**V2.0**: Multi-agent runtime + policy engine
-- Coordinator, planner, retriever, synthesizer, validator agents
-- Policy-as-code (YAML rules for who can access what)
-- Multi-tenant isolation
-- Role-based access control
-
-**V2.1**: Collaborative multi-agent teams
-- Consensus scoring (combine agent opinions)
-- Conflict resolution (handle disagreements)
-- Domain specialist agents (finance, healthcare, etc.)
-- Transparency (know why each agent participated)
-
----
-
-### V3 — Intelligence (Q4 2026)
-
-**V3.0**: GraphRAG + knowledge graphs
-- Knowledge graph construction from corpus
-- Multi-hop reasoning (A → B → C)
-- Community detection + hierarchical summaries
-- EvoRAG (edge reinforcement from feedback)
-
-**V3.1**: Cost optimizer
-- Query classifier (factual vs reasoning)
-- Smart routing (cheap path for factual, premium for complex)
-- Multi-model support (GPT-4, GPT-3.5, local models)
-- Cost dashboard (per-query, per-user, per-month)
-
-**V3.2**: Continuous fine-tuning
-- Feedback collection (thumbs up/down, corrections)
-- Drift detection (F1 trending down)
-- Auto-retraining (self-improving embedders)
-- Model versioning (track + rollback)
-
----
-
-### V4 — Global Operations (Q1 2027)
-
-**V4.0**: Multi-environment + governance
-- Manifests for dev/staging/production
-- Policy inheritance (cascade rules)
-- Human-in-the-loop (review queue for risky answers)
-- Advanced RBAC (fine-grained permissions)
-
-**V4.1**: Multi-language + cultural awareness
-- 20+ languages natively (Arabic, Chinese, French, German, etc.)
-- Regulatory routing (GDPR EU, CCPA US, CNIL France)
-- Cultural context (respect local nuances)
-- Language-aware generation (preserve tone, formality)
-
----
-
-### V5 — Multimodal (Q2 2027)
-
-**V5.0**: Images, audio, video, tables
-- PDF parsing (extract figures, tables, text)
-- Audio transcription (Whisper)
-- Video segmentation + key frame extraction
-- VLM integration (Claude vision, GPT-4V)
-- Multimodal search (query images, get text answers)
-- Rich citations (image references, timecodes, cell refs)
+- Faster per-project delivery by not rebuilding security/audit/evaluation each time.
+- IP compounds across projects: adapters, manifests, and policies built once are reused.
+- See [business-case.md](../business-case.md) for the full commercial argument and its own
+  correction history (Lot 5 corrected unsupported delivered/security/compliance claims there).
 
 ---
 
 ## Get Started
-
-### 5-Minute Quick Start
 
 ```bash
 # 1. Clone and setup
@@ -664,128 +322,80 @@ pip install -e ".[v1,dev]"
 ./scripts/check.sh quick
 
 # 3. Read the essentials
-cat CLAUDE.md                          # Project rules (9 blocks)
-cat docs/guides/getting-started.md     # Setup guide
+cat CLAUDE.md
+cat docs/guides/getting-started.md
 
 # 4. Explore the code
-ls -la src/modular_rag/               # See the architecture
-ls -la examples/simple_qa/             # See an example
+ls -la src/modular_rag/
+ls -la examples/simple_qa/
 ```
 
-### Your First Component (2 Hours)
+### Your first component
 
-Use the `/add-retriever` skill:
-1. **Design**: Read RetrieverProtocol
-2. **Implement**: Write your retriever (100 lines)
-3. **Test**: Write unit + contract tests
-4. **Register**: Add to orchestration registry
-5. **Validate**: Run `/validate-architecture`
-6. **Deploy**: Include in manifest YAML
+Use the `/add-retriever` skill: read the `Retriever` Protocol → implement → write unit +
+contract tests → register in `orchestration/_default_factories.py` → select it in a manifest →
+run `/validate-architecture`.
 
----
+### Your first evaluation
 
-### Your First Evaluation (1.5 Hours)
+Use the `/prepare-evaluation` skill: create a golden set → wire it through `eval/quality_gate.py`'s
+`QualityGate` in report-only mode first → promote to blocking once a baseline is agreed.
 
-Use the `/prepare-evaluation` skill:
-1. **Create golden set**: 50 Q&A pairs in your domain
-2. **Implement metrics**: NDCG@k, MRR, latency
-3. **Run baseline**: Measure current system
-4. **Test regression**: Verify improvements don't break other metrics
-5. **Track trends**: Monitor metrics over time
+### Your first policy
 
----
-
-### Your First Policy (1 Hour)
-
-Use the Policy Engine (V2+):
-1. **Define roles**: analyst, director, admin
-2. **Define data classes**: public, internal, confidential
-3. **Write rules**: "analysts can access public/internal data"
-4. **Test isolation**: Verify users see only their data
-5. **Deploy**: Add policy.yaml to manifest
+`security/policies/policy_engine.py`'s `PolicyEngine` and
+`security/policies/tenant_isolation.py`'s `TenantIsolationPolicy` are real and shipped (not a
+future item) — define roles/data classifications in YAML, wire a `tenant_policy` into your
+manifest's `Container`, and test with `tests/unit/security/policies/test_tenant_isolation.py`
+as a reference.
 
 ---
 
 ## Key Documents
 
-| Document | Read When | Time |
-|----------|-----------|------|
-| [CLAUDE.md](../../CLAUDE.md) | Starting (essential) | 30 min |
-| [ROADMAP.md](../../ROADMAP.md) | Understanding versions | 20 min |
-| [business-case.md](../business-case.md) | Justifying investment | 15 min |
-| [getting-started.md](./getting-started.md) | Setting up locally | 20 min |
-| [onboarding-claude-code.md](./onboarding-claude-code.md) | Using Claude Code | 30 min |
-| [architecture/overview.md](../architecture/overview.md) | Deep dive | 45 min |
-| [ADR-0001](../adr/0001-modular-architecture.md) | Design decisions | 20 min |
-| [validation.md](./validation.md) | Running tests | 15 min |
+| Document | Read when |
+|----------|-----------|
+| [CLAUDE.md](../../CLAUDE.md) | Starting — essential |
+| [docs/refactoring/README.md](../refactoring/README.md) | Understanding what the 2026-08 refactoring programme changed |
+| [ROADMAP.md](../../ROADMAP.md) | Understanding versions |
+| [business-case.md](../business-case.md) | Justifying investment |
+| [getting-started.md](./getting-started.md) | Setting up locally |
+| [architecture/overview.md](../architecture/overview.md) | Deep dive |
+| [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) | The decision that reshaped V2-V5 |
+| [validation-protocol.md](./validation-protocol.md) | Running tests |
 
 ---
 
 ## FAQ
 
-### Q: Can I use this for production today?
-**A**: Yes, V1.0 is production-ready for basic RAG. V1.1 (evaluation) and V1.2 (audit) make it compliance-ready.
+**Can I use this for production today?**
+V1 is complete: hybrid retrieval, security, tenant isolation, audit trail, quality gates, a
+hardened API, and a container build all exist and are tested. Read
+`docs/refactoring/README.md` §5 for the honest list of what's still open before treating any
+specific deployment as fully proven (e.g., some backup/restore commands are documented but
+never executed against live infrastructure yet).
 
-### Q: Do I have to use LangChain?
-**A**: No. This framework orchestrates open-source components (Qdrant, rank-bm25, HuggingFace) and can wrap any LLM.
+**Do I have to use LangChain?**
+No. The framework orchestrates open-source components (Qdrant, rank-bm25, HuggingFace) directly,
+and separately offers LangGraph as one of two selectable *execution engines* behind the
+`DocumentEngine` port — using that engine doesn't mean adopting LangChain's own chain/agent
+abstractions in your own code.
 
-### Q: Can I swap LLMs?
-**A**: Yes, change one line in your manifest YAML. No code changes needed.
+**Can I swap LLMs?**
+Yes — change the generator's `type`/`config` in your manifest.
 
-### Q: What if I'm on-premise?
-**A**: Works fully on-premise with HuggingFace embedders + Qdrant + local LLMs. No external APIs required.
+**What if I'm on-premise?**
+Works fully on-premise with HuggingFace embedders + Qdrant + local LLMs.
 
-### Q: When will V2 be ready?
-**A**: Q3 2026 (planned). V1.0 → V1.1 → V1.2 first (evaluation + compliance).
+**When will native multi-agent orchestration / GraphRAG ship?**
+They won't, as native builds — per ADR-0005, that capability is delegated to the selected
+external engine (LangGraph) via the `DocumentEngine` port, which already exists and is tested.
+What ships going forward is deeper adapter integration with that engine, not a competing native
+runtime.
 
-### Q: Can I contribute?
-**A**: Yes. See [CONTRIBUTING.md](../../CONTRIBUTING.md) for the workflow. Internal PRs only (Publicis keeps IP).
-
-### Q: How long until ROI?
-**A**: 1-2 projects. Framework pays for itself on the second major client deployment.
-
----
-
-## Next Steps
-
-### For First-Time Users
-1. ✅ Read this document (now)
-2. ⏳ Run 5-minute quick start (above)
-3. ⏳ Read [CLAUDE.md](../../CLAUDE.md)
-4. ⏳ Read [getting-started.md](./getting-started.md)
-5. ⏳ Build your first component using `/add-retriever`
-
-### For Teams
-1. ✅ Share this document with stakeholders
-2. ⏳ Run team onboarding (1 day)
-3. ⏳ Assign roles: dev, architect, QA
-4. ⏳ Plan first project sprint
-
-### For Leadership / Product
-1. ✅ Review business case and ROI
-2. ⏳ Allocate resources for V1.1 (evaluation)
-3. ⏳ Plan V2 (agentic) for Q3 2026
-4. ⏳ Consider multi-project deployment strategy
+**Can I contribute?**
+See [CONTRIBUTING.md](../../CONTRIBUTING.md).
 
 ---
-
-## Summary Table
-
-| Aspect | V1 (Now) | V2 | V3 | V4 | V5 |
-|--------|----------|----|----|----|----|
-| **Retrieval** | Hybrid ✅ | ✅ | Graph | ✅ | Multimodal |
-| **Generation** | LLM | Agentic ✅ | ✅ | Multi-lang | VLM |
-| **Governance** | Basic | Policies ✅ | ✅ | Regulations | ✅ |
-| **Evaluation** | Coming | Built-in | ✅ | ✅ | ✅ |
-| **Cost Optimization** | Manual | Manual | Auto ✅ | ✅ | ✅ |
-| **Learning** | Manual | Manual | Auto ✅ | ✅ | ✅ |
-| **Multimodal** | Text | Text | Text | Text | All ✅ |
-| **Time Saved** | 4-8w | +2-3w | +1-2w | +1w | +1-2w |
-
----
-
-**Questions?** Check the [docs/guides/](.) directory for comprehensive guides, or ask the team.
 
 **Ready to build?** Start with [getting-started.md](./getting-started.md).
-
-**Want to contribute?** See [CONTRIBUTING.md](../../CONTRIBUTING.md).

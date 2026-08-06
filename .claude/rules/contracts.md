@@ -3,10 +3,17 @@ paths:
   - "src/modular_rag/contracts/**/*.py"
 ---
 
-# Règles — édition des contrats
+# Rules — editing contracts
 
-- Avant de modifier un Protocol : vérifier toutes les implémentations dans `adapters/` et les modules domaine — casser un Protocol casse tous les tests de conformité.
-- Après avoir ajouté une méthode à un Protocol : mettre à jour `tests/contract/test_*_conformance.py` pour couvrir la nouvelle méthode.
-- Un nouveau fichier de contrat requiert une entrée dans `contracts/__init__.py`.
-- Tout changement qui affecte le layering nécessite un nouvel ADR sous `docs/adr/` (ADRs 0001–0003 sont réservés).
-- Ne jamais importer depuis un module domaine (`ingestion/`, `retrieval/`, `generation/`…) dans `contracts/`.
+*(Translated to English 2026-08-06 for consistency with the rest of `.claude/rules/` —
+see `docs/documentation-audit-2026-08.md`.)*
+
+- Before modifying a Protocol: check every implementation in `adapters/` and the domain
+  modules — breaking a Protocol breaks every conformance test.
+- After adding a method to a Protocol: update `tests/contract/test_*_conformance.py` to cover
+  the new method.
+- A new contract file requires an entry in `contracts/__init__.py`.
+- Any change affecting layering requires a new ADR under `docs/adr/` (ADRs 0001–0003 are
+  reserved).
+- Never import from a domain module (`ingestion/`, `retrieval/`, `generation/`…) inside
+  `contracts/`.

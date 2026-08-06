@@ -1,5 +1,15 @@
 # Strategic Features Integration Plan
 
+> **ADR-0005 note (added 2026-08-06):** per
+> [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) (accepted 2026-08-04), features
+> 4 (Multi-Agent Teams, V2.1), 5 (Knowledge Graphs, V3.0), and 7 (Fine-Tuning Loop execution,
+> V3.2) below are delegated to a selected external engine via adapter, not native builds — the
+> engineering work behind their deal-value figures is adapter-integration effort, not the native
+> implementation ADR-0004 originally sketched. The commercial figures themselves (deal size,
+> staffing, timeline) are this document's own estimates, unchanged by that distinction, but
+> "Multi-Agent Teams" and "Knowledge Graphs" should not be read as promising a from-scratch
+> native runtime.
+
 **Summary:** All 8 strategic capabilities integrated into V1→V5 roadmap with clear timelines, dependencies, and success criteria.
 
 **Scope of this document** (to avoid re-duplicating three overlapping sources): this is the

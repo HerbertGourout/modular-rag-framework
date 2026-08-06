@@ -616,7 +616,9 @@ Change single option without opening full interface.
 
 ## See Also
 
-- [Claude Code Memory Documentation](./claude-code-memory.md)
-- [Claude Code Permissions Deep Dive](./claude-code-permissions.md)
+*(Corrected 2026-08-06 — the two links this section used to carry,
+`claude-code-memory.md` and `claude-code-permissions.md`, don't exist as separate files.)*
+
+- [Claude Code Advanced Config](./claude-code-advanced-config.md) — subagents, skills, hooks, memory
 - [Claude Code MCP Setup](./claude-code-mcp-setup.md)
 - [Claude Code Enterprise Deployment](./claude-code-enterprise-deployment.md)

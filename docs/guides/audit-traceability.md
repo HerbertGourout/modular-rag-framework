@@ -22,22 +22,24 @@ Errors: [list]
 
 ### Accessing Session Logs
 
-**In VS Code**:
-```
-View → Output → GitHub Copilot Chat → (select session date)
+Corrected 2026-08-06 — this section previously described GitHub Copilot Chat's storage
+location, a different product, not Claude Code's.
+
+**Local session transcripts** (one file per session, newline-delimited JSON):
+```bash
+ls ~/.claude/projects/<project-path-hash>/*.jsonl
 ```
 
-**Manually**:
+**Auto-generated project memory** (persistent notes carried across sessions for this project):
 ```bash
-# Local session files (encrypted)
-~/.vscode/extensions/ms-vscode.copilot/session-logs/
+ls ~/.claude/projects/<project-path-hash>/memory/
 ```
 
 ### Session Retention
 
-- **Local**: 30 days (auto-cleanup)
-- **Cloud** (if enabled): 90 days (Anthropic retention policy)
-- **Customer data**: Separate encryption per session
+Retention policy for local transcripts and any server-side logging is set by your Claude Code
+installation/organization configuration, not by this project — check your actual Claude Code
+settings rather than assuming a specific number of days here.
 
 ---
 

@@ -6,11 +6,17 @@
 
 ## 1. Purpose
 
-This framework provides a **context OS** for RAG and agentic systems: a control plane over knowledge, orchestration, memory, governance, and multimodality. It is built around three pillars:
+This framework provides a **context OS** for RAG and agentic systems: an engine-neutral control
+plane over knowledge, governance, and observability, built around three pillars:
 
 1. **Declarative orchestration** — pipelines are described in YAML (manifests), not in imperative Python.
 2. **Composable retrieval** — chunking, embedding, indexing, fusion, and reranking are swappable contracts.
-3. **Verifiable agentic reasoning** — several specialized agents replace the single monolithic LLM call.
+3. **Engine-neutral execution** — a vendor-neutral `DocumentEngine` port (`contracts/engine.py`)
+   lets the same governed pipeline run on the native sequential engine or a selected external
+   engine (LangGraph, [ADR-0006](../adr/0006-external-engine-selection.md)); per
+   [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md), generic multi-agent
+   orchestration is delegated to that external engine, not built as a native specialized-agent
+   runtime.
 
 ---
 
@@ -67,6 +73,14 @@ boxes are checked), see [ROADMAP.md](../../ROADMAP.md); for the same progression
 without technical jargon, see [docs/onboarding.md](../onboarding.md), section 3. The five
 versions are not independent batches — each builds on the pipeline built by the previous one
 rather than replacing it.
+
+> **ADR-0005 note (2026-08-04):** V1.1/V1.2/V2.0 below build natively as described. V2.1
+> (multi-agent teams), V3.0 (GraphRAG traversal), V3.2 (fine-tuning execution), and V5.0
+> (multimodal execution) are **delegated** to the selected external engine (LangGraph) via the
+> `DocumentEngine` port, not built as native runtimes — see
+> [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) §5.2. The "Additions" bullets
+> under V2/V3/V5 below describe the original native-build intent and are retained as historical
+> design reference, not an implementation target for those items.
 
 ### V1 — Core RAG
 **What the framework enables:**
@@ -163,12 +177,18 @@ The contracts in `src/modular_rag/contracts/` are the framework's immutable core
 | `Generator` | `generate(query, context, trace) → Answer` | V1 |
 | `SecurityGuard` | `check_query(query)` / `check_answer(answer)` | V1 |
 | `Evaluator` | `evaluate(query, answer, expected, context)` | V1 |
-| `Planner` | `plan(query) → ExecutionPlan` | V2 |
-| `Agent` | `run(task) → AgentResult` | V2 |
+| `TenantPolicy` | `enforce_query(query)` / `filter_chunks(tenant_id, chunks)` | V1 (Lot 11b) |
+| `DocumentEngine` | `run(request, context) → EngineResult` | V1 (Lot 7 — native and LangGraph adapters) |
 | `Telemetry` | `record_trace(trace)` | V1 |
+| `AuditSink` | `record(event)` | V1 (Lot 10) |
+| `LifecycleLedger` | `record_ingested`/`tombstone`/`export_all` | V1 (Lot 12a) |
 | `Storage` | `put/get/delete/exists` | V1 |
 | `Redactor` | `redact(text) → str` | V1 |
 | `ManifestLoader` | `load(path) → PipelineManifest` | V1 |
+
+`Planner` (`plan(query) → ExecutionPlan`) and `Agent` (`run(task) → AgentResult`) were removed
+in Lot 17 (`docs/refactoring-plan.md`) — zero implementations, zero consumers, superseded by the
+`DocumentEngine` delegation port above.
 
 ---
 
@@ -178,6 +198,8 @@ See the ADRs in `docs/adr/`:
 - [ADR-0001](../adr/0001-modular-architecture.md) — Six planes, contracts/implementations separation
 - [ADR-0002](../adr/0002-contracts-and-plugins.md) — Protocols + Factory Registry
 - [ADR-0003](../adr/0003-security-and-governance.md) — Safety vs Security, policy-as-code
+- [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) — Owned-vs-delegated product boundary (accepted 2026-08-04); partially supersedes [ADR-0004](../adr/0004-strategic-features-v1-v5.md)
+- [ADR-0006](../adr/0006-external-engine-selection.md) — LangGraph selected as the external `DocumentEngine` adapter target
 
 ---
 
@@ -189,7 +211,7 @@ The domain models are defined in `src/modular_rag/core/models/`. They are Pydant
 |---|---|---|---|
 | `Document` | `document.py` | ✓ | Ingestion unit: source, raw content, metadata |
 | `Chunk` | `chunk.py` | ✗ | Sub-segment of a Document, with optional embedding |
-| `Query` | `query.py` | ✓ | User query + routing hint |
+| `Query` | `query.py` | ✓ | User query + tenant_id (Lot 11b) |
 | `RetrievedChunk` | `retrieved.py` | ✓ | Chunk + score + rank + retrieval method |
 | `Citation` | `answer.py` | ✗ | Pointer from an answer to a source chunk |
 | `Answer` | `answer.py` | ✗ | Generated text + citations + trace_id |
@@ -220,8 +242,8 @@ flowchart TD
     Manifest --> Registry["orchestration/registry.py\nComponentRegistry.default()\n_default_factories maps 'fixed'→FixedSizeChunker,\n'bm25'→BM25Retriever, etc."]
     Registry -->|"registry.wire(manifest)"| Wire["Reads manifest.chunker.type, manifest.retriever.type …\nCalls factory(config) for each component"]
     Wire --> Container["app/container.py\nContainer (holds all wired instances)"]
-    Container --> Engine["orchestration/engine.py\nRAGEngine(container)\nengine.ingest() / engine.answer()\nuse container.get(Chunker), etc."]
-    Engine --> Callers["cli/main.py or api/routes.py\ncalls engine methods"]
+    Container --> Engine["orchestration/engine.py\nRAGEngine(container)\nengine.ingest() / engine.answer()\nreads container.chunker, container.retriever, etc."]
+    Engine --> Callers["cli/__init__.py or api/__init__.py\ncalls engine methods"]
 ```
 
 To wire a new component:

@@ -8,7 +8,18 @@ lastUpdated: "2026-06-19"
 
 # Règles — édition du module orchestration
 
-The orchestration layer is responsible for component wiring, query routing, execution flow, and state management. This is where the RAG pipeline comes together.
+> **⚠️ Partially superseded by [ADR-0005](../../docs/adr/0005-document-ai-control-plane-boundary.md)
+> (accepted 2026-08-04), added 2026-08-06.** Sections 3 (`QueryRouter`) and 4 (`FlowCompiler`)
+> below document components that were removed in Lot 17 (`docs/refactoring-plan.md`) — zero
+> test coverage, zero consumers (`RAGEngine` constructed a `QueryRouter` but never called
+> `.route()` on it; `FlowCompiler.compile()` had no caller at all). Generic query
+> routing/orchestration is delegated to the selected external engine (LangGraph) via the
+> `DocumentEngine` port, not built as the native pattern those two sections describe — see
+> section 9 below, which already carries this note, and
+> `src/modular_rag/orchestration/CLAUDE.md` for the accurate, current file list. Sections 1, 2,
+> 5, 6, 7, 8, and 10 remain accurate to current code and are unaffected.
+
+The orchestration layer is responsible for component wiring, execution flow, and state management. This is where the RAG pipeline comes together.
 
 ---
 

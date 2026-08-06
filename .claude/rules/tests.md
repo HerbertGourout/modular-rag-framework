@@ -3,12 +3,17 @@ paths:
   - "tests/**/*.py"
 ---
 
-# Règles — écriture des tests
+# Rules — writing tests
 
-- `tests/unit/` : aucun service externe. Ne pas mocker ce qui peut être testé directement.
-- `tests/contract/` : utiliser `isinstance(obj, Protocol)` pour vérifier la conformité. Parametrize sur toutes les implémentations du Protocol.
-- `tests/integration/` : nécessite Qdrant sur localhost:6333. Marquer avec `@pytest.mark.integration`.
-- `tests/e2e/` : pipeline complet avec vrai LLM. Marquer avec `@pytest.mark.e2e`.
-- `VectorRetriever` et `HybridRetriever` sont exclus des tests contract (nécessitent Qdrant).
-- Les fichiers de tests mirent `src/` : `tests/unit/ingestion/chunkers/test_fixed.py` pour `src/modular_rag/ingestion/chunkers/fixed.py`.
-- Chaque nouvelle implémentation de Protocol nécessite une entrée dans le test de conformité correspondant.
+*(Translated to English 2026-08-06 for consistency with the rest of `.claude/rules/` —
+see `docs/documentation-audit-2026-08.md`.)*
+
+- `tests/unit/`: no external services. Don't mock what can be tested directly.
+- `tests/contract/`: use `isinstance(obj, Protocol)` to check conformance. Parametrize over
+  every implementation of the Protocol.
+- `tests/integration/`: requires Qdrant on localhost:6333. Mark with `@pytest.mark.integration`.
+- `tests/e2e/`: full pipeline with a real LLM. Mark with `@pytest.mark.e2e`.
+- `VectorRetriever` and `HybridRetriever` are excluded from contract tests (they need Qdrant).
+- Test files mirror `src/`: `tests/unit/ingestion/chunkers/test_fixed.py` for
+  `src/modular_rag/ingestion/chunkers/fixed.py`.
+- Every new Protocol implementation needs an entry in the matching conformance test.

@@ -3,19 +3,19 @@
 Welcome! This guide walks you through setting up and using Claude Code for the first time on this project. By the end, you'll understand how to work efficiently with AI assistance while maintaining code quality and project standards.
 
 **Time estimate**: 20 minutes  
-**Required**: VS Code, GitHub access, Python 3.11+
+**Required**: Claude Code (CLI or a supported editor extension), GitHub access, Python 3.11+
 
 ---
 
 ## Prerequisites
 
-### 1. Install Claude Code Extension
-- Open VS Code
-- Go to Extensions (Ctrl+Shift+X / Cmd+Shift+X)
-- Search: "GitHub Copilot Chat"
-- Click Install
-- Sign in with your GitHub account
-- You should see a Copilot icon (💬) in the left sidebar
+### 1. Install Claude Code
+
+Corrected 2026-08-06 — this section previously described installing GitHub Copilot Chat, a
+different product. Claude Code is installed as its own CLI (or a dedicated editor
+extension/desktop app) — see [claude.com/claude-code](https://claude.com/claude-code) for the
+current install instructions for your platform, not the VS Code Extensions marketplace search
+above. Once installed, run `claude` from this repository's root to start a session.
 
 ### 2. Clone and Set Up the Project
 
@@ -97,7 +97,7 @@ Let's walk through a real example: **Adding a new text chunker**.
 
 ### Step 2: Ask Claude Code to Explore
 
-Open the Copilot Chat (💬) and ask:
+Open a Claude Code session and ask:
 
 ```
 I need to add a WordCountChunker to src/modular_rag/ingestion/chunkers/.
