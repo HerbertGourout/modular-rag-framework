@@ -193,7 +193,7 @@ path the hook checks first.
 
 Check, in order: [CLAUDE.md](../../CLAUDE.md) section 09 (known stubs), the relevant
 [ADR](../adr/_index.md) for *why* something is built the way it is, and
-[docs/reviews/2026-05-20-initial-review.md](../reviews/2026-05-20-initial-review.md) for
+[docs/archive/2026-05-20-initial-review.md](../archive/2026-05-20-initial-review.md) for
 historical context on decisions that might explain an unexpected constraint. If it's a new
 failure mode nobody has hit yet, add it here once you've solved it — this file is only as
 useful as it is current.

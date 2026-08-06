@@ -78,10 +78,11 @@ one."
    registry, safety vs. security) and the template to follow for a new decision.
 3. [docs/architecture/module-model.md](architecture/module-model.md) and
    [structure.md](architecture/structure.md) — the complete map of the code, file by file.
-4. [docs/reviews/2026-05-20-initial-review.md](reviews/2026-05-20-initial-review.md) — the
+4. [docs/archive/2026-05-20-initial-review.md](archive/2026-05-20-initial-review.md) — the
    initial review that set the P0/P1/P2 priorities; useful for understanding why certain
    choices (Apache 2.0, an honest pre-alpha status, tests mirroring `src/`) were settled
-   early.
+   early. Archived 2026-08-06 (low ongoing utility, kept for historical context) — see
+   [docs/archive/README.md](archive/README.md).
 
 ### 2.3 Consultant / delivery lead on a client project
 
@@ -141,13 +142,19 @@ proof — not marketing promises.
 3. [docs/business-case.md](business-case.md), section 4 — coverage of regulated
    industries, talking points for a client-side DPO or CISO.
 
-**Watch point to communicate to this profile without softening it**: as things currently
-stand, policy-as-code governance, multi-tenancy, and the full audit trail are **V4 items,
-not yet delivered** (see [ROADMAP.md](../ROADMAP.md)). Never present these capabilities as
-already operational to a client or an auditor — this is exactly the kind of gap between
-documented promise and delivered code that the initial review of 2026-05-20 explicitly
-flagged as the project's #1 risk (see
-[docs/reviews/2026-05-20-initial-review.md](reviews/2026-05-20-initial-review.md)).
+**Watch point to communicate to this profile without softening it**: corrected 2026-08-06 —
+this used to say policy-as-code governance, multi-tenancy, and the audit trail were "V4 items,
+not yet delivered." That's no longer true: per [ADR-0005](adr/0005-document-ai-control-plane-boundary.md)
+(accepted 2026-08-04), the Policy Engine, fail-closed tenant isolation, and a structured audit
+trail are owned and shipped now (V2.0/Lot 10/Lot 11b-c), not deferred to V4. What genuinely
+remains undelivered per V4 is the *multi-environment* layering (dev/staging/prod overrides) and
+full regulatory/human-in-the-loop review workflows — see [ROADMAP.md](../ROADMAP.md). Still
+never present a capability as operational before checking its actual status here or in
+[docs/refactoring/README.md](refactoring/README.md) §5's honest "what's still open" list — this
+is exactly the kind of gap between documented promise and delivered code that the initial
+review of 2026-05-20 flagged as the project's #1 risk (see
+[docs/archive/2026-05-20-initial-review.md](archive/2026-05-20-initial-review.md), archived
+2026-08-06 for low ongoing utility, not because it was wrong).
 
 ### 2.6 Management / commercial
 

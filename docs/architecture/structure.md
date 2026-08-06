@@ -715,8 +715,11 @@ docs/
 │   ├── deployment.md            ← Dockerfile, docker-compose, multi-env manifests
 │   ├── observability.md         ← StructlogTelemetry JSON, NullTelemetry, custom adapter
 │   └── plugin-development.md    ← 4-step recipe for adding a component
-└── reviews/
-    └── 2026-05-20-initial-review.md ← Initial review (strengths, weaknesses, P0/P1 decisions)
+└── archive/                     ← Superseded/low-utility documents, kept for the record
+    ├── 0004-strategic-features-v1-v5.md ← Full text of ADR-0004 (a stub remains in docs/adr/)
+    ├── feature-integration-plan.md      ← Pre-ADR-0005 commercial/staffing plan
+    ├── working-with-agents.md           ← Pre-ADR-0005 native multi-agent design guide
+    └── 2026-05-20-initial-review.md     ← Initial review (strengths, weaknesses, P0/P1 decisions)
 ```
 
 ---

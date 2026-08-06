@@ -31,8 +31,6 @@ break every existing link into this directory), but the tables below keep them a
 | Set up an MCP server integration | [mcp-integrations.md](mcp-integrations.md) |
 | Read a guided tour of the actual codebase | [code-walkthrough.md](code-walkthrough.md) |
 | A full business + technical overview, with role-based quick starts | [framework-overview-onboarding.md](framework-overview-onboarding.md) |
-| Historical: multi-agent orchestration design reference (superseded by ADR-0005) | [working-with-agents.md](working-with-agents.md) |
-| Historical: commercial staffing/deal-size plan per V1-V5 feature | [feature-integration-plan.md](feature-integration-plan.md) |
 
 ## Claude Code tooling guides — by intent
 
@@ -53,6 +51,10 @@ These are about using Claude Code itself, not about the RAG framework it's opera
 | Deploy Claude Code across an organization (MDM, managed settings) | [claude-code-enterprise-deployment.md](claude-code-enterprise-deployment.md) |
 
 ---
+
+Two former entries here — a native multi-agent design guide and a commercial staffing plan —
+moved to [docs/archive/](../archive/) on 2026-08-06 (superseded content, low ongoing utility;
+see `docs/archive/README.md`).
 
 For the framework's own architecture, ADRs, and API reference, see
 [docs/_index.md](../_index.md) — this file only indexes `docs/guides/`.

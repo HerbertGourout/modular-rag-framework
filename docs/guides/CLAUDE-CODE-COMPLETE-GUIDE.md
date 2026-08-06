@@ -450,7 +450,7 @@ coverage:      # pytest with coverage report
 | [docs/guides/adoption-metrics.md](../../docs/guides/adoption-metrics.md) | Success metrics + dashboards | Tech leads |
 | [docs/guides/mcp-integrations.md](../../docs/guides/mcp-integrations.md) | External tool integration process | Architecture team |
 | [docs/guides/subagents-parallelization.md](../../docs/guides/subagents-parallelization.md) | Advanced sub-agent patterns | Advanced users |
-| [docs/guides/working-with-agents.md](../../docs/guides/working-with-agents.md) | V2+ agent patterns (reference) | Future implementation |
+| [docs/archive/working-with-agents.md](../../docs/archive/working-with-agents.md) | Archived — pre-ADR-0005 native agent design (historical reference only) | N/A |
 | [docs/adr/](../../docs/adr/) | Architectural decision records | Decision context |
 | [docs/architecture/](../../docs/architecture/) | Technical architecture | All developers |
 
