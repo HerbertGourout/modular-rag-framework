@@ -372,17 +372,19 @@ Before using any MCP server integration, security review must cover:
 - Decisions (approval/rejection of changes)
 - Errors and warnings
 
-**Where stored**:
-- VS Code: Local in `.vscode/extensions/ms-vscode.copilot/`
-- Server (if enabled): Anthropic's secure logging
+**Where stored** (corrected 2026-08-06 — the previous version of this section described
+GitHub Copilot Chat's storage location, a different product, not Claude Code's):
+- Locally: `~/.claude/projects/<project-path-hash>/<session-id>.jsonl` — one transcript file per
+  session, keyed by a hash of the project's working-directory path.
+- Auto-generated memory (this project's own persistent notes across sessions):
+  `~/.claude/projects/<project-path-hash>/memory/`.
 
 **Access**:
 ```bash
-# View current session
-vs code → Extensions → Copilot → Sessions
+# List session transcripts for this project
+ls ~/.claude/projects/<project-path-hash>/*.jsonl
 
-# Export session for audit
-# (Manual from VS Code UI)
+# A transcript is newline-delimited JSON — inspect with jq or a text editor
 ```
 
 ### MR/PR Traceability

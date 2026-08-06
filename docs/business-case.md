@@ -50,7 +50,12 @@ The YAML manifest is the key: configuring a complete RAG pipeline — chunker, e
 Competitors (Accenture, Capgemini, Deloitte Digital) use LangChain, LlamaIndex, or proprietary cloud solutions. Publicis Sapient can position itself differently.
 
 - **"We have our own enterprise RAG framework"**: a pitch hook few consultancies can deliver credibly and demonstrably.
-- **Governance by design**: V4 with multi-tenant policies, audit trail, and data isolation exists in no OSS framework. It is a decisive argument in regulated RFPs.
+- **Governance by design**: fail-closed tenant isolation, a real Keycloak-backed identity
+  verifier, and a structured audit trail (`AuditEvent`, PII/secret payload allowlist) are
+  already shipped — not a V4-future promise (per
+  [ADR-0005](adr/0005-document-ai-control-plane-boundary.md), accepted 2026-08-04, this is owned
+  and current, V2.0 scope). This exists in no comparable OSS framework at this maturity and is a
+  decisive argument in regulated RFPs today, not "once V4 ships."
 - **Demonstrable architecture**: the ADRs, the Pydantic contracts, and the hexagonal structure are proof of technical maturity that can be shown to a CIO or a CISO during an audit.
 - **Vendor independence**: the adapter pattern proves that Publicis Sapient is not simply reselling OpenAI or AWS — it brings its own value layer, neutral and durable.
 
@@ -120,7 +125,11 @@ Publicis Sapient accumulates methodological expertise across dozens of projects.
 
 - Patterns discovered on one project (optimal chunking for legal documents, reranking strategy for product FAQs) are encoded as reusable adapters and manifests.
 - One project's Ragas evaluations feed the next project's benchmarks.
-- Graph Memory (V3) can model accumulated sector knowledge — an asset that appreciates over time.
+- Graph Memory (V3) could model accumulated sector knowledge as an asset that appreciates over
+  time — with a caveat since [ADR-0005](adr/0005-document-ai-control-plane-boundary.md)
+  (accepted 2026-08-04): GraphRAG traversal itself is delegated to a selected external engine
+  (LangGraph), not a native build; a native graph *data model* may still be retained, but that
+  is undecided, not committed.
 
 ---
 

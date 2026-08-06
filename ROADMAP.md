@@ -189,7 +189,18 @@ self-correction loop when the answer isn't well enough supported by evidence.
 
 ### V2.0 — Multi-Agent Runtime + Policy Engine
 
-**Core agentic modules:**
+> **ADR-0005 note (2026-08-04):** the checklist below predates ADR-0005 and mixes two items
+> with different fates. The **Policy Engine** stays native/owned — see CLAUDE.md block 09's own
+> superseding note ("V1.1, V1.2, and V2.0 are unchanged — build natively"). The **multi-agent
+> runtime** items (router, coordinator/planner/retriever/extractor/synthesizer/validator,
+> plan→retrieve→synthesize→critique→refine) are the exact scope ADR-0005 §5.2 delegates to the
+> selected external engine (LangGraph, ADR-0006) — this is really V2.1's delegated scope
+> described here under V2.0's original heading, not a native build item. The five prototype
+> agent classes these bullets describe were built once and removed in Lot 17
+> (`docs/refactoring-plan.md`) for having zero test coverage and zero consumers. Left unchecked
+> below as a historical record, not a native to-do.
+
+**Core agentic modules (historical — see note above):**
 - [ ] Adaptive query router (LLM-only / simple / agentic / graph)
 - [ ] Multi-agent runtime: coordinator, planner, retriever agent, extractor, synthesizer, validator
 - [ ] Fix pre-existing layering debt before expanding agents/: `agents/validator/validator.py` imports `generation/validators/groundedness` (domain→domain, flagged in pre-PR architecture review 2026-07-12) — invert via a Protocol in `contracts/` or move the lexical-overlap helper to `core/`
@@ -654,6 +665,6 @@ version becomes "demonstrable" rather than "under construction".
 - **ADR-0001**: Modular architecture with six planes
 - **ADR-0002**: Contracts and plugins pattern
 - **ADR-0003**: Security and governance (updated with Policy Engine)
-- **ADR-0004**: Evaluation-as-Contract (NEW)
-- **ADR-0005**: Cost optimization strategy (NEW)
-- **ADR-0006**: Continuous fine-tuning (NEW)
+- **ADR-0004**: Strategic Features (V1→V5) — superseded (partial) by ADR-0005
+- **ADR-0005**: Document-AI control plane product boundary (owned vs. delegated capabilities, accepted 2026-08-04)
+- **ADR-0006**: External engine selection — LangGraph (accepted 2026-08-04)

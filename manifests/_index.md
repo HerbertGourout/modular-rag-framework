@@ -27,13 +27,20 @@ declared `type:` to the matching concrete class (via the factories registered in
 
 ## `presets/` — ready-to-use configurations
 
-| Preset | Target version | Use case |
-|---|---|---|
-| [`local-hybrid-rag.yaml`](presets/local-hybrid-rag.yaml) | V1 | Local development: no authentication, lightweight models (GPT-4o-mini, bge-small), Qdrant on localhost. Recommended starting point for any new contributor or quick demo. |
-| [`secure-enterprise-rag.yaml`](presets/secure-enterprise-rag.yaml) | V1 | Internal deployment for a client: security guards enabled, tighter `max_query_length`, generation temperature at 0 for more deterministic answers. |
-| [`agentic-rag.yaml`](presets/agentic-rag.yaml) | V2 | Multi-step questions requiring the five-agent runtime (coordinator, planner, retriever, extractor, synthesizer, validator). |
-| [`graph-memory-rag.yaml`](presets/graph-memory-rag.yaml) | V3 | Reasoning over relationships between entities (GraphRAG), with EvoRAG feedback. |
-| [`multimodal-rag.yaml`](presets/multimodal-rag.yaml) | V5 | Documents containing images, tables, or audio/video segments. |
+**Authoritative status table: [`README.md`](README.md)** — only `local-hybrid-rag.yaml` is
+Runnable today; `secure-enterprise-rag.yaml`, `agentic-rag.yaml`, `graph-memory-rag.yaml`, and
+`multimodal-rag.yaml` are all Blueprint (declared, but `ComponentRegistry.wire()` doesn't
+process every field they use). This file previously carried its own copy of this table with a
+different (and contradictory) description — removed to keep one source of truth. What each
+preset is *intended* to eventually cover, once its blueprint is completed:
+
+| Preset | Target version | Intended use case | Native or delegated (ADR-0005) |
+|---|---|---|---|
+| [`local-hybrid-rag.yaml`](presets/local-hybrid-rag.yaml) | V1 | Local development: no authentication, lightweight models (GPT-4o-mini, bge-small), Qdrant on localhost. Recommended starting point for any new contributor or quick demo. **Runnable now.** | Native |
+| [`secure-enterprise-rag.yaml`](presets/secure-enterprise-rag.yaml) | V1 | Internal deployment for a client: security guards enabled, tighter `max_query_length`, generation temperature at 0. | Native |
+| [`agentic-rag.yaml`](presets/agentic-rag.yaml) | V2.1 | Multi-step questions — would call an external-engine adapter (e.g. `LangGraphEngineAdapter`) through `manifest.engine.adapter`, not a native five-agent runtime. The five prototype agent classes this preset's field names once implied were removed in Lot 17. | Delegated |
+| [`graph-memory-rag.yaml`](presets/graph-memory-rag.yaml) | V3.0 | Reasoning over entity relationships (GraphRAG) — traversal delegated to the external engine; a native `KnowledgeGraph` data model may be retained (undecided). | Delegated (traversal) |
+| [`multimodal-rag.yaml`](presets/multimodal-rag.yaml) | V5.0 | Documents containing images, tables, or audio/video segments — VLM execution delegated; parsing/citation enrichment may stay native. | Delegated (VLM execution) |
 
 To choose a preset for a client engagement, see also
 [docs/onboarding.md](../docs/onboarding.md), section 2.3 (consultant / delivery lead

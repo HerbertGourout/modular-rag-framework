@@ -193,20 +193,29 @@ Remedy: Request read-only scope on dev/staging databases only
 
 ## Troubleshooting MCP Issues
 
+*(Corrected 2026-08-06, propagating the Step 4 correction above — `allowPaths`/`denyPaths`/
+`enabled`/`capabilities` are this project's own governance-tracking fields, not real
+`.mcp.json` syntax; the actual server definition lives in `.mcp.json`, never
+`.claude/settings.json`.)*
+
 ### Issue: MCP Not Working
 
-1. Check `.claude/settings.json`:
-   - Is `"enabled": true`?
-   - Does allowPaths match your file location?
-   - Does denyPaths block your query?
+1. Check `.mcp.json` at the project root:
+   - Is the server entry present and correctly shaped (`command`/`args`/`env` for `stdio`, or
+     `type`/`url` for `http`/`sse`)?
+   - Does this guide's own governance metadata for the server (`allowPaths`/`denyPaths` in its
+     "Current MCP Integrations" entry) match your file location? These are tracked here, not in
+     any Claude Code config file, and are enforced by translating them into real
+     `.claude/settings.json` `permissions.allow`/`ask`/`deny` rules if the server's tools need
+     scoping.
 
-2. Check VS Code output:
-   - Open View → Output → look for MCP logs
-   - Is the MCP process running?
+2. Check Claude Code's own output/logs for the MCP process — consult your Claude Code
+   installation's documentation for where these are exposed (this varies by how Claude Code is
+   installed: CLI, desktop app, or editor extension).
 
 3. Check permissions:
-   - Does your file path match allowPaths?
-   - Are you querying a blocked path (denyPaths)?
+   - Does your file path match the governance `allowPaths` recorded for this server?
+   - Are you querying a path recorded under `denyPaths`?
 
 ### Issue: "Access Denied" Error
 
@@ -229,9 +238,10 @@ Remedy: Request read-only scope on dev/staging databases only
 ### Issue: Secrets Exposure
 
 If MCP needs API keys:
-1. Store in VS Code built-in secret storage (Settings → Secrets)
-2. OR use .env with explicit denyPath on `.env*`
-3. NEVER hardcode credentials in .claude/settings.json
+1. Use your OS/editor's secret storage or a `.env` file (already git-ignored, see
+   `.gitignore`), with the server's governance entry recording an explicit `denyPaths` on
+   `.env*`
+2. NEVER hardcode credentials in `.mcp.json` or `.claude/settings.json`
 
 ---
 
@@ -255,21 +265,23 @@ Approved by @security-team on [DATE]
 
 ### Next Steps
 
-1. Add to `.claude/settings.json` (see configuration below)
-2. Add entry to docs/guides/mcp-integrations.md
-3. Create branch and commit
-4. Close this issue after deployment
+1. Add the real server entry to `.mcp.json` at the project root (`command`/`args`/`env` for a
+   local `stdio` server, or `type`/`url` for a remote `http`/`sse` server — never
+   `.claude/settings.json`, which has no `mcpServers` key)
+2. If the server's tools need path scoping, translate the governance metadata below into real
+   `permissions.allow`/`ask`/`deny` rules in `.claude/settings.json`
+3. Add this governance entry to docs/guides/mcp-integrations.md's "Current MCP Integrations" section
+4. Create branch and commit
+5. Close this issue after deployment
 
-### Configuration
+### Governance metadata (tracked in this guide, not real `.mcp.json`/`settings.json` syntax)
 
 \`\`\`json
 {
-  "mcpServers": {
-    "mcp-name": {
-      "enabled": true,
-      "allowPaths": [...],
-      "denyPaths": [...]
-    }
+  "mcp-name": {
+    "enabled": true,
+    "allowPaths": [...],
+    "denyPaths": [...]
   }
 }
 \`\`\`

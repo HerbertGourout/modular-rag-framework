@@ -11,5 +11,7 @@ manifest or policy change under near-real conditions before promoting it to prod
 without risking sensitive data.
 
 In the meantime, manually derive a manifest from
-[`secure-enterprise-rag.yaml`](../presets/secure-enterprise-rag.yaml), pointing it at your
-pre-production resources.
+[`secure-enterprise-rag.yaml`](../presets/secure-enterprise-rag.yaml) — note this preset is
+itself Blueprint, not Runnable (see [`../README.md`](../README.md)), so deriving from it means
+also fixing what makes it non-functional (the `policies:` field `wire()` never reads, the
+`${QDRANT_URL}` interpolation `load_manifest()` doesn't perform), not just copying it as-is.

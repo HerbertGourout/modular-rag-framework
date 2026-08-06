@@ -47,25 +47,28 @@ Most RAG stacks today force you to choose between:
 | | LangChain / LlamaIndex | Haystack | This framework |
 |---|---|---|---|
 | **Composition style** | Imperative chains | Pipelines + nodes | **Declarative manifests** (knowledge architecture as code) |
-| **Agents** | Bolted on | Limited | **First-class**, with planner/retrieval/synth/critic separation |
-| **Graph memory** | External plugins | External | **Native** (V3) |
-| **Governance** | Manual | Limited | **Policy-as-code** (V4) |
-| **Multimodal** | Partial | Partial | **Planned native** (V5) |
+| **Agents** | Bolted on | Limited | **Delegated via adapter** to a selected external engine (LangGraph) behind a vendor-neutral `DocumentEngine` port — this framework owns governance/audit/tenant-isolation around it, not a native agent runtime |
+| **Graph memory** | External plugins | External | **Delegated** GraphRAG traversal (V3); a native graph data model may be retained, undecided |
+| **Governance** | Manual | Limited | **Policy-as-code**, owned and current (V2.0), not deferred |
+| **Multimodal** | Partial | Partial | **Delegated** VLM execution (V5); parsing/citation enrichment may stay native |
 | **Evaluation** | External (Ragas, etc.) | Built-in | **Built-in & contract-enforced** |
 
-The goal is **not** to be yet another RAG library — it is to provide a
-**context OS**: a control plane over RAG, agents, memory, and governance
-that scales from a local prototype to a multi-tenant enterprise deployment
-without rewriting the core.
+Per [ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md) (accepted 2026-08-04), the
+goal is **not** to compete on building a bigger agent/graph runtime than the frameworks above —
+it is to own the **engine-neutral control plane** around whichever engine you plug in:
+governance, audit, evaluation, tenant isolation, and portability that scale from a local
+prototype to a multi-tenant enterprise deployment without rewriting the core.
 
 ---
 
 ## Vision
 
 - Build **modular RAG pipelines** (chunking, retrieval, generation, validation) — V1 ✅.
-- Orchestrate **multiple specialized agents** instead of a single monolithic LLM — V2.
+- Own governance, audit, evaluation, and tenant isolation natively; delegate generic
+  multi-agent orchestration to a selected external engine (LangGraph, ADR-0006) via the
+  `DocumentEngine` port — V2 (Policy Engine native and current; agent orchestration delegated).
 - Introduce **graph memory, governance, and multimodality** progressively
-  without rewriting the core — V3 → V5.
+  without rewriting the core — V3 → V5, per the same owned-vs-delegated split.
 
 Every component (chunker, retriever, agent, guard, scorer, etc.) is wired
 through **stable contracts** in [`src/modular_rag/contracts/`](src/modular_rag/contracts/)
@@ -91,7 +94,9 @@ System layers (see [`docs/architecture/module-model.md`](docs/architecture/modul
 - **Control plane** — manifests, policies, permissions, routing, audit.
 - **Ingestion plane** — parsing, normalization, chunking, enrichment, indexing.
 - **Knowledge plane** — vector store, lexical store, optional graph store, reranking.
-- **Reasoning plane** — query planning, retrieval orchestration, specialized agents, synthesis.
+- **Reasoning plane** — retrieval orchestration and synthesis; multi-agent query
+  planning/execution is delegated to the selected external engine (ADR-0005 §5.2), reached via
+  the `DocumentEngine` port, not built as a native specialized-agent runtime.
 - **Safety plane** — adversarial-query detection, anti-poisoning, policy enforcement.
 - **Evaluation plane** — benchmarks, golden sets, scoring, regression dashboards.
 
@@ -102,10 +107,10 @@ System layers (see [`docs/architecture/module-model.md`](docs/architecture/modul
 | Version | Theme | Key capabilities | Status |
 |---|---|---|---|
 | **V1** | Core RAG | Ingestion, adaptive chunking, hybrid retrieval (vector + BM25), grounded generation, basic safety, native evaluation, YAML manifests, HTTP API | ✅ Complete |
-| **V2** | Agentic + Security | Query routing, multi-agent runtime (planner/retrieval/synth/critic/output), policy-aware tool use, multi-step guardrails | ⬜ Planned |
-| **V3** | Graph Memory | Knowledge graph extraction, GraphRAG, multi-hop reasoning, hierarchical community summaries, reasoning memory, EvoRAG-style feedback | ⬜ Planned |
+| **V2** | Agentic + Security | Policy Engine (native, owned, current) + tenant isolation (real, shipped); multi-agent orchestration delegated to the selected external engine via `DocumentEngine` (ADR-0005) | 🟡 Policy Engine/tenant isolation ✅, agent delegation via LangGraph adapter ✅ (Lot 15) |
+| **V3** | Graph Memory | GraphRAG traversal, multi-hop reasoning, and community summaries delegated to the external engine; a native `KnowledgeGraph` data model exists but its retention scope is undecided | ⬜ Delegated / partially undecided |
 | **V4** | Governance | Policy-as-code, multi-tenant, dev/staging/prod environments, fine-grained audit, human-in-the-loop, risk profiles | ⬜ Planned |
-| **V5** | Multimodal | Multimodal ingestion + retrieval (text/images/tables/audio/video), modality-specialized agents, enriched citations with timecodes | ⬜ Planned |
+| **V5** | Multimodal | Multimodal ingestion + retrieval (text/images/tables/audio/video); VLM execution delegated to the external engine, parsing/citation enrichment may stay native | ⬜ Planned |
 
 Detail per-version in [`ROADMAP.md`](ROADMAP.md) and
 [`docs/architecture/roadmap-mermaid.md`](docs/architecture/roadmap-mermaid.md).

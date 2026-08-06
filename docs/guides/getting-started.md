@@ -19,8 +19,16 @@ docker run -d -p 6333:6333 qdrant/qdrant
 ## Step 2 — Set your API key
 
 ```bash
-export MRAG_OPENAI_API_KEY="sk-..."
+export OPENAI_API_KEY="sk-..."
 ```
+
+Note the variable name: it's the OpenAI SDK's own standard `OPENAI_API_KEY`, **not**
+`MRAG_OPENAI_API_KEY`. `app/settings.py`'s `Settings` class declares `MRAG_`-prefixed variables,
+but nothing in the actual pipeline-wiring path (`orchestration/_default_factories.py`) ever
+constructs a `Settings()` — every adapter is built only from the manifest's own config, so
+`MRAG_OPENAI_API_KEY` has no effect. `OpenAIGenerator` passes `api_key=None` to the SDK when the
+manifest doesn't set one explicitly, and the SDK itself falls back to plain `OPENAI_API_KEY`
+(found in Lot 16c, `docs/refactoring/lot-16c-deployment-runbooks.md`).
 
 ## Step 3 — Ingest documents
 
@@ -69,13 +77,18 @@ for cit in answer.citations:
 
 ## Choosing a manifest
 
-| Preset | Use case |
-|---|---|
-| `local-hybrid-rag.yaml` | Local development, no auth, GPT-4o-mini |
-| `secure-enterprise-rag.yaml` | Internal deployment, security guards enabled, GPT-4o |
-| `agentic-rag.yaml` | Complex multi-step questions, 5-agent runtime (V2) |
-| `graph-memory-rag.yaml` | Entity-relationship reasoning, GraphRAG (V3) |
-| `multimodal-rag.yaml` | PDF with charts, images, tables (V5) |
+Only `local-hybrid-rag.yaml` actually wires end to end today — every other preset below is
+**Blueprint** (declared, but `ComponentRegistry.wire()` doesn't process every field it uses, or
+references files/interpolation that don't resolve). See
+[`manifests/README.md`](../../manifests/README.md) for the full, current classification and why.
+
+| Preset | Status | Use case (once its blueprint is completed) |
+|---|---|---|
+| `local-hybrid-rag.yaml` | **Runnable** | Local development, no auth, GPT-4o-mini — the only one to actually run today |
+| `secure-enterprise-rag.yaml` | Blueprint | Internal deployment, security guards enabled, GPT-4o |
+| `agentic-rag.yaml` | Blueprint | Complex multi-step questions — planner/agents fields are unprocessed by `wire()`; this scope is delegated to an external engine per ADR-0005, not a native runtime to complete |
+| `graph-memory-rag.yaml` | Blueprint | Entity-relationship reasoning — GraphRAG traversal is delegated per ADR-0005/0006 |
+| `multimodal-rag.yaml` | Blueprint | PDF with charts, images, tables — `embedder.type: multimodal` isn't a registered factory, `wire()` raises immediately |
 
 ## Next steps
 

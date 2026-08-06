@@ -13,9 +13,15 @@ domain modules don't need the heavy external dependency installed to be unit-tes
 [module-model.md](architecture/module-model.md).
 
 ### Agent
-A specialized reasoning unit in the V2+ multi-agent runtime (coordinator, planner,
-retriever, extractor, synthesizer, validator). Not implemented in V1, where a single
-`RAGEngine` runs the pipeline sequentially instead. See [ROADMAP.md](../ROADMAP.md), V2.
+Historically, a specialized reasoning unit in a planned native multi-agent runtime
+(coordinator, planner, retriever, extractor, synthesizer, validator). Per
+[ADR-0005](adr/0005-document-ai-control-plane-boundary.md) §5.2 (accepted 2026-08-04), generic
+multi-agent orchestration is now **delegated** to a selected external engine (LangGraph) via
+the `DocumentEngine` port, not built as a native runtime — the five prototype classes above
+were built once and removed in Lot 17 (`docs/refactoring-plan.md`) for having zero test
+coverage and zero consumers. `src/modular_rag/agents/` today hosts only the adapter-integration
+shell, not agent implementations. `RAGEngine` runs its fixed pipeline sequentially either way.
+See [ROADMAP.md](../ROADMAP.md), V2, and `docs/refactoring/lot-17-prototype-retirement.md`.
 
 ### BM25 (Best Match 25)
 A sparse, keyword-based lexical retrieval algorithm — ranks documents by term frequency and
@@ -59,9 +65,11 @@ re-score the top-k candidates after hybrid retrieval, before generation. See
 [retrieval-methods.md](../examples/simple_qa/docs/retrieval-methods.md).
 
 ### Domain module
-One of `ingestion/`, `retrieval/`, `generation/`, `security/`, `eval/`, `agents/`,
-`memory/`, `observability/` — implements one capability, depends only on `contracts/` +
-`core/models/`, and must never import from another domain module. See
+One of `ingestion/`, `retrieval/`, `generation/`, `security/`, `eval/`, `memory/`,
+`observability/` — implements one capability, depends only on `contracts/` + `core/models/`,
+and must never import from another domain module. `agents/` is no longer a domain module in
+this sense: per ADR-0005 §5.2, it hosts only engine-delegation adapter integration (not yet
+built), not a capability implementation of its own. See
 [module-model.md](architecture/module-model.md).
 
 ### EvoRAG
@@ -81,8 +89,11 @@ metric (`generation/validators/groundedness.py`). See
 ### GraphRAG
 Retrieval-augmented generation that queries a knowledge graph (entities + relationships)
 instead of, or in addition to, plain text chunks — enables multi-hop reasoning ("who is
-affected, in cascade, by X?") that vector/BM25 search alone cannot answer. V3 scope. See
-[onboarding.md](onboarding.md), section 3.
+affected, in cascade, by X?") that vector/BM25 search alone cannot answer. V3 scope. Per
+[ADR-0005](adr/0005-document-ai-control-plane-boundary.md)/[ADR-0006](adr/0006-external-engine-selection.md),
+the traversal itself is delegated to the selected external engine (LangGraph), not built as a
+native retrieval path; see [Knowledge graph](#knowledge-graph) below for what does stay native.
+See [onboarding.md](onboarding.md), section 3.
 
 ### Guard / SecurityGuard
 A component that inspects a query before retrieval (`check_query()`) or an answer after
@@ -96,10 +107,16 @@ any component can be swapped by implementing its Protocol, without the rest of t
 needing to change. See [ADR-0001](adr/0001-modular-architecture.md).
 
 ### Knowledge graph
-A graph of entities (`GraphNode`) and typed relationships (`GraphEdge`) extracted from the
-ingested corpus, used by V3's GraphRAG retrieval. In-memory (NetworkX-backed) in the current
-implementation, swappable with a Neo4j adapter later. See
-[structure.md](architecture/structure.md), `memory/graph/`.
+A graph of entities (`GraphNode`) and typed relationships (`GraphEdge`), modeled in
+`memory/graph/knowledge_graph.py`. Plain Python dict/list in the current implementation —
+despite an earlier version of this module's own docstring, it does not use NetworkX. Retained
+with a documented caveat in Lot 17 (`docs/refactoring/lot-17-prototype-retirement.md`): its
+`neighbours()`/`subgraph_for_query()` methods are genuine multi-hop-traversal logic, which is
+exactly the capability [ADR-0005](adr/0005-document-ai-control-plane-boundary.md) §5.2
+delegates to the external engine — whether this class counts as a keepable native "data model"
+or should itself be delegated remains genuinely undecided, not resolved by any lot to date. Not
+wired into any retriever or pipeline today. See [structure.md](architecture/structure.md),
+`memory/graph/`.
 
 ### Manifest
 A YAML file describing a complete pipeline configuration — which chunker, embedder,

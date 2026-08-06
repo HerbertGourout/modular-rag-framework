@@ -2,18 +2,38 @@
 
 This file provides guidance for Claude working on the orchestration (registry, engine, wiring) layer. Read this **before editing any file in this directory**.
 
+Rewritten in full 2026-08-06 (documentation audit, `docs/documentation-audit-2026-08.md`): the
+previous version documented `router.py`/`QueryRouter`, `compiler.py`, and `config.py` in detail
+with invented APIs (`RouterDecision`, `RAGConfig`, `QueryRequest`/`QueryResponse`) that never
+matched this module's real code. `QueryRouter` and `FlowCompiler` did exist once but were
+removed in Lot 17 (`docs/refactoring-plan.md`) — zero consumers, zero test coverage,
+superseded by [ADR-0005](../../../docs/adr/0005-document-ai-control-plane-boundary.md) §5.2
+(generic query routing/orchestration is delegated to the selected external engine, not built
+natively). `compiler.py`/`config.py` never existed under this directory at all. This version
+describes only the files actually present here today.
+
 ---
 
-## ⚠️ Central Nervous System
+## Real files in this directory
 
-The orchestration module is the **framework's central hub**:
-- `registry.py` — Component lifecycle and dependency injection
-- `engine.py` — RAG pipeline execution with TraceStep emissions
-- `router.py` — Query routing and fallback logic
-- `compiler.py` — State machine compilation
-- `config.py` — Configuration and schema validation
+```
+orchestration/
+├── __init__.py
+├── registry.py            ComponentRegistry — role/type-name -> factory, wire(manifest) -> Container
+├── engine.py               RAGEngine — the V1 sequential pipeline (ingest, answer, retrieve, delete, rebuild, erase)
+├── native_engine.py        NativeEngineAdapter — wraps RAGEngine behind the DocumentEngine port (Lot 8)
+├── state_machine.py        PipelineState / PipelineStateMachine — tracks transitions during one run
+├── reconciliation.py       IndexReconciler — detects/repairs ledger-vs-index divergence (Lot 12b)
+└── _default_factories.py   register_defaults(registry) — registers every built-in component type
+```
 
-**Changes here affect every workflow, retriever, generator, and agent.**
+`adapters/llms/langgraph_engine.py`'s `LangGraphEngineAdapter` (the second `DocumentEngine`
+implementation, Lot 15) is **not** in this directory — it lives in `adapters/` because it must
+not depend on `app.container.Container` directly (adapters/ layering rule); it depends on a
+local structural Protocol instead. Both `NativeEngineAdapter` and `LangGraphEngineAdapter`
+route through the same `Container` this module wires.
+
+**Changes here affect every retrieval, generation, and engine-adapter call.**
 
 ---
 
@@ -25,366 +45,217 @@ The orchestration module is the **framework's central hub**:
 
 ```python
 # ❌ Direct Python instantiation (breaks manifest-driven architecture)
-from modular_rag.ingestion.chunkers.fixed import FixedChunker
-from modular_rag.retrieval.bm25 import BM25Retriever
+from modular_rag.ingestion.chunkers.fixed import FixedSizeChunker
+from modular_rag.retrieval.retrievers.bm25 import BM25Retriever
 
-chunker = FixedChunker(chunk_size=512)
-retriever = BM25Retriever(chunker=chunker, k=10)
+chunker = FixedSizeChunker(chunk_size=512)
+retriever = BM25Retriever()
 ```
 
 ### ✅ ALLOWED
 
 ```python
-# ✅ Manifest-driven via registry
-import yaml
+# ✅ Manifest-driven via registry (this is what app/bootstrap.py's
+# load_pipeline() actually does)
+from modular_rag.app.bootstrap import load_manifest
 from modular_rag.orchestration.registry import ComponentRegistry
 
-# Load config
-with open("manifests/presets/local-hybrid-rag.yaml") as f:
-    config = yaml.safe_load(f)
+manifest = load_manifest("manifests/presets/local-hybrid-rag.yaml")
+registry = ComponentRegistry.default()   # pre-loaded with every built-in factory
+container = registry.wire(manifest)      # -> Container holding every wired component
 
-# Wire via registry
-registry = ComponentRegistry()
-registry.wire(config)
-
-# Get components by name
-chunker = registry.get_component("chunker", config.chunker.type)
-retriever = registry.get_component("retriever", config.retriever.type)
+chunker = container.chunker
+retriever = container.retriever
 ```
 
 ### Why This Matters
 
 - **Manifest-driven**: All configuration lives in YAML, not scattered in Python code
-- **Lazy loading**: Components instantiated only when needed
+- **Lazy loading**: Heavy adapter dependencies (qdrant-client, sentence-transformers, openai,
+  anthropic, fitz) import only inside the method that uses them
 - **Testability**: Easy to swap implementations for testing
-- **Extensibility**: New components added without modifying Python code
+- **Extensibility**: New components added without modifying existing Python code
 
 ---
 
-## Rule 2: ComponentRegistry — Interface and Responsibilities
-
-### Registry Methods
+## Rule 2: ComponentRegistry — Real Interface
 
 ```python
 class ComponentRegistry:
-    """Manages component lifecycle and dependency injection."""
-    
-    def register(
-        self,
-        category: str,
-        name: str,
-        factory: Callable[[Config], Any]
-    ) -> None:
-        """Register a component factory.
-        
-        Args:
-            category: Component type (e.g., "retriever", "embedder")
-            name: Component name (e.g., "bm25", "openai")
-            factory: Callable that creates component instance
-        """
-        ...
-    
-    def get_component(self, category: str, name: str) -> Any:
-        """Get registered component by name."""
-        ...
-    
-    def wire(self, config: RAGConfig) -> None:
-        """Wire all components from manifest config.
-        
-        This is the main entry point. It orchestrates component creation,
-        dependency injection, and initialization.
-        """
-        ...
+    """Map component type names -> factory functions, then wire a manifest into a Container."""
+
+    def register(self, role: str, type_name: str, factory: Callable[[ComponentConfig], Any]) -> None: ...
+    def available_types(self, role: str) -> frozenset[str]: ...
+    def wire(self, manifest: PipelineManifest) -> Container: ...
+
+    @classmethod
+    def default(cls) -> ComponentRegistry:
+        """Registry pre-loaded with every built-in adapter (via _default_factories.register_defaults)."""
 ```
+
+Roles pre-declared in `__init__`: `chunker`, `embedder`, `indexer`, `retriever`, `reranker`,
+`generator`, `guard`, `evaluator`, plus two forward-looking, currently-empty role slots:
+`planner` and `graph_store` — reserved for the delegated-engine adapter targets
+(`adapters/graphstores/`, per ADR-0005/CLAUDE.md's Adapter Stubs table), not dead code; `wire()`
+does not read `manifest.planner`/`manifest.graph_store` yet, so registering a factory under
+either role has no effect until that wiring is added.
 
 ### Registering Components
 
-**Location**: `orchestration/_default_factories.py`
+**Location**: `orchestration/_default_factories.py` — the single source of truth for every
+built-in factory. Real pattern:
 
 ```python
-def register_default_factories(registry: ComponentRegistry):
-    """Register all built-in components."""
-    
-    # Chunkers
-    registry.register(
-        "chunker",
-        "fixed",
-        lambda cfg: FixedChunker(
-            chunk_size=cfg.config.get("chunk_size", 512),
-            overlap=cfg.config.get("overlap", 0)
-        )
-    )
-    
-    # Retrievers
-    registry.register(
-        "retriever",
-        "bm25",
-        lambda cfg: BM25Retriever(
-            k=cfg.config.get("k", 10),
-            corpus=cfg.config.get("corpus", [])
-        )
-    )
+def register_defaults(reg: ComponentRegistry) -> None:
+    reg.register("chunker", "fixed", lambda cfg: FixedSizeChunker(**cfg.config))
+    reg.register("retriever", "hybrid", lambda cfg: HybridRetriever(**cfg.config))
+    # ... one register() call per (role, type_name) pair
 ```
 
 ### Never Register Here
 
-- ❌ Do NOT register in domain modules (ingestion/, retrieval/, etc.)
-- ❌ Do NOT register in adapters (they're lazy-loaded)
+- ❌ Do NOT register in domain modules (`ingestion/`, `retrieval/`, etc.)
+- ❌ Do NOT register in `adapters/` (they only implement Protocols; wiring stays here)
 - ✅ Register ONLY in `_default_factories.py`
 
 ---
 
-## Rule 3: RAGEngine — Pipeline Execution with TraceStep
-
-### Engine Responsibilities
+## Rule 3: RAGEngine — Real Pipeline Execution
 
 ```python
 class RAGEngine:
-    """Orchestrates RAG pipeline execution.
-    
-    Flow:
-    1. Parse query (security guards)
-    2. Route query (RouterDecision)
-    3. Retrieve documents (retriever)
-    4. Rerank if needed (reranker)
-    5. Generate answer (generator)
-    6. Guard output (security guards)
-    7. Emit trace
-    """
-    
-    def run(self, request: QueryRequest) -> QueryResponse:
-        """Execute full RAG pipeline.
-        
-        Args:
-            request: User query + metadata
-            
-        Returns:
-            response: Generated answer + metadata + trace
-            
-        Raises:
-            SecurityError: If query/answer blocked by guards
-            ComponentError: If pipeline component fails
-        """
-        ...
+    """Main entry point: ingest documents and answer queries via a configured pipeline."""
+
+    def __init__(self, container: Container) -> None: ...
+
+    # Public accessors (Lot 8 — so API/CLI never reach into a private container)
+    @property
+    def manifest_id(self) -> str: ...
+    @property
+    def chunker(self) -> Chunker: ...
+    @property
+    def retriever(self) -> Retriever: ...
+
+    def ingest(self, documents: list[Document]) -> int: ...
+    def ingest_chunks(self, chunks: list[Chunk]) -> int: ...
+    def answer(self, question: str, **query_kwargs: object) -> Answer: ...
+    def retrieve(self, question: str, k: int = 10, tenant_id: str | None = None) -> list[RetrievedChunk]: ...
+    def delete_document(self, document_key: str) -> None: ...
+    def rebuild_document(self, ...) -> None: ...
+    def erase_document(self, document_key: str) -> ErasureProof: ...
 ```
+
+`answer()`'s actual fixed pipeline (`_run_steps`, `engine.py`), in order, each step gated on
+whether the matching optional component is configured on the `Container`:
+
+1. Tenant-isolation identity check (`Container.tenant_policy.enforce_query()`, fail-closed, Lot 11b)
+2. Query guard (`Container.guard.check_query()`)
+3. Retrieval (`Container.retriever.retrieve()`)
+4. Tenant chunk filtering (`Container.tenant_policy.filter_chunks()`)
+5. Reranking (`Container.reranker.rerank()`, if configured)
+6. Generation (`Container.generator.generate()`)
+7. Answer guard (`Container.guard.check_answer()`)
+8. Redaction (`Container.redactor.redact()`, if configured)
+9. Human-review flagging (`Container.review_queue`, if configured)
+
+There is no dynamic routing between strategies — every request runs this same sequence. Query
+classification/strategy selection was `QueryRouter`'s job; it was removed in Lot 17 because
+nothing ever called `.route()` on it (see the file header).
 
 ### TraceStep Emissions (MANDATORY)
 
-Every major operation must emit a `TraceStep`:
+Real pattern — see `engine.py`'s actual `_run_steps`/`_retrieve` for the working example:
 
 ```python
-from modular_rag.observability import Trace
+from modular_rag.core.models.trace import Trace, TraceStep
+import time
 
-def run(self, request: QueryRequest) -> QueryResponse:
-    trace = Trace()
-    
-    # STEP 1: Parse and guard query
-    trace.add_step(
-        operation="parse_query",
-        status="started",
-        input=request.query,
-        model="clause_extractor_v1"
-    )
-    
-    try:
-        parsed = self.parse_query(request)
-        trace.add_step(
-            operation="parse_query",
-            status="completed",
-            output={"entities": parsed.entities},
-        )
-    except Exception as e:
-        trace.add_step(
-            operation="parse_query",
-            status="failed",
-            error=str(e)
-        )
-        raise
-    
-    # STEP 2: Retrieve
-    trace.add_step(operation="retrieve", status="started")
-    docs = self.retriever.retrieve(parsed.query)
-    trace.add_step(
-        operation="retrieve",
-        status="completed",
-        output={"doc_count": len(docs)}
-    )
-    
-    # STEP 3: Generate
-    trace.add_step(operation="generate", status="started")
-    answer = self.generator.generate(parsed, docs)
-    trace.add_step(
-        operation="generate",
-        status="completed",
-        output={"answer_length": len(answer)}
-    )
-    
-    return QueryResponse(
-        answer=answer,
-        trace=trace
-    )
+t0 = time.perf_counter()
+context = self._retrieve(query, k=k)
+trace.add_step(TraceStep(name="retrieve", metadata={"chunks": len(context)}))
 ```
+
+`TraceStep` fields: `name: str`, `latency_ms: float = 0.0`, `metadata: dict[str, Any]`. Every
+generator also emits its own step (e.g. `"openai_generate"`) inside its own `generate()` — do
+not add a second wrapping step around a call that already instruments itself (Lot 10 fixed
+exactly this double-counting bug once).
 
 ### When to Emit TraceStep
 
-- ✅ Query parsing (parsing guards, routing decisions)
-- ✅ Retrieval (number of docs, scores)
-- ✅ Reranking (rerank scores, final order)
-- ✅ Generation (model used, tokens, latency)
-- ✅ Output guards (any blocking/filtering)
-- ❌ NEVER: Full query text if contains PII
-- ❌ NEVER: Full answer text if contains secrets
+- ✅ Guard evaluation (query and answer)
+- ✅ Retrieval (chunk count)
+- ✅ Reranking (if configured)
+- ✅ Generation (model used, tokens, latency — inside the generator itself)
+- ✅ Tenant filtering (chunks before/after)
+- ❌ NEVER: full query text if it may contain PII — use `Container.redactor` first
+- ❌ NEVER: full answer text if it may contain secrets
 
 ---
 
-## Rule 4: QueryRouter — Decision Logic
-
-### Router Responsibilities
+## Rule 4: PipelineStateMachine
 
 ```python
-class QueryRouter:
-    """Routes queries to appropriate retrieval strategy."""
-    
-    def route(self, query: str) -> RouterDecision:
-        """Determine retrieval strategy.
-        
-        Returns:
-            decision: {
-                "strategy": "hybrid" | "vector" | "lexical" | "fallback",
-                "confidence": 0.0-1.0,
-                "reason": "explanation for decision"
-            }
-        """
-        ...
+class PipelineState(StrEnum):
+    IDLE = "idle"
+    GUARDING_QUERY = "guarding_query"
+    RETRIEVING = "retrieving"
+    RERANKING = "reranking"
+    GENERATING = "generating"
+    GUARDING_ANSWER = "guarding_answer"
+    EVALUATING = "evaluating"
+    DONE = "done"
+    ERROR = "error"
 ```
 
-### Routing Strategies
-
-| Strategy | When to Use | Fallback |
-|----------|------------|----------|
-| **hybrid** | Default; balanced accuracy | vector |
-| **vector** | Semantic queries; "find similar" | lexical |
-| **lexical** | Keyword queries; entity search | vector |
-| **fallback** | Router confidence < 0.5 | return empty results |
-
-### Router Implementation
-
-```python
-def route(self, query: str) -> RouterDecision:
-    """Route based on query characteristics."""
-    
-    # Analyze query
-    keywords = self.extract_keywords(query)
-    entities = self.extract_entities(query)
-    semantic_score = self.measure_semantic_content(query)
-    
-    # Decision logic
-    if len(entities) > 0 and semantic_score < 0.3:
-        # Entity-heavy query → lexical search good
-        return RouterDecision(
-            strategy="lexical",
-            confidence=0.8,
-            reason="Entity-focused query (entities found, low semantic content)"
-        )
-    
-    elif semantic_score > 0.7:
-        # Semantic query → vector search
-        return RouterDecision(
-            strategy="vector",
-            confidence=0.8,
-            reason="High semantic content; vector search recommended"
-        )
-    
-    else:
-        # Default → hybrid (combines both)
-        return RouterDecision(
-            strategy="hybrid",
-            confidence=0.6,
-            reason="Mixed semantic/lexical; hybrid recommended"
-        )
-```
+`PipelineStateMachine` (`state_machine.py`) enforces a fixed transition matrix between these
+states and is used on **every** `RAGEngine.answer()` call today — this is real, current V1
+machinery, not a V2+ stub. `transition(to)` raises if the target state isn't reachable from the
+current one.
 
 ---
 
-## Rule 5: RAGConfig Schema Validation
+## Rule 5: DocumentEngine adapters route through this module's wiring
 
-### Config Structure
-
-```python
-@dataclass
-class RAGConfig:
-    """Root configuration for RAG pipeline.
-    
-    Loaded from manifest YAML and validated here.
-    """
-    
-    ingestion: IngestionConfig
-    retrieval: RetrievalConfig
-    generation: GenerationConfig
-    security: SecurityConfig  # optional
-    observability: ObservabilityConfig  # optional
-    
-    def validate(self) -> None:
-        """Validate config consistency."""
-        # Check all required components registered
-        # Check no circular dependencies
-        # Check all manifests referenced exist
-        ...
-```
-
-### Never Allow
-
-- ❌ Circular dependencies (A depends on B, B depends on A)
-- ❌ Missing component references (manifest says "retriever: xyz" but xyz not registered)
-- ❌ Invalid config types (expecting int, got string)
+`NativeEngineAdapter` (`native_engine.py`, Lot 8) wraps a `RAGEngine` instance behind the
+vendor-neutral `DocumentEngine` port (`contracts/engine.py`, Lot 7) — an empty, honest
+capability set (no streaming/cancellation/governance-hook support). `LangGraphEngineAdapter`
+(`adapters/llms/langgraph_engine.py`, Lot 15) is the second implementation, running the same
+wired `Container` components through a real LangGraph `StateGraph` instead — it declares
+`STREAMING`/`GOVERNANCE_INTERCEPT`/`CANCELLATION`. `app/bootstrap.py`'s `load_engine()` selects
+between them from a manifest's `engine.adapter` field (`"native"` default, or `"langgraph"`).
+Both must pass the same governance/tenant-isolation tests — see
+`docs/refactoring/lot-15-langgraph-adapter.md` and `lot-18-pilot-and-closure.md` for two real
+parity bugs found and fixed between them.
 
 ---
 
-## Rule 6: StateMachine Compilation
+## Rule 6: IndexReconciler
 
-### When to Use StateMachine
-
-StateMachine is for **multi-turn workflows** with state transitions (V2+).
-
-```python
-class StateMachine:
-    """Manages workflow state and transitions.
-    
-    V2+ feature: multi-turn conversation, decision trees, etc.
-    V1: Not used (single-turn RAG).
-    """
-    
-    def compile(self, flow_spec: Dict) -> None:
-        """Compile flow specification to state graph."""
-        # Convert YAML flow to executable state graph
-        ...
-    
-    def execute(self, input_data: Any) -> Any:
-        """Execute state machine."""
-        # Process through states, handle transitions
-        ...
-```
-
-**V1 scope**: Do NOT implement state transitions. Use router for single-shot routing.
+`reconciliation.py`'s `IndexReconciler` (Lot 12b) detects and repairs divergence between a
+`LifecycleLedger`'s expected chunk ids and what the indexer/retriever actually hold —
+`check()`/`repair()`, orphan-deletion only, never fabricates missing content. Unrelated to
+query-time routing; this runs as an operational/maintenance task, not part of `answer()`.
 
 ---
 
 ## Checklist Before Editing
 
-- [ ] Am I adding a new component? Register in `_default_factories.py`?
-- [ ] Am I changing engine flow? Added all TraceStep emissions?
-- [ ] Am I changing config schema? Updated and validated schema in `config.py`?
-- [ ] Am I changing router logic? Added reason and confidence to RouterDecision?
-- [ ] Does this change wire components in Python? (❌ NO — use manifest)
-- [ ] Does this expose secrets in trace or logs? (❌ NO — check TraceStep content)
-- [ ] Is this a state machine change? (✅ OK only if V2+ scope clearly documented)
+- [ ] Am I adding a new component type? Register it in `_default_factories.py`, select it by
+      name in a manifest — never instantiate directly.
+- [ ] Am I changing `RAGEngine`'s flow? Emit a `TraceStep` for the new step; update
+      `PipelineStateMachine`'s transition matrix if it adds/removes a state.
+- [ ] Am I touching `LangGraphEngineAdapter`? Any governance/tenant-isolation change here needs
+      the identical change there too (Lot 15/18's own parity-bug history is the reason this
+      rule exists).
+- [ ] Does this change wire components in Python? (❌ NO — use the manifest + registry)
+- [ ] Does this expose secrets or raw PII in a `TraceStep`'s metadata? (❌ NO)
 
 ---
 
 ## References
 
-- [ADR-0002: Contracts and Plugins](../../docs/adr/0002-contracts-and-plugins.md)
-- [.claude/.instructions.md](../../.claude/.instructions.md) — Registry pattern section
-- [.claude/rules/orchestration.md](../../.claude/rules/orchestration.md) — Detailed rules
-- [CONTRIBUTING.md](../../CONTRIBUTING.md) — Component addition workflow
-
+- [ADR-0005: Document-AI Control Plane Boundary](../../../docs/adr/0005-document-ai-control-plane-boundary.md) — why generic routing/orchestration is delegated, not native
+- [contracts/engine.py's compatibility policy](../../../docs/architecture/document-engine-contract.md)
+- [.claude/rules/orchestration.md](../../../.claude/rules/orchestration.md) — broader orchestration-layer rules
+- [docs/refactoring/lot-17-prototype-retirement.md](../../../docs/refactoring/lot-17-prototype-retirement.md) — why `router.py`/`flow_compiler.py` were removed
+- [CONTRIBUTING.md](../../../CONTRIBUTING.md) — component addition workflow

@@ -148,21 +148,30 @@ Your security is protected by **7 independent layers**, each with a different co
 
 **What it does**: Globally defines what is possible. Granular per-path, using Claude Code's **real** `permissions.allow` / `permissions.ask` / `permissions.deny` schema (corrected 2026-06-22 — earlier revisions of this doc and of `.claude/settings.json` used invented keys `denylists`/`noAskPaths`/`autoPaths`/`restrictedPaths` that Claude Code never read).
 
-**3-Bucket Model** (this is the actual Claude Code model, not a 4-tier one — `deny` and `ask` are absolute; everything else falls under `allow` or the session's `defaultMode`):
+**3-Bucket Model** (this is the actual Claude Code model, not a 4-tier one — `deny` and `ask` are absolute; everything else falls under `allow` or the session's `defaultMode`). Corrected 2026-08-06: `.claude/rules/**` and `adapters/{llms,graphstores,search,auth}/**` moved
+`deny`→`ask` on 2026-08-04/05 (ADR-0005/Lot 11b) — an earlier version of this table still
+listed them under `deny`.
 ```
-deny  → always blocked, never prompts (.env*, manifests/production/, .claude/rules/, adapters/{llms,auth,graphstores,search}/, benchmarks/)
+deny  → always blocked, never prompts (.env*, *.local.md, manifests/production/**, benchmarks/**)
   ↓
-ask   → prompts every time (contracts/, orchestration/, security/, adapters/{embeddings,vectorstores}/, core/, pyproject.toml, CONTRIBUTING.md, .gitlab-ci.yml, .github/workflows/)
+ask   → prompts every time (.claude/rules/**, contracts/, orchestration/, security/,
+          adapters/{embeddings,vectorstores,llms,graphstores,search,auth}/, core/,
+          pyproject.toml, CONTRIBUTING.md, .gitlab-ci.yml [no longer exists — see below],
+          .github/workflows/**)
   ↓
 allow → auto-approved, no prompt (tests/, examples/, docs/, ingestion/, retrieval/, generation/, eval/, memory/)
 ```
 
+`.gitlab-ci.yml`/`.gitlab/` were removed from the repository entirely in a 2026-08-06
+documentation-audit cleanup — any `ask` rule still referencing them in `.claude/settings.json`
+is now a harmless dangling entry (matches nothing).
+
 **Configuration**: `.claude/settings.json` → `permissions.allow` / `permissions.ask` / `permissions.deny` (arrays of `Edit(path/**)` / `Write(path/**)` / `Read(path/**)` patterns)
 
 **Examples**:
-- ❌ deny: `.env*`, `manifests/production/**`, `.claude/rules/**`, `adapters/llms/**`
+- ❌ deny: `.env*`, `manifests/production/**`
 - ✅ allow: `tests/**`, `examples/**`, `docs/**`, new chunkers/retrievers/generators
-- ⚠️ ask: Protocol changes, registry changes, security rules
+- ⚠️ ask: `.claude/rules/**`, Protocol changes, registry changes, security rules, `adapters/llms/**`
 
 **Why it matters**: Prevents accidental breaking changes while encouraging component development
 
@@ -332,11 +341,11 @@ src/modular_rag/
 
 **What it does**: Markdown files Claude Code automatically loads into context, either always (no `paths:` frontmatter) or only when a file matching `paths:` is opened.
 
-**6 path-scoped rules** (loaded automatically when their `paths:` glob is touched):
+**7 path-scoped rules** (loaded automatically when their `paths:` glob is touched):
 1. [orchestration.md](../../.claude/rules/orchestration.md) — `src/modular_rag/orchestration/**/*.py`
 2. [adapters.md](../../.claude/rules/adapters.md) — `src/modular_rag/adapters/**/*.py`
 3. [agents.md](../../.claude/rules/agents.md) — `src/modular_rag/agents/**/*.py`
-4. [agentic_workflows.md](../../.claude/rules/agentic_workflows.md) — `src/modular_rag/agents/**/*.py` + `orchestration/team_coordinator.py` (V2+ content, dormant until those paths are touched)
+4. [agentic_workflows.md](../../.claude/rules/agentic_workflows.md) — `src/modular_rag/agents/**/*.py` (superseded by ADR-0005 §5.2 — historical design reference, `orchestration/team_coordinator.py` referenced in an earlier version of this table doesn't exist)
 5. [contracts.md](../../.claude/rules/contracts.md) — `src/modular_rag/contracts/**/*.py`
 6. [security.md](../../.claude/rules/security.md) — `src/modular_rag/security/**/*.py`
 7. [tests.md](../../.claude/rules/tests.md) — `tests/**/*.py`
@@ -358,17 +367,23 @@ src/modular_rag/
 
 **Configuration**: One directory per skill under `.claude/skills/<skill-name>/SKILL.md`, with `name` + `description` frontmatter only. A **flat** `.claude/skills/<name>.md` file is *not* discovered — this project's skills were flat files until 2026-06-22 and were silently invisible to Claude Code until converted to the directory form.
 
-**13 skills available**:
+**18 skills available** (corrected 2026-08-06 — this table previously listed 13):
 
 | Skill | Purpose |
 |-------|---------|
 | `/quick-check` | Syntax + imports (30s) |
 | `/full-check` | Unit + contract tests (2-5m) |
+| `/qa-v1` | Ruff + unit + contract + layering audit — the local V1 gate before an MR |
+| `/test-unit` | `pytest tests/unit` only |
+| `/test-contract` | `pytest tests/contract` only |
+| `/check-layering` | `scripts/check_layering.py` — hexagonal import boundary audit |
+| `/run-simple-qa` | Smoke-test `examples/simple_qa/` end to end |
 | `/validate-security` | Security layer compliance (5-10m) |
+| `/validate-architecture` | Architecture compliance check |
 | `/add-component` | Generic scaffolding for a new component |
 | `/release` | Pre-release validation |
 | `/add-retriever`, `/add-generator`, `/add-security-guard` | Type-specific scaffolding |
-| `/design-retriever-fusion`, `/optimize-chunking`, `/prepare-evaluation`, `/validate-architecture`, `/parallel-feature-analysis` | Domain workflows tied to a subagent (see Advanced: Sub-Agents) |
+| `/design-retriever-fusion`, `/optimize-chunking`, `/prepare-evaluation`, `/parallel-feature-analysis` | Domain workflows tied to a subagent (see Advanced: Sub-Agents) |
 
 **Example**:
 ```
@@ -443,9 +458,12 @@ coverage:      # pytest with coverage report
 
 **Master the end-to-end development process:**
 
+*(Line counts below corrected 2026-08-06 — every figure in this table was previously rounded up
+well past the real file size; see `docs/documentation-audit-2026-08.md`.)*
+
 | Guide | Size | Coverage | Audience |
 |-------|------|----------|----------|
-| **[claude-code-complete-development-guide.md](./claude-code-complete-development-guide.md) 🆕** | 2,500 lines | **COMPLETE WORKFLOW** from problem to commit | All developers |
+| **[claude-code-complete-development-guide.md](./claude-code-complete-development-guide.md)** | 1,511 lines | **COMPLETE WORKFLOW** from problem to commit — its own 5-phase framing, see the reconciliation note under "The 6-Step Workflow" below | All developers |
 | ↳ 5-minute quick start | 5 min | Prerequisites, rules, commands | All |
 | ↳ 5-phase workflow | 30 min | EXPLORE → DESIGN → IMPLEMENT → VALIDATE → REVIEW | All |
 | ↳ Architecture rules | 20 min | Hexagonal layering, imports, wiring, observability | All |
@@ -463,11 +481,11 @@ coverage:      # pytest with coverage report
 
 | Guide | Size | Coverage | Audience |
 |-------|------|----------|----------|
-| [claude-code-settings-reference.md](./claude-code-settings-reference.md) | 1,500 lines | All 100+ settings, scopes, precedence | All developers |
-| [claude-code-mcp-setup.md](./claude-code-mcp-setup.md) | 1,000 lines | MCP configuration, built-in servers, custom servers | Integration leads |
-| [claude-code-plugins-marketplaces.md](./claude-code-plugins-marketplaces.md) | 1,000 lines | Plugin system, marketplace setup, governance | DevOps/Architecture |
-| [claude-code-advanced-config.md](./claude-code-advanced-config.md) | 800 lines | Subagents, skills, path-scoped rules, hooks | Advanced users |
-| [claude-code-enterprise-deployment.md](./claude-code-enterprise-deployment.md) | 600 lines | Managed settings, MDM, Group Policy, deployment | IT/DevOps teams |
+| [claude-code-settings-reference.md](./claude-code-settings-reference.md) | 624 lines | All 100+ settings, scopes, precedence | All developers |
+| [claude-code-mcp-setup.md](./claude-code-mcp-setup.md) | 626 lines | MCP configuration, custom servers | Integration leads |
+| [claude-code-plugins-marketplaces.md](./claude-code-plugins-marketplaces.md) | 610 lines | Plugin system, marketplace setup, governance | DevOps/Architecture |
+| [claude-code-advanced-config.md](./claude-code-advanced-config.md) | 554 lines | Subagents, skills, path-scoped rules, hooks | Advanced users |
+| [claude-code-enterprise-deployment.md](./claude-code-enterprise-deployment.md) | 639 lines | Managed settings, MDM, Group Policy, deployment — general Claude Code reference material, not specific to or verified against this project's own setup | IT/DevOps teams |
 
 **Quick Navigation by Need:**
 
@@ -483,6 +501,20 @@ coverage:      # pytest with coverage report
 ## The 6-Step Workflow
 
 **Universal workflow** that applies regardless of task type (feature, bugfix, refactor).
+
+> **Reconciliation note (2026-08-06):** `claude-code-complete-development-guide.md`'s own
+> "5-phase workflow" (EXPLORE → DESIGN → IMPLEMENT → VALIDATE → REVIEW) describes the same
+> overall process at a coarser grain, not a conflicting one. Read the two as governance-level
+> (this file's 6 steps: EXPLORE → PLAN → VALIDATE → IMPLEMENT → VERIFY → DELIVER) vs.
+> tactical/code-heavy (that file's 5 phases) framings of one workflow, not two competing
+> processes to choose between. The step-name mismatch (this file's "VALIDATE" is a
+> plan-approval gate before coding starts; the other file's "VALIDATE" is post-implementation
+> testing, closer to this file's "VERIFY") was a real inconsistency flagged in
+> `docs/documentation-audit-2026-08.md` — noted here rather than silently merged into one
+> renumbered scheme, since collapsing two independently-detailed, 1000+-line workflow
+> descriptions into a single step-by-step sequence risks introducing new errors faster than it
+> resolves the naming mismatch. If you're following one file's steps, finish with that file's
+> vocabulary rather than mixing terms from both.
 
 ### Step 1️⃣: EXPLORE (Understand Before Acting)
 
