@@ -43,7 +43,8 @@ docs/
 ├── architecture/        ← Complete technical specification (layers, models, flows, security)
 ├── guides/              ← Practical, task-oriented guides (installation, deployment, plugins...)
 ├── glossary.md          ← Definitions of recurring terms (RRF, ULID, groundedness, EvoRAG...)
-└── reviews/             ← Historical project reviews (context behind past decisions)
+└── archive/             ← Superseded or low-ongoing-utility documents, kept for the record —
+                            see archive/README.md for what's there and why
 ```
 
 Each subfolder has its own `_index.md` with a finer-grained breakdown of its content.
