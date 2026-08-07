@@ -39,44 +39,105 @@
     },
     "GovernanceSection": {
       "additionalProperties": false,
-      "description": "Declarative governance intent. Schema only as of Lot 9 \u2014 actual\nfail-closed enforcement is Lot 11b, redaction/audit wiring is Lot 11c.\nSetting `tenant_enforcement: true` here does not, by itself, enforce\nanything yet.",
+      "description": "Governance components activated by the application composition root.\n\n`tenant_enforcement` is a deliberate, explicit governance *intent* flag \u2014\nseparate from `tenant_policy` (which component implements it). Defaulting\nto `False` makes \"no tenant isolation\" a visible, auditable fact on every\nmigrated/loaded manifest instead of a silent absence (ADR-0007 \u00a73: \"a\ndeclared manifest section that cannot be activated must fail validation\").\n`tenant_enforcement=True` with `tenant_policy=None` is a validation error\n(see `app/config_resolution.py::validate_capabilities`), not a silent\nno-op.",
       "properties": {
         "tenant_enforcement": {
           "default": false,
           "title": "Tenant Enforcement",
           "type": "boolean"
         },
-        "policy_refs": {
-          "items": {
-            "type": "string"
-          },
-          "title": "Policy Refs",
-          "type": "array"
-        }
-      },
-      "title": "GovernanceSection",
-      "type": "object"
-    },
-    "ObservabilitySection": {
-      "additionalProperties": false,
-      "description": "Declarative telemetry-sink intent. Schema only as of Lot 9 \u2014 actual\nsink wiring (e.g. PostgreSQL-backed audit store) is Lot 10.",
-      "properties": {
-        "telemetry_sink": {
+        "tenant_policy": {
           "anyOf": [
             {
-              "type": "string"
+              "$ref": "#/$defs/ComponentConfig"
             },
             {
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Telemetry Sink"
+          "default": null
         },
-        "config": {
-          "additionalProperties": true,
-          "title": "Config",
-          "type": "object"
+        "policy_engine": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ComponentConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "redactor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ComponentConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "review_queue": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ComponentConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "audit_sink": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ComponentConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "GovernanceSection",
+      "type": "object"
+    },
+    "LifecycleSection": {
+      "additionalProperties": false,
+      "description": "Document identity, idempotency and deletion ledger.",
+      "properties": {
+        "ledger": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ComponentConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "LifecycleSection",
+      "type": "object"
+    },
+    "ObservabilitySection": {
+      "additionalProperties": false,
+      "description": "Telemetry component selected for runtime traces and metrics.",
+      "properties": {
+        "telemetry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ComponentConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "title": "ObservabilitySection",
@@ -84,7 +145,7 @@
     },
     "QualitySection": {
       "additionalProperties": false,
-      "description": "Declarative quality-gate intent. Schema only as of Lot 9 \u2014 gate\nenforcement against these thresholds is Lot 13.",
+      "description": "Evaluation profile and an optional wired quality gate.",
       "properties": {
         "eval_profile": {
           "anyOf": [
@@ -98,12 +159,16 @@
           "default": null,
           "title": "Eval Profile"
         },
-        "gates": {
-          "additionalProperties": {
-            "type": "number"
-          },
-          "title": "Gates",
-          "type": "object"
+        "gate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ComponentConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "title": "QualitySection",
@@ -204,49 +269,6 @@
       ],
       "default": null
     },
-    "planner": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/ComponentConfig"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "agents": {
-      "items": {
-        "$ref": "#/$defs/ComponentConfig"
-      },
-      "title": "Agents",
-      "type": "array"
-    },
-    "graph_store": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/ComponentConfig"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "policies": {
-      "items": {
-        "type": "string"
-      },
-      "title": "Policies",
-      "type": "array"
-    },
-    "modalities": {
-      "items": {
-        "type": "string"
-      },
-      "title": "Modalities",
-      "type": "array"
-    },
     "engine": {
       "anyOf": [
         {
@@ -284,6 +306,17 @@
       "anyOf": [
         {
           "$ref": "#/$defs/ObservabilitySection"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "lifecycle": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LifecycleSection"
         },
         {
           "type": "null"

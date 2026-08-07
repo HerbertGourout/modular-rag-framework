@@ -10,9 +10,10 @@ _Originally authored as a workflow for `test-specialist`, invoked as `/prepare-e
 > **Corrected 2026-08-06** (documentation-utility pass): step 3 previously referenced four
 > manifest files that don't exist (`local-vector-rag.yaml`, `local-bm25-rag.yaml`,
 > `local-hybrid-reranked-rag.yaml`, `local-hybrid-gpt4-rag.yaml`) — `manifests/presets/`
-> actually contains `local-hybrid-rag.yaml` (the only one confirmed Runnable end-to-end, see
-> `manifests/README.md`), plus `agentic-rag.yaml`, `graph-memory-rag.yaml`,
-> `multimodal-rag.yaml`, `secure-enterprise-rag.yaml` (all Blueprint, not wired end-to-end).
+> actually contains three Runnable manifests (Étape 7, ADR-0007): `local-hybrid-rag.yaml`,
+> `secure-enterprise-rag.yaml` (V2 native), and `langgraph-rag.yaml` (V2 delegated, renamed
+> from `agentic-rag.yaml`). `graph-memory-rag.yaml`/`multimodal-rag.yaml` live under
+> `manifests/blueprints/` — never runnable, see `manifests/README.md`.
 > Step 4's `_load_pipeline()` also imported from the wrong module
 > (`modular_rag.orchestration.load_pipeline` doesn't exist); the real function is
 > `load_pipeline()` in `src/modular_rag/app/bootstrap.py`. Both fixed below. The rest of this

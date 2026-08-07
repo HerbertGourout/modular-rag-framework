@@ -1,7 +1,12 @@
-# Status: BLUEPRINT — `graph_store`, `planner`, and `agents` are declared but
-# ComponentRegistry.wire() never processes any of them (checked against
-# orchestration/registry.py); silently ignored, not an error. This manifest wires only its
-# V1 components today. See docs/refactoring-plan.md §2 and manifests/README.md.
+# Status: BLUEPRINT — design sketch only, NOT a loadable pipeline manifest. GraphRAG
+# traversal/reasoning is delegated to the selected external engine per ADR-0005 §5.2, and the
+# engine selected in ADR-0006 (LangGraph) does not itself provide a graph-memory retrieval mode
+# today — there is nothing for `graph_store`/`planner`/`agents` below to activate. A native
+# knowledge-graph *data model* exists (`memory/graph/knowledge_graph.py`) but is not wired into
+# any retriever. Do not pass this file to `resolve_manifest()`/`mrag validate` expecting it to
+# succeed — it predates the V2 schema and uses fields (`graph_store`, `planner`, `agents`,
+# `modalities`) that ADR-0007 §5 removes from the active schema entirely. Move this file back to
+# `presets/` only once the selected engine (or a native replacement) can actually satisfy it.
 version: "1.0"
 id: graph-memory-rag
 description: "V3 GraphRAG pipeline — knowledge graph extraction, multi-hop reasoning, EvoRAG feedback."

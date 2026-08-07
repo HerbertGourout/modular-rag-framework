@@ -19,28 +19,34 @@ wouldn't make visible.
 ## How a manifest becomes a runnable pipeline
 
 The full path (detailed in
-[docs/architecture/overview.md](../docs/architecture/overview.md), section 9) is: the YAML
-is loaded and validated by `app/bootstrap.py`, then `orchestration/registry.py` maps each
-declared `type:` to the matching concrete class (via the factories registered in
-`_default_factories.py`), and the result is a `Container` of ready-to-use instances that the
-`RAGEngine` uses to answer questions.
+[docs/architecture/overview.md](../docs/architecture/overview.md), section 9) is: the YAML is
+resolved (`${VAR}`/`secret://` interpolation, `app/config_resolution.py::resolve_manifest()`),
+validated, then `orchestration/registry.py` maps each declared `type:` to the matching concrete
+class (via the factories registered in `app/default_factories.py`), and the result is a
+`Container` of ready-to-use instances that `RAGEngine` (native) or a `DocumentEngine` adapter
+(delegated, per `engine.adapter`) uses to answer questions.
 
-## `presets/` — ready-to-use configurations
+## `presets/` — ready-to-use, Runnable configurations
 
-**Authoritative status table: [`README.md`](README.md)** — only `local-hybrid-rag.yaml` is
-Runnable today; `secure-enterprise-rag.yaml`, `agentic-rag.yaml`, `graph-memory-rag.yaml`, and
-`multimodal-rag.yaml` are all Blueprint (declared, but `ComponentRegistry.wire()` doesn't
-process every field they use). This file previously carried its own copy of this table with a
-different (and contradictory) description — removed to keep one source of truth. What each
-preset is *intended* to eventually cover, once its blueprint is completed:
+**Authoritative status table: [`README.md`](README.md).** Since
+[ADR-0007](../docs/adr/0007-layer-boundaries-and-control-plane-activation.md) (Étape 7), every
+file under `presets/` loads, validates, and wires cleanly — non-executable sketches live under
+[`blueprints/`](blueprints/) instead, never `presets/`.
 
-| Preset | Target version | Intended use case | Native or delegated (ADR-0005) |
+| Preset | Version | Use case | Native or delegated (ADR-0005) |
 |---|---|---|---|
-| [`local-hybrid-rag.yaml`](presets/local-hybrid-rag.yaml) | V1 | Local development: no authentication, lightweight models (GPT-4o-mini, bge-small), Qdrant on localhost. Recommended starting point for any new contributor or quick demo. **Runnable now.** | Native |
-| [`secure-enterprise-rag.yaml`](presets/secure-enterprise-rag.yaml) | V1 | Internal deployment for a client: security guards enabled, tighter `max_query_length`, generation temperature at 0. | Native |
-| [`agentic-rag.yaml`](presets/agentic-rag.yaml) | V2.1 | Multi-step questions — would call an external-engine adapter (e.g. `LangGraphEngineAdapter`) through `manifest.engine.adapter`, not a native five-agent runtime. The five prototype agent classes this preset's field names once implied were removed in Lot 17. | Delegated |
-| [`graph-memory-rag.yaml`](presets/graph-memory-rag.yaml) | V3.0 | Reasoning over entity relationships (GraphRAG) — traversal delegated to the external engine; a native `KnowledgeGraph` data model may be retained (undecided). | Delegated (traversal) |
-| [`multimodal-rag.yaml`](presets/multimodal-rag.yaml) | V5.0 | Documents containing images, tables, or audio/video segments — VLM execution delegated; parsing/citation enrichment may stay native. | Delegated (VLM execution) |
+| [`local-hybrid-rag.yaml`](presets/local-hybrid-rag.yaml) | V1 | Local development: no authentication, lightweight models (GPT-4o-mini, bge-small), Qdrant on localhost. Recommended starting point for any new contributor or quick demo. | Native |
+| [`secure-enterprise-rag.yaml`](presets/secure-enterprise-rag.yaml) | V2 | Enterprise deployment: tenant isolation, PII redaction, inline policy engine, durable Postgres audit trail, blocking quality gate. Requires `QDRANT_URL`/`QDRANT_API_KEY`/`AUDIT_DATABASE_URL` env vars and reachable Postgres/Qdrant to actually run. | Native |
+| [`langgraph-rag.yaml`](presets/langgraph-rag.yaml) | V2 | Multi-step questions routed through `engine.adapter: langgraph` — a real `LangGraphEngineAdapter`, not a native agent runtime. Renamed from `agentic-rag.yaml`; the native five-agent design its old field names implied was removed in Lot 17. | Delegated |
+
+## `blueprints/` — design sketches, not loadable
+
+See [`README.md`](README.md) for the full table. `graph-memory-rag.yaml` and
+`multimodal-rag.yaml` live here — both use fields the active V2 schema no longer accepts
+(`graph_store`, `planner`, `agents`) or reference unregistered types (`embedder.type:
+multimodal`), and describe capabilities (GraphRAG traversal, VLM execution) delegated per
+ADR-0005 §5.2 rather than built natively. Do not pass these to `resolve_manifest()` expecting
+success.
 
 To choose a preset for a client engagement, see also
 [docs/onboarding.md](../docs/onboarding.md), section 2.3 (consultant / delivery lead
@@ -51,7 +57,6 @@ profile).
 These three folders are **deliberately empty stubs** at this stage (V4 scope — see
 [CLAUDE.md](../CLAUDE.md), section 09). The idea, once built, is to allow a per-environment
 override on top of a base preset (e.g., `secure-enterprise-rag.yaml` as the base, with a
-`production/overrides.yaml` that tightens security further and enables the full audit
-trail) without duplicating the entire file. See each subfolder for the detail of what's
-planned: [dev/_index.md](dev/_index.md), [staging/_index.md](staging/_index.md),
-[production/_index.md](production/_index.md).
+`production/overrides.yaml` that tightens security further) without duplicating the entire file.
+See each subfolder for the detail of what's planned: [dev/_index.md](dev/_index.md),
+[staging/_index.md](staging/_index.md), [production/_index.md](production/_index.md).

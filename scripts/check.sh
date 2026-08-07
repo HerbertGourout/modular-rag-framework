@@ -104,10 +104,20 @@ check_full() {
         print_success "Type checking: $mypy_errors errors (baseline: $mypy_baseline)"
     fi
 
-    # Step 5: Runnable-manifest validation (see manifests/README.md for the classification)
+    # Step 5: Runnable-manifest validation (see manifests/README.md for the classification).
+    # Every file under manifests/presets/ must wire cleanly (ADR-0007 Étape 7 exit criterion) —
+    # fake-but-present secrets satisfy ${VAR}/secret:// interpolation for the wiring smoke test
+    # without needing a real Postgres/Qdrant connection (components lazy-connect on first use).
     echo ""
-    echo "Step 5/7: Runnable manifest validation..."
-    if python -c "from modular_rag.app.bootstrap import load_pipeline; load_pipeline('manifests/presets/local-hybrid-rag.yaml'); print('local-hybrid-rag.yaml wires cleanly')"; then
+    echo "Step 5/7: Runnable manifest validation (all manifests/presets/*.yaml)..."
+    if QDRANT_URL="http://localhost:6333" QDRANT_API_KEY="smoke-test-key" AUDIT_DATABASE_URL="postgresql://smoke-test/db" python -c "
+from pathlib import Path
+from modular_rag.app.bootstrap import load_pipeline
+
+for path in sorted(Path('manifests/presets').glob('*.yaml')):
+    load_pipeline(str(path))
+    print(f'{path.name} wires cleanly')
+"; then
         print_success "Runnable manifest validation passed"
     else
         print_error "Runnable manifest validation failed"
