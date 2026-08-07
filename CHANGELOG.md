@@ -53,6 +53,38 @@ coverage and zero consumers, superseded by ADR-0005's delegation decision; a rea
 native-vs-external-engine pilot comparison that found and fixed a real CI gap (`langgraph` never
 installed in the `test-unit`/`coverage` jobs).
 
+### Stabilization plan — layer boundaries and control-plane activation (2026-08-07, ongoing)
+
+[ADR-0007](docs/adr/0007-layer-boundaries-and-control-plane-activation.md), accepted: closes the
+gap between the published dependency direction and the real one, and between the manifest V2
+schema's declared governance sections and what actually activates. Full evidence:
+`docs/architecture/capability-matrix.md`.
+
+- **Layering**: moved `Container` to `orchestration/container.py` (was `app/container.py` —
+  orchestration importing from app was backwards); moved the concrete component-composition
+  function to `app/default_factories.py`; added `app/public.py`/`app/application.py` as the only
+  facade `api/`/`cli/` may import. `scripts/check_layering.py` now enforces the full
+  core→contracts→domain→adapters→orchestration→app→api/cli table with a `--strict` CI gate and
+  its own test suite (`tests/unit/scripts/test_check_layering.py`).
+- **Manifest V2 activation**: `GovernanceSection.tenant_enforcement` is now an explicit,
+  validated intent flag (`true` without a `tenant_policy` component fails validation, not a
+  silent no-op). `PostgresAuditSink`/`PostgresLifecycleLedger` are now manifest-activatable, not
+  Python-injectable only. Added `tests/contract/test_telemetry_conformance.py` (previously
+  zero conformance coverage for the `Telemetry` Protocol).
+- **Manifests split into `presets/` (Runnable) and `blueprints/` (design sketches, never
+  loaded)**: converted `secure-enterprise-rag.yaml` into a real V2 manifest (governance, quality
+  gate, `${VAR}`/`secret://` resolution — was a broken placeholder referencing nonexistent
+  policy files); renamed `agentic-rag.yaml` → `langgraph-rag.yaml` with
+  `engine.adapter: langgraph` replacing the never-built native five-agent design; moved
+  `graph-memory-rag.yaml`/`multimodal-rag.yaml` to `manifests/blueprints/`, stripped of their
+  fictional native `agents:`/`graph_store:` blocks.
+- **Removed dead code with zero consumers** (restorable via git history): `app/settings.py`'s
+  orphaned `Settings` class; `memory/graph/` entirely (`KnowledgeGraph.neighbours()`/
+  `subgraph_for_query()` were genuine GraphRAG traversal, not passive storage — resolves
+  ADR-0007's open decision on this); `AgentError`/`GraphError`; `Trace.routing_strategy` (bumps
+  `TRACE_SCHEMA_VERSION` to 1.2); the unused `planner`/`graph_store` registry roles;
+  `RetrievalMethod.GRAPH`/`.MULTIMODAL` and the fully-unused `ChunkingStrategy` enum.
+
 ### Added — 2026-07-12 (`feature/v1-sota-alignment`)
 - `Parser` Protocol (`contracts/parsing.py`) + DOCX and HTML parsers; PDF parsing switched from pypdf to pymupdf.
 - Weighted Reciprocal Rank Fusion (`weights` parameter, defaults reproduce unweighted RRF); `HybridRetriever` passes manifest weights through.
