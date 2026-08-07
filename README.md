@@ -2,7 +2,7 @@
 
 ![Status](https://img.shields.io/badge/status-pre--alpha-orange)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
-![Tests](https://img.shields.io/badge/tests-250%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-passing-brightgreen)
 ![License](https://img.shields.io/badge/license-Apache%202.0-green)
 ![Built by Publicis Sapient](https://img.shields.io/badge/built%20by-Publicis%20Sapient-4a154b)
 
@@ -108,7 +108,7 @@ System layers (see [`docs/architecture/module-model.md`](docs/architecture/modul
 |---|---|---|---|
 | **V1** | Core RAG | Ingestion, adaptive chunking, hybrid retrieval (vector + BM25), grounded generation, basic safety, native evaluation, YAML manifests, HTTP API | ✅ Complete |
 | **V2** | Agentic + Security | Policy Engine (native, owned, current) + tenant isolation (real, shipped); multi-agent orchestration delegated to the selected external engine via `DocumentEngine` (ADR-0005) | 🟡 Policy Engine/tenant isolation ✅, agent delegation via LangGraph adapter ✅ (Lot 15) |
-| **V3** | Graph Memory | GraphRAG traversal, multi-hop reasoning, and community summaries delegated to the external engine; a native `KnowledgeGraph` data model exists but its retention scope is undecided | ⬜ Delegated / partially undecided |
+| **V3** | Graph Memory | GraphRAG traversal, multi-hop reasoning, and community summaries delegated to the external engine; the native `KnowledgeGraph` data model was removed (Étape 8, [ADR-0007](docs/adr/0007-layer-boundaries-and-control-plane-activation.md)) — zero consumers, restorable via git if a real need emerges | ⬜ Delegated (unavailable in the selected engine today) |
 | **V4** | Governance | Policy-as-code, multi-tenant, dev/staging/prod environments, fine-grained audit, human-in-the-loop, risk profiles | ⬜ Planned |
 | **V5** | Multimodal | Multimodal ingestion + retrieval (text/images/tables/audio/video); VLM execution delegated to the external engine, parsing/citation enrichment may stay native | ⬜ Planned |
 
@@ -139,9 +139,8 @@ pip install -e ".[v1]"
 ### Run the example pipeline
 
 ```bash
-# Set your API key (the OpenAI SDK's own standard var, not a custom MRAG_* one —
-# app/settings.py's Settings class declares MRAG_OPENAI_API_KEY but it's never
-# read anywhere in the real pipeline-wiring path)
+# Set your API key (the OpenAI SDK's own standard var — configuration is manifest-driven,
+# see app/config_resolution.py's ${VAR}/secret:// interpolation, not env-var settings classes)
 export OPENAI_API_KEY=sk-...   # Linux/macOS
 $env:OPENAI_API_KEY="sk-..."   # Windows PowerShell
 
@@ -184,14 +183,8 @@ factory with no arguments) does not work — wrap it in a one-line module instea
 uvicorn server:app --reload
 # GET  /health
 # GET  /retrieve?q=...&k=10
+# POST /answer
 ```
-
-> **`POST /answer` does not currently work** — a known bug (`from __future__ import
-> annotations` combined with a locally-scoped request-model class breaks FastAPI's parameter
-> resolution) makes every documented call return `422`. See
-> [docs/refactoring-plan.md](docs/refactoring-plan.md) §2 and
-> `tests/unit/api/test_api.py::test_answer_route_does_not_accept_the_documented_json_body`.
-> `/health` and `/retrieve` work as documented.
 
 ---
 
@@ -266,15 +259,15 @@ direct Python use. The REST API has one known-broken endpoint — see below.**
 | Security (guard + PII redactor) | ✅ |
 | Evaluation (exact-match, benchmarks) | ✅ (naming/failure-masking caveats — see [refactoring plan](docs/refactoring-plan.md) §2) |
 | CLI | ✅ |
-| REST API | ⚠️ `/health` and `/retrieve` work; `POST /answer` returns 422 (routing bug, see above) |
-| YAML manifest wiring | ✅ for `manifests/presets/local-hybrid-rag.yaml`; the other 4 presets are blueprints for unimplemented V2-V5 features — see [manifests/README.md](manifests/README.md) |
-| Unit + contract tests | ✅ 250 passing (202 unit + 48 contract) |
+| REST API | ✅ `/health`, `/retrieve`, `/answer` all work |
+| YAML manifest wiring | ✅ for all three `manifests/presets/*.yaml` (local-hybrid-rag, secure-enterprise-rag, langgraph-rag); `manifests/blueprints/` holds design sketches (GraphRAG, multimodal) that don't load — see [manifests/README.md](manifests/README.md) |
+| Unit + contract tests | ✅ passing — run `./scripts/check.sh full` for the current count (changes too often for a static number to stay accurate) |
 | Integration tests (requires Qdrant) | ✅ |
 
 Track progress and milestones:
 
 - [`CHANGELOG.md`](CHANGELOG.md) — released versions
-- [`ROADMAP.md`](ROADMAP.md) — V1 → V5 capabilities
+- [`ROADMAP.md`](ROADMAP.md) — delivery matrix: native, delegated, or planned per capability
 - [`docs/adr/`](docs/adr/) — Architecture Decision Records
 
 ---

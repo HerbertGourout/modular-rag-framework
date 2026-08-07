@@ -75,4 +75,6 @@ Citations:
 - Swap the generator: change `generator.type` in the manifest to `anthropic`.
 - Adjust retrieval depth: change `retriever.config.k` from `20` to `50`.
 - Enable the security guard: set `security.config.max_query_length: 2000`.
-- Run the REST API: `uvicorn modular_rag.api:create_app --factory`
+- Run the REST API: `create_app()` requires a manifest path argument, so bare `--factory` mode
+  doesn't work — see [docs/api/rest.md](../../docs/api/rest.md) for the one-line wrapper pattern
+  (`docker/server.py` is a working example), then `uvicorn server:app --reload`.
