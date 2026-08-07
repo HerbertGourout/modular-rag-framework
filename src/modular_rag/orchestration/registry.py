@@ -27,8 +27,6 @@ class ComponentRegistry:
             "generator": {},
             "guard": {},
             "evaluator": {},
-            "planner": {},
-            "graph_store": {},
             "tenant_policy": {},
             "policy_engine": {},
             "redactor": {},

@@ -48,14 +48,6 @@ class EvaluationError(ModularRAGError):
     """Raised when scoring or benchmark execution fails."""
 
 
-class GraphError(ModularRAGError):
-    """Raised when graph construction or traversal fails (V3)."""
-
-
-class AgentError(ModularRAGError):
-    """Raised when an agent task fails (V2)."""
-
-
 class StorageError(ModularRAGError):
     """Raised when a storage backend operation fails."""
 

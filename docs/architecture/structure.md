@@ -302,7 +302,7 @@ All Pydantic v2 `BaseModel`. No ORM, no DB mapping.
 **Current state**: `.gitkeep` only. Placeholders for:
 - `adapters/llms/`: OpenAI/Anthropic generators as adapters (currently in `generation/`)
 - `adapters/auth/`: API key / OAuth validation
-- `adapters/graphstores/`: Neo4j (currently KnowledgeGraph is in-memory in `memory/`)
+- `adapters/graphstores/`: Neo4j (no in-memory native graph model exists anymore — removed in Étape 8; GraphRAG traversal is delegated per ADR-0005 §5.2)
 - `adapters/search/`: web search tools (Tavily, Brave…)
 
 ---
@@ -480,23 +480,15 @@ git history. See
 
 **`memory/kv/in_memory.py` → `InMemoryStorage`**: Implements `Storage`. Plain Python dict. Not thread-safe, for dev/tests only.
 
-**`memory/graph/knowledge_graph.py` → `GraphNode` + `GraphEdge` + `KnowledgeGraph`**
-- `GraphNode`: id, label, type, properties, source_chunk_ids
-- `GraphEdge`: source_id, target_id, relation (GraphRelation), weight, properties
-- `KnowledgeGraph`:
-  - `add_node()`, `add_edge()`, `get_node()`
-  - `neighbours(node_id, hops)`: BFS for N hops
-  - `subgraph_for_query(entity_labels, hops)`: seed from labels → BFS expansion
-  - `stats()`: {nodes, edges}
-- In-memory backend, swappable with the Neo4j adapter (future)
-- **Retained but flagged in Lot 17** (`docs/refactoring-plan.md`): `neighbours()`/
-  `subgraph_for_query()` are genuine multi-hop-traversal/sub-graph-selection logic — exactly
-  the GraphRAG capability ADR-0005 §5.2 delegates to the external engine, not a passive data
-  model. Kept (unlike the removed items on this page) because it has real test coverage
-  (`tests/unit/memory/test_knowledge_graph.py`) and the "data model vs. traversal" split is
-  explicitly recorded as undecided, not resolved by any lot to date. See the module's own
-  docstring and
-  [docs/refactoring/lot-17-prototype-retirement.md](../refactoring/lot-17-prototype-retirement.md).
+**`memory/graph/` no longer exists.** `KnowledgeGraph`/`GraphNode`/`GraphEdge`
+(`memory/graph/knowledge_graph.py`) were **removed in Étape 8**
+([ADR-0007](../adr/0007-layer-boundaries-and-control-plane-activation.md), "Resolved:
+knowledge-graph data model"): `neighbours()`/`subgraph_for_query()` were genuine multi-hop-
+traversal logic — exactly the GraphRAG capability ADR-0005 §5.2 delegates to the external
+engine — and the module had zero consumers anywhere outside its own test. Lot 17 had previously
+kept it with an explicit "undecided" caveat; Étape 8 resolved that decision by removing it,
+restorable via git history if a real, wired consumer ever emerges. `core.enums.GraphRelation`
+was removed alongside it.
 
 `memory/versioning/graph_versioning.py` (`GraphVersionManager`, EvoRAG edge reinforcement) was
 **removed in Lot 17** — zero test coverage, zero consumers, and squarely in the delegated
@@ -662,8 +654,7 @@ tests/
 │   ├── security/
 │   │   ├── test_basic_guard.py
 │   │   └── test_redaction.py
-│   ├── eval/test_exact_match.py
-│   └── memory/test_knowledge_graph.py
+│   └── eval/test_exact_match.py
 ├── contract/                ← Verify that an implementation satisfies its Protocol
 │   ├── test_chunker_conformance.py      (FixedSizeChunker + AdaptiveChunker)
 │   ├── test_retrieval_conformance.py    (BM25Retriever — VectorRetriever excluded, needs Qdrant)
@@ -687,7 +678,6 @@ tests/
 | `test_basic_guard.py` | Benign query, injection blocked, jailbreak blocked, max length | 7 |
 | `test_redaction.py` | Email, multiple emails, FR phone, benign text unchanged, API key | 5 |
 | `test_exact_match.py` | Perfect match, no overlap, partial overlap, case-insensitive, expected=None | 6 |
-| `test_knowledge_graph.py` | add/get node, missing node → None, add_edge + neighbours, hops, stats(), subgraph_for_query | 8 |
 
 **Conformance tests — logic**
 - `isinstance(obj, Protocol)` → verifies structural conformance at runtime
