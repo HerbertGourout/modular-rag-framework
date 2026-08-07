@@ -16,8 +16,8 @@ This example shows the minimal path from documents to answers using the
 cd modular-rag-framework
 pip install -e ".[v1]"
 
-# Set your API key (the OpenAI SDK's own standard var — MRAG_OPENAI_API_KEY is
-# declared in app/settings.py but never read in the real pipeline-wiring path)
+# Set your API key (the OpenAI SDK's own standard var — MRAG_OPENAI_API_KEY was
+# declared in app/settings.py's Settings class, orphaned and deleted in Étape 8 of ADR-0007)
 export OPENAI_API_KEY="sk-..."
 
 # Start Qdrant

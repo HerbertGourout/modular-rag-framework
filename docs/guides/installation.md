@@ -84,19 +84,19 @@ The default manifest (`manifests/presets/local-hybrid-rag.yaml`) connects to `lo
 
 ## Environment variables
 
-`app/settings.py` declares a `pydantic-settings` model (`Settings`) with these `MRAG_`-prefixed
-fields, but **it's orphaned**: nothing in the real pipeline-wiring path
-(`orchestration/_default_factories.py`, `app/bootstrap.py`) ever constructs `Settings()` or
-calls `get_settings()`. Setting any variable in the table below has **no effect** on the
-pipeline today. All real configuration goes through the manifest YAML instead — component
-`config:` blocks are passed straight to each adapter's constructor (`**cfg.config`).
+There is no `MRAG_`-prefixed environment-variable convention in this codebase. A
+`pydantic-settings` `Settings` model with `MRAG_*` fields once lived in `app/settings.py`, but it
+was orphaned — nothing in the real pipeline-wiring path ever constructed `Settings()` or called
+`get_settings()` — and the file was deleted outright in Étape 8 of the ADR-0007 stabilization
+pass. All real configuration goes through the manifest YAML instead — component `config:` blocks
+are passed straight to each adapter's constructor (`**cfg.config`).
 
-| Variable (declared, not read) | What actually works instead |
+| What you might expect | What actually works |
 |---|---|
 | `MRAG_OPENAI_API_KEY` / `MRAG_ANTHROPIC_API_KEY` | `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` — the SDKs' own standard names, read automatically when the manifest's `generator.config.api_key` is left unset |
 | `MRAG_QDRANT_URL`, `MRAG_QDRANT_COLLECTION` | Set `url`/`collection` directly in the manifest's `indexer`/`retriever` `config:` block — there is no env-var fallback |
 | `MRAG_EMBEDDING_MODEL` | Set `model_name`/equivalent directly in the manifest's `embedder.config:` block |
-| `MRAG_ENVIRONMENT`, `MRAG_LOG_LEVEL` | No working equivalent today; these are aspirational fields for a future settings wiring pass |
+| `MRAG_ENVIRONMENT`, `MRAG_LOG_LEVEL` | No working equivalent today |
 
 Manifests are the source of truth for configuration (per [CLAUDE.md](../../CLAUDE.md) rule 03)
 — see [manifests/README.md](../../manifests/README.md) for the Runnable

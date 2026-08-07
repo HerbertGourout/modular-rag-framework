@@ -71,9 +71,9 @@ cli/ + api/  →  app/  →  orchestration/  →  contracts/ + core/
 | File | Purpose | Read First? |
 |------|---------|-----------|
 | [CLAUDE.md](../../CLAUDE.md) | Project rules (9 blocks) | ✅ YES |
-| [.claude/.instructions.md](./../.instructions.md) | Claude's mandatory rules | ✅ YES (sections 1-5) |
+| [.claude/.instructions.md](../../.claude/.instructions.md) | Claude's mandatory rules | ✅ YES (sections 1-5) |
 | [CONTRIBUTING.md](../../CONTRIBUTING.md) | Git workflow, branching, PR process | ✅ YES |
-| [.claude/settings.json](./../settings.json) | Permissions, hooks configuration | 🟡 REFERENCE ONLY |
+| [.claude/settings.json](../../.claude/settings.json) | Permissions, hooks configuration | 🟡 REFERENCE ONLY |
 | [docs/guides/validation.md](validation.md) | Command reference | 🟡 REFERENCE ONLY |
 
 ---

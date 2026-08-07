@@ -570,36 +570,21 @@ Hard-coded transition matrix. `transition(to)` validates and logs every state ch
 
 ### `app/` — Process-level wiring
 
-#### `app/settings.py` → `Settings`
-Pydantic-settings with the `MRAG_` prefix. Reads from `.env` + environment variables — but this
-class is **orphaned**: nothing in the real pipeline-wiring path
-(`orchestration/_default_factories.py`, `app/bootstrap.py`) ever constructs `Settings()` or
-calls `get_settings()`. The fields below are declared but currently have no effect; e.g. the
-working OpenAI/Anthropic env vars are the SDKs' own standard `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`
-(read only when the manifest doesn't set `api_key` explicitly), not the `MRAG_`-prefixed names.
+#### `app/settings.py` → deleted (Étape 8, ADR-0007)
+This file declared a `MRAG_`-prefixed `Settings` (pydantic-settings) class — but it was
+orphaned: nothing in the real pipeline-wiring path (`app/default_factories.py`,
+`app/bootstrap.py`) ever constructed `Settings()` or called `get_settings()`, so none of its
+`MRAG_*` fields ever had any effect on a running pipeline. Found in Lot 16c, confirmed dead, and
+deleted outright in Étape 8 of the ADR-0007 stabilization pass (see
+[docs/adr/0007-layer-boundaries-and-control-plane-activation.md](../adr/0007-layer-boundaries-and-control-plane-activation.md)) —
+not deprecated, since a pre-alpha codebase with zero real consumers has nothing to keep
+backward-compatible.
 
-```
-MRAG_OPENAI_API_KEY, MRAG_ANTHROPIC_API_KEY
-MRAG_LLM_MODEL, MRAG_TEMPERATURE, MRAG_MAX_TOKENS
-MRAG_EMBEDDING_MODEL, MRAG_EMBEDDING_BATCH_SIZE
-MRAG_QDRANT_URL, MRAG_QDRANT_API_KEY, MRAG_QDRANT_COLLECTION
-MRAG_K, MRAG_RERANKER_K, MRAG_VECTOR_WEIGHT, MRAG_BM25_WEIGHT
-MRAG_CHUNK_SIZE, MRAG_CHUNK_OVERLAP
-MRAG_SECURITY_ENABLED
-MRAG_TELEMETRY_ENABLED, MRAG_OTEL_ENDPOINT, MRAG_LOG_LEVEL
-MRAG_NEO4J_URL, MRAG_NEO4J_USER, MRAG_NEO4J_PASSWORD
-```
-
-`get_settings()`: singleton (a single `.env` read per process).
-
-**Found in Lot 16c, not yet fixed**: `get_settings()`/`Settings()` is never actually called
-anywhere in `orchestration/_default_factories.py` or the pipeline-loading path — every adapter
-factory is `AdapterClass(**cfg.config)`, sourced only from the manifest. Setting any `MRAG_*`
-env var above currently has zero effect on a running pipeline (the one exception: the OpenAI
-SDK's own standard, non-`MRAG_`-prefixed `OPENAI_API_KEY` env var works, because
-`OpenAIGenerator` passes `api_key=self.api_key or None` and the SDK falls through to its own
-lookup). See `docs/refactoring-plan.md`'s "Orphaned `Settings` class" gap-matrix row and
-[docs/guides/deployment.md](../guides/deployment.md).
+The working credential env vars are, and always were, the LLM SDKs' own standard names —
+`OPENAI_API_KEY`/`ANTHROPIC_API_KEY` — read only when the manifest's `generator.config.api_key`
+is left unset. There is no `MRAG_QDRANT_URL`-style env-var fallback for vectorstore config
+either: `url`/`collection` must be set directly in the manifest's `indexer`/`retriever`
+`config:` block. See [docs/guides/deployment.md](../guides/deployment.md).
 
 #### `app/container.py` → `Container`
 DI Container. Internal `_store: dict[str, Any]`.

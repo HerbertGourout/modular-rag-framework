@@ -6,7 +6,7 @@ paths:
 # Rules — writing tests
 
 *(Translated to English 2026-08-06 for consistency with the rest of `.claude/rules/` —
-see `docs/documentation-audit-2026-08.md`.)*
+see `docs/archive/documentation-audit-2026-08.md`.)*
 
 - `tests/unit/`: no external services. Don't mock what can be tested directly.
 - `tests/contract/`: use `isinstance(obj, Protocol)` to check conformance. Parametrize over

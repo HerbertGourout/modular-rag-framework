@@ -147,11 +147,12 @@ class Embedder(Protocol):
     Used by VectorRetriever to encode queries and documents for similarity search.
     Registered in manifest under "embedder" component type.
     
-    **Example:**
-    ```
-    embedder = registry.get_component("embedder", "hf-e5")
-    doc_vectors = embedder.embed_batch(["hello world", "goodbye world"])
-    query_vector = embedder.embed("hello")
+    **Example** (real API — `ComponentRegistry` has no `get_component()` method; components
+    come off the wired `Container`):
+    ```python
+    container = ComponentRegistry.default().wire(manifest)
+    embedder = container.embedder
+    doc_vectors = embedder.embed(["hello world", "goodbye world"])
     ```
     
     **Errors:**
@@ -159,15 +160,16 @@ class Embedder(Protocol):
     - RuntimeError if model not loaded
     """
     
-    def embed(self, text: str) -> List[float]:
-        """Embed a single text."""
+    def embed(self, texts: List[str]) -> List[List[float]]:
+        """Embed a batch of texts — the real Protocol (contracts/embeddings.py) has no
+        separate single-text method; call embed(["one text"]) for a single item."""
         ...
     
-    def embed_batch(self, texts: List[str]) -> List[List[float]]:
-        """Embed multiple texts efficiently."""
+    async def aembed(self, texts: List[str]) -> List[List[float]]:
+        """Async variant."""
         ...
     
-    def dimension(self) -> int:
+    def dimensions(self) -> int:
         """Return embedding vector dimension."""
         ...
     
@@ -224,40 +226,33 @@ class HybridRetriever(RetrieverV2):
 Every Protocol must have matching test in `tests/contract/`:
 
 ```python
-# tests/contract/test_retriever_conformance.py
+# tests/contract/test_retrieval_conformance.py (real file — see it for the actual pattern)
 
-import pytest
-from typing import runtime_checkable
 from modular_rag.contracts import Retriever
+from modular_rag.core.models.query import Query
+from modular_rag.retrieval.retrievers.bm25 import BM25Retriever  # real path: retrievers/ subpackage
 
 def test_bm25_is_retriever():
-    """Verify BM25Retriever implements Retriever Protocol."""
-    from modular_rag.retrieval.bm25 import BM25Retriever
-    
+    """Verify BM25Retriever implements the Retriever Protocol."""
     retriever = BM25Retriever()
-    
+
     # Check Protocol conformance
     assert isinstance(retriever, Retriever)
-    
-    # Check required methods
+
+    # Check required methods (Retriever has retrieve, aretrieve, name — see contracts/retrieval.py)
     assert hasattr(retriever, 'retrieve')
+    assert hasattr(retriever, 'aretrieve')
     assert hasattr(retriever, 'name')
-    
-    # Check method signatures
-    import inspect
-    sig = inspect.signature(retriever.retrieve)
-    assert len(sig.parameters) == 1  # query param
 
 def test_retriever_output_format():
-    """Verify retrieve() returns correct format."""
-    from modular_rag.retrieval.bm25 import BM25Retriever
-    from modular_rag.core.models import Document
-    
+    """Verify retrieve() returns correct format — takes a Query object, not a bare string."""
+    from modular_rag.core.models.retrieved import RetrievedChunk
+
     retriever = BM25Retriever()
-    results = retriever.retrieve("test query")
-    
+    results = retriever.retrieve(Query(text="test query"), k=10)
+
     assert isinstance(results, list)
-    assert all(isinstance(doc, Document) for doc in results)
+    assert all(isinstance(r, RetrievedChunk) for r in results)
 ```
 
 ---
@@ -308,7 +303,7 @@ class HybridRetriever(Retriever, RankedRetriever):
 
 ## References
 
-- [ADR-0002: Contracts and Plugins](../../docs/adr/0002-contracts-and-plugins.md)
-- [.claude/.instructions.md](../../.claude/.instructions.md) — Architecture rules
-- [CONTRIBUTING.md](../../CONTRIBUTING.md) — Development workflow
+- [ADR-0002: Contracts and Plugins](../../../docs/adr/0002-contracts-and-plugins.md)
+- [.claude/.instructions.md](../../../.claude/.instructions.md) — Architecture rules
+- [CONTRIBUTING.md](../../../CONTRIBUTING.md) — Development workflow
 

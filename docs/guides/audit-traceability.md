@@ -404,7 +404,7 @@ security_check:
 
 - [CLAUDE.md](../../CLAUDE.md) — Project policies
 - [CONTRIBUTING.md](../../CONTRIBUTING.md) — Git workflow
-- [.claude/rules/security-layers.md](./security-layers.md) — 7-layer security strategy
+- [.claude/rules/security-layers.md](../../.claude/rules/security-layers.md) — 7-layer security strategy
 - [.gitignore](../../.gitignore) — Secret patterns
 - [docs/adr/](../../docs/adr/) — Architectural decisions
 

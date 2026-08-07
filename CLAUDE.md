@@ -100,7 +100,8 @@ pytest tests/integration/ -v -m integration
 
 # E2E tests (requires Qdrant + LLM API key)
 export OPENAI_API_KEY=sk-...   # the SDK's own standard var — NOT MRAG_OPENAI_API_KEY
-                                # (app/settings.py's Settings class is orphaned; see
+                                # (app/settings.py's MRAG_-prefixed Settings class was orphaned
+                                # and deleted in Étape 8 of ADR-0007; see
                                 # docs/guides/troubleshooting.md)
 pytest tests/e2e/ -v -m e2e
 ```

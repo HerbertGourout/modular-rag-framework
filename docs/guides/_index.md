@@ -1,6 +1,6 @@
 # Guides — Modular RAG Framework
 
-**Rewritten 2026-08-06** (documentation audit, `docs/documentation-audit-2026-08.md`) — the
+**Rewritten 2026-08-06** (documentation audit, `docs/archive/documentation-audit-2026-08.md`) — the
 previous version of this index was dated June 2026, carried internally-contradictory
 "Updated" dates, and duplicated `docs/_index.md`'s navigation role without staying in sync with
 it. This version follows `docs/_index.md`'s own terser, by-intent format.

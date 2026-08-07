@@ -6,7 +6,7 @@ troubleshooting. It absorbs `docs/guides/validation.md`, which duplicated ~70% o
 under a different structure — see the note at the bottom for what changed.
 
 **Status:** V1 complete
-**Merged and corrected:** 2026-08-06 (documentation audit, `docs/documentation-audit-2026-08.md`)
+**Merged and corrected:** 2026-08-06 (documentation audit, `docs/archive/documentation-audit-2026-08.md`)
 
 ---
 
@@ -373,8 +373,9 @@ echo $OPENAI_API_KEY
 ```
 Note: the working variable is the SDK's own standard name (`OPENAI_API_KEY`/`ANTHROPIC_API_KEY`),
 **not** `MRAG_OPENAI_API_KEY`/`MRAG_ANTHROPIC_API_KEY` — `app/settings.py`'s `Settings` class
-declares those `MRAG_`-prefixed names but nothing in the real pipeline-wiring path ever
-constructs a `Settings()` (found in Lot 16c, `docs/refactoring/lot-16c-deployment-runbooks.md`).
+once declared those `MRAG_`-prefixed names but nothing in the real pipeline-wiring path ever
+constructed a `Settings()` (found in Lot 16c, `docs/refactoring/lot-16c-deployment-runbooks.md`);
+the file was deleted outright in Étape 8 of the ADR-0007 stabilization pass.
 
 ### "Type hints not working" / mypy questions
 ```bash

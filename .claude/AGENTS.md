@@ -68,7 +68,7 @@ What fusion algorithm should I use?
 ```
 
 **File**: [`.claude/agents/retrieval-specialist.md`](./agents/retrieval-specialist.md)  
-**Related Skills**: [`/design-retriever-fusion`](./skills/design-retriever-fusion.md)
+**Related Skills**: [`/design-retriever-fusion`](./skills/design-retriever-fusion/SKILL.md)
 
 ---
 
@@ -108,7 +108,7 @@ What overlap should I use for retrieval?
 ```
 
 **File**: [`.claude/agents/ingestion-specialist.md`](./agents/ingestion-specialist.md)  
-**Related Skills**: [`/optimize-chunking`](./skills/optimize-chunking.md)
+**Related Skills**: [`/optimize-chunking`](./skills/optimize-chunking/SKILL.md)
 
 ---
 
@@ -147,7 +147,7 @@ Should I switch to GPT-4? Use few-shot? Add chain-of-thought?
 ```
 
 **File**: [`.claude/agents/generation-specialist.md`](./agents/generation-specialist.md)  
-**Related Skills**: [`/add-generator`](./skills/add-generator.md)
+**Related Skills**: [`/add-generator`](./skills/add-generator/SKILL.md)
 
 ---
 
@@ -187,7 +187,7 @@ from documents before retrieval. What's the best approach?
 ```
 
 **File**: [`.claude/agents/security-specialist.md`](./agents/security-specialist.md)  
-**Related Skills**: [`/add-security-guard`](./skills/add-security-guard.md)
+**Related Skills**: [`/add-security-guard`](./skills/add-security-guard/SKILL.md)
 
 ---
 
@@ -227,7 +227,7 @@ the hexagonal layering rules? Are there any cross-domain imports I missed?
 ```
 
 **File**: [`.claude/agents/architecture-reviewer.md`](./agents/architecture-reviewer.md)  
-**Related Skills**: [`/validate-architecture`](./skills/validate-architecture.md)
+**Related Skills**: [`/validate-architecture`](./skills/validate-architecture/SKILL.md)
 
 ---
 
@@ -267,7 +267,7 @@ Sometimes they pass, sometimes fail. What's causing this?
 ```
 
 **File**: [`.claude/agents/test-specialist.md`](./agents/test-specialist.md)  
-**Related Skills**: [`/prepare-evaluation`](./skills/prepare-evaluation.md)
+**Related Skills**: [`/prepare-evaluation`](./skills/prepare-evaluation/SKILL.md)
 
 ---
 
@@ -307,7 +307,7 @@ into the system using the registry pattern. How do I do it?
 ```
 
 **File**: [`.claude/agents/orchestration-specialist.md`](./agents/orchestration-specialist.md)  
-**Related Skills**: [`/design-retriever-fusion`](./skills/design-retriever-fusion.md)
+**Related Skills**: [`/design-retriever-fusion`](./skills/design-retriever-fusion/SKILL.md)
 
 ---
 
@@ -347,7 +347,7 @@ How do I trace which step is the bottleneck?
 ```
 
 **File**: [`.claude/agents/observability-expert.md`](./agents/observability-expert.md)  
-**Related Skills**: [`/parallel-feature-analysis`](./skills/parallel-feature-analysis.md)
+**Related Skills**: [`/parallel-feature-analysis`](./skills/parallel-feature-analysis/SKILL.md)
 
 ---
 
@@ -386,14 +386,14 @@ Each subagent has associated **Skills** (reusable workflows):
 
 | Subagent | Associated Skills | Files |
 |----------|------------------|-------|
-| **retrieval-specialist** | `/design-retriever-fusion` | [design-retriever-fusion.md](./skills/design-retriever-fusion.md) |
-| **ingestion-specialist** | `/optimize-chunking` | [optimize-chunking.md](./skills/optimize-chunking.md) |
-| **generation-specialist** | `/add-generator` | [add-generator.md](./skills/add-generator.md) |
-| **security-specialist** | `/add-security-guard` | [add-security-guard.md](./skills/add-security-guard.md) |
-| **architecture-reviewer** | `/validate-architecture` | [validate-architecture.md](./skills/validate-architecture.md) |
-| **test-specialist** | `/prepare-evaluation` | [prepare-evaluation.md](./skills/prepare-evaluation.md) |
-| **orchestration-specialist** | `/design-retriever-fusion` | [design-retriever-fusion.md](./skills/design-retriever-fusion.md) |
-| **observability-expert** | `/parallel-feature-analysis` | [parallel-feature-analysis.md](./skills/parallel-feature-analysis.md) |
+| **retrieval-specialist** | `/design-retriever-fusion` | [design-retriever-fusion.md](./skills/design-retriever-fusion/SKILL.md) |
+| **ingestion-specialist** | `/optimize-chunking` | [optimize-chunking.md](./skills/optimize-chunking/SKILL.md) |
+| **generation-specialist** | `/add-generator` | [add-generator.md](./skills/add-generator/SKILL.md) |
+| **security-specialist** | `/add-security-guard` | [add-security-guard.md](./skills/add-security-guard/SKILL.md) |
+| **architecture-reviewer** | `/validate-architecture` | [validate-architecture.md](./skills/validate-architecture/SKILL.md) |
+| **test-specialist** | `/prepare-evaluation` | [prepare-evaluation.md](./skills/prepare-evaluation/SKILL.md) |
+| **orchestration-specialist** | `/design-retriever-fusion` | [design-retriever-fusion.md](./skills/design-retriever-fusion/SKILL.md) |
+| **observability-expert** | `/parallel-feature-analysis` | [parallel-feature-analysis.md](./skills/parallel-feature-analysis/SKILL.md) |
 
 ---
 
@@ -416,7 +416,7 @@ await asyncio.gather(
 - 📊 Results aggregated automatically
 - 🔄 Regressions detected easily
 
-**See**: [claude-code-parallelization-orchestration.md](../../docs/guides/claude-code-parallelization-orchestration.md)
+**See**: [claude-code-parallelization-orchestration.md](../docs/guides/claude-code-parallelization-orchestration.md)
 
 ---
 
@@ -537,11 +537,11 @@ Each subagent is grounded in **research papers** from the `.claude/research-pape
 ## References
 
 - [Subagent Implementations](./agents/) — All 8 subagent definitions
-- [Reusable Skills](./skills/) — 8 workflow skills (add-retriever, etc.)
-- [Parallelization Guide](../../docs/guides/claude-code-parallelization-orchestration.md)
-- [CLAUDE.md](../../CLAUDE.md) — Project rules and roadmap
+- [Reusable Skills](./skills/) — 18 workflow skills (add-retriever, add-generator, add-security-guard, etc.)
+- [Parallelization Guide](../docs/guides/claude-code-parallelization-orchestration.md)
+- [CLAUDE.md](../CLAUDE.md) — Project rules and roadmap
 - [.claude/settings.json](./settings.json) — Configuration
 
 ---
 
-**Questions?** Refer to [docs/guides/](../../docs/guides/) for comprehensive guides, or invoke the appropriate subagent above.
+**Questions?** Refer to [docs/guides/](../docs/guides/) for comprehensive guides, or invoke the appropriate subagent above.
