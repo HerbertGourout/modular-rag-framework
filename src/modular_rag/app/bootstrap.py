@@ -5,11 +5,13 @@ from typing import TYPE_CHECKING
 
 import yaml
 
+from modular_rag.app.application import ApplicationService
+from modular_rag.app.config_resolution import resolve_manifest
+from modular_rag.app.default_factories import create_default_registry
 from modular_rag.contracts.manifests import PipelineManifest
 from modular_rag.core.errors import ConfigurationError, ManifestError
 from modular_rag.orchestration.engine import RAGEngine
 from modular_rag.orchestration.native_engine import NativeEngineAdapter
-from modular_rag.orchestration.registry import ComponentRegistry
 
 if TYPE_CHECKING:
     from modular_rag.contracts.engine import DocumentEngine
@@ -34,8 +36,8 @@ def load_pipeline(path: str | Path) -> RAGEngine:
     the concrete `RAGEngine` unchanged. Prefer `load_native_engine()` for new
     code that wants the engine-neutral `DocumentEngine` port instead.
     """
-    manifest = load_manifest(path)
-    registry = ComponentRegistry.default()
+    manifest = resolve_manifest(path)
+    registry = create_default_registry()
     container = registry.wire(manifest)
     return RAGEngine(container)
 
@@ -61,8 +63,8 @@ def load_engine(path: str | Path) -> DocumentEngine:
     engine differs). An unrecognized adapter name raises `ConfigurationError`
     rather than silently falling back to native.
     """
-    manifest = load_manifest(path)
-    registry = ComponentRegistry.default()
+    manifest = resolve_manifest(path)
+    registry = create_default_registry()
     container = registry.wire(manifest)
     adapter_name = manifest.engine.adapter if manifest.engine else "native"
 
@@ -76,3 +78,27 @@ def load_engine(path: str | Path) -> DocumentEngine:
         f"Unknown engine.adapter {adapter_name!r} in manifest {path!r}. "
         f"Expected 'native' or 'langgraph'."
     )
+
+
+def load_application(path: str | Path) -> ApplicationService:
+    """Load one manifest into the stable application facade.
+
+    Startup resolution, component wiring and engine selection happen once;
+    API and CLI therefore honor `${VAR}`, `secret://` and `engine.adapter`.
+    """
+    manifest = resolve_manifest(path)
+    container = create_default_registry().wire(manifest)
+    native = RAGEngine(container)
+    adapter_name = manifest.engine.adapter if manifest.engine else "native"
+    if adapter_name == "native":
+        selected: DocumentEngine = NativeEngineAdapter(native)
+    elif adapter_name == "langgraph":
+        from modular_rag.adapters.llms.langgraph_engine import LangGraphEngineAdapter
+
+        selected = LangGraphEngineAdapter(container)
+    else:
+        raise ConfigurationError(
+            f"Unknown engine.adapter {adapter_name!r} in manifest {path!r}. "
+            "Expected 'native' or 'langgraph'."
+        )
+    return ApplicationService(native, selected)

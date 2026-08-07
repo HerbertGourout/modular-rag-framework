@@ -28,7 +28,7 @@ from modular_rag.orchestration.registry import ComponentRegistry
 _ENV_VAR_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 _SECRET_PREFIX = "secret://"
 
-_V2_ONLY_SECTIONS = ("engine", "governance", "quality", "observability")
+_V2_ONLY_SECTIONS = ("engine", "governance", "quality", "observability", "lifecycle")
 
 
 class EnvSecretResolver:
@@ -146,6 +146,24 @@ def validate_capabilities(manifest: PipelineManifest, registry: ComponentRegistr
     _check("generator", manifest.generator)
     _check("guard", manifest.security)
     _check("evaluator", manifest.evaluation)
+    if manifest.governance:
+        _check("tenant_policy", manifest.governance.tenant_policy)
+        _check("policy_engine", manifest.governance.policy_engine)
+        _check("redactor", manifest.governance.redactor)
+        _check("review_queue", manifest.governance.review_queue)
+        _check("audit_sink", manifest.governance.audit_sink)
+        if manifest.governance.tenant_enforcement and manifest.governance.tenant_policy is None:
+            errors.append(
+                "governance.tenant_enforcement=true requires governance.tenant_policy to be "
+                "set — declared intent with no activatable implementation is not a valid "
+                "manifest (ADR-0007 §3)."
+            )
+    if manifest.observability:
+        _check("telemetry", manifest.observability.telemetry)
+    if manifest.lifecycle:
+        _check("lifecycle_ledger", manifest.lifecycle.ledger)
+    if manifest.quality:
+        _check("quality_gate", manifest.quality.gate)
     return errors
 
 
@@ -161,9 +179,13 @@ def migrate_v1_to_v2(raw: dict[str, Any]) -> dict[str, Any]:
     migrated = dict(raw)
     migrated["version"] = "2.0"
     migrated.setdefault("engine", {"adapter": "native", "config": {}})
-    migrated.setdefault("governance", {"tenant_enforcement": False, "policy_refs": []})
-    migrated.setdefault("quality", {"eval_profile": None, "gates": {}})
-    migrated.setdefault("observability", {"telemetry_sink": None, "config": {}})
+    # tenant_enforcement is explicit, not omitted: a v1 manifest never enforced
+    # tenant isolation, and migration must say so out loud (ADR-0007 §3) rather
+    # than leave it as an implicit, easy-to-overlook absence.
+    migrated.setdefault("governance", {"tenant_enforcement": False})
+    migrated.setdefault("quality", {})
+    migrated.setdefault("observability", {})
+    migrated.setdefault("lifecycle", {})
     return migrated
 
 

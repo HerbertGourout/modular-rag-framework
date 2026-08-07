@@ -7,20 +7,20 @@ from typing import Any
 
 import structlog
 
-from modular_rag.app.container import Container
 from modular_rag.contracts.audit import AuditEvent, AuditEventType
 from modular_rag.contracts.chunking import Chunker
 from modular_rag.contracts.erasure import ErasureProof
 from modular_rag.contracts.lifecycle import DocumentStatus
 from modular_rag.contracts.retrieval import Retriever
 from modular_rag.contracts.review import ReviewItem
+from modular_rag.core.document_identity import content_hash, document_key
 from modular_rag.core.errors import ConfigurationError, SecurityError
 from modular_rag.core.models.answer import Answer
 from modular_rag.core.models.document import Document
 from modular_rag.core.models.query import Query
 from modular_rag.core.models.retrieved import RetrievedChunk
 from modular_rag.core.models.trace import Trace, TraceStep
-from modular_rag.ingestion.lifecycle.hashing import content_hash, document_key
+from modular_rag.orchestration.container import Container
 from modular_rag.orchestration.state_machine import PipelineState, PipelineStateMachine
 
 log = structlog.get_logger(__name__)
@@ -338,6 +338,9 @@ class RAGEngine:
                     payload={"guard_decision": "denied", "error_type": type(exc).__name__},
                 )
                 raise
+
+        if self._c.policy_engine:
+            self._c.policy_engine.enforce_query(query)
 
         # 1. security guard — query
         if self._c.guard:

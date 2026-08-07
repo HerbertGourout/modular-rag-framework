@@ -12,7 +12,6 @@ import ast
 from dataclasses import dataclass
 from pathlib import Path
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src" / "modular_rag"
 BASELINE_PATH = PROJECT_ROOT / ".claude" / "layering-baseline.txt"
@@ -30,6 +29,18 @@ DOMAIN_LAYERS = {
 SELF_ONLY_LAYERS = {"core"}
 CONTRACT_LAYERS = {"contracts"}
 ADAPTER_LAYERS = {"adapters"}
+ORCHESTRATION_LAYERS = {"orchestration"}
+APP_LAYERS = {"app"}
+INTERFACE_LAYERS = {"api", "cli"}
+APP_ALLOWED_LAYERS = {
+    "core",
+    "contracts",
+    "adapters",
+    "orchestration",
+    "observability",
+    "app",
+    *DOMAIN_LAYERS,
+}
 
 
 @dataclass(frozen=True)
@@ -161,6 +172,21 @@ def _violation_reason(importer_layer: str, imported_module: str) -> str | None:
     if importer_layer in DOMAIN_LAYERS:
         if imported_layer not in {"core", "contracts", importer_layer}:
             return "domain modules cannot import other domain modules"
+        return None
+
+    if importer_layer in ORCHESTRATION_LAYERS:
+        if imported_layer not in {"core", "contracts", "orchestration"}:
+            return "orchestration can only import core, contracts, or orchestration modules"
+        return None
+
+    if importer_layer in APP_LAYERS:
+        if imported_layer not in APP_ALLOWED_LAYERS:
+            return "app cannot import api, cli, or unknown project layers"
+        return None
+
+    if importer_layer in INTERFACE_LAYERS:
+        if imported_layer not in {"app", importer_layer}:
+            return "api and cli can only import app or their own interface package"
         return None
 
     return None

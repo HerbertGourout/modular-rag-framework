@@ -92,6 +92,22 @@ contract regardless of which engine is picked.
 
 ---
 
+### [ADR-0007: Layer Boundaries and Control-Plane Activation](0007-layer-boundaries-and-control-plane-activation.md)
+
+**Status:** Proposed
+**Date:** 2026-08-07
+
+Proposes the concrete dependency model and activation path needed to make ADR-0005 operational:
+orchestration-owned container, application facade for API/CLI, manifest wiring for every owned
+control-plane capability, separation of runnable presets from blueprints, and removal of
+never-functional legacy manifest fields.
+
+**Key insight:** A capability is not delivered merely because its class exists; it must be
+reachable through a supported entry point, manifest-wired where applicable, and covered by that
+path's tests.
+
+---
+
 ## Decision Making Process
 
 1. **Identification**: Problem identified in sprint planning, client feedback, or architecture review.
@@ -125,7 +141,7 @@ contract regardless of which engine is picked.
    ```
 
 2. Link from this index.
-3. Submit as MR with architecture team review.
+3. Submit as a GitHub PR with architecture review.
 4. Update status to "Accepted" after approval.
 
 ---
@@ -136,13 +152,14 @@ contract regardless of which engine is picked.
 - **ADR-0004**: Feature roadmap (V1→V5 progression) — partially superseded by ADR-0005
 - **ADR-0005**: Product boundary pivot — engine-independent control plane, delegated orchestration
 - **ADR-0006**: External engine selection (LangGraph) — Accepted
+- **ADR-0007**: Layer boundaries and control-plane activation — Proposed
 
-Future ADRs will be added as new major decisions arise (e.g., ADR-0007 for `DocumentEngine` contract freeze per Lot 7).
+Future ADRs will be added as new major decisions arise.
 
 ---
 
 ## References
 
-- [ROADMAP.md](../ROADMAP.md) — Implementation timeline
+- [ROADMAP.md](../../ROADMAP.md) — Implementation timeline
 - [CLAUDE.md](../../CLAUDE.md) — Development guidelines
 - [Security Layers](../architecture/security.md) — Detailed security strategy

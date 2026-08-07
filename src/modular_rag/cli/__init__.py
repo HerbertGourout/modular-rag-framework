@@ -4,9 +4,20 @@ from pathlib import Path
 
 import typer
 
-from modular_rag.app.bootstrap import load_pipeline
-from modular_rag.core.errors import ConfigurationError, ModularRAGError, SecurityError
-from modular_rag.ingestion.pipelines.default import ingest_directory, ingest_path
+from modular_rag.app.public import (
+    ConfigurationError,
+    ModularRAGError,
+    PipelineManifest,
+    SecurityError,
+    create_default_registry,
+    ingest_directory,
+    ingest_path,
+    resolve_manifest,
+    validate_capabilities,
+)
+from modular_rag.app.public import (
+    load_application as load_pipeline,
+)
 
 app = typer.Typer(name="mrag", help="Modular RAG Framework CLI")
 
@@ -80,10 +91,6 @@ def validate(
     unregistered component type, unresolved `${VAR}`/`secret://` reference,
     or unknown field, before a full pipeline load fails deep in wiring.
     """
-    from modular_rag.app.config_resolution import resolve_manifest, validate_capabilities
-    from modular_rag.core.errors import ConfigurationError
-    from modular_rag.orchestration.registry import ComponentRegistry
-
     try:
         # ConfigurationError is the base of ManifestError and covers
         # interpolate()'s unresolved ${VAR}/secret:// failures too — both
@@ -93,7 +100,7 @@ def validate(
         typer.echo(f"INVALID: {exc}")
         raise typer.Exit(code=1) from exc
 
-    errors = validate_capabilities(pipeline_manifest, ComponentRegistry.default())
+    errors = validate_capabilities(pipeline_manifest, create_default_registry())
     if errors:
         typer.echo(f"INVALID: {manifest} — capability errors:")
         for err in errors:
@@ -111,8 +118,6 @@ def manifest_schema() -> None:
     """Print the PipelineManifest JSON Schema (for IDE tooling / diffing
     against manifests/schema/pipeline-manifest.schema.json)."""
     import json
-
-    from modular_rag.contracts.manifests import PipelineManifest
 
     typer.echo(json.dumps(PipelineManifest.model_json_schema(), indent=2))
 

@@ -120,7 +120,9 @@ def test_default_registry_has_the_documented_builtin_type_names() -> None:
     (all adapters lazy-load per CLAUDE.md rule 7). Guards against a factory silently
     disappearing or being renamed.
     """
-    reg = ComponentRegistry.default()
+    from modular_rag.app.default_factories import create_default_registry
+
+    reg = create_default_registry()
 
     assert set(reg._factories["chunker"]) == {"fixed", "adaptive"}
     assert set(reg._factories["embedder"]) == {"sentence-transformers", "openai-embeddings"}

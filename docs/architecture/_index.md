@@ -11,6 +11,7 @@ client architect, this is where the answer lives — complemented by the "why" c
 | Your question | Document |
 |---|---|
 | "What's the overall vision, and what does each V1→V5 version do?" | [overview.md](overview.md) |
+| "Which capabilities really execute today, and through which entry point?" | [capability-matrix.md](capability-matrix.md) |
 | "What data objects flow through the pipeline, with what fields and invariants?" | [data-model.md](data-model.md) |
 | "What modules exist, and why can't they import from each other?" | [module-model.md](module-model.md) |
 | "What happens, step by step, when a query is processed?" | [runtime-flow.md](runtime-flow.md) |
@@ -23,12 +24,14 @@ client architect, this is where the answer lives — complemented by the "why" c
 ## Recommended reading order for a new technical contributor
 
 1. [overview.md](overview.md) — the general framework, read in full once.
-2. [module-model.md](module-model.md) — to internalize the dependency rule before touching
+2. [capability-matrix.md](capability-matrix.md) — to distinguish operational, programmatic,
+   blueprint, delegated, and unresolved capabilities.
+3. [module-model.md](module-model.md) — to internalize the dependency rule before touching
    the code.
-3. [data-model.md](data-model.md) — to recognize the objects handled everywhere
+4. [data-model.md](data-model.md) — to recognize the objects handled everywhere
    (`Document`, `Chunk`, `Query`, `Answer`, `Trace`...).
-4. [runtime-flow.md](runtime-flow.md) — to visualize the full path of a request.
-5. [security.md](security.md) and [structure.md](structure.md) — as reference, as needed.
+5. [runtime-flow.md](runtime-flow.md) — to visualize the full path of a request.
+6. [security.md](security.md) and [structure.md](structure.md) — as reference, as needed.
 
 This folder documents the **target** state of the architecture, including for versions V2
 through V5 not yet delivered. The real status of each capability (delivered / in progress /
