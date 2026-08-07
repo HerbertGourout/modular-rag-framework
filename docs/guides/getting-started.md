@@ -23,12 +23,13 @@ export OPENAI_API_KEY="sk-..."
 ```
 
 Note the variable name: it's the OpenAI SDK's own standard `OPENAI_API_KEY`, **not**
-`MRAG_OPENAI_API_KEY`. `app/settings.py`'s `Settings` class declares `MRAG_`-prefixed variables,
-but nothing in the actual pipeline-wiring path (`orchestration/_default_factories.py`) ever
-constructs a `Settings()` — every adapter is built only from the manifest's own config, so
-`MRAG_OPENAI_API_KEY` has no effect. `OpenAIGenerator` passes `api_key=None` to the SDK when the
-manifest doesn't set one explicitly, and the SDK itself falls back to plain `OPENAI_API_KEY`
-(found in Lot 16c, `docs/refactoring/lot-16c-deployment-runbooks.md`).
+`MRAG_OPENAI_API_KEY`. `app/settings.py`'s `Settings` class once declared `MRAG_`-prefixed
+variables, but every adapter is built only from the manifest's own config — nothing in the
+pipeline-wiring path ever constructed a `Settings()`, so `MRAG_OPENAI_API_KEY` never had any
+effect (found in Lot 16c, `docs/refactoring/lot-16c-deployment-runbooks.md`), and the file was
+deleted outright in Étape 8 of the ADR-0007 stabilization pass. `OpenAIGenerator` passes
+`api_key=None` to the SDK when the manifest doesn't set one explicitly, and the SDK itself falls
+back to plain `OPENAI_API_KEY`.
 
 ## Step 3 — Ingest documents
 

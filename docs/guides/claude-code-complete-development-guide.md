@@ -47,7 +47,8 @@ python -c "import modular_rag; print('✓ Ready')"
 cp .env.example .env
 # Edit .env with your values (OPENAI_API_KEY / ANTHROPIC_API_KEY — the SDKs' own
 # standard names, not MRAG_OPENAI_API_KEY: app/settings.py's MRAG_-prefixed
-# Settings class is declared but never actually read in the pipeline-wiring path)
+# Settings class was never read in the pipeline-wiring path and was deleted in
+# Étape 8 of the ADR-0007 stabilization pass)
 ```
 
 ### 2️⃣ Know the Three Core Rules (< 2 min)

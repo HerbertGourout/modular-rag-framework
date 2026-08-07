@@ -4,7 +4,7 @@
 **Date:** 2026-06-20
 **Authors:** Herbert Gourout, Publicis Data & AI Specialists
 
-**Archived 2026-08-06** (documentation-utility pass — see `docs/documentation-audit-2026-08.md`
+**Archived 2026-08-06** (documentation-utility pass — see `docs/archive/documentation-audit-2026-08.md`
 and the follow-up cleanup it triggered): the full 666-line text of this ADR — 8 strategic
 features, the V1→V5 timeline, code sketches, and success criteria — now lives at
 **[docs/archive/0004-strategic-features-v1-v5.md](../archive/0004-strategic-features-v1-v5.md)**.

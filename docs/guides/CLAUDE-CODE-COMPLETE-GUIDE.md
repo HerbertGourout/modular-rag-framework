@@ -458,7 +458,7 @@ coverage:      # pytest with coverage report
 **Master the end-to-end development process:**
 
 *(Line counts below corrected 2026-08-06 — every figure in this table was previously rounded up
-well past the real file size; see `docs/documentation-audit-2026-08.md`.)*
+well past the real file size; see `docs/archive/documentation-audit-2026-08.md`.)*
 
 | Guide | Size | Coverage | Audience |
 |-------|------|----------|----------|
@@ -1266,7 +1266,7 @@ In Slack or issue comment:
 *(Corrected 2026-08-06: the "Anthropic Claude Code docs" link previously pointed at VS Code's
 GitHub Copilot Chat documentation, and a separate "GitHub Copilot Chat" link was listed
 alongside it — both describe a different product from Claude Code. See
-[docs/documentation-audit-2026-08.md](../documentation-audit-2026-08.md) for the other instances
+[docs/archive/documentation-audit-2026-08.md](../archive/documentation-audit-2026-08.md) for the other instances
 of this conflation already fixed elsewhere in this repo.)*
 
 ---

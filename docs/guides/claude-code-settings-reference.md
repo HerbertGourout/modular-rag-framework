@@ -47,7 +47,8 @@ Claude Code uses a **5-level scope system** where higher levels override lower o
 - **NOT** committed to git (auto-gitignored)
 - Machine-specific settings
 - Example: `"env": {"OPENAI_API_KEY": "sk-..."}` (the SDK's own standard var — not
-  `MRAG_OPENAI_API_KEY`, which `app/settings.py` declares but the pipeline never reads)
+  `MRAG_OPENAI_API_KEY`, which `app/settings.py` declared but the pipeline never read; that
+  file was deleted in Étape 8 of the ADR-0007 stabilization pass)
 
 **CLI Scope** (`--settings <file-or-json>`):
 - One-time override for a specific session

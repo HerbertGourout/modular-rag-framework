@@ -6,7 +6,7 @@ paths:
 # Rules — editing contracts
 
 *(Translated to English 2026-08-06 for consistency with the rest of `.claude/rules/` —
-see `docs/documentation-audit-2026-08.md`.)*
+see `docs/archive/documentation-audit-2026-08.md`.)*
 
 - Before modifying a Protocol: check every implementation in `adapters/` and the domain
   modules — breaking a Protocol breaks every conformance test.

@@ -1,7 +1,7 @@
 # Command Inventory & Validation Strategy
 
 **Merged into [validation-protocol.md](./validation-protocol.md) on 2026-08-06**
-(documentation audit, `docs/documentation-audit-2026-08.md`) — this file and
+(documentation audit, `docs/archive/documentation-audit-2026-08.md`) — this file and
 `validation-protocol.md` had ~70% overlapping content (CI/CD tables, validation-strategy
 walkthroughs, troubleshooting) maintained under two different structures, which had drifted out
 of sync with each other and with the real 7-job CI pipeline. Everything that was here —

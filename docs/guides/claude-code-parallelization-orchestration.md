@@ -669,7 +669,7 @@ agents:
 
 ## References
 
-- [`.claude/settings.json`](../settings.json) - Parallelization configuration
+- [`.claude/settings.json`](../../.claude/settings.json) - Parallelization configuration
 - [`/parallel-feature-analysis` skill](../../.claude/skills/parallel-feature-analysis/SKILL.md)
 - [`/design-retriever-fusion` skill](../../.claude/skills/design-retriever-fusion/SKILL.md)
 - [CLAUDE.md - V2 Agentic Workflows](../../CLAUDE.md#09---roadmap-v1--v5-with-strategic-features)

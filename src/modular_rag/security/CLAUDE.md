@@ -21,18 +21,21 @@ The security module sits **above** domain modules in the architecture. It cannot
 
 ### ❌ FORBIDDEN
 ```python
-# ❌ Security importing from domain module
-from modular_rag.retrieval.bm25 import BM25Retriever
-from modular_rag.generation.openai import OpenAIGenerator
+# ❌ Security importing from domain module (real paths, corrected 2026-08-07)
+from modular_rag.retrieval.retrievers.bm25 import BM25Retriever
+from modular_rag.generation.synthesizers.openai_gen import OpenAIGenerator
 
 # This breaks hexagonal layering!
 ```
 
 ### ✅ ALLOWED
 ```python
-# ✅ Security imports from contracts and core
-from modular_rag.contracts.security import SecurityGuard, PolicyEngine
-from modular_rag.core.models import Document, Query
+# ✅ Security imports from contracts and core.
+# Note: PolicyEngine is NOT in contracts/security.py — it's a concrete class
+# (security/policies/policy_engine.py), not a Protocol. contracts/security.py
+# only has SecurityGuard, Redactor, TenantPolicy, and the GuardResult dataclass.
+from modular_rag.contracts.security import SecurityGuard, GuardResult
+from modular_rag.core.models.query import Query
 from modular_rag.core.errors import SecurityError
 ```
 
@@ -138,7 +141,7 @@ Use `PatternRedactor` to mask:
 - **Phone**: `\b\d{3}[-.]?\d{3}[-.]?\d{4}\b` → `[PHONE]`
 - **Medical**: `ICD-10|\bmedication\b|\bdiagnosis\b` → `[MEDICAL]`
 
-**Reference**: See [src/modular_rag/security/redaction/pattern_redactor.py](../redaction/pattern_redactor.py) for implementation.
+**Reference**: See [src/modular_rag/security/redaction/patterns.py](redaction/patterns.py) (`PatternRedactor`) for implementation.
 
 ---
 
@@ -300,8 +303,9 @@ the LLM SDKs' own standard names:
 OPENAI_API_KEY=your_openai_key_here
 ANTHROPIC_API_KEY=your_anthropic_key_here
 ```
-(`app/settings.py` declares a separate `MRAG_`-prefixed `Settings` class, but it's orphaned —
-nothing in the real pipeline-wiring path ever constructs it.)
+(`app/settings.py` declared a separate `MRAG_`-prefixed `Settings` class; it was orphaned —
+nothing in the real pipeline-wiring path ever constructed it — and was deleted in Étape 8 of the
+ADR-0007 stabilization pass, `docs/adr/0007-layer-boundaries-and-control-plane-activation.md`.)
 
 ---
 
@@ -335,7 +339,7 @@ nothing in the real pipeline-wiring path ever constructs it.)
 ### Violation 1: Cross-Domain Import
 ```python
 # ❌ Bad
-from modular_rag.retrieval.bm25 import BM25Retriever
+from modular_rag.retrieval.retrievers.bm25 import BM25Retriever
 
 # ✅ Fix
 from modular_rag.contracts.retrieval import Retriever
@@ -372,10 +376,9 @@ logger.info(f"Processing query (len={len(query.text)})")
 
 ## References
 
-- [.claude/rules/security.md](../../.claude/rules/security.md) — Global security rules
+- [.claude/rules/security.md](../../../.claude/rules/security.md) — Global security rules
 - [src/modular_rag/contracts/security.py](../contracts/security.py) — SecurityGuard Protocol
-- [src/modular_rag/security/](../security/) — Security module structure
-- [ADR-0003: Security & Governance](../../docs/adr/0003-security-and-governance.md) — Architecture decision
+- [ADR-0003: Security & Governance](../../../docs/adr/0003-security-and-governance.md) — Architecture decision
 
 ---
 

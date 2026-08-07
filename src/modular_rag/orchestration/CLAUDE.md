@@ -2,15 +2,20 @@
 
 This file provides guidance for Claude working on the orchestration (registry, engine, wiring) layer. Read this **before editing any file in this directory**.
 
-Rewritten in full 2026-08-06 (documentation audit, `docs/documentation-audit-2026-08.md`): the
-previous version documented `router.py`/`QueryRouter`, `compiler.py`, and `config.py` in detail
-with invented APIs (`RouterDecision`, `RAGConfig`, `QueryRequest`/`QueryResponse`) that never
-matched this module's real code. `QueryRouter` and `FlowCompiler` did exist once but were
-removed in Lot 17 (`docs/refactoring-plan.md`) — zero consumers, zero test coverage,
-superseded by [ADR-0005](../../../docs/adr/0005-document-ai-control-plane-boundary.md) §5.2
-(generic query routing/orchestration is delegated to the selected external engine, not built
-natively). `compiler.py`/`config.py` never existed under this directory at all. This version
-describes only the files actually present here today.
+Rewritten in full 2026-08-06 (documentation audit, `docs/archive/documentation-audit-2026-08.md`); updated
+2026-08-07 (ADR-0007 Étape 11) for the layer-boundary correction: `Container` moved here from
+`app/container.py`, and `_default_factories.py` moved out to `app/default_factories.py` — the
+generic registry stays in `orchestration/`, the concrete-implementation composition root moved
+to `app/` (the one place allowed to import every domain/adapter implementation). The previous
+version of this file (2026-08-06) documented `router.py`/`QueryRouter`, `compiler.py`, and
+`config.py` in detail with invented APIs (`RouterDecision`, `RAGConfig`,
+`QueryRequest`/`QueryResponse`) that never matched this module's real code. `QueryRouter` and
+`FlowCompiler` did exist once but were removed in Lot 17 (`docs/refactoring-plan.md`) — zero
+consumers, zero test coverage, superseded by
+[ADR-0005](../../../docs/adr/0005-document-ai-control-plane-boundary.md) §5.2 (generic query
+routing/orchestration is delegated to the selected external engine, not built natively).
+`compiler.py`/`config.py` never existed under this directory at all. This version describes only
+the files actually present here today.
 
 ---
 
@@ -19,18 +24,25 @@ describes only the files actually present here today.
 ```
 orchestration/
 ├── __init__.py
+├── container.py            Container — holds every wired component instance (moved here from
+│                            app/container.py, Étape 4; app/container.py is now a compatibility
+│                            re-export only)
 ├── registry.py            ComponentRegistry — role/type-name -> factory, wire(manifest) -> Container
 ├── engine.py               RAGEngine — the V1 sequential pipeline (ingest, answer, retrieve, delete, rebuild, erase)
 ├── native_engine.py        NativeEngineAdapter — wraps RAGEngine behind the DocumentEngine port (Lot 8)
 ├── state_machine.py        PipelineState / PipelineStateMachine — tracks transitions during one run
-├── reconciliation.py       IndexReconciler — detects/repairs ledger-vs-index divergence (Lot 12b)
-└── _default_factories.py   register_defaults(registry) — registers every built-in component type
+└── reconciliation.py       IndexReconciler — detects/repairs ledger-vs-index divergence (Lot 12b)
 ```
+
+`register_defaults()` (the function that maps role/type-name pairs to concrete adapter classes)
+now lives in `app/default_factories.py`, not this directory — `orchestration/` may only import
+`core`/`contracts`/its own package (ADR-0007 §6), and the concrete adapters `register_defaults`
+constructs (`QdrantStore`, `OpenAIGenerator`, etc.) live outside those layers.
 
 `adapters/llms/langgraph_engine.py`'s `LangGraphEngineAdapter` (the second `DocumentEngine`
 implementation, Lot 15) is **not** in this directory — it lives in `adapters/` because it must
-not depend on `app.container.Container` directly (adapters/ layering rule); it depends on a
-local structural Protocol instead. Both `NativeEngineAdapter` and `LangGraphEngineAdapter`
+not depend on `orchestration.container.Container` directly (adapters/ layering rule); it depends
+on a local structural Protocol instead. Both `NativeEngineAdapter` and `LangGraphEngineAdapter`
 route through the same `Container` this module wires.
 
 **Changes here affect every retrieval, generation, and engine-adapter call.**
@@ -90,20 +102,20 @@ class ComponentRegistry:
 
     @classmethod
     def default(cls) -> ComponentRegistry:
-        """Registry pre-loaded with every built-in adapter (via _default_factories.register_defaults)."""
+        """Registry pre-loaded with every built-in adapter (via app.default_factories.register_defaults)."""
 ```
 
 Roles pre-declared in `__init__`: `chunker`, `embedder`, `indexer`, `retriever`, `reranker`,
-`generator`, `guard`, `evaluator`, plus two forward-looking, currently-empty role slots:
-`planner` and `graph_store` — reserved for the delegated-engine adapter targets
-(`adapters/graphstores/`, per ADR-0005/CLAUDE.md's Adapter Stubs table), not dead code; `wire()`
-does not read `manifest.planner`/`manifest.graph_store` yet, so registering a factory under
-either role has no effect until that wiring is added.
+`generator`, `guard`, `evaluator`, `tenant_policy`, `policy_engine`, `redactor`,
+`review_queue`, `audit_sink`, `telemetry`, `lifecycle_ledger`, `quality_gate`. The `planner` and
+`graph_store` placeholder roles (never had a registered factory) were removed in Étape 8 — do
+not reintroduce them without a concrete, wired consumer.
 
 ### Registering Components
 
-**Location**: `orchestration/_default_factories.py` — the single source of truth for every
-built-in factory. Real pattern:
+**Location**: `app/default_factories.py` — the single source of truth for every built-in
+factory (moved here from `orchestration/_default_factories.py`, Étape 4 — see the file header).
+Real pattern:
 
 ```python
 def register_defaults(reg: ComponentRegistry) -> None:
@@ -115,8 +127,8 @@ def register_defaults(reg: ComponentRegistry) -> None:
 ### Never Register Here
 
 - ❌ Do NOT register in domain modules (`ingestion/`, `retrieval/`, etc.)
-- ❌ Do NOT register in `adapters/` (they only implement Protocols; wiring stays here)
-- ✅ Register ONLY in `_default_factories.py`
+- ❌ Do NOT register in `adapters/` (they only implement Protocols; wiring stays in `app/`)
+- ✅ Register ONLY in `app/default_factories.py`
 
 ---
 
@@ -240,7 +252,7 @@ query-time routing; this runs as an operational/maintenance task, not part of `a
 
 ## Checklist Before Editing
 
-- [ ] Am I adding a new component type? Register it in `_default_factories.py`, select it by
+- [ ] Am I adding a new component type? Register it in `app/default_factories.py`, select it by
       name in a manifest — never instantiate directly.
 - [ ] Am I changing `RAGEngine`'s flow? Emit a `TraceStep` for the new step; update
       `PipelineStateMachine`'s transition matrix if it adds/removes a state.

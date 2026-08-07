@@ -1,0 +1,35 @@
+# Accepted `scripts/check_docs.py` forbidden-term mentions, mirroring
+# `.claude/layering-baseline.txt`'s pattern for `scripts/check_layering.py`.
+#
+# Every entry here was individually read and confirmed (2026-08-07, ADR-0007 stabilization
+# pass, Étape 11) to be a legitimate past-tense mention explaining that the named API/file was
+# removed and why — not a claim that it still exists or an invitation to reuse it. Format:
+# `<repo-relative-path>|<forbidden-term>` (no line number: this list should stay stable across
+# ordinary prose edits; only add/remove an entry when the *meaning* changes, e.g. a brand-new
+# mention that is not this kind of historical explanation).
+#
+# Run `python scripts/check_docs.py --strict` to see everything, baseline included.
+.claude/.prompt.md|QueryRouter
+.claude/rules/orchestration.md|QueryRouter
+.claude/rules/orchestration.md|FlowCompiler
+.claude/rules/security-layers.md|MRAG_OPENAI_API_KEY
+.claude/skills/release/SKILL.md|MRAG_OPENAI_API_KEY
+CLAUDE.md|MRAG_OPENAI_API_KEY
+docs/architecture/data-model.md|QueryRouter
+docs/architecture/module-model.md|QueryRouter
+docs/architecture/structure.md|QueryRouter
+docs/architecture/structure.md|FlowCompiler
+docs/guides/claude-code-complete-development-guide.md|MRAG_OPENAI_API_KEY
+docs/guides/CLAUDE-CODE-COMPLETE-GUIDE.md|agentic_workflows.md
+docs/guides/claude-code-settings-reference.md|MRAG_OPENAI_API_KEY
+docs/guides/deployment.md|MRAG_OPENAI_API_KEY
+docs/guides/getting-started.md|MRAG_OPENAI_API_KEY
+docs/guides/installation.md|MRAG_OPENAI_API_KEY
+docs/guides/troubleshooting.md|MRAG_OPENAI_API_KEY
+docs/guides/validation-protocol.md|MRAG_OPENAI_API_KEY
+docs/refactoring-plan.md|MRAG_OPENAI_API_KEY
+docs/refactoring-plan.md|FlowCompiler
+docs/research/DIGEST-architecture.md|QueryRouter
+examples/simple_qa/README.md|MRAG_OPENAI_API_KEY
+src/modular_rag/orchestration/CLAUDE.md|QueryRouter
+src/modular_rag/orchestration/CLAUDE.md|FlowCompiler

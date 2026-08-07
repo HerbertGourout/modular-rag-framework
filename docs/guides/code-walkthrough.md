@@ -39,7 +39,10 @@ mrag ask "…" --manifest manifests/presets/local-hybrid-rag.yaml
 3. **The manifest** — [manifests/presets/local-hybrid-rag.yaml](../../manifests/presets/local-hybrid-rag.yaml):
    the **source of truth** for wiring: which chunker, which retriever, which weights, which generator.
 4. **The registry** — [src/modular_rag/orchestration/registry.py](../../src/modular_rag/orchestration/registry.py)
-   and [_default_factories.py](../../src/modular_rag/orchestration/_default_factories.py):
+   and [app/default_factories.py](../../src/modular_rag/app/default_factories.py) (moved out of
+   `orchestration/` in Étape 4 of the ADR-0007 stabilization pass — `orchestration/` may only
+   import `core`/`contracts`/`orchestration`, while `app/` is the composition root allowed to
+   import concrete adapter implementations):
    `type: hybrid` in YAML → factory `HybridRetriever(**cfg.config)`. This is where (and only
    where) new components get registered.
 5. **The engine** — [src/modular_rag/orchestration/engine.py](../../src/modular_rag/orchestration/engine.py#L67):

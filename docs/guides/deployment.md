@@ -59,15 +59,13 @@ docker run -d --name mrag-api -p 8000:8000 \
 `OPENAI_API_KEY` above is the standard (not `MRAG_`-prefixed) variable the OpenAI SDK itself
 reads when a manifest's `generator.config`/`embedder.config` omits `api_key` — verified against
 `generation/synthesizers/openai_gen.py`'s `OpenAI(api_key=self.api_key or None, ...)`, which
-falls through to the SDK's own env lookup on `None`. `app/settings.py`'s `Settings` class
-declares `MRAG_OPENAI_API_KEY`/`MRAG_QDRANT_URL`/`MRAG_QDRANT_API_KEY` fields, but as of this
-writing nothing in `orchestration/_default_factories.py` actually constructs a `Settings()` or
-reads them — every adapter factory is `AdapterClass(**cfg.config)`, sourced only from the
-manifest. Qdrant's `url`/`api_key` have no SDK-level env fallback the way OpenAI's does, so they
-must be set explicitly in the manifest's `indexer.config` (or resolved via `resolve_manifest()`,
-Lot 9, if your entrypoint uses it). Wiring `Settings` into the factories is a real gap, not this
-guide's to fix — recorded here so this document doesn't repeat the same incorrect claim its
-previous version made.
+falls through to the SDK's own env lookup on `None`. `app/settings.py`'s `Settings` class once
+declared `MRAG_OPENAI_API_KEY`/`MRAG_QDRANT_URL`/`MRAG_QDRANT_API_KEY` fields, but nothing in
+the pipeline-wiring path ever constructed a `Settings()` or read them — every adapter factory is
+`AdapterClass(**cfg.config)`, sourced only from the manifest — so the file was deleted outright
+in Étape 8 of the ADR-0007 stabilization pass. Qdrant's `url`/`api_key` have no SDK-level env
+fallback the way OpenAI's does, so they must be set explicitly in the manifest's
+`indexer.config` (or resolved via `resolve_manifest()`, Lot 9, if your entrypoint uses it).
 
 ### docker-compose.yml
 

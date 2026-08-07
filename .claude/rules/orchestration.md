@@ -2,8 +2,8 @@
 paths:
   - "src/modular_rag/orchestration/**/*.py"
 description: "Rules for editing orchestration module: registry wiring, engine flow, and state machines. Routing/flow compilation are delegated per ADR-0005."
-version: "2.0"
-lastUpdated: "2026-08-06"
+version: "2.1"
+lastUpdated: "2026-08-07"
 ---
 
 # Règles — édition du module orchestration
@@ -14,120 +14,109 @@ The orchestration layer is responsible for component wiring, execution flow, and
 
 ## 1. ComponentRegistry Pattern (Wiring Rule)
 
-### Rule: Register All Components Here, Never Wire Elsewhere
-Every component (chunker, retriever, generator, guard, adapter) must be registered in `orchestration/registry.py` before use. This is the **single source of truth** for component instantiation.
+> **Corrected 2026-08-07 (Étape 11):** this section previously showed a fictional
+> `@_register_factory` decorator, a `registry.load_manifest()`/`registry.get_component()` API,
+> and a manifest shape (`components: chunker: type: ...`) that never matched the real, flat
+> top-level manifest fields (`chunker:`, `retriever:`, etc.). Rewritten against the real
+> `ComponentRegistry` API (`orchestration/registry.py`) and registration location
+> (`app/default_factories.py`, moved from `orchestration/_default_factories.py` in Étape 4).
+
+### Rule: Register All Components in `app/default_factories.py`, Never Wire Elsewhere
+Every component (chunker, retriever, generator, guard, adapter) must be registered there before
+use. This is the **single source of truth** for component instantiation.
 
 ### Correct Pattern
 
-#### Step 1: Create a Factory Function (registry.py)
+#### Step 1: Register a Factory (`app/default_factories.py`, inside `register_defaults()`)
 ```python
-from modular_rag.contracts.chunking import Chunker
-from modular_rag.ingestion.chunkers import FixedSizeChunker
+from modular_rag.ingestion.chunkers.fixed import FixedSizeChunker
 
-@_register_factory("FixedSizeChunker", Chunker)
-def create_fixed_chunker(config: dict) -> Chunker:
-    """
-    Instantiate FixedSizeChunker from manifest config.
-    
-    Args:
-        config: {"chunk_size": 512, "overlap": 20}
-    """
-    return FixedSizeChunker(
-        chunk_size=config.get("chunk_size", 512),
-        overlap=config.get("overlap", 0)
-    )
+def register_defaults(reg: ComponentRegistry) -> None:
+    ...
+    reg.register("chunker", "fixed", lambda cfg: FixedSizeChunker(**cfg.config))
 ```
 
 #### Step 2: Select by Name in Manifest YAML
 ```yaml
-# manifests/presets/local-hybrid-rag.yaml
-components:
-  chunker:
-    type: "FixedSizeChunker"
-    config:
-      chunk_size: 512
-      overlap: 20
+# manifests/presets/local-hybrid-rag.yaml — top-level fields, no components: wrapper
+chunker:
+  type: "fixed"
+  config:
+    chunk_size: 512
+    chunk_overlap: 64
 ```
 
-#### Step 3: Instantiate via Registry (not directly)
+#### Step 3: Instantiate via `wire()` (not directly)
 ```python
 # ❌ WRONG
-from modular_rag.ingestion.chunkers import FixedSizeChunker
+from modular_rag.ingestion.chunkers.fixed import FixedSizeChunker
 chunker = FixedSizeChunker(chunk_size=512)
 
 # ✅ CORRECT
-registry = ComponentRegistry()
-registry.load_manifest("manifests/presets/local-hybrid-rag.yaml")
-chunker = registry.get_component("chunker")
+from modular_rag.app.bootstrap import load_pipeline
+engine = load_pipeline("manifests/presets/local-hybrid-rag.yaml")  # -> RAGEngine
+chunker = engine.chunker
 ```
 
 ### Why This Matters
 - **Decoupling**: Swap implementations by changing manifest, not code.
 - **Testability**: Mock components via test manifests.
 - **Consistency**: All components follow the same wiring pattern.
-- **Observability**: Registry can log all instantiations.
+- **Observability**: Registry logs every registration (`registry.registered` structlog events).
 
 ---
 
-## 2. RAGEngine.run() Flow & TraceStep Emissions
+## 2. RAGEngine.answer() Flow & TraceStep Emissions
+
+> **Corrected 2026-08-07 (Étape 11):** the example below previously showed a `run(query: Query)`
+> method, a boolean-returning guard (`self._guard.evaluate(query) -> bool`), and
+> `retriever.retrieve(query, trace=trace)`/`generator.generate(query, context, trace=trace)`
+> keyword-argument calls — none of which match the real signatures. `SecurityGuard.check_query()`
+> returns a `GuardResult` (`allowed`/`reason`/`risk_score`), `Retriever.retrieve()` takes no
+> `trace` argument at all (retrieval isn't separately traced by the retriever itself), and
+> `Generator.generate(query, context, trace)` takes `trace` positionally, not as a keyword.
 
 ### Rule: Emit TraceStep at Each Major Stage
-The `RAGEngine.run()` method orchestrates the entire pipeline. Each stage must emit a `TraceStep` for observability.
-
-### Correct Flow with TraceStep
+The real method is `RAGEngine.answer(question: str, **query_kwargs) -> Answer`
+(`orchestration/engine.py`), which delegates to a private `_run_steps()`. Each stage is gated on
+whether its optional component is configured on the `Container`; see
+`src/modular_rag/orchestration/CLAUDE.md` for the full 9-step list. Simplified illustration of
+the pattern (real code, not the full method):
 
 ```python
 from modular_rag.core.models.trace import Trace, TraceStep
 import time
 
-def run(self, query: Query) -> Answer:
-    """Execute the full RAG pipeline with trace emissions."""
+def answer(self, question: str, **query_kwargs: object) -> Answer:
+    query = Query(text=question, **query_kwargs)
     trace = Trace(query_id=query.id)
-    
-    # Stage 1: Guard query
+
+    if self._c.guard is not None:
+        result = self._c.guard.check_query(query)
+        if not result.allowed:
+            raise SecurityError(result.reason or "Query blocked by safety guard.")
+
     t0 = time.perf_counter()
-    is_safe = self._guard.evaluate(query)
-    if not is_safe:
-        trace.add_step(TraceStep(
-            name="guard_query",
-            latency_ms=(time.perf_counter() - t0) * 1000,
-            metadata={"risk_score": self._guard.risk_score}
-        ))
-        return Answer(text="Query blocked by safety guard", trace=trace)
-    
-    trace.add_step(TraceStep(
-        name="guard_query",
-        latency_ms=(time.perf_counter() - t0) * 1000
-    ))
-    
-    # Stage 2: Retrieve context
-    t0 = time.perf_counter()
-    context = self._retriever.retrieve(query, trace=trace)
+    context = self._c.retriever.retrieve(query)
     trace.add_step(TraceStep(
         name="retrieve",
         latency_ms=(time.perf_counter() - t0) * 1000,
-        metadata={"chunks": len(context)}
+        metadata={"chunks": len(context)},
     ))
-    
-    # Stage 3: Generate answer
-    t0 = time.perf_counter()
-    answer = self._generator.generate(query, context, trace=trace)
-    trace.add_step(TraceStep(
-        name="generate",
-        latency_ms=(time.perf_counter() - t0) * 1000,
-        metadata={"tokens": answer.token_count}
-    ))
-    
+
+    # generate() takes `trace` positionally and emits its own TraceStep internally —
+    # do not wrap it in a second "generate" step (Lot 10 fixed exactly this double-count).
+    answer = self._c.generator.generate(query, context, trace)
     return answer
 ```
 
 ### TraceStep Fields
-- **name** (str): Stage identifier (e.g., "guard_query", "retrieve", "generate")
-- **latency_ms** (float): Time taken in milliseconds
-- **metadata** (dict): Stage-specific data (chunk count, token count, risk score, etc.)
+Real fields (`core/models/trace.py`): `name: str`, `input_tokens: int = 0`,
+`output_tokens: int = 0`, `latency_ms: float = 0.0`, `metadata: dict[str, Any]`.
 
 ### Reference
-See [src/modular_rag/orchestration/engine.py](src/modular_rag/orchestration/engine.py#L76-L91) for working examples.
+See `orchestration/engine.py`'s real `_run_steps()`/`answer()` for the actual, complete
+9-step flow — this section is illustrative, not a copy of the real method body.
 
 ---
 
@@ -384,7 +373,7 @@ def test_full_rag_pipeline():
 ## Summary: Orchestration Dos & Don'ts
 
 ### ✅ DO
-- Register all components in `orchestration/_default_factories.py`
+- Register all components in `app/default_factories.py` (moved from `orchestration/_default_factories.py` in Étape 4 — `orchestration/` may only import core/contracts/orchestration)
 - Select components by name in manifest YAML
 - Emit `TraceStep` at each major stage
 - Inject dependencies via `Container`, built by `ComponentRegistry.wire()`
@@ -411,7 +400,7 @@ Before modifying this module, ask yourself:
 1. **Is this native orchestration or delegated-engine scope?** (Native: `RAGEngine`,
    `ComponentRegistry`, `StateMachine`. Delegated: routing, multi-agent coordination — goes
    through `DocumentEngine`.)
-2. **Does this require a registry entry?** (If so, add the factory in `_default_factories.py`.)
+2. **Does this require a registry entry?** (If so, add the factory in `app/default_factories.py`.)
 3. **Should this emit TraceStep?** (If user-visible, yes.)
 4. **What tests are needed?** (Unit for logic, integration for full pipeline.)
 5. **Does this violate layering?** (Orchestration imports domain modules only via contracts.)

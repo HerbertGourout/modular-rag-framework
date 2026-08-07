@@ -240,14 +240,16 @@ examples/
 | **Encryption Keys** | Private keys, encryption secrets | 🔴 CRITICAL | Use key management service |
 | **PII** | SSN, credit card numbers, phone | 🔴 CRITICAL | Use security/redaction/ |
 
-> **Corrected 2026-08-06:** this section previously named `MRAG_OPENAI_API_KEY`/
-> `MRAG_QDRANT_URL`/etc. as the working variables. They aren't — `app/settings.py`'s `Settings`
-> class declares those `MRAG_`-prefixed fields, but nothing in the real pipeline-wiring path
-> (`orchestration/_default_factories.py`, `app/bootstrap.py`) ever constructs `Settings()` or
-> calls `get_settings()`. The only working credential env vars are the LLM SDKs' own standard
-> names (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`), read automatically when a manifest's
-> `generator.config.api_key` is left unset. Qdrant URL/collection and every other endpoint
-> config comes from the manifest's `config:` block directly, with no env-var fallback at all.
+> **Corrected 2026-08-06, updated 2026-08-07:** this section previously named
+> `MRAG_OPENAI_API_KEY`/`MRAG_QDRANT_URL`/etc. as the working variables. They never were —
+> `app/settings.py`'s `Settings` class once declared those `MRAG_`-prefixed fields, but nothing
+> in the real pipeline-wiring path ever constructed `Settings()` or called `get_settings()`; the
+> file was deleted outright in Étape 8 of the ADR-0007 stabilization pass
+> (`docs/adr/0007-layer-boundaries-and-control-plane-activation.md`). The only working credential
+> env vars are the LLM SDKs' own standard names (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`), read
+> automatically when a manifest's `generator.config.api_key` is left unset. Qdrant URL/collection
+> and every other endpoint config comes from the manifest's `config:` block directly, with no
+> env-var fallback at all.
 
 ### .env Management
 

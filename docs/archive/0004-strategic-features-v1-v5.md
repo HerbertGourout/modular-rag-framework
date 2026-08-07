@@ -1,6 +1,6 @@
 # ADR-0004 — Strategic Features: Making the Framework Incontournable (V1→V5)
 
-**Status:** Superseded (partial) — see [ADR-0005](0005-document-ai-control-plane-boundary.md)  
+**Status:** Superseded (partial) — see [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md)  
 **Date:** 2026-06-20  
 **Authors:** Herbert Gourout, Publicis Data & AI Specialists
 
@@ -657,9 +657,9 @@ gantt
 
 - [ROADMAP.md](../../ROADMAP.md) — Complete timeline
 - [CLAUDE.md block 09](../../CLAUDE.md#09--roadmap-v1--v5-with-strategic-features) — Version scope
-- [ADR-0001](0001-modular-architecture.md) — Six-plane architecture
-- [ADR-0002](0002-contracts-and-plugins.md) — Protocols and contracts
-- [ADR-0003](0003-security-and-governance.md) — Security layers
+- [ADR-0001](../adr/0001-modular-architecture.md) — Six-plane architecture
+- [ADR-0002](../adr/0002-contracts-and-plugins.md) — Protocols and contracts
+- [ADR-0003](../adr/0003-security-and-governance.md) — Security layers
 
 ---
 

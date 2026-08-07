@@ -2,7 +2,7 @@
 
 **For**: All team members (developers, architects, product managers, stakeholders)
 **Purpose**: Understand what this framework is, why it exists, what it does now, and what's coming
-**Rewritten**: 2026-08-06 (documentation audit, `docs/documentation-audit-2026-08.md`)
+**Rewritten**: 2026-08-06 (documentation audit, `docs/archive/documentation-audit-2026-08.md`)
 **Status**: V1 complete; a full 18-lot engine-agnostic control-plane refactoring programme
 (2026-08-03 → 2026-08-06) has also shipped — see [docs/refactoring/README.md](../refactoring/README.md)
 

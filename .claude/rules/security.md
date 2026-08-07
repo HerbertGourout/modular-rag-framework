@@ -6,7 +6,7 @@ paths:
 # Rules — security module
 
 *(Translated to English 2026-08-06 for consistency with the rest of `.claude/rules/` —
-see `docs/documentation-audit-2026-08.md`.)*
+see `docs/archive/documentation-audit-2026-08.md`.)*
 
 - **Safety** (prompt injection, PII, toxicity) → `security/filters/` or `security/redaction/`
 - **Security** (RBAC, tenant isolation, policy enforcement) → `security/policies/`
