@@ -82,13 +82,13 @@ Only `local-hybrid-rag.yaml` actually wires end to end today — every other pre
 references files/interpolation that don't resolve). See
 [`manifests/README.md`](../../manifests/README.md) for the full, current classification and why.
 
-| Preset | Status | Use case (once its blueprint is completed) |
+| Preset | Status | Use case |
 |---|---|---|
-| `local-hybrid-rag.yaml` | **Runnable** | Local development, no auth, GPT-4o-mini — the only one to actually run today |
-| `secure-enterprise-rag.yaml` | Blueprint | Internal deployment, security guards enabled, GPT-4o |
-| `agentic-rag.yaml` | Blueprint | Complex multi-step questions — planner/agents fields are unprocessed by `wire()`; this scope is delegated to an external engine per ADR-0005, not a native runtime to complete |
-| `graph-memory-rag.yaml` | Blueprint | Entity-relationship reasoning — GraphRAG traversal is delegated per ADR-0005/0006 |
-| `multimodal-rag.yaml` | Blueprint | PDF with charts, images, tables — `embedder.type: multimodal` isn't a registered factory, `wire()` raises immediately |
+| `local-hybrid-rag.yaml` | **Runnable** | Local development, no auth, GPT-4o-mini — the reference starting point |
+| `secure-enterprise-rag.yaml` | **Runnable** (V2) | Enterprise deployment — tenant isolation, PII redaction, inline policy engine, durable Postgres audit trail, blocking quality gate. Needs `QDRANT_URL`/`QDRANT_API_KEY`/`AUDIT_DATABASE_URL` set. |
+| `langgraph-rag.yaml` | **Runnable** (V2) | Complex multi-step questions routed through `engine.adapter: langgraph` — a real `LangGraphEngineAdapter`, not native agents. Renamed from `agentic-rag.yaml`. |
+| `manifests/blueprints/graph-memory-rag.yaml` | Blueprint | Entity-relationship reasoning — GraphRAG traversal is delegated per ADR-0005/0006 and not provided by the selected engine yet |
+| `manifests/blueprints/multimodal-rag.yaml` | Blueprint | PDF with charts, images, tables — `embedder.type: multimodal` isn't a registered factory; VLM execution is delegated |
 
 ## Next steps
 

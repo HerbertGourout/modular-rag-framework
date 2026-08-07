@@ -39,8 +39,20 @@ jobs:
             echo "::error::New mypy errors introduced ($MYPY_ERRORS > baseline $MYPY_BASELINE)"
             exit 1
           fi
-      - name: Validate the runnable manifest (see manifests/README.md)
-        run: python -c "from modular_rag.app.bootstrap import load_pipeline; load_pipeline('manifests/presets/local-hybrid-rag.yaml'); print('local-hybrid-rag.yaml wires cleanly')"
+      - name: Validate every runnable manifest (see manifests/README.md)
+        env:
+          QDRANT_URL: "http://localhost:6333"
+          QDRANT_API_KEY: "smoke-test-key"
+          AUDIT_DATABASE_URL: "postgresql://smoke-test/db"
+        run: |
+          python -c "
+          from pathlib import Path
+          from modular_rag.app.bootstrap import load_pipeline
+
+          for path in sorted(Path('manifests/presets').glob('*.yaml')):
+              load_pipeline(str(path))
+              print(f'{path.name} wires cleanly')
+          "
 
   test-unit:
     runs-on: ubuntu-latest

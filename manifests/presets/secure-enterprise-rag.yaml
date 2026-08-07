@@ -1,14 +1,13 @@
-# Status: BLUEPRINT — two real breakages, not just unimplemented V4 scope: (1) `policies:`
-# references manifests/policies/no-pii-export.yaml and hr-data-restriction.yaml, neither of
-# which exists on disk, and ComponentRegistry.wire() never reads the `policies` field anyway;
-# (2) `indexer.config.url: "${QDRANT_URL}"` is never interpolated — load_manifest() does a
-# plain yaml.safe_load with no env-var substitution (that's Lot 9 scope), so this literal
-# string would be passed to QdrantStore as-is. `security`/`evaluation` types (`basic`/
-# `exact-match`) ARE real and would wire correctly. See docs/refactoring-plan.md §2 and
-# manifests/README.md.
-version: "1.0"
+# Status: RUNNABLE (V2) — converted from the old V4-style BLUEPRINT (Étape 7,
+# docs/adr/0007-layer-boundaries-and-control-plane-activation.md). Every `type:` below is
+# registered in app/default_factories.py. `${QDRANT_URL}` / `secret://QDRANT_API_KEY` /
+# `secret://AUDIT_DATABASE_URL` are resolved by app/config_resolution.py::resolve_manifest()
+# (used by `mrag validate`/`mrag ask`/`mrag ingest`) — set the matching environment variables
+# before loading this manifest, or `resolve_manifest()` fails closed with a clear
+# ConfigurationError rather than passing the literal placeholder string through.
+version: "2.0"
 id: secure-enterprise-rag
-description: "Enterprise pipeline with security guards, PII redaction, and audit telemetry."
+description: "Enterprise pipeline with security guards, PII redaction, tenant isolation, policy enforcement, and durable audit trail."
 tenant: enterprise
 environment: production
 
@@ -28,7 +27,7 @@ indexer:
   config:
     collection: enterprise_docs
     url: "${QDRANT_URL}"
-    api_key: "${QDRANT_API_KEY}"
+    api_key: "secret://QDRANT_API_KEY"
 
 retriever:
   type: hybrid
@@ -58,10 +57,49 @@ security:
 evaluation:
   type: exact-match
 
-# V4 — policy declarations (loaded from policies/ directory)
-policies:
-  - policies/no-pii-export.yaml
-  - policies/hr-data-restriction.yaml
+engine:
+  adapter: native
 
-modalities:
-  - text
+# Replaces the old file-referencing `policies:` list (manifests/policies/no-pii-export.yaml,
+# hr-data-restriction.yaml never existed on disk, and ComponentRegistry.wire() never read that
+# field regardless). PolicyEngine's factory expects inline Policy objects
+# (governance.policy_engine.config.policies), not file paths — see
+# app/default_factories.py's "policy_engine"/"inline" registration.
+governance:
+  tenant_enforcement: true
+  tenant_policy:
+    type: tenant-isolation
+  redactor:
+    type: patterns
+  policy_engine:
+    type: inline
+    config:
+      policies:
+        - name: no-pii-export
+          rules:
+            - name: deny-pii-export-requests
+              condition: "export"
+              action: deny
+              priority: 10
+        - name: hr-data-restriction
+          rules:
+            - name: deny-hr-restricted-queries
+              condition: "hr-restricted"
+              action: deny
+              priority: 10
+  audit_sink:
+    type: postgres
+    config:
+      dsn: "secret://AUDIT_DATABASE_URL"
+
+observability:
+  telemetry:
+    type: structlog
+
+quality:
+  gate:
+    type: baseline
+    config:
+      mode: blocking
+      baseline:
+        exact_match: 0.85

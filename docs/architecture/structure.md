@@ -731,35 +731,38 @@ docs/
 
 ## `manifests/` — YAML configurations
 
-> **Runnable vs. Blueprint (see `manifests/README.md`):** only `local-hybrid-rag.yaml` wires
-> end-to-end via `ComponentRegistry.wire()` today. The other four are Blueprint — the YAML
-> fields exist and parse, but several referenced concepts (5 agents + coordinator,
-> `GraphPlanner`, EvoRAG feedback) describe the pre-Lot-17 native design and don't correspond to
-> any component the registry can actually instantiate now (that prototype cluster was removed —
-> zero consumers, see `docs/refactoring/lot-17-prototype-retirement.md`). Treat the "Notable"
-> column below as documentation of *intent*, not of wired behavior, for every row except
-> `local-hybrid-rag`.
+> **Runnable vs. Blueprint (see `manifests/README.md`):** since
+> [ADR-0007](../adr/0007-layer-boundaries-and-control-plane-activation.md) (Étape 7),
+> `presets/` contains only manifests that load, validate, and wire cleanly — non-executable
+> sketches live under `blueprints/` instead. `secure-enterprise-rag.yaml` was converted to a
+> real V2 manifest (governance/quality sections, `${VAR}`/`secret://` interpolation) and
+> `agentic-rag.yaml` was renamed `langgraph-rag.yaml` with `engine.adapter: langgraph` replacing
+> the never-built native five-agent design (removed in Lot 17, see
+> `docs/refactoring/lot-17-prototype-retirement.md`). `graph-memory-rag.yaml` and
+> `multimodal-rag.yaml` moved to `blueprints/` — GraphRAG traversal and VLM execution are
+> delegated per ADR-0005 §5.2, and neither is provided by the selected engine today.
 
 ```
 manifests/
 ├── presets/
 │   ├── local-hybrid-rag.yaml         ← V1 local dev (HuggingFace + Qdrant localhost + GPT-4o-mini) — Runnable
-│   ├── secure-enterprise-rag.yaml    ← V1 prod (guard + policies + GPT-4o, temp=0.0) — Blueprint
-│   ├── agentic-rag.yaml              ← V2 (5 agents + coordinator + adaptive routing) — Blueprint, pre-Lot-17 design
-│   ├── graph-memory-rag.yaml         ← V3 (GraphPlanner + NetworkX + EvoRAG feedback) — Blueprint, pre-Lot-17 design
-│   └── multimodal-rag.yaml           ← V5 (CLIP + Whisper + claude-opus-4-7 + modality agents) — Blueprint
+│   ├── secure-enterprise-rag.yaml    ← V2 native (tenant isolation + policy engine + Postgres audit + quality gate) — Runnable
+│   └── langgraph-rag.yaml            ← V2 delegated (engine.adapter: langgraph) — Runnable
+├── blueprints/
+│   ├── graph-memory-rag.yaml         ← GraphRAG sketch — delegated traversal not provided by selected engine
+│   └── multimodal-rag.yaml           ← Multimodal sketch — VLM execution delegated, parsing/enrichment status open
 ├── dev/                              ← Dev environment overrides (V4, currently empty)
 ├── staging/                          ← Staging overrides (V4, currently empty)
 └── production/                       ← Production overrides (V4, currently empty)
 ```
 
-| Manifest | Version | Status | LLM | Embedder | Security | Notable |
+| Manifest | Version | Status | LLM | Embedder | Governance | Notable |
 |---|---|---|---|---|---|---|
 | `local-hybrid-rag` | V1 | Runnable | gpt-4o-mini | bge-small-en-v1.5 | none | Development, Qdrant localhost |
-| `secure-enterprise-rag` | V1 | Blueprint | gpt-4o | bge-base-en-v1.5 | BasicSecurityGuard + policies | max_query_length=2000, temp=0.0 |
-| `agentic-rag` | V2 | Blueprint | gpt-4o | bge-base-en-v1.5 | BasicSecurityGuard | k=30, rerank_k=10, 5 agents (pre-Lot-17 design, not wired) |
-| `graph-memory-rag` | V3 | Blueprint | gpt-4o | bge-base-en-v1.5 | BasicSecurityGuard | GraphPlanner, EvoRAG feedback (pre-Lot-17 design, not wired) |
-| `multimodal-rag` | V5 | Blueprint | claude-opus-4-7 | CLIP + bge-base | BasicSecurityGuard | multi-vector, modality agents |
+| `secure-enterprise-rag` | V2 | Runnable | gpt-4o | bge-base-en-v1.5 | tenant isolation + redaction + inline policy engine + Postgres audit | Blocking quality gate; requires QDRANT_URL/QDRANT_API_KEY/AUDIT_DATABASE_URL |
+| `langgraph-rag` | V2 | Runnable | gpt-4o | bge-base-en-v1.5 | none | `engine.adapter: langgraph` — real `LangGraphEngineAdapter`, not native agents |
+| `graph-memory-rag` | — | Blueprint | gpt-4o | bge-base-en-v1.5 | — | GraphRAG traversal delegated, unavailable in selected engine today |
+| `multimodal-rag` | — | Blueprint | claude-opus-4-7 | multimodal (unregistered) | — | VLM execution delegated; parsing/enrichment status open |
 
 ---
 

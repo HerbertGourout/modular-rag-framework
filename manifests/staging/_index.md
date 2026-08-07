@@ -11,7 +11,9 @@ manifest or policy change under near-real conditions before promoting it to prod
 without risking sensitive data.
 
 In the meantime, manually derive a manifest from
-[`secure-enterprise-rag.yaml`](../presets/secure-enterprise-rag.yaml) — note this preset is
-itself Blueprint, not Runnable (see [`../README.md`](../README.md)), so deriving from it means
-also fixing what makes it non-functional (the `policies:` field `wire()` never reads, the
-`${QDRANT_URL}` interpolation `load_manifest()` doesn't perform), not just copying it as-is.
+[`secure-enterprise-rag.yaml`](../presets/secure-enterprise-rag.yaml) — since Étape 7 (ADR-0007)
+this preset is Runnable, not Blueprint (see [`../README.md`](../README.md)): governance section
+with tenant isolation/redaction/inline policy engine/Postgres audit, `${QDRANT_URL}`/
+`secret://QDRANT_API_KEY`/`secret://AUDIT_DATABASE_URL` actually resolved by
+`app/config_resolution.py::resolve_manifest()`. Copying it as a staging base is safe; just set
+the referenced environment variables for the staging environment.
