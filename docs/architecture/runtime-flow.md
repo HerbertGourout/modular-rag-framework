@@ -131,6 +131,7 @@ Generic multi-agent orchestration (the pre-ADR-0005 `Router`/`Coordinator`/`Plan
 `Retriever Agent`/`Extractor`/`Synthesizer`/`Validator` design) and GraphRAG traversal
 (`Entity Extractor`/`Graph Retriever`/`Context Builder`) are both delegated to whichever engine
 is selected here — neither was ever built as native code beyond the multi-agent prototype
-[removed in Lot 17](../refactoring/lot-17-prototype-retirement.md). A native `KnowledgeGraph`
-data model does exist (`memory/graph/knowledge_graph.py`, retained with a documented caveat) but
-is not wired into either engine path today.
+[removed in Lot 17](../refactoring/lot-17-prototype-retirement.md). The native `KnowledgeGraph`
+data model (`memory/graph/knowledge_graph.py`) was removed 2026-08-07 (Étape 8,
+[ADR-0007](../adr/0007-layer-boundaries-and-control-plane-activation.md)) — zero consumers
+anywhere, restorable via git history. There is no native graph capability of any kind today.

@@ -9,15 +9,33 @@ This document describes the dependency architecture of the framework: what modul
 ```
 src/modular_rag/
 ├── contracts/          ← Protocols (interfaces). Nothing else depends on these except adapters + domain modules.
+│                          Corrected 2026-08-07 — this list previously named several files that
+│                          don't exist (embedding.py, memory.py, manifest.py) and omitted half
+│                          the real ones. Real files, alphabetical:
+│   ├── audit.py            AuditEvent, AuditEventType, AuditSink
 │   ├── chunking.py         Chunker protocol
-│   ├── embedding.py        Embedder protocol (sync + async)
-│   ├── storage.py          Indexer, Retriever, Storage protocols
-│   ├── generation.py       Generator, Reranker protocols
-│   ├── security.py         SecurityGuard, Redactor, GuardResult
+│   ├── embeddings.py       Embedder protocol (sync + async)
+│   ├── engine.py           DocumentEngine port, EngineRequest/EngineStep/EngineCapability
+│   ├── erasure.py          Right-to-erasure Protocol
 │   ├── evaluation.py       Evaluator protocol
-│   ├── telemetry.py        Telemetry protocol
-│   ├── memory.py           KnowledgeGraphStore protocol
-│   └── manifest.py         ManifestLoader, PipelineManifest
+│   ├── generation.py       Generator protocol
+│   ├── identity.py         TokenVerifier, TenantContext
+│   ├── indexing.py         Indexer protocol
+│   ├── lifecycle.py        LifecycleLedger, DocumentRecord, INDEX_SCHEMA_VERSION
+│   ├── manifests.py        PipelineManifest, GovernanceSection, QualitySection,
+│   │                       ObservabilitySection, LifecycleSection, EngineSelection
+│   ├── parsing.py          Parser protocol
+│   ├── reconciliation.py   Index-reconciliation Protocol
+│   ├── reranking.py        Reranker protocol
+│   ├── retrieval.py        Retriever protocol
+│   ├── review.py           HumanReviewGate-related Protocol
+│   ├── secrets.py          SecretResolver protocol
+│   ├── security.py         SecurityGuard, Redactor, TenantPolicy, GuardResult
+│   ├── storage.py          Storage protocol (KV)
+│   └── telemetry.py        Telemetry protocol
+│                          (No `memory.py`/`KnowledgeGraphStore` — never existed; the module-
+│                          level `memory/graph/` implementation it would have backed was
+│                          removed 2026-08-07, Étape 8.)
 │
 ├── core/               ← Shared, depended on by all. Imports NOTHING from this project.
 │   ├── models/             Domain entities (Pydantic v2, see data-model.md)
@@ -72,16 +90,17 @@ src/modular_rag/
 │   ├── redaction/
 │   │   └── patterns.py     PatternRedactor (email, phone, IBAN, API key)
 │   └── policies/
-│       └── policy_engine.py PolicyEngine (V4 — evaluates PolicyRule conditions)
+│       └── policy_engine.py PolicyEngine (V2.0, native/owned per ADR-0005 §5.1 — evaluates
+│                              inline Policy/PolicyRule conditions, manifest-wired via
+│                              governance.policy_engine)
 │
 ├── eval/               ← Domain module: Answer × ground truth → Metrics
-│   └── exact_match.py      ExactMatchEvaluator (token-level P/R)
+│   └── scorers/exact_match.py  ExactMatchEvaluator (token-level P/R)
 │
-├── memory/             ← Domain module: persistent knowledge graph (V3)
-│   └── graph/
-│       └── knowledge_graph.py KnowledgeGraph (in-memory, plain dict/list — not NetworkX,
-│                              despite an earlier version of this diagram; retained with a
-│                              caveat in Lot 17, see docs/refactoring-plan.md)
+├── memory/             ← Domain module: no graph submodule anymore — `memory/graph/`
+│                          (KnowledgeGraph, GraphNode, GraphEdge) was removed 2026-08-07
+│                          (Étape 8, ADR-0007): zero consumers anywhere, restorable via git
+│                          history. Only `memory/kv/in_memory.py` (InMemoryStorage) remains.
 │
 ├── agents/             ← engine-delegation adapter integration (ADR-0005 §5.2), not a
 │                          native multi-agent runtime — the five prototype agent classes this
@@ -180,10 +199,10 @@ delegation decision.
 | `ingestion/` | `TextParser`, `PDFParser`, `FixedSizeChunker`, `AdaptiveChunker`, `TextNormalizer`, `MetadataEnricher`, `ingest_path` |
 | `retrieval/` | `BM25Retriever`, `VectorRetriever`, `ReciprocRankFusion` |
 | `security/` | `BasicSecurityGuard`, `PatternRedactor` |
-| `eval/` | `ExactMatchEvaluator` |
-| `memory/` | `KnowledgeGraph` |
-| `orchestration/` | `RAGEngine`, `ComponentRegistry` |
-| `app/` | `bootstrap`, `Settings` |
+| `eval/` | `ExactMatchEvaluator`, `QualityGate`, `BenchmarkRunner` |
+| `memory/` | `InMemoryStorage` (no graph submodule — removed 2026-08-07, Étape 8) |
+| `orchestration/` | `RAGEngine`, `ComponentRegistry`, `Container` |
+| `app/` | `bootstrap`, `default_factories`, `public`, `application` (no `Settings` — removed 2026-08-07, Étape 8) |
 
 ---
 
