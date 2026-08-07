@@ -252,7 +252,7 @@ A `Trace` is the audit record for a single pipeline execution. It accumulates `T
 | `total_latency_ms` | `float` | `0.0` | Running total — updated by `add_step()` |
 | `total_input_tokens` | `int` | `0` | Running total |
 | `total_output_tokens` | `int` | `0` | Running total |
-| `routing_strategy` | `str` | `""` | Strategy chosen by the router |
+| `routing_strategy` | `str` | `""` | Execution strategy/engine identifier recorded on the trace (the native `QueryRouter` this once referred to was removed in Lot 17; nothing currently sets this field) |
 | `created_at` | `datetime` | `utcnow()` | Start of pipeline execution |
 
 **Key method**

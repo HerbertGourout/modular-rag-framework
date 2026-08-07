@@ -188,15 +188,14 @@ A change to a contract (`contracts/`) requires updating the matching `tests/cont
 
 ## 09 — Roadmap: V1 → V5 with Strategic Features
 
-<!-- Updated: 2026-06-20 — Integrated 8 strategic features across V1-V5 -->
-<!-- Superseded in part 2026-08-04 by ADR-0005 — see note below and block 01 -->
+<!-- Updated: 2026-08-06 — reconciled with ADR-0005; native design text for delegated
+     capabilities removed rather than banner-flagged (see docs/refactoring/lot-17-prototype-retirement.md) -->
 
 > **ADR-0005 superseding note:** of the roadmap below, **V1.1, V1.2, and V2.0 are unchanged —
 > build natively as described.** **V2.1 (Multi-Agent Teams), V3.0 (GraphRAG), V3.2 (Fine-Tuning
 > Loop — except its drift-detection/evaluation trigger, which stays native), and V5.0
-> (multimodal execution)** are now delegated to a selected external engine via adapter, not
-> built from the native designs described below. Treat those four sections as historical design
-> intent, not an implementation target, until Lot 17 rewrites this document fully.
+> (multimodal execution)** are delegated to a selected external engine via the `DocumentEngine`
+> port ([ADR-0006](docs/adr/0006-external-engine-selection.md), LangGraph), not built natively.
 
 Strategic roadmap integrating **8 high-value features** that make this framework incontournable (irreplaceable).
 See [ROADMAP.md](ROADMAP.md) for complete timeline and success criteria per version.
@@ -232,11 +231,10 @@ See [ROADMAP.md](ROADMAP.md) for complete timeline and success criteria per vers
 
 ---
 
-### V2 — Agentic + Policy Engine + Teams `[Q3 2026]`
+### V2 — Policy Engine `[Q3 2026]`
 
-**V2.0 — Multi-Agent Runtime + Policy-as-Code** `[UPDATED — P0 priority]`
-- Multi-agent runtime: coordinator, planner, retriever, extractor, synthesizer, validator
-- **NEW - Policy Engine** (moved from V4): `security/policies/`
+**V2.0 — Policy-as-Code** `[UPDATED — P0 priority]`
+- `security/policies/`: Policy-as-Code framework
   - Define policies in YAML (who can access what)
   - PolicyEngine evaluates queries vs policies before execution
   - Role-based access control (analyst vs director)
@@ -245,44 +243,34 @@ See [ROADMAP.md](ROADMAP.md) for complete timeline and success criteria per vers
 - **Key difference vs V1**: Governance is now proactive (prevent bad queries) not just reactive
 - **Success**: Policies enforced, multi-tenant isolation works, violations logged
 
-**V2.1 — Collaborative Multi-Agent Teams** `[NEW — 3 months after V2.0]`
-- `agents/domain_specialist/`: Expert agents for specific domains
-- `agents/fact_checker/`: Validates answers against retrieved docs
-- `agents/collaboration/`: Consensus scoring, conflict resolution
-- `orchestration/team_coordinator.py`: Orchestrate which agents run, in what order
-- **Example workflow**: HR question → HR specialist + Legal + Finance agents → synthesis
-- **Key difference**: Transparency (know why each agent was involved), accountability
-- **Success**: Team queries executable, consensus > 85%, full reasoning trace
+**V2.1 — Multi-Agent Orchestration** — delegated per [ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md)
+§5.2 to a selected external engine via the `DocumentEngine` port; not built natively. The
+prototype implementation was removed in
+[Lot 17](docs/refactoring/lot-17-prototype-retirement.md).
 
 ---
 
 ### V3 — Graph Memory + Cost Optimization + Fine-Tuning `[Q4 2026]`
 
-**V3.0 — GraphRAG + Knowledge Graphs**
-- Knowledge graph construction from corpus
-- GraphRAG retrieval (sub-graph selection, multi-hop reasoning)
-- Community detection + hierarchical summaries
-- Neo4j adapter for `adapters/graphstores/`
-- EvoRAG: edge reinforcement from user feedback
-- **Success**: 3-hop reasoning works, F1 > 0.80 on graph queries
+**V3.0 — GraphRAG** — traversal/reasoning execution delegated per
+[ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md) §5.2 to a selected external
+engine via the `DocumentEngine` port. A knowledge-graph *data model* may still live in
+`memory/` if Lot 6 evidence shows the external engine can't represent it — undecided.
 
-**V3.1 — Cost Optimization Engine** `[NEW — 2 months after V3.0]`
-- `orchestration/cost_optimizer/`: Query classifier (factual vs reasoning)
-- Smart routing: BM25 → GPT-3.5 if factual, GPT-4 only if reasoning-heavy
-- Multi-model support: Mix GPT-4, GPT-3.5, local LLMs
-- `orchestration/query_cache.py`: Hash-based caching, return cached if > 95% similar
-- `eval/cost_reporting/`: Dashboard (cost/query, per user, per month)
-- **Example impact**: 10k queries/month → $300 → $41.50 (86% savings)
-- **Success**: 70% queries routed to cheap path, cost reduction > 50%
+**V3.1 — Cost/Latency Evidence + Reporting** `[NEW — 2 months after V3.0]` — reframed per
+ADR-0005 §5.1: the in-house query-routing/model-selection logic is delegated; what stays
+native is reporting.
+- `eval/cost_reporting/`: Dashboard (cost/query, per user, per month), regardless of which
+  engine served the query
+- **Success**: cost/latency reported per query, anomalies flagged
 
-**V3.2 — Continuous Fine-Tuning Loop** `[NEW — 3 months after V3.0]`
+**V3.2 — Drift Detection + Evaluation Trigger** `[NEW — 3 months after V3.0]` — reframed per
+ADR-0005 §5.2: fine-tuning *execution* is delegated to external MLOps tooling; what stays
+native is deciding *when* retraining is needed.
 - `eval/feedback_collection/`: Thumbs up/down, user corrections
-- `eval/drift_detection.py`: Monitor F1 vs baseline
-- `orchestration/auto_fine_tuning/`: Auto-retrain on corrections
-- `orchestration/model_versioning/`: Track versions, rollback if regress
-- **Example workflow**: User corrects 50 queries → auto-fine-tune embedder → F1 improves 2-5%
-- **Key difference**: RAG that learns autonomously; never manual retraining
-- **Success**: Feedback > 80%, drift detected, F1 improves monthly
+- `eval/drift_detection.py`: Monitor F1 vs baseline, alert on degradation
+- **Success**: Feedback > 80%, drift detected, alert triggers a defined external retraining
+  workflow
 
 ---
 
@@ -308,14 +296,10 @@ See [ROADMAP.md](ROADMAP.md) for complete timeline and success criteria per vers
 
 ### V5 — Multimodal Intelligence `[Q2 2027]`
 
-**V5.0 — Images, Audio, Video, Tables + VLMs**
-- Multimodal parsers: image, table, audio transcription (Whisper), video segmentation
-- Multi-vector Qdrant index (text + image + table)
-- MG²-RAG: multi-granularity cross-modal graph
-- Modality-specialized agents: text, vision, table, video agents
-- VLM generation (Claude vision, GPT-4V)
-- Enriched citations: image references, timecodes
-- **Success**: Multimodal QA on PDFs with charts, VLM integration works
+**V5.0 — Multimodal Intelligence** — VLM execution delegated per
+[ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md) §5.2 to a selected external
+engine via the `DocumentEngine` port. Parsing/citation enrichment (extracting images/tables,
+attaching timecodes) may remain native if Lot 6/15 evidence supports it — undecided.
 
 ---
 
@@ -370,18 +354,18 @@ engine or a specific vendor SDK.
 
 ```
 V1 — V1.0 → V1.1 → V1.2 (complete V1 before V2)
-V2 — V2.0 → V2.1 (complete V2 before V3)
-V3 — V3.0 → V3.1 → V3.2 (complete V3 before V4)
+V2 — V2.0 (V2.1 delegated, not built — see above)
+V3 — V3.0 (delegated) → V3.1 → V3.2 (native reporting/drift-detection portions)
 V4 — V4.0 → V4.1 (complete V4 before V5)
-V5 — V5.0
+V5 — V5.0 (delegated — see above)
 ```
 
 Why sequences matter:
 - V1.1 (Evaluation) depends on V1.0 (core components to evaluate)
 - V1.2 (Audit) depends on V1.0 + V1.1 (what to audit)
-- V2.0 (Agents) depends on V1.x (they use V1 components)
-- V2.1 (Teams) depends on V2.0 (requires agent runtime)
-- V3.1 (Cost Opt) depends on V3.0 (optimize what's expensive)
+- V2.0 (Policy Engine) depends on V1.x (they use V1 components)
+- V3.1's cost/latency reporting and V3.2's drift detection don't depend on V3.0's (delegated)
+  GraphRAG — they're independent native features that happen to share a version number
 - V4.1 (Multi-Lang) depends on V4.0 (governance framework)
 
 ---
@@ -402,10 +386,16 @@ Why sequences matter:
 → No. V1 is English. V4.1 adds 20+ languages. For now, use mxbai-embed-large (which handles multiple languages by default, but don't expect perfect quality in V1).
 
 **"Can I do fine-tuning in V2?"**
-→ Not recommended. V3.2 is the target. V2-V3 focus on reasoning + retrieval quality first.
+→ Not recommended. V3.2 is the target, and even there only the drift-detection/evaluation
+trigger is native — the actual fine-tuning execution is delegated per ADR-0005 §5.2 to
+external MLOps tooling, not built in this repo at any version.
 
 **"What if client asks for V5 features in V1?"**
-→ Explain the strategy: "V1 is proven RAG. V2 adds governance and agents. V3 adds intelligence. V4 adds compliance. V5 adds multimodal." Each version compounds on the previous.
+→ Explain the strategy honestly: V1 is proven native RAG with native governance/audit/eval built
+in every version. Multi-agent orchestration (V2.1), GraphRAG traversal (V3.0), fine-tuning
+execution (V3.2), and multimodal execution (V5.0) are delegated to a selected external engine
+per ADR-0005 — this framework's differentiator is owning governance/audit/eval/portability
+*around* that engine, not building those four capabilities in-house.
 
 **"What about benchmarks?"**
 → V3+. V1-V2 use golden sets (eval). V3 adds performance benchmarks and tracking.
@@ -420,7 +410,7 @@ Why sequences matter:
 | Audit Trail | Manual logs | Limited | ✅ **GDPR-ready (V1.2), native** |
 | Policies | None | Limited | ✅ **Policy-as-Code (V2.0), native** |
 | Multi-Agent | Bolted-on | Limited | ⚙️ **Delegated to a selected external engine (V2.1)**, exposed via `DocumentEngine` |
-| Cost Optimization | None | None | ✅ **Auto-routing (V3.1), native** |
+| Cost Optimization | None | None | ✅ **Evidence/reporting native (V3.1)**; routing logic delegated |
 | Fine-Tuning | None | None | ⚙️ **Drift detection/eval trigger native; fine-tuning execution delegated (V3.2)** |
 | Graph Memory | External | External | ⚙️ **Delegated GraphRAG traversal (V3.0)**; a native graph data model is possible pending Lot 6 evidence |
 | Multi-Language | English-first | Limited | ✅ **20+ languages (V4.1), native** |

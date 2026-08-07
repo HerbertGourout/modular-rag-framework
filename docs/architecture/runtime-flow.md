@@ -95,68 +95,42 @@ flowchart LR
 
 ---
 
-## V2 — Agentic RAG
+## Engine delegation — native vs. LangGraph
 
-> **Historical design reference, not current behavior.** The components this section names
-> (`Router`, `Coordinator`, `Planner`, `Retriever Agent`, `Extractor`, `Synthesizer`,
-> `Validator`) were removed in Lot 17 (`docs/refactoring-plan.md`): the router was constructed
-> by `RAGEngine` but its classification output was never actually read anywhere, and the five
-> agent classes had zero consumers anywhere in the codebase. Per
-> [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) §5.2, generic multi-agent
-> orchestration is delegated to the selected external engine (LangGraph,
-> [ADR-0006](../adr/0006-external-engine-selection.md)) via the `DocumentEngine` port
-> (`contracts/engine.py`) — reached through `adapters/llms/langgraph_engine.py`'s
-> `LangGraphEngineAdapter`, not through the diagram below. Kept as a record of the original
-> design intent, not a description of anything the framework does today.
-
-The V2 router was meant to classify each query and dispatch it to the right execution path.
-Simple queries would go directly to the V1 pipeline; complex queries requiring multi-step
-reasoning would go to the Coordinator, which spun up a team of specialised agents. The Validator
-could loop back to the Retriever Agent if groundedness was too low — the self-correction loop
-this design intended for agentic RAG.
+Per [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) §5.2, this is the real fork
+in the current codebase: a manifest's `engine.adapter` field selects which `DocumentEngine`
+(`contracts/engine.py`) implementation `app/bootstrap.py::load_engine()` returns.
+`"native"` (or no `engine` section) gets `NativeEngineAdapter` — the fixed V1 pipeline from the
+diagrams above. `"langgraph"` gets `LangGraphEngineAdapter`
+(`adapters/llms/langgraph_engine.py`), whose internal graph is the real, current replacement for
+the V2/V3 native-agent and GraphRAG designs once sketched here — both adapters share the same
+`Container` (identical chunker/retriever/guard/generator selection); only the orchestration
+engine differs.
 
 ```mermaid
 flowchart TD
-    Q[Query] --> Router
-    Router -->|llm_only| LLM[Generator]
-    Router -->|simple_rag| V1[V1 Pipeline]
-    Router -->|agentic_rag| Coord[Coordinator]
+    Q[Query] --> LE["load_engine(manifest)"]
+    LE -->|engine.adapter: native, or unset| Native[NativeEngineAdapter]
+    LE -->|engine.adapter: langgraph| LG[LangGraphEngineAdapter]
 
-    Coord --> Planner
-    Planner -->|ExecutionPlan| Coord
-    Coord --> RetAgent[Retriever Agent]
-    RetAgent --> Extractor
-    Extractor --> Synthesizer
-    Synthesizer --> Validator
-    Validator -->|low groundedness| RetAgent
-    Validator -->|ok| Output[Generator → Answer]
+    Native --> V1Flow["guard → retrieve → rerank → generate\n(see V1 diagrams above)"]
+
+    subgraph LangGraph state graph
+        Route[route] --> Retrieve[retrieve]
+        Retrieve --> Guard[guard]
+        Guard -->|blocked| Blocked[blocked]
+        Guard -->|allowed| Generate[generate]
+    end
+    LG --> Route
+    Generate --> Ans[Answer]
+    Blocked --> Ans
+    V1Flow --> Ans
 ```
 
----
-
-## V3 — Graph RAG
-
-> **Historical design reference, not current behavior.** Per ADR-0005 §5.2, GraphRAG traversal
-> and multi-hop reasoning are delegated to the selected external engine, not built as the native
-> pipeline diagrammed below. A native `KnowledgeGraph` data model does exist
-> (`memory/graph/knowledge_graph.py`) and is retained with a documented caveat — see its own
-> docstring and `docs/refactoring/lot-17-prototype-retirement.md` — but it is not wired into any
-> retriever or pipeline today, and the Entity Extractor/Graph Retriever/Context Builder
-> components below were never built.
-
-In V3's original design, retrieval would start from the knowledge graph rather than the vector
-store. The Entity Extractor would identify named entities in the query; the Graph Retriever
-would expand them to a local sub-graph; the Vector Retriever would enrich with additional chunk
-context. The Context Builder would merge both and feed the Generator — intended to enable
-multi-hop reasoning (A → B → C) with explicit proof paths in the answer.
-
-```mermaid
-flowchart LR
-    Q[Query] --> EE[Entity Extractor]
-    EE --> GR[Graph Retriever]
-    GR --> SubG[Sub-graph + community summaries]
-    SubG --> VR[Vector Retriever]
-    VR --> Merge[Context Builder]
-    Merge --> LLM[Generator]
-    LLM --> Ans[Answer + proof path]
-```
+Generic multi-agent orchestration (the pre-ADR-0005 `Router`/`Coordinator`/`Planner`/
+`Retriever Agent`/`Extractor`/`Synthesizer`/`Validator` design) and GraphRAG traversal
+(`Entity Extractor`/`Graph Retriever`/`Context Builder`) are both delegated to whichever engine
+is selected here — neither was ever built as native code beyond the multi-agent prototype
+[removed in Lot 17](../refactoring/lot-17-prototype-retirement.md). A native `KnowledgeGraph`
+data model does exist (`memory/graph/knowledge_graph.py`, retained with a documented caveat) but
+is not wired into either engine path today.

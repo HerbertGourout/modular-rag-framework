@@ -78,9 +78,7 @@ rather than replacing it.
 > (multi-agent teams), V3.0 (GraphRAG traversal), V3.2 (fine-tuning execution), and V5.0
 > (multimodal execution) are **delegated** to the selected external engine (LangGraph) via the
 > `DocumentEngine` port, not built as native runtimes — see
-> [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) §5.2. The "Additions" bullets
-> under V2/V3/V5 below describe the original native-build intent and are retained as historical
-> design reference, not an implementation target for those items.
+> [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) §5.2.
 
 ### V1 — Core RAG
 **What the framework enables:**
@@ -94,22 +92,21 @@ rather than replacing it.
 - Exposure via HTTP API (FastAPI) and CLI (`mrag ask`, `mrag ingest`).
 - Reproducible configuration through versioned YAML manifests.
 
-### V2 — Agentic + Adaptive
+### V2 — Policy Engine + Delegated Orchestration
 **Additions:**
-- Adaptive routing: LLM-only / simple RAG / agentic RAG / graph RAG depending on complexity.
-- Multi-agent runtime: coordinator, planner, retriever agent, extractor, synthesizer, validator.
-- Multi-step workflows (plan → retrieve → synthesize → critique → refine).
-- Multi-step security: inspection of agent plans.
-- Agentic execution traces (which agent, which tool, how long).
+- Policy-as-code (native): RBAC, data classification, multi-tenant isolation.
+- Multi-agent orchestration, adaptive routing, and multi-step agentic workflows: delegated to
+  the selected external engine via the `DocumentEngine` port — not built natively. See
+  [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) §5.2.
 
-### V3 — Graph Memory
+### V3 — GraphRAG (Delegated) + Cost/Fine-Tuning Evidence (Native)
 **Additions:**
-- Knowledge graph extraction from the corpus (entities, relations, communities).
-- GraphRAG: graph querying + contextual subgraph injected into the LLM.
-- Explicit multi-hop reasoning (A → B → C with evidence).
-- Hierarchical per-community summaries (Louvain).
-- Reasoning graphs as reusable memory.
-- EvoRAG: edge reinforcement / weakening driven by feedback.
+- GraphRAG traversal/reasoning: delegated to the selected external engine — not built natively.
+  A native knowledge-graph data model may still live in `memory/`, pending Lot 6 evidence.
+- Cost/latency evidence and reporting (native): dashboards, per-query/user/month attribution —
+  the routing logic itself is delegated.
+- Drift detection and evaluation trigger (native): decides *when* retraining is needed;
+  fine-tuning execution itself is delegated.
 
 ### V4 — Governance
 **Additions:**
@@ -120,13 +117,12 @@ rather than replacing it.
 - Human-in-the-loop: human validation for sensitive answers.
 - Per-pipeline risk profiles.
 
-### V5 — Multimodal
+### V5 — Multimodal (Delegated)
 **Additions:**
-- Multimodal ingestion: text, PDFs with images and tables, audio, video.
-- Multi-vector index: text + image (CLIP/Colpali) + tables + video segments.
-- MG²-RAG: multi-granularity cross-modal graph.
-- Modality-specialized agents: text_agent, vision_agent, table_agent, video_agent.
-- Enriched answers: video timecodes, image references, table excerpts.
+- VLM execution (image/table/audio/video model inference, modality-specialized agents):
+  delegated to the selected external engine via the `DocumentEngine` port — not built natively.
+- Multimodal parsing and citation enrichment (extracting images/tables, attaching timecodes)
+  may remain native if Lot 6/15 evidence supports it — undecided.
 
 ---
 
