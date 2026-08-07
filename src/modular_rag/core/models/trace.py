@@ -7,11 +7,14 @@ from pydantic import BaseModel, Field
 
 from modular_rag.core.ids import new_id
 
-TRACE_SCHEMA_VERSION = "1.1"  # bumped in Lot 10 (docs/refactoring-plan.md): fixed the
-# double-counted generation-latency bug (orchestration/engine.py no longer adds its own
-# wrapping "generate" step alongside the generator's own instrumentation). Existing
-# consumers reading `steps` by name/latency should re-check any generation-latency
-# aggregation logic against this version.
+TRACE_SCHEMA_VERSION = "1.2"  # bumped in Étape 8 (ADR-0007, docs/adr/0007-layer-boundaries-
+# and-control-plane-activation.md): removed `routing_strategy` — declared since the deleted
+# native QueryRouter, zero real consumers, always the empty-string default. Existing consumers
+# reading Trace JSON that happened to key off this field should treat its absence as "no
+# dynamic routing occurred," same as the empty-string default ever meant.
+# 1.1 was bumped in Lot 10 (docs/refactoring-plan.md): fixed the double-counted
+# generation-latency bug (orchestration/engine.py no longer adds its own wrapping "generate"
+# step alongside the generator's own instrumentation).
 
 
 class TraceStep(BaseModel):
@@ -31,7 +34,6 @@ class Trace(BaseModel):
     total_latency_ms: float = 0.0
     total_input_tokens: int = 0
     total_output_tokens: int = 0
-    routing_strategy: str = ""
     failed: bool = False
     failure_reason: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

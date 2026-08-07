@@ -187,10 +187,20 @@ plain V1 pipeline.
 2. Exact V2 YAML shape for infrastructure providers and policy references.
 3. Whether identity provider selection belongs in the same solution manifest or a separate
    deployment/service configuration.
-4. Whether the native knowledge-graph data model has a justified passive-data role; native
-   traversal remains outside the boundary.
 5. Whether API/CLI should switch immediately to `DocumentEngine` or retain an explicitly named
    native compatibility command during migration.
+
+### Resolved: knowledge-graph data model (Étape 8, 2026-08-07)
+
+Decision #4 (whether the native knowledge-graph data model has a justified passive-data role)
+is now **resolved: removed**. `memory/graph/knowledge_graph.py` (`KnowledgeGraph`, `GraphNode`,
+`GraphEdge`) had zero consumers anywhere outside its own test — no retriever, pipeline, or
+manifest-wired component ever constructed one — and `neighbours()`/`subgraph_for_query()` were
+genuine multi-hop-traversal logic, not passive storage, so keeping them was never actually
+compatible with the "passive data model only" framing this decision asked about. No concrete
+need for a passive graph data model was demonstrated. Removed entirely (`git rm -r
+src/modular_rag/memory/graph/`), restorable via git history if a real, wired consumer emerges.
+`core.enums.GraphRelation` was removed alongside it (orphaned once `GraphEdge` was gone).
 
 ---
 
