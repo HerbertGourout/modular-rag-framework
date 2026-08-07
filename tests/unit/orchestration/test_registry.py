@@ -132,3 +132,49 @@ def test_default_registry_has_the_documented_builtin_type_names() -> None:
     assert set(reg._factories["generator"]) == {"openai", "anthropic"}
     assert set(reg._factories["guard"]) == {"basic"}
     assert set(reg._factories["evaluator"]) == {"exact-match"}
+    assert set(reg._factories["tenant_policy"]) == {"tenant-isolation"}
+    assert set(reg._factories["policy_engine"]) == {"inline"}
+    assert set(reg._factories["redactor"]) == {"patterns"}
+    assert set(reg._factories["review_queue"]) == {"human-review"}
+    assert set(reg._factories["audit_sink"]) == {"in-memory", "postgres"}
+    assert set(reg._factories["telemetry"]) == {"structlog", "null"}
+    assert set(reg._factories["lifecycle_ledger"]) == {"in-memory", "postgres"}
+    assert set(reg._factories["quality_gate"]) == {"baseline"}
+
+
+def test_postgres_audit_sink_and_lifecycle_ledger_are_manifest_activatable() -> None:
+    """Registration-only check (Étape 6): these were previously Python-injectable
+    only. Constructing via the factory with a `dsn` config must not require a
+    live PostgreSQL connection — `psycopg` is lazy-imported inside the adapter's
+    own `_get_connection()`, not at construction time."""
+    from modular_rag.adapters.audit.postgres_sink import PostgresAuditSink
+    from modular_rag.adapters.lifecycle.postgres_ledger import PostgresLifecycleLedger
+    from modular_rag.app.default_factories import create_default_registry
+    from modular_rag.contracts.manifests import ComponentConfig
+
+    reg = create_default_registry()
+    cfg = ComponentConfig(type="postgres", config={"dsn": "postgresql://localhost/test"})
+
+    audit_sink = reg._factories["audit_sink"]["postgres"](cfg)
+    ledger = reg._factories["lifecycle_ledger"]["postgres"](cfg)
+
+    assert isinstance(audit_sink, PostgresAuditSink)
+    assert isinstance(ledger, PostgresLifecycleLedger)
+
+
+def test_unregistered_audit_sink_type_is_rejected_not_silently_ignored() -> None:
+    """Negative test (Étape 6): an unknown audit_sink type must surface as an
+    explicit capability error, not silently no-op."""
+    from modular_rag.app.config_resolution import validate_capabilities
+    from modular_rag.app.default_factories import create_default_registry
+    from modular_rag.contracts.manifests import ComponentConfig, GovernanceSection, PipelineManifest
+
+    reg = create_default_registry()
+    manifest = PipelineManifest(
+        id="x",
+        governance=GovernanceSection(audit_sink=ComponentConfig(type="does-not-exist")),
+    )
+
+    errors = validate_capabilities(manifest, reg)
+
+    assert any("audit_sink" in e and "does-not-exist" in e for e in errors)
