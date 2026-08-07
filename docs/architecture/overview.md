@@ -235,9 +235,9 @@ The complete path from a YAML file to an operational pipeline:
 flowchart TD
     YAML["manifests/presets/local-hybrid-rag.yaml"]
     YAML -->|"load_manifest(path)"| Manifest["app/bootstrap.py\n→ PipelineManifest"]
-    Manifest --> Registry["orchestration/registry.py\nComponentRegistry.default()\n_default_factories maps 'fixed'→FixedSizeChunker,\n'bm25'→BM25Retriever, etc."]
+    Manifest --> Registry["orchestration/registry.py\nComponentRegistry.default()\napp/default_factories.py maps 'fixed'→FixedSizeChunker,\n'hybrid'→HybridRetriever, etc."]
     Registry -->|"registry.wire(manifest)"| Wire["Reads manifest.chunker.type, manifest.retriever.type …\nCalls factory(config) for each component"]
-    Wire --> Container["app/container.py\nContainer (holds all wired instances)"]
+    Wire --> Container["orchestration/container.py\nContainer (holds all wired instances)"]
     Container --> Engine["orchestration/engine.py\nRAGEngine(container)\nengine.ingest() / engine.answer()\nreads container.chunker, container.retriever, etc."]
     Engine --> Callers["cli/__init__.py or api/__init__.py\ncalls engine methods"]
 ```

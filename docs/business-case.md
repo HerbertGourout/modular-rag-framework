@@ -65,25 +65,31 @@ Competitors (Accenture, Capgemini, Deloitte Digital) use LangChain, LlamaIndex, 
 
 Publicis Sapient works with banks, insurers, pharmaceutical players, and utilities — all subject to strict regulations (GDPR, DORA, NIS2, sector-specific). This framework addresses these constraints directly.
 
-- **Audit trail — designed, not yet delivered**: every retrieval, generation, and security
-  decision is captured in a per-request `Trace` object, but today that `Trace` is discarded
-  after the request unless a `telemetry` component is wired — and the manifest schema doesn't
-  yet expose a way to configure one. Nothing is currently persisted for a DPO to query. This is
-  V1.2 scope (`docs/refactoring-plan.md` Lot 10); do not represent this as delivered to a client
-  or auditor until Lot 10 lands.
-- **Automatic PII redaction**: emails, phone numbers, IBANs, API keys removed before exposure — documentable in a DPIA.
-- **Multi-tenant isolation — descriptive only, not yet enforced**: the manifest schema has a
-  `tenant` field, but it is not wired into any storage-level filter or access check today — two
-  tenants sharing a deployment are not actually isolated at the data layer. This is Lot 11b
-  scope (`docs/refactoring-plan.md`); do not represent this as delivered until then.
+- **Audit trail — primitives shipped, not a turnkey compliance report**: every run captures a
+  structured `AuditEvent` (PII/secret payload allowlist enforced by a validator) to a
+  manifest-configured sink (`governance.audit_sink.type: in-memory` or `postgres` — the
+  Postgres sink is append-only by construction, no UPDATE/DELETE anywhere in the code). What's
+  **not** shipped yet: a formatted GDPR/CCPA/HIPAA report *generator* — turning captured events
+  into a report a DPO can hand to a regulator is still a manual query today. Say "captures a
+  durable, structured audit trail," not "generates compliance reports."
+- **Automatic PII redaction**: emails, phone numbers, IBANs, API keys removed before exposure
+  via a manifest-activatable redactor (`governance.redactor.type: patterns`) — documentable in
+  a DPIA.
+- **Multi-tenant isolation — enforced, gated by an explicit flag**: `governance.tenant_policy`
+  (fail-closed `TenantIsolationPolicy`) filters cross-tenant data and denies requests missing a
+  tenant on query/ingest, real Keycloak-backed identity verification is available for the
+  API. `governance.tenant_enforcement: true` must be set explicitly — it is never silently
+  assumed, and a manifest declaring it without a wired `tenant_policy` now fails validation
+  rather than silently no-op'ing.
 - **Safety vs Security explicitly separated**: a distinction regulators appreciate, and one that proves security is not an afterthought.
 
-> **2026-08-04 correction (Lot 5):** the two rows above were previously stated as delivered
-> capabilities. They are target-state design decisions with real code behind the *shape* of the
-> solution (a `Trace` model exists; a `tenant` field exists) but no enforcement or persistence
-> yet. Do not cite this document's audit-trail or tenant-isolation claims in a client-facing or
-> compliance context until the corresponding lots in `docs/refactoring-plan.md` are marked
-> `COMPLETE`.
+> **Corrected 2026-08-07 (ADR-0007 Étape 10):** the audit-trail and tenant-isolation rows above
+> were rewritten to match the current, verified state — both primitives are now real and
+> manifest-activatable (`secure-enterprise-rag.yaml` is a working example), which supersedes the
+> 2026-08-04 correction that used to sit here (it described an earlier, pre-Lot-11b/pre-Étape-6
+> state). Still be precise in client conversations: "captures/enforces X" is accurate;
+> "is GDPR/HIPAA compliant" is not — compliance is a property of a full deployment plus process,
+> never of a software component alone.
 
 ---
 
@@ -126,10 +132,11 @@ Publicis Sapient accumulates methodological expertise across dozens of projects.
 - Patterns discovered on one project (optimal chunking for legal documents, reranking strategy for product FAQs) are encoded as reusable adapters and manifests.
 - One project's Ragas evaluations feed the next project's benchmarks.
 - Graph Memory (V3) could model accumulated sector knowledge as an asset that appreciates over
-  time — with a caveat since [ADR-0005](adr/0005-document-ai-control-plane-boundary.md)
-  (accepted 2026-08-04): GraphRAG traversal itself is delegated to a selected external engine
-  (LangGraph), not a native build; a native graph *data model* may still be retained, but that
-  is undecided, not committed.
+  time — GraphRAG traversal itself is delegated to a selected external engine (LangGraph) per
+  [ADR-0005](adr/0005-document-ai-control-plane-boundary.md), not a native build, and the
+  external engine doesn't provide it today. A prior native knowledge-graph *data model* was
+  removed as dead code in 2026-08-07 (zero consumers) — there is no native graph capability of
+  any kind in the codebase right now, only the delegation target.
 
 ---
 
@@ -151,7 +158,7 @@ Some projects require guarantees that OSS frameworks cannot provide.
 | Reusable IP | Higher margins on every client project |
 | Accelerated delivery | 4–8 weeks saved per project |
 | Differentiation | Winning pitch in regulated RFPs |
-| Governance | Demonstrable GDPR/DORA compliance |
+| Governance | Manifest-activatable primitives (tenant isolation, PII redaction, structured audit trail) a client assembles into a compliant deployment |
 | Resilience | Zero vendor lock-in, compatible with any LLM evolution |
 | Service offering | Basis for a formalized enterprise RAG practice |
 | Talent | Recruitment and retention of senior AI profiles |

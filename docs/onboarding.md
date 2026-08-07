@@ -238,9 +238,11 @@ strengthens or weakens the graph's relationships depending on whether the answer
 them turned out to be correct.
 
 > Per ADR-0005, GraphRAG **traversal** (the N-hop exploration and reasoning) is delegated to
-> the selected external engine, not built natively — a native graph *data model* may still be
-> kept (undecided, pending Lot 6 evidence). EvoRAG's edge-reinforcement feedback loop was
-> removed entirely in Lot 17 (`docs/refactoring-plan.md`): zero consumers, dead code.
+> the selected external engine, not built natively. A prior native graph *data model* was
+> removed as dead code on 2026-08-07 (zero consumers anywhere, restorable via git history) —
+> there is no native graph capability of any kind in the codebase today. EvoRAG's
+> edge-reinforcement feedback loop was removed entirely in Lot 17 (`docs/refactoring-plan.md`):
+> zero consumers, dead code.
 
 **Status**: ⬜ planned, and partly delegated per ADR-0005 — see [ROADMAP.md](../ROADMAP.md).
 
@@ -257,9 +259,12 @@ like code, and automatically applied to every query and every agent action. Each
 contamination. Every security decision is logged for audit. Answers judged risky can be held
 for human review before being returned.
 
-**Status**: ⬜ planned — see [ROADMAP.md](../ROADMAP.md). This is the version that unlocks
-client projects in regulated sectors (see [docs/business-case.md](business-case.md),
-section 4).
+**Status**: ⬜ planned overall, but two of its checklist items already shipped as part of V2.0's
+Policy Engine — `HumanReviewGate` (manifest `governance.review_queue.type: human-review`) and
+policy-as-code evaluation are real and manifest-activatable today. What's genuinely still
+missing is multi-environment manifest layering (dev/staging/prod overrides) and OPA
+integration — see [ROADMAP.md](../ROADMAP.md). This is the version that unlocks client
+projects in regulated sectors (see [docs/business-case.md](business-case.md), section 4).
 
 ### V5 — Multimodal: beyond text
 
