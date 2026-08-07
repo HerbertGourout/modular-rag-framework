@@ -13,7 +13,6 @@ Requirements:
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 import textwrap
 from pathlib import Path

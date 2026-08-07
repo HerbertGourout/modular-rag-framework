@@ -183,12 +183,19 @@ plain V1 pipeline.
 
 ## Open decisions requiring acceptance or implementation evidence
 
-1. Whether `app.container` needs a temporary compatibility re-export.
 2. Exact V2 YAML shape for infrastructure providers and policy references.
 3. Whether identity provider selection belongs in the same solution manifest or a separate
    deployment/service configuration.
 5. Whether API/CLI should switch immediately to `DocumentEngine` or retain an explicitly named
    native compatibility command during migration.
+
+### Resolved: `app.container` compatibility re-export (Étape 4, 2026-08-07)
+
+Decision #1 is resolved: yes, kept. `src/modular_rag/app/container.py` is now a two-line
+re-export (`from modular_rag.orchestration.container import Container`) rather than the real
+class definition. No named removal condition has been set yet — it stays until a caller audit
+confirms nothing outside `orchestration/`/tests imports `Container` via the old `app.container`
+path.
 
 ### Resolved: knowledge-graph data model (Étape 8, 2026-08-07)
 
