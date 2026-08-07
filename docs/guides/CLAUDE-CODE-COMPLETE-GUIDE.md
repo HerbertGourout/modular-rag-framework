@@ -341,14 +341,13 @@ src/modular_rag/
 
 **What it does**: Markdown files Claude Code automatically loads into context, either always (no `paths:` frontmatter) or only when a file matching `paths:` is opened.
 
-**7 path-scoped rules** (loaded automatically when their `paths:` glob is touched):
+**6 path-scoped rules** (loaded automatically when their `paths:` glob is touched):
 1. [orchestration.md](../../.claude/rules/orchestration.md) — `src/modular_rag/orchestration/**/*.py`
 2. [adapters.md](../../.claude/rules/adapters.md) — `src/modular_rag/adapters/**/*.py`
-3. [agents.md](../../.claude/rules/agents.md) — `src/modular_rag/agents/**/*.py`
-4. [agentic_workflows.md](../../.claude/rules/agentic_workflows.md) — `src/modular_rag/agents/**/*.py` (superseded by ADR-0005 §5.2 — historical design reference, `orchestration/team_coordinator.py` referenced in an earlier version of this table doesn't exist)
-5. [contracts.md](../../.claude/rules/contracts.md) — `src/modular_rag/contracts/**/*.py`
-6. [security.md](../../.claude/rules/security.md) — `src/modular_rag/security/**/*.py`
-7. [tests.md](../../.claude/rules/tests.md) — `tests/**/*.py`
+3. [agents.md](../../.claude/rules/agents.md) — `src/modular_rag/agents/**/*.py` (rewritten 2026-08-06 to describe the current `DocumentEngine` adapter-integration scope, per ADR-0005 §5.2; `agentic_workflows.md`, its ~90%-old-vision former companion rule for the same path, was deleted rather than kept as historical reference)
+4. [contracts.md](../../.claude/rules/contracts.md) — `src/modular_rag/contracts/**/*.py`
+5. [security.md](../../.claude/rules/security.md) — `src/modular_rag/security/**/*.py`
+6. [tests.md](../../.claude/rules/tests.md) — `tests/**/*.py`
 
 **1 always-on rule** (no `paths:` frontmatter → loaded every session, like CLAUDE.md):
 - [security-layers.md](../../.claude/rules/security-layers.md) — 7-layer defense system

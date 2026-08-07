@@ -17,8 +17,7 @@ src/modular_rag/
 │   ├── evaluation.py       Evaluator protocol
 │   ├── telemetry.py        Telemetry protocol
 │   ├── memory.py           KnowledgeGraphStore protocol
-│   ├── manifest.py         ManifestLoader, PipelineManifest
-│   └── agents.py           Planner, Agent, AgentResult protocols (V2)
+│   └── manifest.py         ManifestLoader, PipelineManifest
 │
 ├── core/               ← Shared, depended on by all. Imports NOTHING from this project.
 │   ├── models/             Domain entities (Pydantic v2, see data-model.md)

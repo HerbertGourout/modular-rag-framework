@@ -1,12 +1,11 @@
 # Roadmap — Visual Diagrams
 
-The five diagrams below are visual companions to two text documents: [ROADMAP.md](../../ROADMAP.md)
+The diagrams below are visual companions to two text documents: [ROADMAP.md](../../ROADMAP.md)
 (the checklist of what is done vs. planned) and
 [docs/architecture/module-model.md](module-model.md) (the prose explanation of why the
 dependency rules exist). Read this page when a picture answers your question faster than a
 table — for example, when you need to explain the V1→V5 sequencing to someone who has never
-opened the codebase, or when you need to trace which agent hands off to which in the V2
-runtime without reading `agents/coordinator/coordinator.py` line by line.
+opened the codebase.
 
 ## V1 → V5 progression
 
@@ -27,26 +26,22 @@ timeline
                 : Basic security guard + PII redactor
                 : Built-in evaluation scorers
                 : FastAPI REST + Typer CLI
-    section V2 Agentic + Security
-        2026 Q3 : Adaptive query router
-                : Multi-agent runtime (5 roles)
+    section V2 Policy + Security
+        2026 Q3 : Policy-as-code (native)
                 : Adversarial detector
-                : Policy-aware tool use
-    section V3 Graph Memory
-        2026 Q4 : Knowledge graph construction
-                : GraphRAG multi-hop retrieval
-                : Community detection
-                : EvoRAG edge reinforcement
+                : Multi-agent orchestration (⚙️ delegated)
+    section V3 Graph + Evidence
+        2026 Q4 : Cost/latency reporting (native)
+                : Drift detection (native)
+                : GraphRAG traversal (⚙️ delegated)
     section V4 Governance
         2027 Q1 : Policy-as-code (YAML rules)
                 : Multi-tenant isolation
                 : Audit trail
                 : Human-in-the-loop review
     section V5 Multimodal
-        2027 Q2 : Image & table parsers
-                : Audio transcription (Whisper)
-                : Multi-vector Qdrant index
-                : Modality-specialized agents
+        2027 Q2 : Parsing & citation enrichment (native, pending evidence)
+                : VLM execution (⚙️ delegated)
 ```
 
 ## Module dependency graph
@@ -122,70 +117,16 @@ flowchart LR
     end
 ```
 
-## V2 agentic runtime
+## Multi-agent orchestration and GraphRAG — delegated
 
-> **Historical design reference, not current behavior.** The classes this diagram names
-> (`QueryRouter`, `CoordinatorAgent`, `RetrieverAgent`, `ExtractorAgent`, `SynthesizerAgent`,
-> `ValidatorAgent`) were removed in Lot 17 (`docs/refactoring-plan.md`): `QueryRouter` was
-> constructed by `RAGEngine` but its classification output was never actually read anywhere,
-> and the five agent classes had zero consumers anywhere in the codebase. Per
-> [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) §5.2, generic multi-agent
-> orchestration is delegated to the selected external engine, not built natively along the
-> lines this diagram sketches. Kept here as a record of the original design intent, per Lot
-> 17's own "keep digests" instruction — not as a description of anything the framework does
-> today.
-
-The `Router` was meant to be the decision point that kept V1 and V2 coexisting rather than V2
-replacing V1: most questions would still take the cheap, fast `simple_rag` path, and only
-questions the router judged complex enough would be handed to the `CoordinatorAgent`. Inside
-that agentic path, the loop from `Validator` back to `RetAgent` was meant as the self-correction
-mechanism described in [ROADMAP.md](../../ROADMAP.md) — if the draft answer wasn't well-grounded
-in retrieved evidence, the system would retrieve again rather than return a weakly-supported
-answer.
-
-```mermaid
-%%{init: {"theme": "base"}}%%
-flowchart TD
-    Q[Query] --> Router[QueryRouter]
-
-    Router -->|llm_only| LLM[Generator]
-    Router -->|simple_rag| V1[V1 Pipeline]
-    Router -->|agentic_rag| Coord[CoordinatorAgent]
-
-    Coord --> Plan[ExecutionPlan]
-    Plan --> RetAgent[RetrieverAgent]
-    RetAgent --> Chunks[RetrievedChunks]
-    Chunks --> Extractor[ExtractorAgent]
-    Extractor --> Entities[Named Entities]
-    Entities --> Synth[SynthesizerAgent]
-    Synth --> Draft[Draft Answer]
-    Draft --> Validator[ValidatorAgent]
-    Validator -->|groundedness < threshold| RetAgent
-    Validator -->|ok| Output[Answer + Citations]
-```
-
-## V3 GraphRAG flow
-
-Note that the `VectorRetriever` from V1 still appears here — GraphRAG never replaces
-vector/BM25 retrieval, it augments it. The entity extractor identifies what the query is
-"about" in graph terms, the knowledge graph expands that into a sub-graph of related nodes
-and their community summaries, and the context builder merges that structured evidence with
-the plain-text chunks V1 already knows how to retrieve. The output answer carries an explicit
-proof path — the chain of graph edges that justified the multi-hop reasoning — which plain
-vector retrieval alone cannot produce.
-
-```mermaid
-%%{init: {"theme": "base"}}%%
-flowchart LR
-    Q[Query] --> EE[Entity Extractor]
-    EE --> KG[KnowledgeGraph.subgraph_for_query]
-    KG --> SubG[Sub-graph nodes + edges]
-    SubG --> VR[VectorRetriever]
-    SubG --> CB[Context Builder]
-    VR --> CB
-    CB --> LLM[Generator]
-    LLM --> Answer[Answer + proof path]
-```
+> **Delegated per [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) §5.2.**
+> Multi-agent orchestration and GraphRAG traversal are delegated to a selected external engine
+> via the `DocumentEngine` port, not built natively in this repository. The prototype
+> multi-agent implementation was removed in
+> [Lot 17](../refactoring/lot-17-prototype-retirement.md); GraphRAG traversal was
+> concept-only — nothing was ever built to remove. For the real, current request flow
+> (including the delegation fork), see
+> [docs/architecture/runtime-flow.md](runtime-flow.md).
 
 ## V4 policy evaluation loop
 

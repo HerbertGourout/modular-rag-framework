@@ -4,9 +4,12 @@
 > supersedes part of this roadmap.** V1.1, V1.2, and V2.0 (Policy Engine) are unchanged — built
 > natively. **V2.1 (Multi-Agent Teams), V3.0 (GraphRAG), V3.2 (Fine-Tuning Loop mechanics —
 > except its drift-detection/evaluation trigger, which stays native), and V5.0 (multimodal
-> execution)** are now delegated to a selected external engine via adapter, not built from the
-> native task lists below. This is an interim marker (`docs/refactoring-plan.md` Lot 2); full
-> reconciliation of this document is Lot 17 scope.
+> execution)** are delegated to a selected external engine via the `DocumentEngine` port
+> ([ADR-0006](docs/adr/0006-external-engine-selection.md), LangGraph), not built natively. This
+> document was reconciled with ADR-0005 on 2026-08-06: the native task lists that used to sit
+> under those four items were removed (see
+> [Lot 17](docs/refactoring/lot-17-prototype-retirement.md) for the prototype code that
+> corresponded to them, where any existed) rather than kept "for historical reference."
 
 ## Version Progression Overview
 
@@ -17,20 +20,20 @@ V1: Core RAG Base                              (Q2 2026)
 └─ V1.2: Compliance audit trail               (NEW)
 
 V2: Agentic + Governance                      (Q3 2026)
-├─ V2.0: Multi-agent runtime + policy engine  (UPDATED)
-└─ V2.1: Collaborative multi-agent teams      (NEW)
+├─ V2.0: Policy engine                        (UPDATED — multi-agent runtime delegated, see V2.1)
+└─ V2.1: Multi-agent orchestration            (⚙️ delegated — DocumentEngine port)
 
 V3: Graph Memory + Intelligence                (Q4 2026)
-├─ V3.0: GraphRAG + knowledge graphs
-├─ V3.1: Cost optimization engine             (NEW)
-└─ V3.2: Continuous fine-tuning loop          (NEW)
+├─ V3.0: GraphRAG + knowledge graphs          (⚙️ delegated — traversal only; data model TBD)
+├─ V3.1: Cost/latency evidence + reporting    (native — routing logic itself is delegated)
+└─ V3.2: Drift detection + eval trigger       (native — fine-tuning execution is ⚙️ delegated)
 
 V4: Multi-Language Governance                  (Q1 2027)
 ├─ V4.0: Multi-tenant policies + environments
 └─ V4.1: Multi-language + cultural reasoning  (NEW)
 
 V5: Multimodal Intelligence                    (Q2 2027)
-└─ V5.0: Images, audio, video, tables + VLMs
+└─ V5.0: Parsing/citation enrichment (native, pending evidence) — VLM execution ⚙️ delegated
 ```
 
 ---
@@ -187,32 +190,16 @@ call to a language model isn't reliable enough to decompose a complex problem �
 introduces a team of specialized agents that split up the reasoning steps, with a
 self-correction loop when the answer isn't well enough supported by evidence.
 
-### V2.0 — Multi-Agent Runtime + Policy Engine
+### V2.0 — Policy Engine
 
-> **ADR-0005 note (2026-08-04):** the checklist below predates ADR-0005 and mixes two items
-> with different fates. The **Policy Engine** stays native/owned — see CLAUDE.md block 09's own
-> superseding note ("V1.1, V1.2, and V2.0 are unchanged — build natively"). The **multi-agent
-> runtime** items (router, coordinator/planner/retriever/extractor/synthesizer/validator,
-> plan→retrieve→synthesize→critique→refine) are the exact scope ADR-0005 §5.2 delegates to the
-> selected external engine (LangGraph, ADR-0006) — this is really V2.1's delegated scope
-> described here under V2.0's original heading, not a native build item. The five prototype
-> agent classes these bullets describe were built once and removed in Lot 17
-> (`docs/refactoring-plan.md`) for having zero test coverage and zero consumers. Left unchecked
-> below as a historical record, not a native to-do.
+> **Delegated per [ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md) §5.2.**
+> Multi-agent orchestration (router, coordinator, planner, retriever/extractor/synthesizer/
+> validator agents) is delegated to a selected external engine via the `DocumentEngine` port,
+> not built natively in this repository. The prototype implementation was removed in
+> [Lot 17](docs/refactoring/lot-17-prototype-retirement.md); see that record for what was
+> deleted and why. The Policy Engine below is unaffected — it stays native/owned.
 
-**Core agentic modules (historical — see note above):**
-- [ ] Adaptive query router (LLM-only / simple / agentic / graph)
-- [ ] Multi-agent runtime: coordinator, planner, retriever agent, extractor, synthesizer, validator
-- [ ] Fix pre-existing layering debt before expanding agents/: `agents/validator/validator.py` imports `generation/validators/groundedness` (domain→domain, flagged in pre-PR architecture review 2026-07-12) — invert via a Protocol in `contracts/` or move the lexical-overlap helper to `core/`
-- [ ] Multi-step agentic workflow with plan → retrieve → synthesize → critique → refine
-- [ ] Agent plan inspection by security guard
-- [ ] Example: `examples/agentic_rag/`
-
-**Dependency on V1**: the router never replaces the V1 pipeline — it decides, question by
-question, whether the simple pipeline is enough or the agent team needs to take over. A
-regression in V1's hybrid retrieval therefore silently breaks V2 as well.
-
-**Policy Engine (moved from V4):** `[NEW — P0 priority]`
+**Policy Engine:** `[NEW — P0 priority]`
 - `security/policies/`: Policy-as-Code framework
   - `policy_engine.py`: Evaluate queries vs policies before execution
   - `policy_yaml_loader.py`: Load YAML policies (who can access what)
@@ -256,67 +243,14 @@ manifests/
 
 ---
 
-### V2.1 — Collaborative Multi-Agent Teams `[NEW — 3 months]`
+### V2.1 — Multi-Agent Orchestration
 
-**Purpose:** Enable complex enterprise workflows where multiple specialized agents collaborate.
-
-**Implementation:**
-- `agents/`: Expanded agent roles
-  - `domain_specialist/`: Expert for specific domain (finance, HR, supply chain)
-  - `fact_checker/`: Validates other agents' answers against retrieved docs
-  - `synthesis/`: Combines answers from multiple agents
-  - `human_escalation/`: When to escalate to human review
-- `agents/collaboration/`: Agent-to-agent communication
-  - `consensus_scoring.py`: Do all agents agree?
-  - `conflict_resolution.py`: What if agents disagree?
-  - `evidence_aggregation.py`: Combine evidence from multiple sources
-- `orchestration/`: Updated engine for team coordination
-  - `team_coordinator.py`: Orchestrates which agents run, in what order
-  - `agent_communication.py`: Message passing between agents
-  - `reasoning_transparency.py`: Explain why each agent was involved
-
-**Modules:**
-```
-agents/
-├── domain_specialist/            (new role)
-├── fact_checker/                 (new role)
-├── synthesis/                    (enhanced)
-├── collaboration/
-│   ├── consensus_scoring.py
-│   ├── conflict_resolution.py
-│   ├── evidence_aggregation.py
-│   └── team_decisions.py
-└── human_escalation/             (new)
-
-orchestration/
-├── team_coordinator.py           (multi-agent orchestration)
-└── agent_communication.py        (messaging)
-```
-
-**Example workflow (HR query):**
-```yaml
-question: "What's our policy on remote work + parental leave combined?"
-
-agents_run_in_sequence:
-  1. domain_specialist (HR)      → "Fetch HR policies"
-  2. legal_agent                 → "Check compliance implications"
-  3. finance_agent               → "Cost impact analysis"
-  4. fact_checker                → "Validate consistency"
-  5. synthesis_agent             → "Create coherent answer"
-  6. if confidence < 70%         → escalate to human
-
-output:
-  - answer: "Here's the policy..."
-  - confidence: 0.85
-  - agents_involved: [HR, Legal, Finance]
-  - reasoning_trace: [trace per agent]
-```
-
-**Success criteria:**
-- ✅ Multi-agent queries executable
-- ✅ Consensus scoring > 85% on golden set
-- ✅ Full reasoning trace per agent
-- ✅ Human escalation works
+> **Delegated per [ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md) §5.2.**
+> Collaborative multi-agent teams (domain specialists, fact-checking, consensus scoring,
+> team coordination) are delegated to a selected external engine via the `DocumentEngine` port,
+> not built natively in this repository. The prototype implementation was removed in
+> [Lot 17](docs/refactoring/lot-17-prototype-retirement.md); see that record for what was
+> deleted and why.
 
 ---
 
@@ -329,161 +263,80 @@ graph, not plain text search.
 
 ### V3.0 — GraphRAG + Knowledge Graphs
 
-**Core graph modules:**
-- [ ] Knowledge graph construction from corpus (spaCy entity extraction)
-- [ ] GraphRAG retrieval (sub-graph selection, multi-hop)
-- [ ] Community detection (Louvain) + hierarchical summaries
-- [ ] Reasoning graph memory (reusable per query type)
-- [ ] EvoRAG: edge reinforcement/weakening from user feedback
-- [ ] Neo4j adapter for `adapters/graphstores/`
-- [ ] Example: `examples/graph_memory/`
-
-**Dependency on earlier versions**: the graph enriches the context handed to the generator —
-it never replaces V1's vector/BM25 search, which continues to supply the raw passage text
-cited in the answer.
+> **Delegated per [ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md) §5.2.**
+> GraphRAG traversal/reasoning execution is delegated to a selected external engine via the
+> `DocumentEngine` port; this repository does not implement it natively. A knowledge-graph
+> *data model* may still live in `memory/` if Lot 6 evidence shows the external engine can't
+> represent it — that decision is undecided, not settled by this note.
 
 ---
 
-### V3.1 — Cost Optimization Engine `[NEW — 2 months]`
+### V3.1 — Cost/Latency Evidence + Reporting `[NEW — 2 months]`
 
-**Purpose:** Automatically route queries to cheapest sufficient solution; reduce LLM costs 60-80%.
+> **Reframed per [ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md) §5.1.** The
+> in-house query-routing/model-selection logic this version used to specify (classify
+> factual-vs-reasoning, route cheap-vs-expensive models) is delegated to the selected external
+> engine — that's generic orchestration mechanics, not a governance concern this framework needs
+> to own. What stays native is the **evidence and reporting** layer: cost/latency data collected
+> from whichever engine ran the query, surfaced as a dashboard regardless of which engine
+> produced the answer.
+
+**Purpose:** Report cost and latency per query, per user, per month — engine-agnostic evidence
+for governance and budget decisions, not a routing decision-maker itself.
 
 **Implementation:**
-- `orchestration/cost_optimizer/`: Smart routing
-  - `query_classifier.py`: Is this factual (BM25 enough) or reasoning-heavy (needs LLM)?
-  - `routing_strategy.py`: Route to cheap path first, escalate if needed
-  - `token_budgeting.py`: Penalize verbose responses
-- `adapters/llms/`: Multi-model support (not just OpenAI)
-  - Mix GPT-4 (reasoning), GPT-3.5 (factual), local LLMs (private)
-  - Model selection per query type
-- `orchestration/caching/`: Cache questions + answers
-  - Hash-based: return cached if > 95% similarity
-  - Cost savings: avoid repeated expensive calls
 - `eval/cost_reporting/`: Dashboard
   - Cost per query, per user, per month
   - Trends, anomalies (spike detection)
+- `orchestration/`: Record which engine/model actually served each query, for the dashboard to
+  attribute cost against
 
 **Modules:**
 ```
-orchestration/
-├── cost_optimizer/
-│   ├── query_classifier.py       (factual vs reasoning)
-│   ├── routing_strategy.py       (cheap → expensive)
-│   ├── model_selector.py         (GPT-4 vs 3.5 vs local)
-│   └── caching.py               (dedup similar queries)
-├── query_cache.py               (with similarity matching)
-└── cost_config.yaml             (model prices, thresholds)
-
 eval/
 └── cost_reporting/
     ├── cost_dashboard.py
     └── cost_anomaly_detector.py
-
-adapters/llms/
-├── openai_multi_model.py        (GPT-4, 3.5, etc.)
-├── local_llm.py                 (Ollama, LM Studio)
-└── anthropic_multi_model.py     (Claude variants)
-```
-
-**Cost savings example:**
-```
-Before optimization:
-- 10,000 queries/month
-- All via GPT-4 ($0.03/query)
-- Total: $300/month
-
-After optimization:
-- 7,000 queries → BM25 + GPT-3.5 ($0.002/query) = $14
-- 2,500 queries → vector + GPT-3.5 ($0.005/query) = $12.5
-- 500 queries → full reasoning + GPT-4 ($0.03/query) = $15
-- Total: $41.5/month
-- Savings: 86% cost reduction
 ```
 
 **Success criteria:**
-- ✅ Cost classifier F1 > 0.85
-- ✅ 70%+ queries routed to cheap path
-- ✅ Cache hit rate > 20%
-- ✅ Cost reduction > 50% vs baseline
+- ✅ Cost/latency reported per query, per user, per month, regardless of engine
+- ✅ Anomaly detection flags spikes
 
 ---
 
-### V3.2 — Continuous Fine-Tuning Loop `[NEW — 3 months]`
+### V3.2 — Drift Detection + Evaluation Trigger `[NEW — 3 months]`
 
-**Purpose:** Auto-improve embedders/rerankers based on user feedback; RAG that learns.
+> **Reframed per [ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md) §5.2.**
+> Fine-tuning *execution* (embedder/reranker retraining, model versioning, A/B rollout) is
+> delegated to external MLOps/fine-tuning tooling, not built natively. What stays native is
+> **drift detection and the evaluation trigger**: this framework decides *when* quality has
+> degraded and *that* retraining should happen; it does not run the retraining itself.
+
+**Purpose:** Collect user feedback, detect quality drift, and trigger an external fine-tuning
+process when detected — engine-agnostic evaluation, not an in-house training pipeline.
 
 **Implementation:**
 - `eval/feedback_collection/`: Gather user signals
   - Thumbs up/down on answers
   - Manual corrections (user provides better answer)
-  - Explicit queries vs implicit signals
 - `eval/drift_detection.py`: Monitor performance over time
   - F1 on validation set vs today
-  - AUROC trends
   - Alert if degrading > 2%
-- `orchestration/auto_fine_tuning/`: Auto-trigger retraining
-  - Fine-tune embedders on corrected questions
-  - Fine-tune rerankers on feedback examples
-  - Safety gates: only deploy if metrics improve
-- `orchestration/model_versioning/`: Track embedder/reranker versions
-  - Rollback if new version performs worse
-  - A/B test new versions on subset of traffic
 
 **Modules:**
 ```
 eval/
 ├── feedback_collection/
 │   ├── thumbs_up_down.py
-│   ├── correction_capture.py
-│   └── feedback_aggregator.py
-└── drift_detection.py           (performance monitoring)
-
-orchestration/
-├── auto_fine_tuning/
-│   ├── embedder_finetuner.py    (sentence-transformers)
-│   ├── reranker_finetuner.py    (cross-encoder)
-│   ├── safety_gates.py          (don't deploy if regress)
-│   └── fine_tuning_config.yaml
-├── model_versioning/
-│   ├── version_manager.py       (track versions)
-│   └── rollback.py              (revert bad versions)
-└── ab_testing.py               (gradual deployment)
-
-manifests/
-└── fine_tuning_config.yaml     (which models to tune, thresholds)
-```
-
-**Example workflow:**
-```
-Day 1:
-  - Deploy embedder v1.0 (baseline)
-  - F1 = 0.82 on validation set
-
-Week 1:
-  - Collect 50 user corrections
-  - Fine-tune embedder on these examples → v1.1
-  - A/B test v1.1 on 10% of traffic
-  - v1.1 F1 = 0.86 (improvement ✅)
-  - Deploy v1.1 to 100%
-
-Week 4:
-  - Monitor v1.1 performance → F1 drops to 0.79 (drift detected)
-  - Revert to v1.0 temporarily
-  - Investigate why drift occurred
-  - Fine-tune on latest feedback → v1.2
-  - Deploy v1.2
-
-Continuous improvement:
-  - Every 2 weeks: retrain on latest feedback
-  - Every quarter: evaluate vs v1.0 baseline
-  - Never deploy if < baseline performance
+│   └── correction_capture.py
+└── drift_detection.py           (performance monitoring, triggers external retraining)
 ```
 
 **Success criteria:**
 - ✅ Feedback collection > 80% of queries
 - ✅ Drift detection works (alerts on degradation)
-- ✅ Auto-fine-tuning improves F1 by > 2% per month
-- ✅ Zero regressions (all new models > baseline)
+- ✅ Alert triggers a defined external retraining workflow (not run in-house)
 
 ---
 
@@ -603,23 +456,12 @@ Query: "What's the best station to travel from?"
 
 ### V5.0 — Images, Audio, Video, Tables + VLMs
 
-**What this version solves**: many useful documents aren't plain text — a financial report
-has charts, a contract has tables, a meeting has an audio recording. Earlier versions only
-process the text extracted from these documents, losing whatever information lives in an
-image, a table, or an audio track.
-
-- [ ] Multimodal parsers: image extraction (pymupdf), table extraction, audio transcription (Whisper), video segmentation
-- [ ] Multi-vector Qdrant index (text + image + table)
-- [ ] MG²-RAG: multi-granularity cross-modal graph
-- [ ] Modality-specialised agents: text_agent, vision_agent, table_agent, video_agent
-- [ ] VLM generation (Claude vision, GPT-4V)
-- [ ] Enriched citations: image references, timecodes
-- [ ] Example: multimodal QA on PDF reports with charts
-
-**Real progress status**: this is the least advanced version of the project to date (see the
-implementation table in
-[docs/architecture/structure.md](docs/architecture/structure.md)) — the dedicated modules
-(`multimodal/`, `vision/`, `tables/`, `audio/`) are still largely unbuilt.
+> **Delegated per [ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md) §5.2.** VLM
+> execution (image/table/audio/video model inference, modality-specialized agents) is delegated
+> to a selected external engine via the `DocumentEngine` port; this repository does not
+> implement it natively. Multimodal *parsing and citation enrichment* (extracting images/tables
+> from a document, attaching a timecode or image reference to a citation) may remain owned if
+> Lot 6/15 evidence supports it — undecided, not settled by this note.
 
 ---
 
@@ -633,14 +475,16 @@ version becomes "demonstrable" rather than "under construction".
 | **v1.0** | Q2 2026 | Hybrid RAG working, F1 > 0.75, examples running |
 | **v1.1** | Q2 2026 | All metrics implemented, regression detector active |
 | **v1.2** | Q3 2026 | Audit trail immutable, GDPR report < 10s |
-| **v2.0** | Q3 2026 | Multi-agent runtime, policies enforced |
-| **v2.1** | Q4 2026 | Team coordination working, consensus > 85% |
-| **v3.0** | Q4 2026 | GraphRAG queries work, 3-hop reasoning |
-| **v3.1** | Q1 2027 | Cost reduction > 50%, 70% cheap-path routing |
-| **v3.2** | Q1 2027 | Auto-fine-tuning improves F1 > 2% monthly |
+| **v2.0** | Q3 2026 | Policies enforced (multi-agent runtime ⚙️ delegated, see v2.1) |
+| **v2.1** ⚙️ | Q4 2026 | Delegated to selected external engine — see V2.1 note above |
+| **v3.0** ⚙️ | Q4 2026 | Delegated (traversal) — see V3.0 note above |
+| **v3.1** | Q1 2027 | Cost/latency reported per query, anomalies flagged (routing itself ⚙️ delegated) |
+| **v3.2** | Q1 2027 | Drift detection alerts on degradation (fine-tuning execution ⚙️ delegated) |
 | **v4.0** | Q1 2027 | Multi-environment policies, prod-ready |
 | **v4.1** | Q2 2027 | 20+ languages, cultural reasoning |
-| **v5.0** | Q2 2027 | Multimodal QA, VLM integration |
+| **v5.0** ⚙️ | Q2 2027 | Delegated (VLM execution) — see V5.0 note above |
+
+⚙️ = delegated to a selected external engine per [ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md), not a native build target for this framework.
 
 ---
 
@@ -648,15 +492,19 @@ version becomes "demonstrable" rather than "under construction".
 
 | Feature | LangChain | Haystack | **This Framework** |
 |---|---|---|---|
-| Evaluation | External (Ragas) | Built-in | ✅ **Contract-enforced** |
+| Evaluation | External (Ragas) | Built-in | ✅ **Contract-enforced, native** |
 | Audit Trail | Manual | Limited | ✅ **GDPR/CCPA native** |
-| Policies | None | Limited | ✅ **Policy-as-Code** |
-| Multi-Agent | Bolted-on | Limited | ✅ **Team collaboration** |
-| Cost Optimization | None | None | ✅ **Auto-routing, 50%+ savings** |
-| Fine-Tuning | None | None | ✅ **Continuous improvement** |
-| Graph Memory | External | External | ✅ **Native, v3.0** |
+| Policies | None | Limited | ✅ **Policy-as-Code, native** |
+| Multi-Agent | Bolted-on | Limited | ⚙️ **Delegated to a selected external engine**, exposed via `DocumentEngine` |
+| Cost Optimization | None | None | ✅ **Evidence/reporting native**; routing logic ⚙️ delegated |
+| Fine-Tuning | None | None | ✅ **Drift detection/eval trigger native**; execution ⚙️ delegated |
+| Graph Memory | External | External | ⚙️ **Delegated traversal**; native data model possible pending Lot 6 evidence |
 | Multi-Language | English-first | Limited | ✅ **20+ languages native** |
-| Multimodal | Partial | Partial | ✅ **Full, v5.0** |
+| Multimodal | Partial | Partial | ⚙️ **Delegated VLM execution**; parsing/citation enrichment may stay native |
+
+⚙️ = delegated per [ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md) — the
+differentiator is owning governance/audit/eval/portability *around* whichever engine is
+selected, not reimplementing the engine's own mechanics.
 
 ---
 

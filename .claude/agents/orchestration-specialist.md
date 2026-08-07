@@ -27,7 +27,7 @@ Subagent frontmatter does not support per-agent file permissions; the lines belo
 - `Edit(src/modular_rag/ingestion/**)`
 
 
-Expert agent specializing in component orchestration, registry patterns, manifest-driven wiring, and multi-agent coordination.
+Expert agent specializing in component orchestration, registry patterns, manifest-driven wiring, and engine-delegation adapter integration.
 
 ## Core Expertise
 
@@ -120,7 +120,7 @@ Invoke when:
 - Designing new manifests
 - Implementing orchestration logic
 - Composing multi-component pipelines
-- Planning multi-agent systems (V2+)
+- Planning engine-delegation adapter integration (`agents/`, `adapters/llms/`)
 
 ## Example Interactions
 
