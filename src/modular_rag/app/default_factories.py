@@ -4,8 +4,10 @@ from modular_rag.orchestration.registry import ComponentRegistry
 
 
 def register_defaults(reg: ComponentRegistry) -> None:
+    from modular_rag.adapters.audit.postgres_sink import PostgresAuditSink
     from modular_rag.adapters.embeddings.hf_embedder import HuggingFaceEmbedder
     from modular_rag.adapters.embeddings.openai_embedder import OpenAIEmbedder
+    from modular_rag.adapters.lifecycle.postgres_ledger import PostgresLifecycleLedger
     from modular_rag.adapters.vectorstores.qdrant_store import QdrantStore
     from modular_rag.core.models.policy import Policy
     from modular_rag.eval.quality_gate import QualityGate
@@ -49,9 +51,13 @@ def register_defaults(reg: ComponentRegistry) -> None:
     reg.register("redactor", "patterns", lambda cfg: PatternRedactor())
     reg.register("review_queue", "human-review", lambda cfg: HumanReviewGate(**cfg.config))
     reg.register("audit_sink", "in-memory", lambda cfg: InMemoryAuditSink())
+    reg.register("audit_sink", "postgres", lambda cfg: PostgresAuditSink(**cfg.config))
     reg.register("telemetry", "structlog", lambda cfg: StructlogTelemetry())
     reg.register("telemetry", "null", lambda cfg: NullTelemetry())
     reg.register("lifecycle_ledger", "in-memory", lambda cfg: InMemoryLifecycleLedger())
+    reg.register(
+        "lifecycle_ledger", "postgres", lambda cfg: PostgresLifecycleLedger(**cfg.config)
+    )
     reg.register("quality_gate", "baseline", lambda cfg: QualityGate(**cfg.config))
 
 
