@@ -1,25 +1,28 @@
 # Capability Matrix — Current Operational Truth
 
-**Snapshot date:** 2026-08-07  
-**Scope:** repository behavior before the boundary and manifest refactors proposed in
-[ADR-0007](../adr/0007-layer-boundaries-and-control-plane-activation.md).
+**Baseline snapshot date:** 2026-08-07 (before ADR-0007's Étapes 4-8 landed).
+**Last updated:** 2026-08-07 (after Étapes 4-8 — layering fixes, manifest V2 activation,
+manifest reorg, dead-code removal).
+**Scope:** [ADR-0007](../adr/0007-layer-boundaries-and-control-plane-activation.md)'s
+boundary and manifest-activation correction.
 
 This matrix is the evidence-based source for whether a capability is actually usable. A class
 existing under `src/` is not sufficient: a capability is **operational** only when a supported
-entry point can activate it and tests cover that path.
+entry point can activate it and tests cover that path. The original 2026-08-07 baseline
+(before any ADR-0007 fix landed) is preserved in git history (`docs/refactoring-plan.md`'s
+commit history around Lot 19) if you need the exact "before" comparison point.
 
-## Reproducible baseline
+## Reproducible baseline (original snapshot, still accurate as history)
 
 Before the Step-3 checker tests were added, the repository contained 214 Python files and 155
 Markdown files. Compilation passed and the local service-free suite reported 548 passing tests
-(466 unit + 82 contract). After adding the 27 dependency-policy tests, the same suite reports
-575 passing tests.
+(466 unit + 82 contract). After adding the 27 dependency-policy tests, the same suite reported
+575 passing tests. As of this update (post Étapes 6-8), the suite reports 585 tests (495 unit +
+90 contract) — net change from adding `tests/contract/test_telemetry_conformance.py`,
+`tests/unit/observability/test_telemetry.py`, and new registry tests, minus the 6 tests removed
+with `KnowledgeGraph` (Étape 8).
 
-The complete layering policy exposes 25 current import violations. They are listed explicitly in
-`.claude/layering-baseline.txt`: normal mode rejects any new violation, while `--strict` remains
-red until Step 4 removes the recorded debt.
-
-Built-in manifest factories at this snapshot are limited to:
+Built-in manifest factories, current as of this update:
 
 | Role | Registered types |
 |---|---|
@@ -31,8 +34,17 @@ Built-in manifest factories at this snapshot are limited to:
 | `generator` | `openai`, `anthropic` |
 | `guard` | `basic` |
 | `evaluator` | `exact-match` |
+| `tenant_policy` | `tenant-isolation` |
+| `policy_engine` | `inline` |
+| `redactor` | `patterns` |
+| `review_queue` | `human-review` |
+| `audit_sink` | `in-memory`, `postgres` |
+| `telemetry` | `structlog`, `null` |
+| `lifecycle_ledger` | `in-memory`, `postgres` |
+| `quality_gate` | `baseline` |
 
-The empty `planner` and `graph_store` registry roles are legacy placeholders, not capabilities.
+The `planner` and `graph_store` registry roles (legacy placeholders, never had a registered
+factory) were removed from `ComponentRegistry` in Étape 8.
 
 ## Status vocabulary
 
@@ -44,6 +56,7 @@ The empty `planner` and `graph_store` registry roles are legacy placeholders, no
 | **Blueprint** | Design input only; not expected to execute successfully or completely. |
 | **Delegated** | Owned by an external engine/tool behind a repository contract or adapter. |
 | **Decision open** | Retention or ownership is unresolved and must not be presented as committed. |
+| **Not built** | No implementation exists yet, regardless of what design docs describe. |
 
 ## Runtime and configuration
 
@@ -51,53 +64,62 @@ The empty `planner` and `graph_store` registry roles are legacy placeholders, no
 |---|---|---|---|
 | Native ingestion, retrieval and generation | **Operational** | V1 manifest → `load_pipeline()` → `ComponentRegistry.wire()` → `RAGEngine` | `manifests/presets/local-hybrid-rag.yaml`; `tests/e2e/test_simple_qa_pipeline.py` (service-dependent). |
 | Engine-neutral native adapter | **Operational** | `load_native_engine()` or `load_engine()` with `engine.adapter: native` | `app/bootstrap.py`; engine conformance tests. |
-| LangGraph adapter | **Programmatic only** | `load_engine()` with `engine.adapter: langgraph` | Unit/conformance coverage exists, but API and CLI call `load_pipeline()` and therefore do not select it. |
-| Manifest YAML validation | **Operational** | `load_manifest()` / `PipelineManifest.model_validate()` | Unknown top-level fields are rejected. Several accepted legacy fields are ignored by wiring; see below. |
-| Environment layering, `${VAR}` and `secret://` | **Programmatic only** | `resolve_manifest()` and `mrag validate` | `load_pipeline()` and `load_engine()` call `load_manifest()` directly, so normal startup bypasses resolution. |
-| Capability dry-run validation | **Operational for V1 component roles** | `mrag validate` → `validate_capabilities()` | Checks chunker/embedder/indexer/retriever/reranker/generator/guard/evaluator only. |
-| Legacy `planner`, `agents`, `graph_store`, `policies`, `modalities` fields | **Blueprint** | Parsed by `PipelineManifest` | `ComponentRegistry.wire()` ignores them; valid YAML can therefore describe behavior that never runs. |
+| LangGraph adapter | **Operational** | `load_engine()` with `engine.adapter: langgraph`, or `manifests/presets/langgraph-rag.yaml` | Unit/conformance coverage; verified end-to-end via `load_engine()` (Étape 7). API/CLI still call `load_pipeline()` by default — selecting LangGraph from the REST API/CLI is not yet wired, only via direct `load_engine()` call. |
+| Manifest YAML validation | **Operational** | `load_manifest()` / `PipelineManifest.model_validate()` | Unknown top-level fields are rejected (`extra="forbid"`). Legacy fields (`planner`/`agents`/`graph_store`/old-style `policies`/`modalities`) now hard-fail validation instead of being silently ignored (Étape 7). |
+| Environment layering, `${VAR}` and `secret://` | **Operational** for `mrag validate` and `load_pipeline()` | `resolve_manifest()`, called by both `mrag validate` and `load_pipeline()` | Verified end-to-end on `secure-enterprise-rag.yaml` (Étape 7): `${QDRANT_URL}`, `secret://QDRANT_API_KEY`, `secret://AUDIT_DATABASE_URL` all resolve. |
+| Capability dry-run validation | **Operational**, extended | `mrag validate` → `validate_capabilities()` | Now also checks `governance`/`observability`/`lifecycle`/`quality` component roles, plus a fail-closed check for `governance.tenant_enforcement=true` without `tenant_policy` (Étape 6). |
+| Legacy `planner`, `agents`, `graph_store`, `policies`, `modalities` fields | **Removed from the active schema** | Rejected by `PipelineManifest.model_validate()` | Only present in `manifests/blueprints/*.yaml`, which are never loaded through `resolve_manifest()` (Étape 7). |
 
 ## Owned control-plane capabilities
 
 | Capability | Status | Activation path today | Evidence / limitation |
 |---|---|---|---|
-| Basic query/answer guard | **Operational** | Manifest `security.type: basic` | Registered in `_default_factories.py` and consumed by `RAGEngine`. |
-| PII/secret redaction | **Programmatic only** | Register `PatternRedactor` manually on `Container.redactor` | No manifest role or default factory. |
-| Policy-as-code evaluation | **Programmatic only** | Construct `PolicyEngine` directly | Not registered, not loaded from `policy_refs`, and not invoked by normal bootstrap. |
-| Tenant isolation | **Programmatic only** | Inject `TenantIsolationPolicy` into `Container.tenant_policy` | Enforcement is tested in both engines, but no manifest wiring activates the policy. |
-| OIDC/Keycloak identity verification | **Programmatic only** | Pass a `TokenVerifier` to `create_app()` | No manifest/service configuration path; API authentication is optional by default. |
-| Structured audit events | **Programmatic only** | Inject an `AuditSink` into `Container.audit_sink` | In-memory and PostgreSQL sinks exist; neither is registered or selected from a manifest. |
-| Trace telemetry | **Programmatic only** | Inject `Telemetry` into `Container.telemetry` | Manifest `observability` is parsed but ignored by wiring. |
-| Human review queue | **Programmatic only** | Inject `HumanReviewGate` into `Container.review_queue` | No manifest factory or user-facing review workflow. |
-| Document lifecycle and erasure | **Programmatic only** | Inject a `LifecycleLedger` | Engine methods are implemented and tested; normal manifests cannot configure a ledger. |
-| Index reconciliation | **Programmatic only** | Construct `IndexReconciler` with a configured container | Operational maintenance primitive, not exposed through CLI/API or manifests. |
-| Exact-match evaluator construction | **Construction only** | Manifest `evaluation.type: exact-match` | Registry constructs it, but `RAGEngine.answer()` does not run evaluation; `BenchmarkRunner` is the consuming path. |
-| Golden-set benchmark runner | **Programmatic only** | Construct `BenchmarkRunner` | Implemented and unit-tested; no shipped golden-set catalogue or user-facing runner. |
-| Quality gates | **Programmatic only** | Construct `QualityGate` against a metrics dictionary | Manifest `quality.gates` is parsed but never enforced. |
-| Data-classification vocabulary | **Construction only** | `DataClassification` enum and fixtures | No classification-aware policy enforcement consumes the values. |
+| Basic query/answer guard | **Operational** | Manifest `security.type: basic` | Registered, consumed by `RAGEngine`. |
+| PII/secret redaction | **Operational** | Manifest `governance.redactor.type: patterns` | Registered factory + manifest role (Étape 6); used in `secure-enterprise-rag.yaml`. |
+| Policy-as-code evaluation | **Operational** | Manifest `governance.policy_engine.type: inline`, policies declared inline in `config.policies` | Registered factory + manifest role (Étape 6); used in `secure-enterprise-rag.yaml`. |
+| Tenant isolation | **Operational** | Manifest `governance.tenant_policy.type: tenant-isolation`, gated by explicit `governance.tenant_enforcement: true` | Registered factory + manifest role; `tenant_enforcement=true` without `tenant_policy` now fails validation instead of silently no-op'ing (Étape 6/8). |
+| OIDC/Keycloak identity verification | **Programmatic only** (by design) | Pass a `TokenVerifier` to `create_app()` | ADR-0007 explicitly keeps this a service/interface concern, not a manifest-wired domain policy — mixing identity verification with policy enforcement is what the ADR warns against. |
+| Structured audit events | **Operational** | Manifest `governance.audit_sink.type: in-memory` or `postgres` | Both sinks registered (Étape 6); Postgres verified append-only by construction. |
+| Trace telemetry | **Operational** | Manifest `observability.telemetry.type: structlog` or `null` | Both registered; previously untested — added conformance + unit tests (Étape 6). |
+| Human review queue | **Operational** | Manifest `governance.review_queue.type: human-review` | Registered factory + manifest role. |
+| Document lifecycle and erasure | **Operational** | Manifest `lifecycle.ledger.type: in-memory` or `postgres` | Both registered (Postgres added Étape 6); engine methods tested. |
+| Index reconciliation | **Programmatic only** | Construct `IndexReconciler` with a configured container | Still not exposed through CLI/API or manifests — unchanged by this update. |
+| Exact-match evaluator | **Operational** | Manifest `evaluation.type: exact-match` | Registered; `Evaluator` Protocol contract-tested. Golden-set catalogue and NDCG still not built — see [ROADMAP.md](../../ROADMAP.md) V1.1. |
+| Golden-set benchmark runner | **Programmatic only** | Construct `BenchmarkRunner` | Implemented and unit-tested; no shipped golden-set catalogue (`eval/datasets/` is empty) or user-facing runner. |
+| Quality gates | **Operational** | Manifest `quality.gate.type: baseline`, `report_only`/`blocking` mode | Registered factory + manifest role (Étape 6); used in `secure-enterprise-rag.yaml` in blocking mode. |
+| Data-classification vocabulary | **Construction only** | `DataClassification` enum and fixtures | No classification-aware policy enforcement consumes the values — unchanged by this update. |
+| Cost/latency evidence reporting (V3.1) | **Not built** | None | `eval/cost_reporting/` doesn't exist on disk. |
+| Drift detection / eval trigger (V3.2) | **Not built** | None | `eval/drift_detection.py`/`eval/feedback_collection/` don't exist on disk. |
 
-## Delegated and future capabilities
+## Delegated, removed, and future capabilities
 
 | Capability | Status | Activation path today | Evidence / limitation |
 |---|---|---|---|
-| Generic multi-agent orchestration | **Delegated** | External engine through `DocumentEngine` | Native agent prototypes were removed in Lot 17. The LangGraph adapter does not make the legacy `agents:` manifest field operational. |
-| GraphRAG traversal | **Delegated / decision open** | Intended external-engine capability | `memory/graph/knowledge_graph.py` still contains native multi-hop traversal but has no runtime consumer; retention is unresolved. |
-| Native knowledge-graph data model | **Decision open** | Direct Python use only | `GraphNode`/`GraphEdge`/`KnowledgeGraph` have unit tests but no pipeline wiring. |
-| Fine-tuning execution | **Delegated** | External MLOps tooling | Native ownership is limited to future drift detection/evaluation triggers. |
-| Multimodal execution | **Delegated** | Future external-engine adapter capability | `multimodal-rag.yaml` is a non-runnable blueprint; parsing/citation enrichment ownership remains evidence-dependent. |
-| Multi-language/cultural reasoning | **Blueprint** | None | Roadmap target only; no end-to-end implementation or quality evidence. |
+| Generic multi-agent orchestration | **Delegated** | External engine through `DocumentEngine` (`manifests/presets/langgraph-rag.yaml`) | Native agent prototypes were removed in Lot 17. `langgraph-rag.yaml` (renamed from `agentic-rag.yaml`, Étape 7) makes delegation the manifest-visible reality instead of a dead `agents:` field. |
+| GraphRAG traversal | **Delegated** | Intended external-engine capability, not available in LangGraph today | `manifests/blueprints/graph-memory-rag.yaml` documents the sketch; not loadable. |
+| Native knowledge-graph data model | **Removed** (Étape 8, resolves ADR-0007's open decision #4) | None — `memory/graph/` no longer exists | Zero consumers anywhere outside its own test; `neighbours()`/`subgraph_for_query()` were genuine traversal logic, not passive storage. Restorable via git history. |
+| Fine-tuning execution | **Delegated** | External MLOps tooling | Native ownership is limited to drift detection/evaluation triggers, which are themselves not built yet (see above). |
+| Multimodal execution | **Delegated** | Future external-engine adapter capability | `manifests/blueprints/multimodal-rag.yaml` (moved from `presets/`, Étape 7) is a non-runnable sketch, stripped of its fictional native `agents:`/`graph_store:` blocks; parsing/citation enrichment ownership remains evidence-dependent. |
+| Multi-language/cultural reasoning | **Not built** | None | No `adapters/nlp/` module exists; roadmap target only. |
 
-## Known architecture debt affecting these statuses
+## Known architecture debt — resolved vs. still open
 
-1. The standard layering audit did not cover `orchestration`, `app`, `api`, or `cli` before
-   Step 3 of the 2026-08 correction programme.
-2. `orchestration` imports `app.Container`, opposite to the published dependency direction.
-3. `orchestration/_default_factories.py` acts as the concrete composition root and imports every
-   implementation layer; ADR-0007 proposes moving that responsibility to `app`.
-4. `RAGEngine` imports lifecycle hashing directly from the ingestion domain.
-5. Owned control-plane implementations are mostly test-injected rather than manifest-wired.
-6. API and CLI bypass both `load_engine()` selection and `resolve_manifest()` resolution.
-7. Runnable presets and non-runnable design blueprints share the same schema and folder.
+Resolved by Étapes 4-8 (previously listed here as open debt):
+1. ~~Layering audit didn't cover `orchestration`/`app`/`api`/`cli`~~ — `scripts/check_layering.py`
+   now covers all seven layers, `--strict` passes clean, baseline emptied (Étape 3-4).
+2. ~~`orchestration` imports `app.Container`~~ — `Container` moved to `orchestration/container.py`
+   (Étape 4).
+3. ~~`orchestration/_default_factories.py` is the accidental composition root~~ — moved to
+   `app/default_factories.py` (Étape 4).
+4. ~~Owned control-plane implementations are test-injected, not manifest-wired~~ — governance/
+   observability/lifecycle/quality sections are now manifest-activatable (Étape 6).
+5. ~~Runnable presets and non-runnable blueprints share the same folder~~ — split into
+   `manifests/presets/` and `manifests/blueprints/` (Étape 7).
 
-The target treatment for these items is proposed in ADR-0007. Until its implementation lands,
-documentation and client-facing claims should use the statuses in this matrix.
+Still open:
+6. `RAGEngine` still imports lifecycle hashing directly from the ingestion domain (not addressed
+   by Étapes 4-8 — not part of ADR-0007's scope).
+7. API and CLI still call `load_pipeline()` by default rather than `load_engine()` — selecting
+   the LangGraph adapter from the REST API/CLI (not just via direct `load_engine()` call) is not
+   yet wired. This is ADR-0007's open decision #5.
+8. `IndexReconciler` remains programmatic-only, not exposed through CLI/API/manifests.

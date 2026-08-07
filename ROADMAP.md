@@ -98,42 +98,31 @@ without requiring external services for those two categories.
 
 **Purpose:** Force every component to be measurable; contract-enforced metrics.
 
-**Implementation:**
-- `contracts/evaluation.py`: Define `MetricsProtocol` for all components
-  - Retriever metrics: NDCG@k, MRR, latency_p95, recall
-  - Generator metrics: semantic similarity, factuality score, token efficiency
-  - System metrics: F1 on golden set, cost per query
-- `eval/metrics/`: Implement all scorers
-  - `semantic_similarity.py`: Compare generated vs expected answers
-  - `factuality.py`: Check if answer is grounded in retrieved docs (RAGAS-style)
-  - `efficiency.py`: Cost + latency measurement
-- `eval/golden_sets/`: Per-domain reference Q&A
-  - Finance, Healthcare, Manufacturing, default
-- `eval/regression_dashboard/`: Auto-detect performance drops
-  - Alerts if F1 drops > 2% vs baseline
-- `tests/contract/test_metrics_conformance.py`: Verify each adapter implements metrics
+**Status: partially built.** The original detailed module list below (`eval/metrics/`,
+`eval/golden_sets/`, `eval/regression_dashboard/`) described files that were never actually
+created — corrected 2026-08-07 (Étape 9) to describe the real, simpler implementation instead.
 
-**Modules:**
-```
-eval/
-├── metrics/
-│   ├── retriever_metrics.py      (NDCG, MRR, latency)
-│   ├── generator_metrics.py      (semantic similarity, factuality)
-│   ├── system_metrics.py         (F1, cost/query, coverage)
-│   └── regression_detector.py    (alert on degradation)
-├── golden_sets/
-│   ├── finance.yaml              (Q&A for finance domain)
-│   ├── healthcare.yaml
-│   ├── manufacturing.yaml
-│   └── default.yaml
-└── dashboard.py                   (metrics visualization)
-```
+**What actually exists:**
+- `contracts/evaluation.py`: `Evaluator` Protocol (`evaluate(query, answer, expected, context) ->
+  Metrics`) — registered, manifest-wirable (`evaluator` role), contract-tested
+  (`tests/contract/test_eval_conformance.py`)
+- `eval/scorers/exact_match.py`: `ExactMatchEvaluator` — the one registered `evaluator` type today
+- `eval/scorers/retrieval_metrics.py`: `recall_at_k`, `precision_at_k`, `mrr` — no NDCG yet
+- `eval/runners/benchmark.py`: `BenchmarkRunner`/`GoldenSet`/`BenchmarkCase`/`BenchmarkReport` —
+  the golden-set infrastructure exists as classes; `eval/datasets/` (populated per-domain YAML
+  files) is still empty, so no actual golden set is shipped yet
+- `eval/quality_gate.py`: `QualityGate` — compares metrics against a baseline, `report_only` or
+  `blocking` mode; manifest-wired (`quality.gate`), used by `secure-enterprise-rag.yaml`
+
+**Not built:** semantic-similarity/factuality/RAGAS-style scorers, per-domain golden-set YAML
+files, a regression dashboard/detector.
 
 **Success criteria:**
-- ✅ All retrievers evaluated with NDCG@k
-- ✅ All generators evaluated with factuality score
-- ✅ Golden set coverage > 90%
-- ✅ Regression detector prevents merges below baseline
+- ✅ `Evaluator` Protocol contract-enforced and manifest-wirable
+- ✅ Retrieval metrics (recall/precision/MRR) computed
+- ⬜ NDCG@k
+- ⬜ Populated per-domain golden sets (`eval/datasets/` is currently empty)
+- ⬜ Regression dashboard/auto-detection
 
 ---
 
@@ -141,44 +130,33 @@ eval/
 
 **Purpose:** GDPR/CCPA-ready logging; prove what happened, when, by whom, with what result.
 
-**Implementation:**
-- `security/audit/`: Immutable audit system
-  - `immutable_log.py`: Append-only event store (cannot modify past events)
-  - `event_schema.py`: Structured events (query, user, role, data_touched, redaction_applied, timestamp)
-  - `data_lineage.py`: Track source → processing → response chain
-  - `access_control_log.py`: Who accessed what data, when, why
-- `security/redaction/`: Proof of PII redaction
-  - Log what was redacted, how (regex pattern, replacement)
-  - Never log full PII, only redaction proof
-- `security/compliance_reports/`: Auto-generate audit reports
-  - GDPR report: queries touching personal data last 90 days
-  - CCPA report: user data access + deletion requests
-  - HIPAA report: healthcare data access trails
-  - Immutable export (signed, timestamped)
+**Status: partially built.** The original detailed module list below (event schema, data
+lineage tracker, access-control log, GDPR/CCPA/HIPAA report generators) described files that
+were never actually created — corrected 2026-08-07 (Étape 9) to describe the real, simpler
+implementation instead.
 
-**Modules:**
-```
-security/
-├── audit/
-│   ├── immutable_log.py          (append-only event store)
-│   ├── event_schema.py           (structured events)
-│   ├── data_lineage_tracker.py   (source → response chain)
-│   └── access_control_log.py     (RBAC audit)
-├── redaction/
-│   ├── redaction_proof.py        (log redaction actions)
-│   └── pii_detector.py           (what needs redacting)
-└── compliance/
-    ├── gdpr_reporter.py          (personal data audit)
-    ├── ccpa_reporter.py          (deletion request support)
-    ├── hipaa_reporter.py         (healthcare compliance)
-    └── report_generator.py       (signed exports)
-```
+**What actually exists:**
+- `contracts/audit.py`: `AuditEvent` (structured event model), `AuditEventType`, `AuditSink`
+  Protocol
+- `security/audit/store.py`: `InMemoryAuditSink` — manifest-wired (`audit_sink: in-memory`)
+- `adapters/audit/postgres_sink.py`: `PostgresAuditSink` — durable, append-only (`ON CONFLICT
+  DO NOTHING`, no UPDATE/DELETE anywhere in the file), manifest-wired (`audit_sink: postgres`,
+  Étape 6)
+- `security/redaction/patterns.py`: `PatternRedactor` — manifest-wired (`redactor: patterns`)
+
+**Not built:** a data-lineage tracker (source → processing → response chain as its own
+artifact), an access-control log, and GDPR/CCPA/HIPAA report *generators* (nothing produces a
+formatted compliance report from the audit events — the events themselves are captured, but
+turning them into a report is a manual query today).
 
 **Success criteria:**
-- ✅ Zero unredacted PII in logs
-- ✅ GDPR report generates < 10 seconds
-- ✅ Audit trail immutable (cannot delete)
-- ✅ Data lineage traceable (source → output)
+- ✅ Structured audit events captured (`AuditEvent`), manifest-activatable sink (in-memory or
+  Postgres)
+- ✅ PII redaction manifest-activatable (`PatternRedactor`)
+- ✅ Postgres audit sink is append-only by construction (no UPDATE/DELETE statements)
+- ⬜ Formatted GDPR/CCPA/HIPAA report generation
+- ⬜ Explicit data-lineage tracking artifact (source → processing → response)
+- ⬜ Access-control log (who accessed what, when, why)
 
 ---
 
@@ -212,34 +190,29 @@ self-correction loop when the answer isn't well enough supported by evidence.
   - Policies + TraceStep = full auditability
 - Multi-tenant support (tenant ID in context, policies per tenant)
 
-**Modules:**
-```
-security/
-├── policies/
-│   ├── policy_engine.py          (evaluate query vs policies)
-│   ├── policy_loader.py          (YAML → Policy objects)
-│   ├── role_based_access.py      (RBAC enforcement)
-│   └── policy_schemas.py         (YAML schema validation)
-└── data_classification/
-    └── classification.yaml        (sensitivity levels)
+**Status: built, with a simpler shape than originally sketched.** Corrected 2026-08-07
+(Étape 9) — `policy_loader.py`, `role_based_access.py`, `policy_schemas.py`,
+`data_classification/`, `orchestration/policy_executor.py`/`policy_registry.py`, and
+`manifests/policies/*.yaml` were never created; policies are declared inline in the manifest's
+`governance.policy_engine.config.policies` instead (see `secure-enterprise-rag.yaml`).
 
-orchestration/
-├── policy_executor.py            (apply policies in engine)
-└── policy_registry.py            (register custom policies)
-
-manifests/
-└── policies/
-    ├── data_classification.yaml
-    ├── role_access.yaml
-    ├── query_routing.yaml
-    └── audit_rules.yaml
+**What actually exists:**
 ```
+security/policies/
+├── policy_engine.py       (PolicyEngine — evaluate query vs inline Policy objects)
+├── tenant_isolation.py    (TenantIsolationPolicy — fail-closed enforce/filter by tenant_id)
+└── human_review.py        (HumanReviewGate — hold low-confidence answers for review)
+```
+All three are manifest-wired (`governance.policy_engine`/`tenant_policy`/`review_queue`) and
+contract-tested.
 
 **Success criteria:**
-- ✅ Queries evaluated against policies before execution
-- ✅ Multi-tenant isolation working (tenant A cannot see tenant B data)
-- ✅ Policy violations logged + escalated
-- ✅ Policy audit trail complete
+- ✅ Queries evaluated against inline policies before execution (`PolicyEngine`)
+- ✅ Multi-tenant isolation working, fail-closed (`TenantIsolationPolicy`)
+- ✅ Policy violations raise `PolicyViolationError` (evaluation failures also fail closed, per
+  Lot 11b)
+- ⚠️ Policy audit trail exists (`AuditEvent`/`AuditSink`) but is not yet a formatted report —
+  see V1.2
 
 ---
 
@@ -265,9 +238,10 @@ graph, not plain text search.
 
 > **Delegated per [ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md) §5.2.**
 > GraphRAG traversal/reasoning execution is delegated to a selected external engine via the
-> `DocumentEngine` port; this repository does not implement it natively. A knowledge-graph
-> *data model* may still live in `memory/` if Lot 6 evidence shows the external engine can't
-> represent it — that decision is undecided, not settled by this note.
+> `DocumentEngine` port; this repository does not implement it natively. The native
+> `KnowledgeGraph` data model was removed in Étape 8
+> ([ADR-0007](docs/adr/0007-layer-boundaries-and-control-plane-activation.md)) — zero
+> consumers anywhere, restorable via git history if a real, wired need emerges.
 
 ---
 
@@ -299,9 +273,12 @@ eval/
     └── cost_anomaly_detector.py
 ```
 
-**Success criteria:**
-- ✅ Cost/latency reported per query, per user, per month, regardless of engine
-- ✅ Anomaly detection flags spikes
+**Status: not yet built** — `eval/cost_reporting/` doesn't exist on disk. The bullets below are
+target criteria for when it's implemented, not achieved results.
+
+**Success criteria (target, not yet met):**
+- ⬜ Cost/latency reported per query, per user, per month, regardless of engine
+- ⬜ Anomaly detection flags spikes
 
 ---
 
@@ -333,10 +310,13 @@ eval/
 └── drift_detection.py           (performance monitoring, triggers external retraining)
 ```
 
-**Success criteria:**
-- ✅ Feedback collection > 80% of queries
-- ✅ Drift detection works (alerts on degradation)
-- ✅ Alert triggers a defined external retraining workflow (not run in-house)
+**Status: not yet built** — neither `eval/feedback_collection/` nor `eval/drift_detection.py`
+exist on disk. The bullets below are target criteria, not achieved results.
+
+**Success criteria (target, not yet met):**
+- ⬜ Feedback collection > 80% of queries
+- ⬜ Drift detection works (alerts on degradation)
+- ⬜ Alert triggers a defined external retraining workflow (not run in-house)
 
 ---
 
@@ -443,12 +423,14 @@ Query: "What's the best station to travel from?"
 5. Output: Answer in English
 ```
 
-**Success criteria:**
-- ✅ Language detection > 99% accuracy
-- ✅ Support 20+ languages natively
-- ✅ F1 in non-English languages > 0.80
-- ✅ Mixed-script queries handled correctly
-- ✅ Regulatory routing works per country
+**Status: not yet built** — none of the modules listed above exist on disk yet.
+
+**Success criteria (target, not yet met):**
+- ⬜ Language detection > 99% accuracy
+- ⬜ Support 20+ languages natively
+- ⬜ F1 in non-English languages > 0.80
+- ⬜ Mixed-script queries handled correctly
+- ⬜ Regulatory routing works per country
 
 ---
 
@@ -472,14 +454,14 @@ version becomes "demonstrable" rather than "under construction".
 
 | Version | Target | Key Success Metrics |
 |---|---|---|
-| **v1.0** | Q2 2026 | Hybrid RAG working, F1 > 0.75, examples running |
-| **v1.1** | Q2 2026 | All metrics implemented, regression detector active |
-| **v1.2** | Q3 2026 | Audit trail immutable, GDPR report < 10s |
-| **v2.0** | Q3 2026 | Policies enforced (multi-agent runtime ⚙️ delegated, see v2.1) |
+| **v1.0** | Q2 2026 | ✅ Done — Hybrid RAG working, F1 > 0.75, examples running |
+| **v1.1** | Q2 2026 | 🟡 Partial — recall/precision/MRR + `Evaluator` contract shipped; NDCG, populated golden sets, regression dashboard not built |
+| **v1.2** | Q3 2026 | 🟡 Partial — structured audit events + manifest-activatable sinks shipped; formatted GDPR/CCPA/HIPAA reports not built |
+| **v2.0** | Q3 2026 | ✅ Done — `PolicyEngine`/`TenantIsolationPolicy`/`HumanReviewGate` manifest-wired (multi-agent runtime ⚙️ delegated, see v2.1) |
 | **v2.1** ⚙️ | Q4 2026 | Delegated to selected external engine — see V2.1 note above |
 | **v3.0** ⚙️ | Q4 2026 | Delegated (traversal) — see V3.0 note above |
-| **v3.1** | Q1 2027 | Cost/latency reported per query, anomalies flagged (routing itself ⚙️ delegated) |
-| **v3.2** | Q1 2027 | Drift detection alerts on degradation (fine-tuning execution ⚙️ delegated) |
+| **v3.1** | Q1 2027 | ⬜ Not built — `eval/cost_reporting/` doesn't exist yet (routing itself ⚙️ delegated) |
+| **v3.2** | Q1 2027 | ⬜ Not built — `eval/drift_detection.py` doesn't exist yet (fine-tuning execution ⚙️ delegated) |
 | **v4.0** | Q1 2027 | Multi-environment policies, prod-ready |
 | **v4.1** | Q2 2027 | 20+ languages, cultural reasoning |
 | **v5.0** ⚙️ | Q2 2027 | Delegated (VLM execution) — see V5.0 note above |
@@ -492,19 +474,22 @@ version becomes "demonstrable" rather than "under construction".
 
 | Feature | LangChain | Haystack | **This Framework** |
 |---|---|---|---|
-| Evaluation | External (Ragas) | Built-in | ✅ **Contract-enforced, native** |
-| Audit Trail | Manual | Limited | ✅ **GDPR/CCPA native** |
-| Policies | None | Limited | ✅ **Policy-as-Code, native** |
+| Evaluation | External (Ragas) | Built-in | ✅ **Contract-enforced, native** — `Evaluator` Protocol + recall/precision/MRR shipped; golden sets and NDCG still open (V1.1) |
+| Audit Trail | Manual | Limited | 🟡 **Primitives shipped, native** — structured, append-only audit events (in-memory or Postgres); no formatted GDPR/CCPA/HIPAA report generator yet (V1.2) |
+| Policies | None | Limited | ✅ **Policy-as-Code, native** — `PolicyEngine`/`TenantIsolationPolicy` manifest-wired and fail-closed |
 | Multi-Agent | Bolted-on | Limited | ⚙️ **Delegated to a selected external engine**, exposed via `DocumentEngine` |
-| Cost Optimization | None | None | ✅ **Evidence/reporting native**; routing logic ⚙️ delegated |
-| Fine-Tuning | None | None | ✅ **Drift detection/eval trigger native**; execution ⚙️ delegated |
-| Graph Memory | External | External | ⚙️ **Delegated traversal**; native data model possible pending Lot 6 evidence |
-| Multi-Language | English-first | Limited | ✅ **20+ languages native** |
-| Multimodal | Partial | Partial | ⚙️ **Delegated VLM execution**; parsing/citation enrichment may stay native |
+| Cost Optimization | None | None | ⬜ **Not yet built** — `eval/cost_reporting/` doesn't exist; scoped as native reporting once built, routing logic itself ⚙️ delegated (V3.1) |
+| Fine-Tuning | None | None | ⬜ **Not yet built** — `eval/drift_detection.py` doesn't exist; scoped as native detection once built, execution itself ⚙️ delegated (V3.2) |
+| Graph Memory | External | External | ⚙️ **Delegated traversal**; the native data model was evaluated and removed (Étape 8, zero consumers) — no native graph capability today |
+| Multi-Language | English-first | Limited | ⬜ **Not yet built** — no `adapters/nlp/` module exists (V4.1) |
+| Multimodal | Partial | Partial | ⚙️ **Delegated VLM execution**; parsing/citation enrichment status still open |
 
 ⚙️ = delegated per [ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md) — the
 differentiator is owning governance/audit/eval/portability *around* whichever engine is
-selected, not reimplementing the engine's own mechanics.
+selected, not reimplementing the engine's own mechanics. This table intentionally avoids
+compliance claims like "GDPR compliant" — what's shipped are the *primitives* (audit events,
+tenant isolation, policy enforcement) a deployer assembles into a compliant deployment, not a
+turnkey certification.
 
 ---
 

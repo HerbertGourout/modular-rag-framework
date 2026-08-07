@@ -13,9 +13,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 01 — Project purpose
 
-Production-grade modular RAG + agentic orchestration framework for Publicis enterprise use cases. Five-version progression: V1 (Core RAG) → V2 (Agentic) → V3 (Graph Memory) → V4 (Governance) → V5 (Multimodal).
-
-> **[ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md) (accepted 2026-08-04) changes what "V2-V5" means.** This package owns governance, audit, evaluation, config/manifests, tenant isolation, and portability natively. It delegates generic multi-agent orchestration (V2.1), GraphRAG traversal (V3.0), fine-tuning-platform mechanics (V3.2), and multimodal execution (V5.0) to a selected external engine via adapter — these are no longer native builds. See block 09 and the ADR for the full owned/delegated split. Full reconciliation of this document with the ADR is Lot 17 scope; this is an interim marker.
+Production-grade modular RAG framework for Publicis enterprise use cases, built around three
+things: a **bounded native engine** (hybrid retrieval, generation, security — the V1 pipeline,
+`NativeEngineAdapter`), an **owned control plane** (governance, audit, evaluation,
+config/manifests, tenant isolation, portability — native and manifest-activatable across every
+version, not just V1), and **delegated external engines** for generic multi-agent orchestration
+and GraphRAG traversal (LangGraph today, selected via [ADR-0006](docs/adr/0006-external-engine-selection.md),
+reached through the `DocumentEngine` port). The historical "V1 Core RAG → V2 Agentic → V3 Graph
+Memory → V4 Governance → V5 Multimodal" progression in block 09 still organizes the detailed
+roadmap, but per [ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md) (accepted
+2026-08-04) and [ADR-0007](docs/adr/0007-layer-boundaries-and-control-plane-activation.md)
+(accepted 2026-08-07), most version numbers no longer map to "built natively in that version" —
+see block 09 for the current owned/delegated split, which is reconciled with the ADRs, not an
+interim marker awaiting a future rewrite.
 
 **Non-negotiable priority**: preserve the V1 end-to-end path before adding V3+ features. New graph, governance, or multimodal work must not break `examples/simple_qa/`, unit tests, contract tests, or the local layering audit.
 
@@ -98,7 +108,12 @@ pytest tests/e2e/ -v -m e2e
 ### CLI & API development
 ```bash
 # REST API (development mode with hot-reload)
-uvicorn modular_rag.api:create_app --factory --reload
+# NOTE: bare `uvicorn modular_rag.api:create_app --factory` does NOT work — create_app()
+# requires a manifest_path argument, and --factory mode calls the factory with zero args.
+# Use docker/server.py's pattern (a one-line wrapper) or write your own:
+#   from modular_rag.api import create_app
+#   app = create_app("manifests/presets/local-hybrid-rag.yaml")
+# then: uvicorn server:app --reload  (see docs/api/rest.md for the full parameter reference)
 
 # CLI ingestion
 mrag ingest ./my_docs --manifest manifests/presets/local-hybrid-rag.yaml

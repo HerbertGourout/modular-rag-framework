@@ -9,7 +9,9 @@
 > manifests/trace/audit), Phase C (Lots 11a-12c, tenant identity/fail-closed enforcement +
 > document lifecycle/reconciliation/erasure), and Phase D (Lots 15-18, portability and
 > delivery) are all **engineering-COMPLETE** — final sign-off pending, see Lot 18 below. Full
-> detail in `docs/refactoring/lot-{0..18}-*.md` (one file per lot/sub-lot):
+> detail in `docs/refactoring/lot-{0..18}-*.md` (one file per lot/sub-lot). Lot 19 (below) is
+> tracked directly in ADR-0007 and the capability matrix rather than its own lot file, pending
+> a dedicated evidence writeup at closure:
 > - **Lot 13 COMPLETE** (2026-08-05): corrected `Metrics` vocabulary (answer-scoped fields
 >   distinct from retrieval-scoped ones; genuine `exact_match`), fixed `BenchmarkRunner`'s
 >   failure-masking, versioned `Metrics`/`GoldenSet` schemas, report-only/blocking `QualityGate`.
@@ -100,6 +102,18 @@
 >   claim, not evidence. Evidence in `docs/refactoring/lot-18-pilot-and-closure.md`.
 > **Refactoring programme (Phase A-D, Lots 0-18): engineering work COMPLETE. Awaiting Herbert
 > Gourout's sign-off before this status block can honestly say "closed."**
+> **Lot 19 (new, 2026-08-07):** a follow-on audit found the published dependency direction
+> (`api/cli → app → orchestration → contracts/core`) didn't match the real one
+> (`orchestration/{engine,registry,reconciliation}.py` imported `app.Container`, and API/CLI
+> imported domain code directly), and that governance/audit/quality manifest sections were
+> parsed but not consumed by `wire()`. [ADR-0007](adr/0007-layer-boundaries-and-control-plane-activation.md)
+> (accepted 2026-08-07) is the correction: `Container` moved to `orchestration/`, a real
+> `app/public.py`/`app/application.py` facade now sits between interfaces and implementation,
+> `manifests/presets/` holds only genuinely-loadable manifests (`manifests/blueprints/` for
+> sketches), dead code with zero consumers was removed, and the layering checker enforces the
+> full table with `--strict` as a hard CI gate. Full evidence:
+> [capability-matrix.md](architecture/capability-matrix.md). In progress as of this writing —
+> see the tracking table below for exact status.
 > **Target outcome:** Deploy compliant, measurable document-AI solutions faster, independently
 > of the underlying execution engine.
 > **Migration principle:** Incremental, evidence-based, reversible, and releasable after every
@@ -255,21 +269,22 @@ stated otherwise.
 | 7 | Engine-neutral contracts and compatibility policy | P0 | M (1wk) | COMPLETE | 4, 6 |
 | 8 | Native V1 adapter and compatibility facade | P0 | M (1wk) | COMPLETE | 7 |
 | 9 | Versioned solution configuration and secret resolution | P0 | M (1wk) | COMPLETE | 7 |
-| 10 | Versioned trace/audit foundation | P0 | M (1wk) | NOT STARTED | 7, 9 |
-| 11a | Threat model and data-classification policy | P0 | S (2-3d) | NOT STARTED | 8-10 |
-| 11b | Authenticated identity/tenant propagation, fail-closed enforcement | P0 | M (1wk) | NOT STARTED | 11a |
-| 11c | Redaction integration, audit evidence, human-review escalation | P0 | M (1wk) | NOT STARTED | 11b |
-| 12a | Document identity and idempotent ingest/update/delete/tombstone | P0 | M (1wk) | NOT STARTED | 11c |
-| 12b | Index schema/version, vector-lexical atomicity, reconciliation | P0 | L (1.5-2wk) | NOT STARTED | 12a |
-| 12c | Backup, restore, rebuild, migration, right-to-erasure proof | P0 | M (1wk) | NOT STARTED | 12b |
-| 13 | Correct quality and measurement plane | P0 | M (1wk) | NOT STARTED | 7-10 |
-| 14 | Reliability, concurrency, and resource lifecycle | P1 | L (1.5-2wk) | NOT STARTED | 12c, 13 |
-| 15 | First production external-engine adapter | P1 | L (2-3wk) | NOT STARTED | 7, 9, 10, 12c, 13, 14 |
-| 16a | API/CLI hardening (auth, authz, limits, safe errors, readiness) | P1 | M (1wk) | NOT STARTED | 15 |
-| 16b | Packaging and supply chain (builds, SBOM, licence gates, single version source) | P1 | S-M (3-5d) | NOT STARTED | 15 |
-| 16c | Deployment and ops runbooks (deploy, backup, restore, rollback) | P1 | S-M (3-5d) | NOT STARTED | 16a, 16b |
-| 17 | Prototype retirement and final docs/Claude/research consolidation | P1 | M (1wk) | NOT STARTED | 16a-16c |
-| 18 | Multi-engine pilot, release gates, and programme closure | P1 | M-L (1-2wk) | NOT STARTED | 17 |
+| 10 | Versioned trace/audit foundation | P0 | M (1wk) | COMPLETE | 7, 9 |
+| 11a | Threat model and data-classification policy | P0 | S (2-3d) | COMPLETE | 8-10 |
+| 11b | Authenticated identity/tenant propagation, fail-closed enforcement | P0 | M (1wk) | COMPLETE | 11a |
+| 11c | Redaction integration, audit evidence, human-review escalation | P0 | M (1wk) | COMPLETE | 11b |
+| 12a | Document identity and idempotent ingest/update/delete/tombstone | P0 | M (1wk) | COMPLETE | 11c |
+| 12b | Index schema/version, vector-lexical atomicity, reconciliation | P0 | L (1.5-2wk) | COMPLETE | 12a |
+| 12c | Backup, restore, rebuild, migration, right-to-erasure proof | P0 | M (1wk) | COMPLETE | 12b |
+| 13 | Correct quality and measurement plane | P0 | M (1wk) | COMPLETE | 7-10 |
+| 14 | Reliability, concurrency, and resource lifecycle | P1 | L (1.5-2wk) | COMPLETE | 12c, 13 |
+| 15 | First production external-engine adapter | P1 | L (2-3wk) | COMPLETE | 7, 9, 10, 12c, 13, 14 |
+| 16a | API/CLI hardening (auth, authz, limits, safe errors, readiness) | P1 | M (1wk) | COMPLETE | 15 |
+| 16b | Packaging and supply chain (builds, SBOM, licence gates, single version source) | P1 | S-M (3-5d) | COMPLETE | 15 |
+| 16c | Deployment and ops runbooks (deploy, backup, restore, rollback) | P1 | S-M (3-5d) | COMPLETE (documentation/tooling scope — execution evidence pending real infra) | 16a, 16b |
+| 17 | Prototype retirement and final docs/Claude/research consolidation | P1 | M (1wk) | COMPLETE (one sub-item blocked by the permission system) | 16a-16c |
+| 18 | Multi-engine pilot, release gates, and programme closure | P1 | M-L (1-2wk) | COMPLETE (engineering scope) — sign-off pending | 17 |
+| 19 | Layer-boundary correction and control-plane activation (ADR-0007) | P0 | L (1.5-2wk) | IN PROGRESS — Étapes 1-9 of 12 done as of 2026-08-07, see [ADR-0007](adr/0007-layer-boundaries-and-control-plane-activation.md) and [capability-matrix.md](architecture/capability-matrix.md) | 18 |
 
 Ranges (e.g. `8-10`) list the earliest and latest lot whose evidence is required via the
 dependency chain, not necessarily every intermediate lot as a direct predecessor. `16a` and
