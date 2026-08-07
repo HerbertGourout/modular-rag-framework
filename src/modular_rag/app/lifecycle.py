@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import structlog
 
-from modular_rag.app.container import Container
+from modular_rag.orchestration.container import Container
 
 log = structlog.get_logger(__name__)
 

@@ -7,10 +7,14 @@ from pydantic import BaseModel
 from modular_rag import __version__
 from modular_rag.api.errors import to_http_exception
 from modular_rag.api.middleware import MaxBodySizeMiddleware, RateLimitMiddleware
-from modular_rag.app.bootstrap import load_pipeline
-from modular_rag.contracts.identity import TenantContext, TokenVerifier
-from modular_rag.core.errors import AuthenticationError
-from modular_rag.core.models.answer import Answer
+from modular_rag.app.public import (
+    AuthenticationError,
+    TenantContext,
+    TokenVerifier,
+)
+from modular_rag.app.public import (
+    load_application as load_pipeline,
+)
 
 _DEFAULT_MAX_BODY_BYTES = 1_000_000  # 1 MB
 _DEFAULT_RATE_LIMIT_PER_MINUTE = 60
@@ -103,7 +107,7 @@ def create_app(
         identity: TenantContext | None = Depends(_authenticate),  # noqa: B008
     ) -> AnswerResponse:
         try:
-            ans: Answer = pipeline.answer(
+            ans = pipeline.answer(
                 req.question, tenant_id=identity.tenant_id if identity else None
             )
         except Exception as exc:

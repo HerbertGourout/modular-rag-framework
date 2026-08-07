@@ -28,7 +28,7 @@ import uuid
 import structlog
 from fastapi import HTTPException
 
-from modular_rag.core.errors import AuthenticationError, ModularRAGError, SecurityError
+from modular_rag.app.public import AuthenticationError, ModularRAGError, SecurityError
 
 log = structlog.get_logger(__name__)
 

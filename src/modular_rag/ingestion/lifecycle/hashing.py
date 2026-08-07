@@ -8,15 +8,6 @@ document (same tenant, same `source` path/URL) is recognized as the same
 logical document across separate `ingest()` calls. `content_hash()` detects
 whether that document's content actually changed since the last ingest.
 """
-from __future__ import annotations
+from modular_rag.core.document_identity import content_hash, document_key
 
-import hashlib
-
-
-def content_hash(content: str) -> str:
-    return hashlib.sha256(content.encode("utf-8")).hexdigest()
-
-
-def document_key(source: str, tenant_id: str | None = None) -> str:
-    raw = f"{tenant_id or 'default'}:{source}"
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+__all__ = ["content_hash", "document_key"]

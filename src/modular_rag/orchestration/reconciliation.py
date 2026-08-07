@@ -12,13 +12,13 @@ against what each store actually reports having.
 """
 from __future__ import annotations
 
-from modular_rag.app.container import Container
 from modular_rag.contracts.reconciliation import (
     DocumentDivergence,
     ReconciliationReport,
     RepairResult,
 )
 from modular_rag.core.errors import ConfigurationError
+from modular_rag.orchestration.container import Container
 
 
 class IndexReconciler:

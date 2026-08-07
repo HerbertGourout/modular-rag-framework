@@ -27,35 +27,51 @@ class EngineSelection(BaseModel):
 
 
 class GovernanceSection(BaseModel):
-    """Declarative governance intent. Schema only as of Lot 9 — actual
-    fail-closed enforcement is Lot 11b, redaction/audit wiring is Lot 11c.
-    Setting `tenant_enforcement: true` here does not, by itself, enforce
-    anything yet."""
+    """Governance components activated by the application composition root.
+
+    `tenant_enforcement` is a deliberate, explicit governance *intent* flag —
+    separate from `tenant_policy` (which component implements it). Defaulting
+    to `False` makes "no tenant isolation" a visible, auditable fact on every
+    migrated/loaded manifest instead of a silent absence (ADR-0007 §3: "a
+    declared manifest section that cannot be activated must fail validation").
+    `tenant_enforcement=True` with `tenant_policy=None` is a validation error
+    (see `app/config_resolution.py::validate_capabilities`), not a silent
+    no-op.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     tenant_enforcement: bool = False
-    policy_refs: list[str] = Field(default_factory=list)
+    tenant_policy: ComponentConfig | None = None
+    policy_engine: ComponentConfig | None = None
+    redactor: ComponentConfig | None = None
+    review_queue: ComponentConfig | None = None
+    audit_sink: ComponentConfig | None = None
 
 
 class QualitySection(BaseModel):
-    """Declarative quality-gate intent. Schema only as of Lot 9 — gate
-    enforcement against these thresholds is Lot 13."""
+    """Evaluation profile and an optional wired quality gate."""
 
     model_config = ConfigDict(extra="forbid")
 
     eval_profile: str | None = None
-    gates: dict[str, float] = Field(default_factory=dict)
+    gate: ComponentConfig | None = None
 
 
 class ObservabilitySection(BaseModel):
-    """Declarative telemetry-sink intent. Schema only as of Lot 9 — actual
-    sink wiring (e.g. PostgreSQL-backed audit store) is Lot 10."""
+    """Telemetry component selected for runtime traces and metrics."""
 
     model_config = ConfigDict(extra="forbid")
 
-    telemetry_sink: str | None = None
-    config: dict[str, Any] = Field(default_factory=dict)
+    telemetry: ComponentConfig | None = None
+
+
+class LifecycleSection(BaseModel):
+    """Document identity, idempotency and deletion ledger."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ledger: ComponentConfig | None = None
 
 
 class PipelineManifest(BaseModel):
@@ -76,26 +92,12 @@ class PipelineManifest(BaseModel):
     security: ComponentConfig | None = None
     evaluation: ComponentConfig | None = None
 
-    # V2 — agentic
-    planner: ComponentConfig | None = None
-    agents: list[ComponentConfig] = Field(default_factory=list)
-
-    # V3 — graph memory
-    graph_store: ComponentConfig | None = None
-
-    # V4 — governance
-    policies: list[str] = Field(default_factory=list)
-
-    # V5 — multimodal
-    modalities: list[str] = Field(default_factory=lambda: ["text"])
-
-    # Schema v2 sections (Lot 9) — see each section's own docstring for what
-    # is (and isn't) actually enforced yet. All optional and default to None
-    # so every existing v1 manifest keeps validating unchanged.
+    # Engine-independent control-plane sections (ADR-0005/ADR-0007).
     engine: EngineSelection | None = None
     governance: GovernanceSection | None = None
     quality: QualitySection | None = None
     observability: ObservabilitySection | None = None
+    lifecycle: LifecycleSection | None = None
 
 
 @runtime_checkable

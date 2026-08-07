@@ -5,9 +5,9 @@ from typing import Any
 
 import structlog
 
-from modular_rag.app.container import Container
 from modular_rag.contracts.manifests import ComponentConfig, PipelineManifest
 from modular_rag.core.errors import RegistryError
+from modular_rag.orchestration.container import Container
 
 log = structlog.get_logger(__name__)
 
@@ -29,6 +29,14 @@ class ComponentRegistry:
             "evaluator": {},
             "planner": {},
             "graph_store": {},
+            "tenant_policy": {},
+            "policy_engine": {},
+            "redactor": {},
+            "review_queue": {},
+            "audit_sink": {},
+            "telemetry": {},
+            "lifecycle_ledger": {},
+            "quality_gate": {},
         }
 
     def register(self, role: str, type_name: str, factory: _Factory) -> None:
@@ -68,6 +76,28 @@ class ComponentRegistry:
             container.register("guard", self._build("guard", manifest.security))
         if manifest.evaluation:
             container.register("evaluator", self._build("evaluator", manifest.evaluation))
+        if manifest.governance:
+            governance = manifest.governance
+            for role, cfg in (
+                ("tenant_policy", governance.tenant_policy),
+                ("policy_engine", governance.policy_engine),
+                ("redactor", governance.redactor),
+                ("review_queue", governance.review_queue),
+                ("audit_sink", governance.audit_sink),
+            ):
+                if cfg:
+                    container.register(role, self._build(role, cfg))
+        if manifest.observability and manifest.observability.telemetry:
+            container.register(
+                "telemetry", self._build("telemetry", manifest.observability.telemetry)
+            )
+        if manifest.lifecycle and manifest.lifecycle.ledger:
+            container.register(
+                "lifecycle_ledger",
+                self._build("lifecycle_ledger", manifest.lifecycle.ledger),
+            )
+        if manifest.quality and manifest.quality.gate:
+            container.register("quality_gate", self._build("quality_gate", manifest.quality.gate))
 
         # Post-wiring: inject embedder and store into vector/hybrid retriever.
         # VectorRetriever needs an Embedder to embed queries and a QdrantStore to
@@ -87,11 +117,3 @@ class ComponentRegistry:
         log.info("registry.wired", pipeline_id=manifest.id)
         return container
 
-    @classmethod
-    def default(cls) -> ComponentRegistry:
-        """Return a registry pre-loaded with all built-in adapters."""
-        from modular_rag.orchestration._default_factories import register_defaults
-
-        reg = cls()
-        register_defaults(reg)
-        return reg
