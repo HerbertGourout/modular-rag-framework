@@ -9,9 +9,9 @@
 > manifests/trace/audit), Phase C (Lots 11a-12c, tenant identity/fail-closed enforcement +
 > document lifecycle/reconciliation/erasure), and Phase D (Lots 15-18, portability and
 > delivery) are all **engineering-COMPLETE** — final sign-off pending, see Lot 18 below. Full
-> detail in `docs/refactoring/lot-{0..18}-*.md` (one file per lot/sub-lot). Lot 19 (below) is
-> tracked directly in ADR-0007 and the capability matrix rather than its own lot file, pending
-> a dedicated evidence writeup at closure:
+> detail in `docs/refactoring/lot-{0..18}-*.md` (one file per lot/sub-lot). **Lot 19** (below) is
+> also engineering-complete as of 2026-08-07 — see its own evidence file,
+> [`docs/refactoring/lot-19-layer-boundary-stabilization.md`](refactoring/lot-19-layer-boundary-stabilization.md):
 > - **Lot 13 COMPLETE** (2026-08-05): corrected `Metrics` vocabulary (answer-scoped fields
 >   distinct from retrieval-scoped ones; genuine `exact_match`), fixed `BenchmarkRunner`'s
 >   failure-masking, versioned `Metrics`/`GoldenSet` schemas, report-only/blocking `QualityGate`.
@@ -111,9 +111,10 @@
 > `app/public.py`/`app/application.py` facade now sits between interfaces and implementation,
 > `manifests/presets/` holds only genuinely-loadable manifests (`manifests/blueprints/` for
 > sketches), dead code with zero consumers was removed, and the layering checker enforces the
-> full table with `--strict` as a hard CI gate. Full evidence:
-> [capability-matrix.md](architecture/capability-matrix.md). In progress as of this writing —
-> see the tracking table below for exact status.
+> full table with `--strict` as a hard CI gate. **Engineering-complete as of 2026-08-07** — full
+> evidence in [lot-19-layer-boundary-stabilization.md](refactoring/lot-19-layer-boundary-stabilization.md)
+> and [capability-matrix.md](architecture/capability-matrix.md); same sign-off caveat as Lots 0-18
+> above applies.
 > **Target outcome:** Deploy compliant, measurable document-AI solutions faster, independently
 > of the underlying execution engine.
 > **Migration principle:** Incremental, evidence-based, reversible, and releasable after every
@@ -284,7 +285,7 @@ stated otherwise.
 | 16c | Deployment and ops runbooks (deploy, backup, restore, rollback) | P1 | S-M (3-5d) | COMPLETE (documentation/tooling scope — execution evidence pending real infra) | 16a, 16b |
 | 17 | Prototype retirement and final docs/Claude/research consolidation | P1 | M (1wk) | COMPLETE (one sub-item blocked by the permission system) | 16a-16c |
 | 18 | Multi-engine pilot, release gates, and programme closure | P1 | M-L (1-2wk) | COMPLETE (engineering scope) — sign-off pending | 17 |
-| 19 | Layer-boundary correction and control-plane activation (ADR-0007) | P0 | L (1.5-2wk) | IN PROGRESS — Étapes 1-9 of 12 done as of 2026-08-07, see [ADR-0007](adr/0007-layer-boundaries-and-control-plane-activation.md) and [capability-matrix.md](architecture/capability-matrix.md) | 18 |
+| 19 | Layer-boundary correction and control-plane activation (ADR-0007) | P0 | L (1.5-2wk) | COMPLETE (engineering scope) — sign-off pending, see [lot-19-layer-boundary-stabilization.md](refactoring/lot-19-layer-boundary-stabilization.md), [ADR-0007](adr/0007-layer-boundaries-and-control-plane-activation.md), and [capability-matrix.md](architecture/capability-matrix.md) | 18 |
 
 Ranges (e.g. `8-10`) list the earliest and latest lot whose evidence is required via the
 dependency chain, not necessarily every intermediate lot as a direct predecessor. `16a` and

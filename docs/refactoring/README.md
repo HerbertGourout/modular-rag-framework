@@ -138,6 +138,14 @@ comparison that found a *second* governance-parity bug the per-lot tests had mis
 | 16c | Deployment/backup/restore/rollback runbooks | [lot-16c-deployment-runbooks.md](lot-16c-deployment-runbooks.md) |
 | 17 | Removed the dead agent/routing/planning prototype cluster | [lot-17-prototype-retirement.md](lot-17-prototype-retirement.md) |
 | 18 | Pilot comparison, CI hardening, programme closure | [lot-18-pilot-and-closure.md](lot-18-pilot-and-closure.md) |
+| 19 | Layer-boundary correction (`Container`/factories moved, facade enforced) and control-plane manifest activation (ADR-0007) | [lot-19-layer-boundary-stabilization.md](lot-19-layer-boundary-stabilization.md) |
+
+A follow-on audit after Lot 18's closure found two structural gaps Lots 0-18 hadn't
+caught: the published dependency direction didn't match the real one (`orchestration/`
+imported `app.Container`), and several owned governance/audit/quality capabilities were
+implemented and tested but not reachable through any manifest. Lot 19
+([ADR-0007](../adr/0007-layer-boundaries-and-control-plane-activation.md)) is the
+correction — engineering-complete as of 2026-08-07, same sign-off caveat as Lots 0-18.
 
 ---
 
@@ -157,7 +165,10 @@ guide. Each links to the lot that found it.
 | Overload/soak load-test script never executed against live infra | Script exists (`scripts/loadtest_answer.py`), never run — no live deployment target in this environment | [16c](lot-16c-deployment-runbooks.md) |
 | Postgres/Qdrant backup-restore commands never executed against live infra | Commands are correct against each system's real documented tooling, unexecuted here | [16c](lot-16c-deployment-runbooks.md) |
 | CI `container-build`/`supply-chain` jobs never executed in this environment | No `docker` binary here; the next GitHub Actions run is the real verification | [16b](lot-16b-supply-chain.md) |
-| **Final sign-off** (architecture/security/operations/legal/business-quality) | **Not self-granted** — reserved for Herbert Gourout | [18](lot-18-pilot-and-closure.md) |
+| `manifests/production/_index.md` cannot be edited | Hard `permissions.deny` on `manifests/production/**`; confirmed intentional (V4+ scope), blocked two separate edit attempts | [19](lot-19-layer-boundary-stabilization.md) |
+| API/CLI don't expose `engine.adapter` selection | LangGraph is only reachable via a direct `load_engine()` call today, not `mrag ask`/`POST /answer` — ADR-0007 open decision #5 | [19](lot-19-layer-boundary-stabilization.md) |
+| `IndexReconciler` remains programmatic-only | Not exposed through CLI/API/manifests | [19](lot-19-layer-boundary-stabilization.md) |
+| **Final sign-off** (architecture/security/operations/legal/business-quality) | **Not self-granted** — reserved for Herbert Gourout | [18](lot-18-pilot-and-closure.md), [19](lot-19-layer-boundary-stabilization.md) |
 
 ---
 
