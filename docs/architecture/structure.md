@@ -121,7 +121,7 @@ Keep A Changelog format. The `[Unreleased]` section contains all additions since
 ---
 
 ### `CONTRIBUTING.md`
-5-step guide for adding a component (example: a new chunker): check contract → implement → register in `_default_factories.py` → manifest → tests. MR checklist included.
+5-step guide for adding a component (example: a new chunker): check contract → implement → register in `app/default_factories.py` → manifest → tests. PR checklist included.
 
 ---
 
@@ -541,14 +541,16 @@ The main conductor. Uses the Container to access all components.
 
 **`retrieve(question, k)`**: Retrieval only, no generation.
 
-#### `orchestration/_default_factories.py`
-Lazy factory callables for all built-in components. `register_defaults(reg)` is called by `ComponentRegistry.default()`.
+#### `app/default_factories.py`
+Application composition root for all built-in components. `create_default_registry()` creates a
+generic `ComponentRegistry` and calls `register_defaults(reg)`; orchestration never imports
+concrete domain or adapter implementations.
 
 #### `orchestration/registry.py` → `ComponentRegistry`
 Maps `(role, type_name)` → `factory callable`.
 - `register(role, type_name, factory)`: adds a factory
 - `wire(manifest) → Container`: for each role in the manifest, calls `factory(config)`, stores in the Container
-- `default()`: classmethod that pre-loads `_default_factories`
+- No built-in/default classmethod: concrete catalogue ownership stays in `app/`.
 
 `orchestration/router.py` (`QueryRouter`) and `orchestration/flow_compiler.py`
 (`FlowCompiler`) were **removed in Lot 17** (`docs/refactoring-plan.md`). Both were
@@ -593,7 +595,7 @@ DI Container. Internal `_store: dict[str, Any]`.
 
 #### `app/bootstrap.py`
 - `load_manifest(path) → PipelineManifest`: reads the YAML, validates via Pydantic
-- `load_pipeline(path) → RAGEngine`: `load_manifest` → `ComponentRegistry.default()` → `registry.wire(manifest)` → `RAGEngine(container)`
+- `load_pipeline(path) → RAGEngine`: `resolve_manifest` → `create_default_registry()` → `registry.wire(manifest)` → `RAGEngine(container)`
 
 #### `app/lifecycle.py`
 - `startup(container)` + `shutdown(container)`: startup/shutdown hooks (currently just logging — placeholder for managing DB connections, cleanup, etc.)

@@ -4,7 +4,7 @@ This file provides guidance for Claude working on the orchestration (registry, e
 
 Rewritten in full 2026-08-06 (documentation audit, `docs/archive/documentation-audit-2026-08.md`); updated
 2026-08-07 (ADR-0007 Étape 11) for the layer-boundary correction: `Container` moved here from
-`app/container.py`, and `_default_factories.py` moved out to `app/default_factories.py` — the
+`app/container.py`, and `app/default_factories.py` moved out to `app/default_factories.py` — the
 generic registry stays in `orchestration/`, the concrete-implementation composition root moved
 to `app/` (the one place allowed to import every domain/adapter implementation). The previous
 version of this file (2026-08-06) documented `router.py`/`QueryRouter`, `compiler.py`, and
@@ -69,11 +69,11 @@ retriever = BM25Retriever()
 ```python
 # ✅ Manifest-driven via registry (this is what app/bootstrap.py's
 # load_pipeline() actually does)
-from modular_rag.app.bootstrap import load_manifest
-from modular_rag.orchestration.registry import ComponentRegistry
+from modular_rag.app.config_resolution import resolve_manifest
+from modular_rag.app.default_factories import create_default_registry
 
-manifest = load_manifest("manifests/presets/local-hybrid-rag.yaml")
-registry = ComponentRegistry.default()   # pre-loaded with every built-in factory
+manifest = resolve_manifest("manifests/presets/local-hybrid-rag.yaml")
+registry = create_default_registry()
 container = registry.wire(manifest)      # -> Container holding every wired component
 
 chunker = container.chunker
@@ -114,7 +114,7 @@ not reintroduce them without a concrete, wired consumer.
 ### Registering Components
 
 **Location**: `app/default_factories.py` — the single source of truth for every built-in
-factory (moved here from `orchestration/_default_factories.py`, Étape 4 — see the file header).
+factory (moved here from `app/default_factories.py`, Étape 4 — see the file header).
 Real pattern:
 
 ```python

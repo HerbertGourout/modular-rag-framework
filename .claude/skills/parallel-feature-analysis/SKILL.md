@@ -41,7 +41,7 @@ Feature C (2h) ┘
 ```python
 FEATURES_TO_ANALYZE = {
     "retrieval": {
-        # names match the real registered types in orchestration/_default_factories.py
+        # names match the real registered types in app/default_factories.py
         # ("vector", "hybrid") — there is no standalone registered "bm25" retriever
         # type, only via HybridRetriever internally
         "components": ["vector", "hybrid"],

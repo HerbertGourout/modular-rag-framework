@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
@@ -64,10 +67,20 @@ def create_app(
     """
     pipeline = load_pipeline(manifest_path)
 
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        try:
+            yield
+        finally:
+            close = getattr(pipeline, "close", None)
+            if close is not None:
+                close()
+
     api = FastAPI(
         title="Modular RAG API",
         version=__version__,
         description="Production-grade RAG and agentic reasoning API.",
+        lifespan=lifespan,
     )
     api.add_middleware(RateLimitMiddleware, requests_per_minute=rate_limit_per_minute)
     api.add_middleware(MaxBodySizeMiddleware, max_bytes=max_body_bytes)

@@ -19,7 +19,7 @@ Generic scaffolding workflow for any new V1 component. For retrievers, generator
 
 4. **Contract test.** Add `tests/contract/test_<component>_conformance.py` asserting `isinstance(instance, <Protocol>)` and exercising the Protocol's required methods.
 
-5. **Register.** Add a factory entry in `src/modular_rag/orchestration/_default_factories.py`. Never instantiate the component directly anywhere else (CLAUDE.md rule 05.3).
+5. **Register.** Add a factory entry in `src/modular_rag/app/default_factories.py`. Never instantiate the component directly anywhere else (CLAUDE.md rule 05.3).
 
 6. **Wire into a manifest.** Reference the new component by name in a YAML under `manifests/presets/` (or a new preset) so it's actually reachable end-to-end.
 

@@ -21,15 +21,16 @@ RUN useradd --create-home --uid 1000 mrag
 WORKDIR /app
 COPY --from=builder /src/dist/*.whl /tmp/
 RUN WHEEL_FILE=$(ls /tmp/*.whl) && \
-    pip install --no-cache-dir "${WHEEL_FILE}[v1]" && \
+    pip install --no-cache-dir "${WHEEL_FILE}[v1,langgraph,postgres,auth]" && \
     rm -rf /tmp/*.whl
 COPY manifests/ manifests/
 COPY docker/server.py server.py
+COPY docker/local-hybrid-rag.yaml docker/local-hybrid-rag.yaml
 USER mrag
 EXPOSE 8000
 # MRAG_MANIFEST_PATH selects the pipeline manifest (default: the one runnable
-# preset validated in CI, manifests/presets/local-hybrid-rag.yaml — see
-# manifests/README.md for why the other four are blueprint-only). Any
+# preset validated in CI, manifests/presets/local-hybrid-rag.yaml). The image
+# includes the extras required by every runnable preset; blueprints remain non-runnable. Any
 # secrets the manifest's ${VAR}/secret:// references need (Lot 9,
 # app/config_resolution.py) must be injected as environment variables at
 # `docker run`/orchestrator level, never baked into the image.

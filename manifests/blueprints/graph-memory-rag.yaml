@@ -2,7 +2,7 @@
 # traversal/reasoning is delegated to the selected external engine per ADR-0005 §5.2, and the
 # engine selected in ADR-0006 (LangGraph) does not itself provide a graph-memory retrieval mode
 # today — there is nothing for `graph_store`/`planner`/`agents` below to activate. The native
-# knowledge-graph *data model* (`memory/graph/knowledge_graph.py`) that used to back this sketch
+# native knowledge-graph data model that used to back this sketch
 # was itself deleted in Étape 8 of the ADR-0007 stabilization pass (zero consumers, zero test
 # coverage) — see
 # `docs/adr/0007-layer-boundaries-and-control-plane-activation.md`. Do not pass this file to

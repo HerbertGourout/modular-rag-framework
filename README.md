@@ -136,7 +136,7 @@ python -m venv .venv
 pip install -e ".[v1]"
 ```
 
-### Run the example pipeline
+### Run a full hybrid query
 
 ```bash
 # Set your API key (the OpenAI SDK's own standard var — configuration is manifest-driven,
@@ -144,11 +144,8 @@ pip install -e ".[v1]"
 export OPENAI_API_KEY=sk-...   # Linux/macOS
 $env:OPENAI_API_KEY="sk-..."   # Windows PowerShell
 
-# Ingest documents
-python examples/simple_qa/main.py ingest examples/simple_qa/docs/
-
-# Ask a question
-python examples/simple_qa/main.py ask "What is RAG?"
+# Cross-platform; keeps ingestion and querying in one process so BM25 is retained.
+python examples/simple_qa/first_query.py
 ```
 
 ### Use the API directly
@@ -169,6 +166,10 @@ for citation in answer.citations:
 mrag ingest ./my_docs --manifest manifests/presets/local-hybrid-rag.yaml
 mrag ask "What is hybrid retrieval?" --manifest manifests/presets/local-hybrid-rag.yaml
 ```
+
+The vector index persists in Qdrant between these commands; the reference BM25 index does not.
+Consequently, a separate `mrag ask` process uses vector fallback. See the
+[getting-started guide](docs/guides/getting-started.md) for a genuinely hybrid one-process run.
 
 ### REST API
 
@@ -197,6 +198,7 @@ Use after code changes:
 ```bash
 ./scripts/check.sh quick    # Syntax & import order
 ./scripts/check.sh full     # Quick + unit + contract tests
+# Windows PowerShell: .\scripts\check.ps1 quick|full
 ```
 
 ### Full validation workflows
@@ -204,7 +206,7 @@ Use after code changes:
 | Workflow | Command | Time | Use when |
 |----------|---------|------|----------|
 | **Daily** | `./scripts/check.sh quick` | ~30s | After edits, before commit |
-| **Pre-merge** | `./scripts/check.sh full` | ~2-5m | Ready for PR/MR |
+| **Pre-merge** | `./scripts/check.sh full` | ~2-5m | Ready for PR |
 | **With services** | `./scripts/check.sh integration` | ~1-2m | Qdrant running |
 | **Production** | `./scripts/check.sh all` | ~10m | Before release |
 

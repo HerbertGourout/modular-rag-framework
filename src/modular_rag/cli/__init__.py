@@ -15,9 +15,7 @@ from modular_rag.app.public import (
     resolve_manifest,
     validate_capabilities,
 )
-from modular_rag.app.public import (
-    load_application as load_pipeline,
-)
+from modular_rag.app.public import load_application as load_pipeline
 
 app = typer.Typer(name="mrag", help="Modular RAG Framework CLI")
 
@@ -42,12 +40,19 @@ def _exit_code_for(exc: Exception) -> int:
     return 1
 
 
+def _close_application(application: object | None) -> None:
+    close = getattr(application, "close", None)
+    if close is not None:
+        close()
+
+
 @app.command()
 def ingest(
     path: Path = typer.Argument(..., help="File or directory to ingest"),  # noqa: B008
     manifest: Path = typer.Option(..., "--manifest", "-m", help="Pipeline manifest YAML"),  # noqa: B008
 ) -> None:
     """Parse, chunk, embed and index documents from a file or directory."""
+    pipeline = None
     try:
         pipeline = load_pipeline(manifest)
         if path.is_dir():
@@ -58,6 +63,8 @@ def ingest(
     except Exception as exc:
         typer.echo(f"ERROR: {exc}", err=True)
         raise typer.Exit(code=_exit_code_for(exc)) from exc
+    finally:
+        _close_application(pipeline)
     typer.echo(f"Indexed {n} chunks from {path}.")
 
 
@@ -70,12 +77,15 @@ def ask(
     ),
 ) -> None:
     """Answer a question using the configured RAG pipeline."""
+    pipeline = None
     try:
         pipeline = load_pipeline(manifest)
         answer = pipeline.answer(question, tenant_id=tenant_id)
     except Exception as exc:
         typer.echo(f"ERROR: {exc}", err=True)
         raise typer.Exit(code=_exit_code_for(exc)) from exc
+    finally:
+        _close_application(pipeline)
     typer.echo(f"\n{answer.text}\n")
     for i, citation in enumerate(answer.citations, 1):
         typer.echo(f"  [{i}] {citation.source} (score={citation.score:.3f})")

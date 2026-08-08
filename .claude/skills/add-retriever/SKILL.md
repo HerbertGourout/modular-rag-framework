@@ -11,7 +11,7 @@ description: Step-by-step workflow for implementing a new retriever following th
 > constructor, and a `BUILT_IN_RETRIEVERS` registry dict — none of which exist. Rewritten below
 > against the real `Retriever` protocol (`src/modular_rag/contracts/retrieval.py`), the real
 > `RetrievedChunk` type (`src/modular_rag/core/models/retrieved.py`), and the real registration
-> pattern (`src/modular_rag/orchestration/_default_factories.py`), using `VectorRetriever`
+> pattern (`src/modular_rag/app/default_factories.py`), using `VectorRetriever`
 > (`src/modular_rag/retrieval/retrievers/vector.py`) as the reference implementation.
 
 ## State of the Art First (mandatory)
@@ -176,7 +176,7 @@ def test_{retriever_name}_conforms_to_retriever_protocol():
 
 ### 6. Register in Registry (5 min)
 
-**File:** `src/modular_rag/orchestration/_default_factories.py` — add the import inside
+**File:** `src/modular_rag/app/default_factories.py` — add the import inside
 `register_defaults()` (all component imports there are function-local) and one `reg.register(...)`
 line, following the existing `"vector"`/`"hybrid"` retriever entries:
 
@@ -209,7 +209,7 @@ retrieval:
 - [ ] External libraries lazy-imported
 - [ ] Unit tests cover >85% of code
 - [ ] Contract conformance test passing
-- [ ] Registered in `_default_factories.py`
+- [ ] Registered in `app/default_factories.py`
 - [ ] Manifest example provided (and confirmed Runnable, or marked Blueprint)
 
 **Validation commands:**
@@ -252,7 +252,7 @@ git push origin feature/add-{retriever_name}-retriever
 ✅ Lazy imports on external libraries
 ✅ Unit test coverage > 85%
 ✅ Contract conformance test passing
-✅ Registered in `_default_factories.py`
+✅ Registered in `app/default_factories.py`
 ✅ Manifest example provided (and confirmed Runnable, or marked Blueprint)
 ✅ Architecture rules verified
 

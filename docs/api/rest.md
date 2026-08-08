@@ -5,8 +5,10 @@ pipeline can be called as a network service rather than embedded as a Python lib
 matters for any client whose existing application (a portal, a chatbot integration, an
 internal tool) is not written in Python, or that simply doesn't want heavy dependencies like
 `sentence-transformers` or `qdrant-client` inside its own process. The API is a thin
-`create_app()` factory over the same `RAGEngine` the CLI uses — there is no separate business
-logic here, only request/response translation, authentication, and safe-error mapping
+`create_app()` factory over the same `ApplicationService` the CLI uses. The service selects the
+manifest's `DocumentEngine` for answer execution and retains native ingestion/retrieval-only
+use cases; the HTTP layer only performs request/response translation, authentication, resource
+lifecycle, and safe-error mapping
 (Lot 16a, [docs/refactoring-plan.md](../refactoring-plan.md)).
 
 `create_app(manifest_path, ...)` requires `manifest_path`, so bare `--factory` mode (which calls
@@ -95,12 +97,15 @@ Submit a question and receive a grounded answer with citations.
 sequenceDiagram
     participant C as Client
     participant API as FastAPI (/answer)
-    participant E as RAGEngine
+    participant A as ApplicationService
+    participant E as DocumentEngine
 
     C->>API: POST /answer {question} [Authorization: Bearer <token>]
     API->>API: verify token (if configured) -> tenant_id
-    API->>E: engine.answer(question, tenant_id)
-    E-->>API: Answer (text + citations + trace_id)
+    API->>A: answer(question, tenant_id)
+    A->>E: run(EngineRequest, ExecutionContext)
+    E-->>A: EngineResult
+    A-->>API: Answer (text + citations + trace_id)
     API-->>C: 200 AnswerResponse
     Note over API,C: 401 if auth required and missing/invalid,<br/>403 if SecurityError,<br/>413/429 from middleware,<br/>500/502 on internal failure (generic message + correlation id)
 ```

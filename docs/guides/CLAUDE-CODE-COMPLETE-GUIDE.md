@@ -532,7 +532,7 @@ the canonical scheme — the single source of truth for step names and ordering 
 ```
 ✓ Read CLAUDE.md blocks 1-5 (project rules)
 ✓ Explore: How do retrievers work? (read VectorRetriever)
-✓ Explore: Where are retrievers registered? (read _default_factories.py)
+✓ Explore: Where are retrievers registered? (read app/default_factories.py)
 ✓ Clarify: Should BM25 be standalone or hybrid? (ask maintainer)
 ```
 
@@ -557,7 +557,7 @@ the canonical scheme — the single source of truth for step names and ordering 
 ```
 Step 1: Implement BM25Retriever in src/modular_rag/retrieval/bm25_retriever.py (45 min)
 Step 2: Write unit tests (30 min)
-Step 3: Register in _default_factories.py (5 min)
+Step 3: Register in app/default_factories.py (5 min)
 Step 4: Add contract conformance test (15 min)
 Step 5: Add to example manifest (5 min)
 
@@ -602,7 +602,7 @@ Team:    ✅ Approved. Proceed.
 ./scripts/check.sh full
 
 # Step 3: Register
-# Claude: "Add BM25Retriever to _default_factories.py
+# Claude: "Add BM25Retriever to app/default_factories.py
 #  - Name: 'bm25-retriever'"
 ./scripts/check.sh quick
 
@@ -669,7 +669,7 @@ Adds:
 - BM25Retriever in src/modular_rag/retrieval/bm25_retriever.py
 - Unit tests in tests/unit/retrieval/test_bm25_retriever.py
 - Contract conformance test
-- Registration in orchestration/_default_factories.py
+- Registration in app/default_factories.py
 
 Protocol: Implements VectorRetriever (retrieve, name, clear_cache)
 Tests: 5 unit tests covering edge cases
@@ -817,7 +817,7 @@ Claude creates:
   ✓ src/modular_rag/retrieval/bm25_retriever.py
   ✓ tests/unit/retrieval/test_bm25_retriever.py
   ✓ tests/contract/test_bm25_retriever_conformance.py (stub)
-  ✓ Hints for registration in _default_factories.py
+  ✓ Hints for registration in app/default_factories.py
 ```
 
 ---

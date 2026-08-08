@@ -56,7 +56,7 @@ VectorRetriever Usage Map
 
 Imports (9 total):
   - src/modular_rag/retrieval/__init__.py:5 (export)
-  - src/modular_rag/orchestration/_default_factories.py:12 (registration)
+  - src/modular_rag/app/default_factories.py:12 (registration)
   - tests/unit/retrieval/test_vector.py:3 (test)
   - tests/contract/test_retrieval_conformance.py:8 (contract test)
   - examples/simple_qa/main.py:15 (example)
@@ -69,7 +69,7 @@ Direct Instantiation (3 total):
   - examples/simple_qa/main.py:25 (example)
 
 Registry Registration (1 total):
-  - src/modular_rag/orchestration/_default_factories.py:45
+  - src/modular_rag/app/default_factories.py:45
 
 Impact Summary:
   - If renamed: 9 imports + 3 instantiations + 1 registration = 13 changes
@@ -305,7 +305,7 @@ Plan:
    - E2E test in tests/e2e/ (existing pattern)
 
 3. Register in registry
-   - _default_factories.py: "hybrid-retriever"
+   - app/default_factories.py: "hybrid-retriever"
 
 4. Update manifest
    - manifests/presets/local-hybrid-rag.yaml
@@ -342,7 +342,7 @@ git checkout -b feature/hybrid-retriever
 ./scripts/check.sh full
 
 # Step 3: Register & configure
-# Claude: "Register HybridRetriever in _default_factories.py
+# Claude: "Register HybridRetriever in app/default_factories.py
 #  - Name: 'hybrid-retriever'
 #  - Params: bm25_weight, vector_weight"
 

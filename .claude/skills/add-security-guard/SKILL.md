@@ -12,7 +12,7 @@ description: Step-by-step workflow for implementing security guards (filters, de
 > `GuardResult` dataclass (`src/modular_rag/contracts/security.py`), the real directory layout
 > (`security/filters/`, `security/detectors/`, `security/redaction/`, `security/policies/`,
 > `security/audit/` — there is no `security/guards/` parent), and the real registration pattern
-> (`src/modular_rag/orchestration/_default_factories.py`), using `BasicSecurityGuard`
+> (`src/modular_rag/app/default_factories.py`), using `BasicSecurityGuard`
 > (`src/modular_rag/security/filters/basic_guard.py`) as the reference implementation.
 
 ## State of the Art First (mandatory)
@@ -222,7 +222,7 @@ def test_{guard_name}_conforms_to_security_guard_protocol():
 
 ### 7. Register & Test (5 min)
 
-**File:** `src/modular_rag/orchestration/_default_factories.py` — add the import inside
+**File:** `src/modular_rag/app/default_factories.py` — add the import inside
 `register_defaults()` and one `reg.register(...)` line, following the existing `"guard"`/`"basic"`
 entry:
 
@@ -254,7 +254,7 @@ you need one, write it explicitly and add it under `security/filters/`, iteratin
 ✅ Unit test coverage > 85%
 ✅ Contract conformance test passing
 ✅ Edge cases handled
-✅ Registered in `_default_factories.py`
+✅ Registered in `app/default_factories.py`
 
 ## Time Estimate
 

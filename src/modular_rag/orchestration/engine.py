@@ -41,6 +41,10 @@ class RAGEngine:
         reaching into the private `_c` container directly."""
         return self._c.manifest.id
 
+    def close(self) -> None:
+        """Release resources owned by the wired container."""
+        self._c.close()
+
     @property
     def chunker(self) -> Chunker:
         """Public accessor for the wired chunker. Ingestion entry points (CLI,

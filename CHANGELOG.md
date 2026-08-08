@@ -53,7 +53,7 @@ coverage and zero consumers, superseded by ADR-0005's delegation decision; a rea
 native-vs-external-engine pilot comparison that found and fixed a real CI gap (`langgraph` never
 installed in the `test-unit`/`coverage` jobs).
 
-### Stabilization plan — layer boundaries and control-plane activation (2026-08-07, ongoing)
+### Stabilization — layer boundaries and control-plane activation (completed 2026-08-07)
 
 [ADR-0007](docs/adr/0007-layer-boundaries-and-control-plane-activation.md), accepted: closes the
 gap between the published dependency direction and the real one, and between the manifest V2
@@ -84,6 +84,11 @@ schema's declared governance sections and what actually activates. Full evidence
   ADR-0007's open decision on this); `AgentError`/`GraphError`; `Trace.routing_strategy` (bumps
   `TRACE_SCHEMA_VERSION` to 1.2); the unused `planner`/`graph_store` registry roles;
   `RetrievalMethod.GRAPH`/`.MULTIMODAL` and the fully-unused `ChunkingStrategy` enum.
+- **Finalization**: API and CLI now honor `engine.adapter` through `load_application()`;
+  document identity hashing lives in `core/`; application, API lifespan, and CLI commands close
+  wired resources deterministically. Local gates pass with 588 unit/contract tests; live
+  Qdrant/PostgreSQL/LLM validation remains a CI/staging sign-off because those services and
+  credentials are not available in the local environment.
 
 ### Added — 2026-07-12 (`feature/v1-sota-alignment`)
 - `Parser` Protocol (`contracts/parsing.py`) + DOCX and HTML parsers; PDF parsing switched from pypdf to pymupdf.

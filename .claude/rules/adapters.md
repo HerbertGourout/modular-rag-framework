@@ -292,7 +292,7 @@ class OpenAIGenerator:
         self.api_key = api_key
         self.model = model
 
-# In orchestration/_default_factories.py, inside register_defaults():
+# In app/default_factories.py, inside register_defaults():
 reg.register("generator", "openai", lambda cfg: OpenAIGenerator(**cfg.config))
 # api_key isn't read from a custom env var — if the manifest's config.api_key is left
 # unset, OpenAIGenerator passes None through and the SDK itself falls back to its own

@@ -74,8 +74,8 @@ one."
 1. [docs/architecture/overview.md](architecture/overview.md) — the complete technical
    specification, the system's six planes, the V1→V5 roadmap with the detail of what each
    version adds.
-2. [docs/adr/](adr/) — the three decisions already settled (six planes, Protocol +
-   registry, safety vs. security) and the template to follow for a new decision.
+2. [docs/adr/](adr/) — the seven accepted decisions covering modularity, contracts,
+   security/governance, product boundaries, external-engine selection, and layer activation.
 3. [docs/architecture/module-model.md](architecture/module-model.md) and
    [structure.md](architecture/structure.md) — the complete map of the code, file by file.
 4. [docs/archive/2026-05-20-initial-review.md](archive/2026-05-20-initial-review.md) — the
@@ -207,11 +207,10 @@ results to the initial forecast and explain the gap" — a question that require
 several pieces of information, cross-referencing them, and then double-checking the answer
 is well supported before returning it.
 
-**How it works.** A router detects that a question is complex and hands it off to a team of
-five specialized agents rather than a single model call: a planner breaks the question into
-steps, an agent retrieves the information, an agent extracts the relevant facts, an agent
-drafts an answer, an agent validates that the draft is well supported by the sources — and
-if it isn't, the loop retries the search before returning the final answer.
+**How it works here.** The framework sends the normalized request through the selected
+`DocumentEngine`. The shipped LangGraph adapter owns multi-step execution while this package
+keeps configuration, tenant context, governance, audit contracts, and result shapes
+engine-neutral. There is no native team of specialized agents in this repository.
 
 > Per [ADR-0005](adr/0005-document-ai-control-plane-boundary.md) (accepted 2026-08-04),
 > this native five-agent design is **not** what gets built — generic multi-agent orchestration

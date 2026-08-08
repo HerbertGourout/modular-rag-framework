@@ -124,7 +124,7 @@ Ask Claude:
 Now create:
 1. src/modular_rag/ingestion/chunkers/word_count.py implementing WordCountChunker
 2. tests/unit/ingestion/chunkers/test_word_count.py with basic tests
-3. Add WordCountChunker to orchestration/_default_factories.py
+3. Add WordCountChunker to app/default_factories.py
 
 Follow the Chunker Protocol exactly. Use name="word-count" for registration.
 ```
@@ -171,7 +171,7 @@ Implements word-count-based text chunking as alternative to fixed character chun
 Adds:
 - WordCountChunker in src/modular_rag/ingestion/chunkers/word_count.py
 - Unit tests in tests/unit/ingestion/chunkers/test_word_count.py
-- Registration in orchestration/_default_factories.py
+- Registration in app/default_factories.py
 
 Protocol: Implements Chunker.chunk() and Chunker.name()
 Tests: 5 unit tests covering edge cases

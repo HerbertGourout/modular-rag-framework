@@ -54,9 +54,13 @@ class _FakeTokenVerifier:
 class _FakePipeline:
     def __init__(self, *, answer_error: Exception | None = None) -> None:
         self.manifest_id = "fake-pipeline"
+        self.closed = False
         self._answer_error = answer_error
         self.last_answer_tenant_id: str | None = "unset"
         self.last_retrieve_tenant_id: str | None = "unset"
+
+    def close(self) -> None:
+        self.closed = True
 
     def answer(self, question: str, tenant_id: str | None = None) -> Answer:
         self.last_answer_tenant_id = tenant_id
@@ -98,6 +102,17 @@ def test_ready_reports_the_wired_pipeline(monkeypatch: pytest.MonkeyPatch) -> No
 
     assert response.status_code == 200
     assert response.json() == {"status": "ready", "pipeline": "fake-pipeline"}
+
+
+def test_api_lifespan_closes_pipeline_resources(monkeypatch: pytest.MonkeyPatch) -> None:
+    pipeline = _FakePipeline()
+    monkeypatch.setattr(api_module, "load_pipeline", lambda path: pipeline)
+    application = api_module.create_app("unused-manifest-path.yaml")
+
+    with TestClient(application) as client:
+        assert client.get("/health").status_code == 200
+
+    assert pipeline.closed is True
 
 
 def test_answer_accepts_the_documented_json_body_and_returns_200(

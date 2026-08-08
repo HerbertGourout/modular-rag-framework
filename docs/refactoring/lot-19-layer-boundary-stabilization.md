@@ -1,6 +1,6 @@
 # Lot 19 — Layer-Boundary Correction and Control-Plane Activation
 
-**Status:** COMPLETE (engineering scope) — final sign-off pending, see §6 below
+**Status:** COMPLETE (local engineering and finalization gates) — infrastructure sign-off pending
 **Date:** 2026-08-07
 **Depends on:** Lot 18 (programme closure, engineering-complete, sign-off pending) and
 [ADR-0007](../adr/0007-layer-boundaries-and-control-plane-activation.md) (accepted 2026-08-07)
@@ -49,7 +49,7 @@ Run 2026-08-07, working tree at commit `ac2834a` plus the drive-by fix in §3:
 | Layering (strict) | `python scripts/check_layering.py --strict` | **Pass** — 0 violations across all 7 layers, baseline empty |
 | Docs regression gate | `python scripts/check_docs.py` | **Pass** — 0 active findings; 36 accepted baseline mentions (legitimate past-tense explanations of Lot 17/Étape 8 deletions, individually verified, listed in `.claude/docs-terms-baseline.txt`) |
 | Type checking | `python -m mypy src/modular_rag` | 31 errors — matches the pre-existing accepted baseline (not a gate blocker; unchanged by this lot) |
-| Unit + contract tests | `pytest tests/unit tests/contract -q` | **585 passed** (495 unit + 90 contract) |
+| Unit + contract tests | `pytest tests/unit tests/contract -q` | **588 passed** (498 unit + 90 contract) |
 | Full local suite | `./scripts/check.sh full` | **7/7 green** |
 
 `scripts/check_capabilities.py`, mentioned as an optional ("éventuellement") automation idea in
@@ -112,8 +112,8 @@ a genuinely Runnable preset (`local-hybrid-rag.yaml` and `secure-enterprise-rag.
 | Selection | `engine.adapter: native` (or omitted — the default) | `engine.adapter: langgraph` |
 | Declared capabilities | None (`STREAMING`/`GOVERNANCE_INTERCEPT`/`CANCELLATION` all absent) | `STREAMING`, `GOVERNANCE_INTERCEPT`, `CANCELLATION` |
 | Underlying execution | The existing fixed-sequence `RAGEngine` | A real LangGraph `StateGraph` orchestrating the same wired `Container` components |
-| Audit evidence emission | Yes, via the wired `AuditSink` | **No** — by design (Lot 15); belongs above the port, at a caller that doesn't exist yet (still open, see §5) |
-| Reachable from API/CLI by default | Yes (`load_pipeline()`) | **No** — only via a direct `load_engine()` call; API/CLI don't yet expose `engine.adapter` selection (ADR-0007 open decision #5, still open) |
+| Audit evidence emission | Yes, via the wired `AuditSink` | **No** — the `ApplicationService` caller now exists, but it does not yet translate LangGraph execution events into the owned `AuditSink` (still open, see §6) |
+| Reachable from API/CLI by default | Yes, through `load_application()` | **Yes**, when the resolved manifest selects `engine.adapter: langgraph`; API and CLI import `load_application()` through `app.public` |
 
 ---
 
@@ -147,10 +147,10 @@ Carried forward from Lot 18's closure list where still true, plus what this lot 
 | Item | Status |
 |---|---|
 | `manifests/production/_index.md` cannot be edited | Hard `permissions.deny` on `manifests/production/**` in `.claude/settings.json` blocked two separate edit attempts this lot (Étape 7 and earlier); confirmed intentional (V4+ governance scope), not a bug, but it means this specific file could not be brought current alongside everything else. |
-| API/CLI don't expose `engine.adapter` selection | ADR-0007 open decision #5; LangGraph is only reachable via a direct `load_engine()` call today, not through `mrag ask`/`POST /answer`. |
-| LangGraph adapter emits no audit evidence | By design (Lot 15); the caller that would sit above the port and bridge `GOVERNANCE_INTERCEPT` events to the `AuditSink` doesn't exist yet. |
+| API/CLI engine selection | **Resolved after Étape 12:** both use `load_application()`, which honors `engine.adapter`; covered by the application façade tests and preset smoke checks. |
+| LangGraph adapter emits no audit evidence | The `ApplicationService` caller exists, but the bridge from LangGraph execution events to the owned `AuditSink` remains to be designed and tested. |
 | `IndexReconciler` remains programmatic-only | Not exposed through CLI/API/manifests — unchanged by this lot. |
-| `RAGEngine` still imports lifecycle hashing directly from the ingestion domain | Pre-existing, out of ADR-0007's stated scope; not addressed. |
+| Lifecycle hashing layer violation | **Resolved after Étape 12:** helpers live in `core/document_identity.py`; ingestion exposes only a compatibility re-export. |
 | `scripts/check_capabilities.py` not built | Optional per the original plan; `capability-matrix.md` covers the same ground today via manual (but individually verified) inspection. See §2. |
 | `pymupdf` AGPL-3.0/Artifex dual licence; 56 research PDFs' unverified redistribution rights | Carried from Lot 16b/17 — Herbert Gourout confirmed "leave as-is for now," still not resolved. |
 | Live-infrastructure checks (§5) | Cannot be executed in this sandbox; next real CI run / staging deployment is the actual verification. |
@@ -165,3 +165,25 @@ engineering scope is complete and all locally-runnable gates are
 green; what remains is the same category of decision Lot 18 already deferred: architecture,
 security, operations, legal, and business-quality review of the cumulative programme (Lots 0-19)
 by the person who owns that decision, not a checklist this document can close on his behalf.
+
+---
+
+## 8. Finalization pass — 2026-08-07
+
+The post-closure finalization corrected two stale claims in this report and the capability
+matrix: API/CLI now use `load_application()` and honor `engine.adapter`, and document hashing
+now belongs to `core/document_identity.py`. It also made resource ownership explicit:
+`ApplicationService.close()` delegates to `RAGEngine.close()`/`Container.close()`, the FastAPI
+lifespan closes the application on shutdown, and CLI `ingest`/`ask` close it in `finally` blocks.
+
+Local evidence after those changes:
+
+- Ruff, compilation, strict layering, documentation checks, and `git diff --check`: pass.
+- MyPy: 31 errors, equal to the ratcheted baseline of 31 (no regression).
+- All three runnable presets wire successfully; selected engines are native, native, and
+  LangGraph respectively.
+- Unit + contract suite: 588 passed, with one upstream Starlette/httpx deprecation warning.
+
+Infrastructure discovery found no Docker or `psql` executable, no listener on Qdrant port 6333
+or PostgreSQL port 5432, and no OpenAI/Anthropic API key. Integration/E2E execution therefore
+remains a staging/CI sign-off activity rather than a silently skipped local success.

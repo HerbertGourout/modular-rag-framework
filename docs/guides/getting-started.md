@@ -31,27 +31,55 @@ deleted outright in Étape 8 of the ADR-0007 stabilization pass. `OpenAIGenerato
 `api_key=None` to the SDK when the manifest doesn't set one explicitly, and the SDK itself falls
 back to plain `OPENAI_API_KEY`.
 
-## Step 3 — Ingest documents
+## Step 3 — Run a genuinely hybrid query in one process
+
+BM25 is an in-memory reference index; Qdrant is persistent. To exercise both halves of hybrid
+retrieval on a first run, ingestion and questioning must use the same application process:
+
+```python
+from modular_rag.app.bootstrap import load_application
+from modular_rag.app.public import ingest_directory
+
+application = load_application("manifests/presets/local-hybrid-rag.yaml")
+try:
+    chunks = ingest_directory("examples/simple_qa/docs", application.chunker)
+    print(f"Indexed {application.ingest_chunks(chunks)} chunks")
+    answer = application.answer("What is RAG?")
+    print(answer.text)
+    for citation in answer.citations:
+        print(f"- {citation.source}: {citation.score:.3f}")
+finally:
+    application.close()
+```
+
+Save this as `first_query.py`, then run `python first_query.py`.
+
+## Step 4 — Use the CLI
 
 ```bash
 mrag ingest ./my_docs/ --manifest manifests/presets/local-hybrid-rag.yaml
 ```
 
-This command:
+The ingestion command:
 1. Parses every `.txt`, `.md`, `.pdf` file under `./my_docs/`.
 2. Normalizes and enriches each document.
 3. Chunks using the adaptive chunker (512-token sections).
 4. Generates embeddings using `bge-small-en-v1.5`.
-5. Indexes chunks into Qdrant and builds an in-memory BM25 index.
+5. Indexes chunks into Qdrant and builds an in-memory BM25 index for that command process.
 
-## Step 4 — Ask a question
+Ask from a separate CLI invocation:
 
 ```bash
 mrag ask "What are the main findings in the Q3 report?" \
          --manifest manifests/presets/local-hybrid-rag.yaml
 ```
 
-Output:
+Because this is a new process, its BM25 index starts empty and `HybridRetriever` falls back to
+the persistent Qdrant/vector side. This is supported, but it is not a full hybrid query. Use the
+single-process example above for hybrid behavior, or replace BM25 with a shared lexical backend
+before deploying multiple workers.
+
+Typical output:
 
 ```
 Answer: The main findings in the Q3 report are...
@@ -63,25 +91,25 @@ Citations:
       "Key highlights include a 15% reduction in operational costs..."
 ```
 
-## Step 5 — Use the Python API
+## Step 5 — Use the Python API after content is persisted
 
 ```python
-from modular_rag.app.bootstrap import load_pipeline
+from modular_rag.app.bootstrap import load_application
 
-pipeline = load_pipeline("manifests/presets/local-hybrid-rag.yaml")
-answer = pipeline.answer("What are the main findings in the Q3 report?")
+application = load_application("manifests/presets/local-hybrid-rag.yaml")
+answer = application.answer("What are the main findings in the Q3 report?")
 
 print(answer.text)
 for cit in answer.citations:
     print(f"  [{cit.source}] {cit.passage[:80]}...")
+application.close()
 ```
 
 ## Choosing a manifest
 
-Only `local-hybrid-rag.yaml` actually wires end to end today — every other preset below is
-**Blueprint** (declared, but `ComponentRegistry.wire()` doesn't process every field it uses, or
-references files/interpolation that don't resolve). See
-[`manifests/README.md`](../../manifests/README.md) for the full, current classification and why.
+All files under `manifests/presets/` validate and wire; design-only configurations live under
+`manifests/blueprints/`. See [`manifests/README.md`](../../manifests/README.md) for the
+authoritative classification and runtime prerequisites.
 
 | Preset | Status | Use case |
 |---|---|---|

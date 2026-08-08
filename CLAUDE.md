@@ -158,7 +158,7 @@ and `docs/guides/model-routing.md`.
 
 1. **Contracts first.** The `contracts/` Protocol must exist before any concrete implementation.
 2. **No cross-domain imports.** Retrievers never import from `generation/`; guards never import from `ingestion/`. They share only `core/models/` types.
-3. **Manifests are the source of truth.** Register the component in `orchestration/_default_factories.py`, then select it by name in YAML. Never wire it in Python elsewhere.
+3. **Manifests are the source of truth.** Register the component in `app/default_factories.py`, then select it by name in YAML. Never wire it in Python elsewhere.
 4. **Tests mirror `src/`.** `tests/unit/ingestion/chunkers/test_fixed.py` for `src/modular_rag/ingestion/chunkers/fixed.py`. Add a contract test in `tests/contract/` for every new Protocol implementation.
 5. **Observability is mandatory.** Every retrieval, generation, and agent method must emit a `TraceStep` via `Trace.add_step()`.
 6. **Extend, don't rewrite.** All core modules exist. Add to them rather than recreating.

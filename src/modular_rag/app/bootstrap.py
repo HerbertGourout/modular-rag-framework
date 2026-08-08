@@ -32,8 +32,9 @@ def load_pipeline(path: str | Path) -> RAGEngine:
     """Load a manifest and return a ready-to-use RAGEngine.
 
     This is the stable compatibility facade (Lot 8, docs/refactoring-plan.md)
-    — existing callers (API, CLI, examples/simple_qa/) keep working against
-    the concrete `RAGEngine` unchanged. Prefer `load_native_engine()` for new
+    — existing direct Python callers and examples keep working against the
+    concrete `RAGEngine` unchanged. API and CLI use `load_application()`.
+    Prefer `load_native_engine()` for new
     code that wants the engine-neutral `DocumentEngine` port instead.
     """
     manifest = resolve_manifest(path)

@@ -46,9 +46,19 @@ dependencies into a CI image or a client's production container. Install only wh
 | `v4` | `pip install -e ".[v4]"` | Observability: opentelemetry-sdk/api/exporter-otlp — not yet wired into any code (V4 not reached), declared ahead of that work |
 | `v5` | `pip install -e ".[v5]"` | Multimodal: pymupdf (already in `v1`), pillow, pytesseract — not yet wired into any code (V5 not reached) |
 | `langgraph` | `pip install -e ".[langgraph]"` | The external `DocumentEngine` adapter (Lot 15) — only needed if a manifest sets `engine.adapter: "langgraph"` |
+| `postgres` | `pip install -e ".[postgres]"` | `psycopg` driver for the durable audit and lifecycle components used by `secure-enterprise-rag.yaml` |
+| `auth` | `pip install -e ".[auth]"` | PyJWT cryptography support for `KeycloakTokenVerifier` in authenticated API deployments |
 | `supply-chain` | `pip install -e ".[supply-chain]"` | `pip-audit`, `pip-licenses`, `cyclonedx-bom` — CI/audit tooling (Lot 16b), not needed to run the framework |
 | `dev` | `pip install -e ".[dev]"` | Testing and linting: pytest, pytest-asyncio, pytest-cov, mypy, ruff, httpx, respx, build |
-| `all` | `pip install -e ".[all]"` | `v1` + `v4` + `v5` + `langgraph` + `dev` (not `supply-chain` — opt-in audit tooling, see above) |
+| `all` | `pip install -e ".[all]"` | `v1` + `v4` + `v5` + `langgraph` + `postgres` + `auth` + `dev` (not `supply-chain`) |
+
+Recommended installations by runnable preset:
+
+| Preset | Command |
+|---|---|
+| `local-hybrid-rag.yaml` | `pip install -e ".[v1]"` |
+| `langgraph-rag.yaml` | `pip install -e ".[v1,langgraph]"` |
+| `secure-enterprise-rag.yaml` | `pip install -e ".[v1,postgres]"` |
 
 There is no `v3` (Graph Memory) group — removed in Lot 17 (`docs/refactoring-plan.md`): its
 dependencies (neo4j, networkx, spacy, python-louvain) were never imported anywhere in
@@ -94,7 +104,7 @@ are passed straight to each adapter's constructor (`**cfg.config`).
 | What you might expect | What actually works |
 |---|---|
 | `MRAG_OPENAI_API_KEY` / `MRAG_ANTHROPIC_API_KEY` | `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` — the SDKs' own standard names, read automatically when the manifest's `generator.config.api_key` is left unset |
-| `MRAG_QDRANT_URL`, `MRAG_QDRANT_COLLECTION` | Set `url`/`collection` directly in the manifest's `indexer`/`retriever` `config:` block — there is no env-var fallback |
+| `MRAG_QDRANT_URL`, `MRAG_QDRANT_COLLECTION` | No implicit SDK fallback. Set `url`/`collection` in the manifest, or reference `${QDRANT_URL}`/`secret://QDRANT_API_KEY`; startup resolves those references before wiring. |
 | `MRAG_EMBEDDING_MODEL` | Set `model_name`/equivalent directly in the manifest's `embedder.config:` block |
 | `MRAG_ENVIRONMENT`, `MRAG_LOG_LEVEL` | No working equivalent today |
 

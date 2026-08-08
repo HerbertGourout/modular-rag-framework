@@ -165,7 +165,7 @@ def learn_fusion_weights(vector_lists, bm25_lists, golden_set):
 ### 6. Reranking (Already Wired)
 
 `HybridRetriever` takes `reranker_k` in its constructor and `CrossEncoderReranker` is already
-registered (`orchestration/_default_factories.py`, `reg.register("reranker", "cross-encoder",
+registered (`app/default_factories.py`, `reg.register("reranker", "cross-encoder",
 ...)`) — reranking is a manifest-config concern (select the reranker in your YAML), not
 something to hand-build inside a retriever subclass.
 
