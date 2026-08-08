@@ -3,7 +3,7 @@
 # path|importer_layer|imported_module|reason
 #
 # Cleared 2026-08-07 (ADR-0007 Step 4): every entry from the Step-3 baseline was resolved
-# (Container moved to orchestration/container.py, _default_factories.py moved to
+# (Container moved to orchestration/container.py, app/default_factories.py moved to
 # app/default_factories.py, api/cli now import only app.public). `--strict` verified
 # clean before this file was emptied — it is now the mandatory gate with zero exemptions,
 # per ADR-0007 §6. Add an entry here only for a new, deliberately-accepted violation with

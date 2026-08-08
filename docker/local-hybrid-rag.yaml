@@ -1,0 +1,43 @@
+# Container-network variant of the local runnable preset.
+version: "1.0"
+id: docker-local-hybrid-rag
+description: "Local Docker Compose pipeline using the qdrant service hostname."
+tenant: default
+environment: dev
+
+chunker:
+  type: adaptive
+  config:
+    chunk_size: 512
+    chunk_overlap: 64
+
+embedder:
+  type: sentence-transformers
+  config:
+    model: "BAAI/bge-small-en-v1.5"
+
+indexer:
+  type: qdrant
+  config:
+    collection: documents
+    url: "http://qdrant:6333"
+
+retriever:
+  type: hybrid
+  config:
+    vector_weight: 0.7
+    bm25_weight: 0.3
+    k: 20
+    reranker_k: 5
+
+reranker:
+  type: cross-encoder
+  config:
+    model: "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
+generator:
+  type: openai
+  config:
+    model: "gpt-4o-mini"
+    temperature: 0.1
+    max_tokens: 2048

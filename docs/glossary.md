@@ -49,7 +49,7 @@ it — includes the source, a verbatim excerpt, and a relevance score. See
 ### ComponentRegistry
 The object that maps a `(role, type_name)` pair (e.g., `("chunker", "adaptive")`) to a
 factory function that builds the concrete instance. Populated by
-`orchestration/_default_factories.py`, consumed when a manifest is wired into a `Container`.
+`app/default_factories.py`, consumed when a manifest is wired into a `Container`.
 See [overview.md](architecture/overview.md), section 9.
 
 ### Contract

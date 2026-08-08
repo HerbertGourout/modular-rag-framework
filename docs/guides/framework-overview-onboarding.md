@@ -207,7 +207,7 @@ external engine via the `DocumentEngine` port:
 |---|---|---|
 | **V2.0** | Policy Engine (real, shipped), tenant isolation (real, shipped) | — |
 | **V2.1** | — | Multi-agent teams / collaborative agent orchestration |
-| **V3.0** | A native `KnowledgeGraph` data model may be retained (undecided — see `memory/graph/knowledge_graph.py`'s own docstring) | GraphRAG traversal, multi-hop reasoning, community detection |
+| **V3.0** | No native graph runtime or data model today; the zero-consumer prototype was removed in ADR-0007 Étape 8 | GraphRAG traversal, multi-hop reasoning, community detection |
 | **V3.1** | Cost-routing/caching logic, if built | — |
 | **V3.2** | Drift detection / evaluation trigger | Fine-tuning execution itself |
 | **V4** | Multi-tenant policy layering, audit retention, human-in-the-loop review | — |
@@ -333,7 +333,7 @@ ls -la examples/simple_qa/
 ### Your first component
 
 Use the `/add-retriever` skill: read the `Retriever` Protocol → implement → write unit +
-contract tests → register in `orchestration/_default_factories.py` → select it in a manifest →
+contract tests → register in `app/default_factories.py` → select it in a manifest →
 run `/validate-architecture`.
 
 ### Your first evaluation

@@ -40,7 +40,8 @@ uvicorn server:app --app-dir docker --reload --host 0.0.0.0 --port 8000
 
 The [`Dockerfile`](../../Dockerfile) at the repo root (Lot 16b, `docs/refactoring-plan.md`) is
 the real, current build — a multi-stage immutable image: a `builder` stage produces a wheel from
-source, the `runtime` stage installs only that wheel (`[v1]` extra) into a slim non-root image,
+source, the `runtime` stage installs the wheel with the `v1`, `langgraph`, `postgres`, and
+`auth` extras into a slim non-root image,
 never the source tree, dev tooling, or `.claude/research-papers/` (excluded via
 [`.dockerignore`](../../.dockerignore)). [`docker/server.py`](../../docker/server.py) is the
 `create_app()` wrapper the image runs, configurable via `MRAG_MANIFEST_PATH`. Verified in CI by
@@ -77,7 +78,7 @@ services:
       - "8000:8000"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - MRAG_MANIFEST_PATH=manifests/presets/local-hybrid-rag.yaml
+      - MRAG_MANIFEST_PATH=docker/local-hybrid-rag.yaml
     depends_on:
       - qdrant
 
@@ -92,12 +93,9 @@ volumes:
   qdrant_data:
 ```
 
-`local-hybrid-rag.yaml` hardcodes `indexer.config.url: "http://localhost:6333"` — inside this
-compose network that resolves to the `mrag-api` container itself, not the `qdrant` service, so
-this example as written will fail to reach Qdrant. Since there is no environment-variable
-override for it (see above), either edit the manifest's `url` to `http://qdrant:6333` before
-building the image, or mount a modified copy over `/app/manifests/presets/local-hybrid-rag.yaml`
-at `docker run`/compose time.
+`docker/local-hybrid-rag.yaml` is the container-network variant of the local preset: its Qdrant
+URL is `http://qdrant:6333`, matching the Compose service name. The ordinary local preset keeps
+`localhost:6333` for host-based development; do not interchange the two environments.
 
 ```bash
 docker-compose up -d
@@ -123,17 +121,13 @@ manifests/
 └── production/  # full security stack, multi-tenant, audit trail
 ```
 
-**This layering mechanism is V4 scope and not implemented yet** — the three folders above
-are currently stubs (see each folder's `_index.md`). `secure-enterprise-rag.yaml` is
-**blueprint, not runnable today** — see [`manifests/README.md`](../../manifests/README.md):
-`wire()` never reads its `policies:` field (which also points at two files that don't exist),
-and its `${QDRANT_URL}` interpolation is never resolved by `load_pipeline()`/`create_app()`
-(both call the plain, non-interpolating `load_manifest()` — `${VAR}`/`secret://` resolution is
-`app/config_resolution.py`'s `resolve_manifest()`, wired into `mrag validate` and schema
-export, Lot 9, but not into the actual pipeline-loading path yet). Until a real production
-manifest exists, start from [`local-hybrid-rag.yaml`](../../manifests/presets/local-hybrid-rag.yaml)
-(the only preset proven to wire end-to-end, Lot 5) and add security components by hand — see
-the hardening list below, not the blueprint preset.
+Automatic discovery of `dev/`, `staging/`, and `production/` overrides is not implemented; the
+folders remain future-facing stubs. Programmatic callers can already pass an explicit
+`environment_path` to `resolve_manifest()`, while API/CLI startup resolves one selected manifest
+including `${VAR}` and `secret://` references. `secure-enterprise-rag.yaml` is a runnable V2
+preset, not a blueprint: it wires tenant isolation, redaction, inline policy evaluation,
+PostgreSQL audit, telemetry, and a blocking quality gate. Install `.[v1,postgres]`, supply
+`QDRANT_URL`, `QDRANT_API_KEY`, and `AUDIT_DATABASE_URL`, and configure API identity separately.
 
 ## Health check
 
@@ -161,11 +155,31 @@ client-facing goes live, work through this list explicitly rather than assuming 
 switch handles it:
 
 1. Configure `create_app(..., token_verifier=...)` (Lot 16a) — `adapters/auth/keycloak_verifier.py`'s `KeycloakTokenVerifier` is the reference `TokenVerifier` implementation. Without one, `/answer` and `/retrieve` are unauthenticated. See [rest.md](../api/rest.md#authentication).
-2. Enable `BasicSecurityGuard` and `PatternRedactor` in your manifest, and a `tenant_policy` (`TenantIsolationPolicy`, Lot 11b) if serving more than one tenant.
+2. Start from `secure-enterprise-rag.yaml`, or explicitly enable `BasicSecurityGuard`, `PatternRedactor`, an audit sink, and `TenantIsolationPolicy`. The tenant policy denies requests without an authenticated tenant identity.
 3. Tune `create_app(..., rate_limit_per_minute=..., max_body_bytes=...)` (Lot 16a) for your expected load — see [backup-restore.md](backup-restore.md#overload--soak-evidence-deferred-from-lot-14) for a load-test script to calibrate against.
-4. Set Qdrant's `api_key` in `indexer.config.api_key` if your Qdrant instance requires one — as a manifest literal, not an environment-variable reference: `load_pipeline()`/`create_app()` load the manifest via plain `load_manifest()` (no `${VAR}`/`secret://` interpolation), so a `${QDRANT_API_KEY}`-style reference here will not resolve at wiring time. Pre-render the manifest yourself, or use `resolve_manifest()` (Lot 9) if you build a custom entrypoint on top of it.
+4. Keep secrets out of YAML: use `${QDRANT_URL}` and `secret://QDRANT_API_KEY`/`secret://AUDIT_DATABASE_URL`. `load_pipeline()`, `load_engine()`, and `load_application()` all call `resolve_manifest()` before wiring.
 5. Put the API behind an authenticated reverse proxy (nginx, Traefik, or your API gateway) as defense-in-depth on top of, not instead of, #1.
-6. Reduce log verbosity for production if needed — `app/settings.py`'s `Settings.log_level` field exists but, like the API-key fields above, nothing in this codebase currently constructs a `Settings()` or applies it (no `logging.basicConfig()`/`structlog.configure()` call reads it either); setting `MRAG_LOG_LEVEL` today has no effect. Configure `structlog`/stdlib `logging` directly in your own entrypoint if you need this before that gap is closed.
+6. Configure `structlog`/stdlib logging in the deployment entrypoint or platform. There is no framework-wide `MRAG_LOG_LEVEL` setting.
+
+## Authenticated container deployment
+
+The shipped `docker/server.py` enables Keycloak verification when both variables below are set;
+setting only one fails startup rather than silently exposing an unauthenticated API:
+
+```bash
+docker run -d --name mrag-secure -p 8000:8000 \
+  -e MRAG_MANIFEST_PATH=manifests/presets/secure-enterprise-rag.yaml \
+  -e MRAG_OIDC_ISSUER_URL=https://keycloak.example/realms/client \
+  -e MRAG_OIDC_AUDIENCE=modular-rag-api \
+  -e QDRANT_URL=https://qdrant.example \
+  -e QDRANT_API_KEY="$QDRANT_API_KEY" \
+  -e AUDIT_DATABASE_URL="$AUDIT_DATABASE_URL" \
+  -e OPENAI_API_KEY="$OPENAI_API_KEY" \
+  modular-rag:local
+```
+
+The token must contain `tenant_id` and `sub` claims by default. Customize claim paths by
+constructing `KeycloakTokenVerifier` in your own entrypoint when the realm uses different names.
 
 For backup, restore, and rollback procedures once this is running, see
 [backup-restore.md](backup-restore.md).

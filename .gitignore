@@ -89,6 +89,7 @@ site/
 .qdrant_storage/    # Local Qdrant vector store (dev only)
 cache/
 tmp/
+.check-tmp/
 
 ---
 ## IDE & EDITOR CONFIGS (per-user, not project policy)
@@ -163,17 +164,18 @@ logs/
 #   - .claude.local.md (personal preferences)
 
 # WHY SECRETS ARE GITIGNORED:
-# Environment variables like MRAG_OPENAI_API_KEY, MRAG_QDRANT_URL
-# are user/machine-specific and MUST NEVER be committed to version control.
+# API keys, database URLs, OIDC settings, and manifest-resolved secrets are
+# user/machine-specific and MUST NEVER be committed to version control.
 #
 # Setup locally (each developer):
 #   1. Create .env with your values (template: see .env.example if exists)
 #   2. NEVER commit .env to version control
-#   3. For CI/CD: use GitLab CI/CD secrets instead
+#   3. For CI/CD: use GitHub Actions secrets or the deployment platform's secret store
 #
 # Example .env:
-#   MRAG_OPENAI_API_KEY=sk-...
-#   MRAG_QDRANT_URL=http://localhost:6333
+#   OPENAI_API_KEY=sk-...
+#   QDRANT_URL=http://localhost:6333
+#   QDRANT_API_KEY=...
 
 # WHY VENV IS GITIGNORED:
 # Virtual environments are machine-specific and bulky.

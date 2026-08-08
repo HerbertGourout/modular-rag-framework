@@ -10,7 +10,7 @@ through the `ComponentRegistry` and selected by name in YAML manifests.
 %%{init: {"theme": "base"}}%%
 flowchart LR
     S1["1. Check or extend\nthe contract"] --> S2["2. Implement\nthe component"]
-    S2 --> S3["3. Register in\n_default_factories.py"]
+    S2 --> S3["3. Register in\napp/default_factories.py"]
     S3 --> S4["4. Use in\na manifest"]
 ```
 
@@ -72,10 +72,10 @@ class SemanticChunker:
 `contracts/`, `core/models/`, and the standard library. Never import from
 `generation/`, `retrieval/`, `agents/`, etc.
 
-### 3. Register in `_default_factories.py`
+### 3. Register in `app/default_factories.py`
 
 ```python
-# src/modular_rag/orchestration/_default_factories.py
+# src/modular_rag/app/default_factories.py
 
 from modular_rag.ingestion.chunkers.semantic import SemanticChunker
 
@@ -94,7 +94,7 @@ def register_defaults(reg: ComponentRegistry) -> None:
 
 ```yaml
 # manifests/presets/semantic-rag.yaml
-version: "1"
+version: "1.0"
 id: semantic-rag
 chunker:
   type: semantic

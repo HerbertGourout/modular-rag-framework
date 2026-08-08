@@ -56,7 +56,7 @@ Do not modify files unless explicitly asked.
 - Keep changes narrow and behavior-preserving unless the task requests a design change.
 - Respect the hexagonal layering rules in `CLAUDE.md`.
 - For contract changes, update conformance tests.
-- For new built-in components, register through `orchestration/_default_factories.py`
+- For new built-in components, register through `app/default_factories.py`
   and select through YAML manifests.
 - Use `scripts/check_layering.py` before finalizing architecture-sensitive changes.
 - Prefer `.\.venv\Scripts\python.exe -m pytest` when `.venv` exists.

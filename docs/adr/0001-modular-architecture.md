@@ -48,4 +48,4 @@ Within each plane, all components are exposed through **contracts** (`src/modula
 **Mitigations**
 - CLAUDE.md documents the dependency rule.
 - The registry (`orchestration/registry.py`) enforces wiring declaratively.
-- Factory registration is centralised in `orchestration/_default_factories.py`.
+- Factory registration is centralised in `app/default_factories.py`.

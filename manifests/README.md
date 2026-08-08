@@ -25,7 +25,7 @@ the same change.
 
 | Blueprint | Why it's not runnable |
 |---|---|
-| `graph-memory-rag.yaml` | GraphRAG traversal is delegated per ADR-0005 §5.2, and the selected engine (LangGraph, ADR-0006) doesn't itself provide graph-memory retrieval today. A native `KnowledgeGraph` data model exists (`memory/graph/knowledge_graph.py`) but isn't wired into any retriever. Uses pre-V2 fields (`graph_store`, `planner`, `agents`) that the active schema no longer accepts. |
+| `graph-memory-rag.yaml` | GraphRAG traversal is delegated per ADR-0005 §5.2, and the selected engine does not provide graph-memory retrieval today. The zero-consumer native graph prototype was removed in ADR-0007 Étape 8. Uses pre-V2 fields that the active schema rejects. |
 | `multimodal-rag.yaml` | `embedder.type: multimodal` isn't a registered factory. VLM execution is delegated per ADR-0005 §5.2 — the native modality-agent fields this file used to carry were removed. Only the parsing/citation-enrichment sketch remains, and that capability's native-vs-delegated status is itself still an open decision. |
 
 **"Blueprint" means**: safe to read as a design sketch of a future capability; `resolve_manifest()`

@@ -19,7 +19,7 @@ The orchestration layer is responsible for component wiring, execution flow, and
 > and a manifest shape (`components: chunker: type: ...`) that never matched the real, flat
 > top-level manifest fields (`chunker:`, `retriever:`, etc.). Rewritten against the real
 > `ComponentRegistry` API (`orchestration/registry.py`) and registration location
-> (`app/default_factories.py`, moved from `orchestration/_default_factories.py` in Étape 4).
+> (`app/default_factories.py`, moved from `app/default_factories.py` in Étape 4).
 
 ### Rule: Register All Components in `app/default_factories.py`, Never Wire Elsewhere
 Every component (chunker, retriever, generator, guard, adapter) must be registered there before
@@ -343,7 +343,7 @@ def answer(self, question: str) -> Answer:
 ```python
 # Test registry factory pattern
 def test_registry_creates_components():
-    registry = ComponentRegistry.default()
+    registry = create_default_registry()
     container = registry.wire(manifest)
     assert container.retriever is not None
 
@@ -351,7 +351,7 @@ def test_registry_creates_components():
 def test_engine_emits_trace_steps():
     engine = RAGEngine(container)
     answer = engine.answer("What is RAG?")
-    assert len(answer.trace.steps) >= 3  # guard, retrieve, generate
+    assert answer.trace_id is not None
 ```
 
 ### Integration Tests (tests/integration/)
@@ -360,12 +360,12 @@ Require Qdrant on localhost:6333. Test full pipeline end-to-end.
 ```python
 @pytest.mark.integration
 def test_full_rag_pipeline():
-    registry = ComponentRegistry.default()
+    registry = create_default_registry()
     container = registry.wire(manifest)  # manifest selects real Qdrant + OpenAI adapters
     engine = RAGEngine(container)
     answer = engine.answer("What is RAG?")
     assert answer.text
-    assert len(answer.trace.steps) > 0
+    assert answer.trace_id is not None
 ```
 
 ---
@@ -373,7 +373,7 @@ def test_full_rag_pipeline():
 ## Summary: Orchestration Dos & Don'ts
 
 ### ✅ DO
-- Register all components in `app/default_factories.py` (moved from `orchestration/_default_factories.py` in Étape 4 — `orchestration/` may only import core/contracts/orchestration)
+- Register all components in `app/default_factories.py` (moved from `app/default_factories.py` in Étape 4 — `orchestration/` may only import core/contracts/orchestration)
 - Select components by name in manifest YAML
 - Emit `TraceStep` at each major stage
 - Inject dependencies via `Container`, built by `ComponentRegistry.wire()`

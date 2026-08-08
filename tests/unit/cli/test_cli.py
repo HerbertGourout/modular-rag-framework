@@ -31,6 +31,10 @@ class _FakePipeline:
         self.ingested: list[Chunk] = []
         self._answer_error = answer_error
         self.last_tenant_id: str | None = "unset"
+        self.closed = False
+
+    def close(self) -> None:
+        self.closed = True
 
     def ingest_chunks(self, chunks: list[Chunk]) -> int:
         self.ingested.extend(chunks)
@@ -78,6 +82,7 @@ def test_ask_command_threads_the_tenant_id_option_into_the_pipeline_call(
 
     assert result.exit_code == 0
     assert fake_pipeline.last_tenant_id == "acme-corp"
+    assert fake_pipeline.closed is True
 
 
 def test_ask_command_exits_with_a_typed_code_on_a_security_denial(

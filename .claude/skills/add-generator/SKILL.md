@@ -11,7 +11,7 @@ description: Step-by-step workflow for implementing a new LLM generator followin
 > a `BUILT_IN_GENERATORS` registry dict — none of which exist in the real code. Rewritten below
 > against the actual `Generator` protocol (`src/modular_rag/contracts/generation.py`), the real
 > `TraceStep`/`Trace` schema (`src/modular_rag/core/models/trace.py`), and the real
-> registration pattern (`src/modular_rag/orchestration/_default_factories.py`), using
+> registration pattern (`src/modular_rag/app/default_factories.py`), using
 > `OpenAIGenerator` (`src/modular_rag/generation/synthesizers/openai_gen.py`) as the reference
 > implementation.
 
@@ -214,7 +214,7 @@ def test_{generator_name}_conforms_to_generator_protocol():
 
 ### 7. Register in Registry (5 min)
 
-**File:** `src/modular_rag/orchestration/_default_factories.py` — add the import inside
+**File:** `src/modular_rag/app/default_factories.py` — add the import inside
 `register_defaults()` (all component imports there are function-local) and one `reg.register(...)`
 line, following the existing generator entries:
 
@@ -260,7 +260,7 @@ pytest tests/contract/test_generator_conformance.py -v
 ✅ Unit test coverage > 85%
 ✅ Contract conformance test passing
 ✅ TraceStep emitted on every `generate()`/`agenerate()` call
-✅ Registered in `_default_factories.py`, selected by name in a manifest
+✅ Registered in `app/default_factories.py`, selected by name in a manifest
 
 ## Time Estimate
 

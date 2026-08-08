@@ -150,7 +150,7 @@ class Embedder(Protocol):
     **Example** (real API — `ComponentRegistry` has no `get_component()` method; components
     come off the wired `Container`):
     ```python
-    container = ComponentRegistry.default().wire(manifest)
+    container = create_default_registry().wire(manifest)
     embedder = container.embedder
     doc_vectors = embedder.embed(["hello world", "goodbye world"])
     ```

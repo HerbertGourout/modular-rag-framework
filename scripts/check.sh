@@ -112,11 +112,13 @@ check_full() {
     echo "Step 5/7: Runnable manifest validation (all manifests/presets/*.yaml)..."
     if QDRANT_URL="http://localhost:6333" QDRANT_API_KEY="smoke-test-key" AUDIT_DATABASE_URL="postgresql://smoke-test/db" python -c "
 from pathlib import Path
-from modular_rag.app.bootstrap import load_pipeline
+from modular_rag.app.bootstrap import load_application
 
-for path in sorted(Path('manifests/presets').glob('*.yaml')):
-    load_pipeline(str(path))
-    print(f'{path.name} wires cleanly')
+paths = sorted(Path('manifests/presets').glob('*.yaml')) + [Path('docker/local-hybrid-rag.yaml')]
+for path in paths:
+    application = load_application(str(path))
+    print(f'{path.name} wires cleanly (engine={application.engine_name})')
+    application.close()
 "; then
         print_success "Runnable manifest validation passed"
     else
@@ -186,8 +188,8 @@ check_e2e() {
         return 1
     fi
     
-    if [[ -z "${MRAG_OPENAI_API_KEY:-}" ]] && [[ -z "${MRAG_ANTHROPIC_API_KEY:-}" ]]; then
-        print_error "No LLM API key set. Export MRAG_OPENAI_API_KEY or MRAG_ANTHROPIC_API_KEY"
+    if [[ -z "${OPENAI_API_KEY:-}" ]] && [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
+        print_error "No LLM API key set. Export OPENAI_API_KEY or ANTHROPIC_API_KEY"
         return 1
     fi
     

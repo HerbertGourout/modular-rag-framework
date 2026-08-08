@@ -17,7 +17,7 @@ commit history around Lot 19) if you need the exact "before" comparison point.
 Before the Step-3 checker tests were added, the repository contained 214 Python files and 155
 Markdown files. Compilation passed and the local service-free suite reported 548 passing tests
 (466 unit + 82 contract). After adding the 27 dependency-policy tests, the same suite reported
-575 passing tests. As of this update (post Étapes 6-8), the suite reports 585 tests (495 unit +
+575 passing tests. As of the finalization pass, the suite reports 588 tests (498 unit +
 90 contract) — net change from adding `tests/contract/test_telemetry_conformance.py`,
 `tests/unit/observability/test_telemetry.py`, and new registry tests, minus the 6 tests removed
 with `KnowledgeGraph` (Étape 8).
@@ -64,7 +64,7 @@ factory) were removed from `ComponentRegistry` in Étape 8.
 |---|---|---|---|
 | Native ingestion, retrieval and generation | **Operational** | V1 manifest → `load_pipeline()` → `ComponentRegistry.wire()` → `RAGEngine` | `manifests/presets/local-hybrid-rag.yaml`; `tests/e2e/test_simple_qa_pipeline.py` (service-dependent). |
 | Engine-neutral native adapter | **Operational** | `load_native_engine()` or `load_engine()` with `engine.adapter: native` | `app/bootstrap.py`; engine conformance tests. |
-| LangGraph adapter | **Operational** | `load_engine()` with `engine.adapter: langgraph`, or `manifests/presets/langgraph-rag.yaml` | Unit/conformance coverage; verified end-to-end via `load_engine()` (Étape 7). API/CLI still call `load_pipeline()` by default — selecting LangGraph from the REST API/CLI is not yet wired, only via direct `load_engine()` call. |
+| LangGraph adapter | **Operational** | `load_engine()` or `load_application()` with `engine.adapter: langgraph`, including `manifests/presets/langgraph-rag.yaml` | Unit/conformance coverage; API and CLI import `load_application()` through `app.public` and therefore honor the selected adapter. Raw retrieval remains a native application use case because `DocumentEngine` intentionally exposes answer orchestration, not retrieval-only execution. |
 | Manifest YAML validation | **Operational** | `load_manifest()` / `PipelineManifest.model_validate()` | Unknown top-level fields are rejected (`extra="forbid"`). Legacy fields (`planner`/`agents`/`graph_store`/old-style `policies`/`modalities`) now hard-fail validation instead of being silently ignored (Étape 7). |
 | Environment layering, `${VAR}` and `secret://` | **Operational** for `mrag validate` and `load_pipeline()` | `resolve_manifest()`, called by both `mrag validate` and `load_pipeline()` | Verified end-to-end on `secure-enterprise-rag.yaml` (Étape 7): `${QDRANT_URL}`, `secret://QDRANT_API_KEY`, `secret://AUDIT_DATABASE_URL` all resolve. |
 | Capability dry-run validation | **Operational**, extended | `mrag validate` → `validate_capabilities()` | Now also checks `governance`/`observability`/`lifecycle`/`quality` component roles, plus a fail-closed check for `governance.tenant_enforcement=true` without `tenant_policy` (Étape 6). |
@@ -109,17 +109,17 @@ Resolved by Étapes 4-8 (previously listed here as open debt):
    now covers all seven layers, `--strict` passes clean, baseline emptied (Étape 3-4).
 2. ~~`orchestration` imports `app.Container`~~ — `Container` moved to `orchestration/container.py`
    (Étape 4).
-3. ~~`orchestration/_default_factories.py` is the accidental composition root~~ — moved to
+3. ~~`app/default_factories.py` is the accidental composition root~~ — moved to
    `app/default_factories.py` (Étape 4).
 4. ~~Owned control-plane implementations are test-injected, not manifest-wired~~ — governance/
    observability/lifecycle/quality sections are now manifest-activatable (Étape 6).
 5. ~~Runnable presets and non-runnable blueprints share the same folder~~ — split into
    `manifests/presets/` and `manifests/blueprints/` (Étape 7).
 
+6. ~~`RAGEngine` imports lifecycle hashing from the ingestion domain~~ — helpers moved to
+   `core/document_identity.py`; the ingestion path keeps only a compatibility re-export.
+7. ~~API and CLI bypass `engine.adapter`~~ — both now enter through `load_application()`, which
+   resolves the manifest and selects Native or LangGraph before serving answers.
+
 Still open:
-6. `RAGEngine` still imports lifecycle hashing directly from the ingestion domain (not addressed
-   by Étapes 4-8 — not part of ADR-0007's scope).
-7. API and CLI still call `load_pipeline()` by default rather than `load_engine()` — selecting
-   the LangGraph adapter from the REST API/CLI (not just via direct `load_engine()` call) is not
-   yet wired. This is ADR-0007's open decision #5.
 8. `IndexReconciler` remains programmatic-only, not exposed through CLI/API/manifests.

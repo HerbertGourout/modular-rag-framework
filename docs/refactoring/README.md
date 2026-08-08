@@ -161,12 +161,12 @@ guide. Each links to the lot that found it.
 | `app/settings.py`'s `Settings` class never actually wired in | Found, documented, **not fixed** — every `MRAG_*` env var except `OPENAI_API_KEY` (SDK-level fallback) has zero effect | [16c](lot-16c-deployment-runbooks.md) |
 | `.gitlab-ci.yml`/`.gitlab/` removal | Confirmed by Herbert Gourout, blocked twice by the permission system for reasons not visible from `settings.json` alone | [17](lot-17-prototype-retirement.md) |
 | `memory/graph/knowledge_graph.py` — data model or delegated traversal? | Retained with a caveat; genuinely undecided, not resolved by any lot | [17](lot-17-prototype-retirement.md) |
-| LangGraph adapter emits no audit evidence | By design (Lot 15) — belongs above the port, at a caller that doesn't exist yet; still open at closure | [15](lot-15-langgraph-adapter.md), [18](lot-18-pilot-and-closure.md) |
+| LangGraph adapter emits no audit evidence | `ApplicationService` now supplies the caller above the port, but its event-to-`AuditSink` bridge remains open | [15](lot-15-langgraph-adapter.md), [19](lot-19-layer-boundary-stabilization.md) |
 | Overload/soak load-test script never executed against live infra | Script exists (`scripts/loadtest_answer.py`), never run — no live deployment target in this environment | [16c](lot-16c-deployment-runbooks.md) |
 | Postgres/Qdrant backup-restore commands never executed against live infra | Commands are correct against each system's real documented tooling, unexecuted here | [16c](lot-16c-deployment-runbooks.md) |
 | CI `container-build`/`supply-chain` jobs never executed in this environment | No `docker` binary here; the next GitHub Actions run is the real verification | [16b](lot-16b-supply-chain.md) |
 | `manifests/production/_index.md` cannot be edited | Hard `permissions.deny` on `manifests/production/**`; confirmed intentional (V4+ scope), blocked two separate edit attempts | [19](lot-19-layer-boundary-stabilization.md) |
-| API/CLI don't expose `engine.adapter` selection | LangGraph is only reachable via a direct `load_engine()` call today, not `mrag ask`/`POST /answer` — ADR-0007 open decision #5 | [19](lot-19-layer-boundary-stabilization.md) |
+| API/CLI engine selection | Resolved: API and CLI use `load_application()` and honor `engine.adapter` for answer execution | [19](lot-19-layer-boundary-stabilization.md) |
 | `IndexReconciler` remains programmatic-only | Not exposed through CLI/API/manifests | [19](lot-19-layer-boundary-stabilization.md) |
 | **Final sign-off** (architecture/security/operations/legal/business-quality) | **Not self-granted** — reserved for Herbert Gourout | [18](lot-18-pilot-and-closure.md), [19](lot-19-layer-boundary-stabilization.md) |
 

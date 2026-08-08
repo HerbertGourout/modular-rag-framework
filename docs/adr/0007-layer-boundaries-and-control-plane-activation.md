@@ -181,13 +181,14 @@ plain V1 pipeline.
 
 ---
 
-## Open decisions requiring acceptance or implementation evidence
+## Resolved decisions
 
-2. Exact V2 YAML shape for infrastructure providers and policy references.
-3. Whether identity provider selection belongs in the same solution manifest or a separate
-   deployment/service configuration.
-5. Whether API/CLI should switch immediately to `DocumentEngine` or retain an explicitly named
-   native compatibility command during migration.
+2. The V2 YAML shape uses typed component selections under `governance`, `observability`,
+   `lifecycle`, and `quality`; provider secrets remain references resolved at startup.
+3. Identity verification remains service configuration (`TokenVerifier` passed to the API),
+   separate from solution-manifest policy enforcement.
+5. API and CLI use `load_application()`. Its `ApplicationService` selects the configured
+   `DocumentEngine` for answers while retaining native ingestion and retrieval-only use cases.
 
 ### Resolved: `app.container` compatibility re-export (Étape 4, 2026-08-07)
 

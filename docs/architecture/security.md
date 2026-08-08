@@ -118,7 +118,7 @@ security:
   guard: basic
   redactor: null
 
-# secure-enterprise-rag.yaml  (production intent — Blueprint, not runnable today; see manifests/README.md)
+# secure-enterprise-rag.yaml  (runnable V2 preset; requires Qdrant, PostgreSQL, secrets, and API identity configuration)
 security:
   guard: basic
   redactor: pattern

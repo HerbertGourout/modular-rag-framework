@@ -46,8 +46,8 @@ sections before assuming something is broken in the code itself.
 
 ### `ConnectionRefusedError` / `httpx.ConnectError` pointing at `localhost:6333`
 
-**Why**: Qdrant isn't running, or `MRAG_QDRANT_URL` points somewhere else than where it's
-actually listening.
+**Why**: Qdrant isn't running, or the manifest's `indexer.config.url` points somewhere else
+than where it is listening.
 
 **Fix**:
 ```bash
@@ -74,7 +74,7 @@ because the SDK client reads the env var once at construction time, not per requ
 
 **Why, in order of likelihood**:
 1. You ingested into a different Qdrant collection than the one the manifest queries (check
-   `MRAG_QDRANT_COLLECTION` matches on both sides).
+   the manifest's `collection` value matches on both sides).
 2. The BM25 half of hybrid retrieval is in-memory and rebuilt per process —if you ingested in
    one process and are querying in a freshly started one, the BM25 index is empty even though
    Qdrant still has the vectors from before. (See [installation.md](installation.md) and
@@ -90,11 +90,11 @@ because the SDK client reads the env var once at construction time, not per requ
 ### `RegistryError: no factory registered for ('chunker', 'my-thing')`
 
 **Why**: the manifest's `type:` field doesn't match any name registered in
-`orchestration/_default_factories.py`. This is by design — see
+`app/default_factories.py`. This is by design — see
 [CLAUDE.md](../../CLAUDE.md) rule 03: nothing runs unless it's registered *and* selected by
 name in YAML.
 
-**Fix**: check the exact string in `_default_factories.py`'s `reg.register("chunker", "...",
+**Fix**: check the exact string in `app/default_factories.py`'s `reg.register("chunker", "...",
 ...)` call and make sure the manifest's `type:` matches it character for character (typos
 and hyphen/underscore mismatches are the usual culprit). If you're adding a new component,
 see [plugin-development.md](plugin-development.md).

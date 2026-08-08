@@ -13,9 +13,23 @@ from __future__ import annotations
 import os
 
 from modular_rag.api import create_app
+from modular_rag.adapters.auth.keycloak_verifier import KeycloakTokenVerifier
 
 _MANIFEST_PATH = os.environ.get(
     "MRAG_MANIFEST_PATH", "manifests/presets/local-hybrid-rag.yaml"
 )
+_OIDC_ISSUER = os.environ.get("MRAG_OIDC_ISSUER_URL")
+_OIDC_AUDIENCE = os.environ.get("MRAG_OIDC_AUDIENCE")
 
-app = create_app(_MANIFEST_PATH)
+if bool(_OIDC_ISSUER) != bool(_OIDC_AUDIENCE):
+    raise RuntimeError(
+        "MRAG_OIDC_ISSUER_URL and MRAG_OIDC_AUDIENCE must be set together."
+    )
+
+_TOKEN_VERIFIER = (
+    KeycloakTokenVerifier(issuer_url=_OIDC_ISSUER, audience=_OIDC_AUDIENCE)
+    if _OIDC_ISSUER and _OIDC_AUDIENCE
+    else None
+)
+
+app = create_app(_MANIFEST_PATH, token_verifier=_TOKEN_VERIFIER)

@@ -29,6 +29,11 @@ class ApplicationService:
         return self._native.manifest_id
 
     @property
+    def engine_name(self) -> str:
+        """Selected answer-engine name without exposing the adapter object."""
+        return self._selected.name()
+
+    @property
     def chunker(self) -> Chunker:
         return self._native.chunker
 
@@ -59,3 +64,7 @@ class ApplicationService:
         # Raw retrieval is a native application use case; DocumentEngine owns
         # answer orchestration and deliberately has no retrieval-only method.
         return self._native.retrieve(question, k=k, tenant_id=tenant_id)
+
+    def close(self) -> None:
+        """Release every resource owned by the wired application."""
+        self._native.close()

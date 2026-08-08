@@ -33,3 +33,4 @@ docs/research/DIGEST-architecture.md|QueryRouter
 examples/simple_qa/README.md|MRAG_OPENAI_API_KEY
 src/modular_rag/orchestration/CLAUDE.md|QueryRouter
 src/modular_rag/orchestration/CLAUDE.md|FlowCompiler
+docs/adr/0007-layer-boundaries-and-control-plane-activation.md|_default_factories.py

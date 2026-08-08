@@ -28,7 +28,7 @@ pip install -e "."
 # Install V1 stack (recommended)
 pip install -e ".[v1,dev]"
 
-# Install everything (v1 + v4 + v5 + langgraph + dev — no "v3", removed in Lot 17)
+# Install everything (v1 + v4 + v5 + langgraph + postgres + auth + dev)
 pip install -e ".[all]"
 ```
 
@@ -45,6 +45,11 @@ pip install -e ".[all]"
 ./scripts/check.sh quick
 # OR
 ruff check src/modular_rag/ tests/ --select E,F,I --quiet
+```
+
+```powershell
+# Windows PowerShell
+.\scripts\check.ps1 quick
 ```
 
 **Blocks on:** syntax errors (E9xx), undefined names (F8xx), import order violations (I001-I002).
@@ -67,6 +72,11 @@ pytest tests/unit/ -v
 pytest tests/contract/ -v
 ```
 
+```powershell
+# Windows PowerShell
+.\scripts\check.ps1 full
+```
+
 **Blocks on:** failed unit tests, failed contract tests, syntax/import/layering errors, mypy
 error count exceeding `.claude/mypy-baseline.txt`'s ratchet.
 **Allows:** mypy errors already present in the baseline (the baseline only ratchets down, never
@@ -82,6 +92,11 @@ docker run -p 6333:6333 qdrant/qdrant &
 ./scripts/check.sh integration
 # OR
 pytest tests/integration/ -v -m integration
+```
+
+```powershell
+docker run -d -p 6333:6333 qdrant/qdrant
+.\scripts\check.ps1 integration
 ```
 
 **Blocks on:** failed integration tests, Qdrant connection errors.
@@ -100,6 +115,12 @@ docker run -p 6333:6333 qdrant/qdrant &
 pytest tests/e2e/ -v -m e2e
 ```
 
+```powershell
+$env:OPENAI_API_KEY="sk-..."
+docker run -d -p 6333:6333 qdrant/qdrant
+.\scripts\check.ps1 e2e
+```
+
 **Blocks on:** failed E2E tests, missing LLM API key, Qdrant unavailable.
 
 ### Tier All: Comprehensive (~10 minutes)
@@ -107,6 +128,10 @@ pytest tests/e2e/ -v -m e2e
 
 ```bash
 ./scripts/check.sh all
+```
+
+```powershell
+.\scripts\check.ps1 all
 ```
 
 **Runs:** Tier 1 → Tier 2 → Tier 3 → Tier 4.

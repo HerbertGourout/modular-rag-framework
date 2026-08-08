@@ -72,6 +72,14 @@ v5 = [
 langgraph = [
     "langgraph>=1.2",
 ]
+# Durable audit/lifecycle implementations selected by secure-enterprise-rag.yaml.
+postgres = [
+    "psycopg[binary]>=3.1",
+]
+# OIDC/JWKS verification for authenticated API deployments.
+auth = [
+    "pyjwt[crypto]>=2.8",
+]
 # Development
 dev = [
     "pytest>=8.2",
@@ -91,7 +99,7 @@ supply-chain = [
     "pip-licenses>=5.0",
     "cyclonedx-bom>=6.0",
 ]
-all = ["modular-rag[v1,v4,v5,langgraph,dev]"]
+all = ["modular-rag[v1,v4,v5,langgraph,postgres,auth,dev]"]
 
 [project.scripts]
 mrag = "modular_rag.cli:app"

@@ -64,6 +64,11 @@ FORBIDDEN_TERMS = [
     "agentic_workflows.md",
     "native five-agent runtime",
     "MRAG_OPENAI_API_KEY",
+    "_default_factories.py",
+    "ComponentRegistry.default()",
+    "three decisions already settled",
+    "only `local-hybrid-rag.yaml` actually wires",
+    "Settings.log_level` field exists",
 ]
 
 # The self-identifying header line every blueprint manifest must carry, e.g.

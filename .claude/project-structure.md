@@ -42,5 +42,5 @@ docs/architecture/   → overview, data-model, module-model, runtime-flow, secur
 > longer unassigned. `app/settings.py`'s `Settings` class (`MRAG_*` env vars) is declared but
 > never actually constructed anywhere in the real pipeline-wiring path — found in Lot 16c
 > (`docs/refactoring/lot-16c-deployment-runbooks.md`), not yet fixed; don't assume any `MRAG_*`
-> variable configures a running pipeline without checking `orchestration/_default_factories.py`
+> variable configures a running pipeline without checking `app/default_factories.py`
 > first.

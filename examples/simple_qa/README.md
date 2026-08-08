@@ -26,19 +26,25 @@ docker run -d -p 6333:6333 qdrant/qdrant
 
 ## Run
 
-### Ingest documents
+### Recommended: one-process hybrid run
+
+```bash
+python examples/simple_qa/first_query.py
+```
+
+This ingests the sample documents and asks a question before the in-memory BM25 index is lost.
+Sample documents are provided in `docs/`.
+
+### CLI compatibility path
 
 ```bash
 python examples/simple_qa/main.py ingest examples/simple_qa/docs/
-```
-
-Sample documents are provided in `docs/` — a short text about RAG and retrieval methods.
-
-### Ask a question
-
-```bash
 python examples/simple_qa/main.py ask "What is Retrieval-Augmented Generation?"
 ```
+
+The second command is a new process: Qdrant vectors persist, but the reference BM25 index does
+not. It therefore demonstrates vector fallback, not full hybrid fusion. Use `first_query.py` for
+the complete hybrid path.
 
 Expected output:
 
@@ -64,11 +70,12 @@ Citations:
 |---|---|
 | **Manifest-driven config** | `manifests/presets/local-hybrid-rag.yaml` |
 | **Adaptive chunking** | Section-aware splitting, 512-token max |
-| **Hybrid retrieval** | Vector (Qdrant) + BM25 fused via RRF |
+| **Hybrid retrieval** | Vector (Qdrant) + BM25 fused via RRF in `first_query.py` |
 | **Cross-encoder reranking** | `cross-encoder/ms-marco-MiniLM-L-6-v2` |
 | **Grounded generation** | GPT-4o-mini with numbered source context |
-| **Security guard** | Query length + injection check |
-| **Structured telemetry** | Trace written to stdout as JSON |
+
+The local preset deliberately does not configure a security guard, telemetry sink, tenant
+policy, or audit sink. Use `secure-enterprise-rag.yaml` for those control-plane components.
 
 ## Extending
 

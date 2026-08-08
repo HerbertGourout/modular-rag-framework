@@ -138,7 +138,7 @@ List affected modules:
 ## Checklist
 - [ ] Tests added/updated (unit + contract if applicable)
 - [ ] No cross-domain imports introduced
-- [ ] New adapter registered in `_default_factories.py`
+- [ ] New adapter registered in `app/default_factories.py`
 - [ ] `docs/` updated if applicable
 - [ ] ADR written if structural decision made
 - [ ] `CHANGELOG.md` updated
@@ -210,7 +210,7 @@ for the worked examples of what breaks when a rule is skipped.
   communicate through `contracts/` and `core/models/`. Skipping this means a unit test for a
   chunker could start silently requiring an LLM API key, because generation code got pulled
   in transitively.
-- **Register in `_default_factories.py`**: every new built-in adapter must be registered by
+- **Register in `app/default_factories.py`**: every new built-in adapter must be registered by
   type name. A component that exists in code but isn't registered is invisible to every
   manifest — it simply cannot be selected, which is by design: nothing runs unless a
   manifest says so.
@@ -243,6 +243,15 @@ Use the standardized validation script for all checks:
 ./scripts/check.sh all          # All scopes (~10m)
 ```
 
+Windows PowerShell uses the equivalent native script:
+
+```powershell
+.\scripts\check.ps1 quick
+.\scripts\check.ps1 full
+.\scripts\check.ps1 integration
+.\scripts\check.ps1 all
+```
+
 See [docs/guides/validation.md](docs/guides/validation.md) for full reference.
 
 ---
@@ -269,14 +278,14 @@ asked to implement.
 %%{init: {"theme": "base"}}%%
 flowchart LR
     C1["1. Verify/extend the\nProtocol in contracts/"] --> C2["2. Implement the class\nin the domain folder"]
-    C2 --> C3["3. Register the factory in\norchestration/_default_factories.py"]
+    C2 --> C3["3. Register the factory in\napp/default_factories.py"]
     C3 --> C4["4. Select it by name\nin a manifest YAML"]
     C4 --> C5["5. Write unit + contract tests"]
 ```
 
 1. Verify `contracts/chunking.py` Chunker Protocol covers your interface (or extend it + write ADR).
 2. Create `src/modular_rag/ingestion/chunkers/my_chunker.py` implementing `chunk()` and `name()`.
-3. Register in `orchestration/_default_factories.py`:
+3. Register in `app/default_factories.py`:
    ```python
    reg.register("chunker", "my-chunker", lambda cfg: MyChunker(**cfg.config))
    ```
@@ -299,8 +308,8 @@ flowchart LR
 - [ ] No cross-domain imports introduced
 - [ ] Local V1 gate run (`/qa-v1` or Ruff + unit + contract + layering audit)
 - [ ] High-risk AI-generated changes reviewed by a second provider or human reviewer
-- [ ] New adapter registered in `_default_factories.py`
-- [ ] `./scripts/check.sh full` passes locally
+- [ ] New adapter registered in `app/default_factories.py`
+- [ ] `./scripts/check.sh full` (Linux/macOS) or `.\scripts\check.ps1 full` (Windows) passes
 - [ ] CI/CD (lint + test + coverage) passes
 - [ ] `docs/architecture/` updated if layering or contracts changed
 - [ ] ADR written if a structural decision was made
