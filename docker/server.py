@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import os
 
-from modular_rag.api import create_app
 from modular_rag.adapters.auth.keycloak_verifier import KeycloakTokenVerifier
+from modular_rag.api import create_app
 
 _MANIFEST_PATH = os.environ.get(
     "MRAG_MANIFEST_PATH", "manifests/presets/local-hybrid-rag.yaml"

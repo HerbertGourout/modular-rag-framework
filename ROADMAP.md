@@ -104,21 +104,21 @@ created — corrected 2026-08-07 (Étape 9) to describe the real, simpler implem
 
 **What actually exists:**
 - `contracts/evaluation.py`: `Evaluator` Protocol (`evaluate(query, answer, expected, context) ->
-  Metrics`) — registered, manifest-wirable (`evaluator` role), contract-tested
+  Metrics`) — consumed by offline evaluation runners and contract-tested
   (`tests/contract/test_eval_conformance.py`)
-- `eval/scorers/exact_match.py`: `ExactMatchEvaluator` — the one registered `evaluator` type today
+- `eval/scorers/exact_match.py`: `ExactMatchEvaluator` — built-in offline answer scorer
 - `eval/scorers/retrieval_metrics.py`: `recall_at_k`, `precision_at_k`, `mrr` — no NDCG yet
 - `eval/runners/benchmark.py`: `BenchmarkRunner`/`GoldenSet`/`BenchmarkCase`/`BenchmarkReport` —
   the golden-set infrastructure exists as classes; `eval/datasets/` (populated per-domain YAML
   files) is still empty, so no actual golden set is shipped yet
-- `eval/quality_gate.py`: `QualityGate` — compares metrics against a baseline, `report_only` or
-  `blocking` mode; manifest-wired (`quality.gate`), used by `secure-enterprise-rag.yaml`
+- `eval/quality_gate.py`: `QualityGate` — compares offline benchmark metrics against a baseline,
+  in `report_only` or `blocking` mode; not part of runtime pipeline manifests (ADR-0008)
 
 **Not built:** semantic-similarity/factuality/RAGAS-style scorers, per-domain golden-set YAML
 files, a regression dashboard/detector.
 
 **Success criteria:**
-- ✅ `Evaluator` Protocol contract-enforced and manifest-wirable
+- ✅ `Evaluator` Protocol contract-enforced and usable by offline evaluation runners
 - ✅ Retrieval metrics (recall/precision/MRR) computed
 - ⬜ NDCG@k
 - ⬜ Populated per-domain golden sets (`eval/datasets/` is currently empty)

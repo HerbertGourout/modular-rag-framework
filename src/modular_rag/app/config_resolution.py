@@ -23,7 +23,7 @@ from modular_rag.contracts.manifests import (
 )
 from modular_rag.contracts.secrets import SecretResolver
 from modular_rag.core.errors import ConfigurationError, ManifestError
-from modular_rag.orchestration.registry import ComponentRegistry
+from modular_rag.orchestration.registry import ComponentRegistry, runtime_manifest_errors
 
 _ENV_VAR_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 _SECRET_PREFIX = "secret://"
@@ -145,7 +145,6 @@ def validate_capabilities(manifest: PipelineManifest, registry: ComponentRegistr
     _check("reranker", manifest.reranker)
     _check("generator", manifest.generator)
     _check("guard", manifest.security)
-    _check("evaluator", manifest.evaluation)
     if manifest.governance:
         _check("tenant_policy", manifest.governance.tenant_policy)
         _check("policy_engine", manifest.governance.policy_engine)
@@ -162,8 +161,7 @@ def validate_capabilities(manifest: PipelineManifest, registry: ComponentRegistr
         _check("telemetry", manifest.observability.telemetry)
     if manifest.lifecycle:
         _check("lifecycle_ledger", manifest.lifecycle.ledger)
-    if manifest.quality:
-        _check("quality_gate", manifest.quality.gate)
+    errors.extend(runtime_manifest_errors(manifest))
     return errors
 
 

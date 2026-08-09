@@ -6,12 +6,13 @@ from typing import TYPE_CHECKING
 import yaml
 
 from modular_rag.app.application import ApplicationService
-from modular_rag.app.config_resolution import resolve_manifest
+from modular_rag.app.config_resolution import resolve_manifest, validate_capabilities
 from modular_rag.app.default_factories import create_default_registry
 from modular_rag.contracts.manifests import PipelineManifest
 from modular_rag.core.errors import ConfigurationError, ManifestError
 from modular_rag.orchestration.engine import RAGEngine
 from modular_rag.orchestration.native_engine import NativeEngineAdapter
+from modular_rag.orchestration.registry import ComponentRegistry
 
 if TYPE_CHECKING:
     from modular_rag.contracts.engine import DocumentEngine
@@ -38,7 +39,14 @@ def load_pipeline(path: str | Path) -> RAGEngine:
     code that wants the engine-neutral `DocumentEngine` port instead.
     """
     manifest = resolve_manifest(path)
+    adapter_name = manifest.engine.adapter if manifest.engine else "native"
+    if adapter_name != "native":
+        raise ConfigurationError(
+            f"load_pipeline() only supports engine.adapter='native', got {adapter_name!r}. "
+            "Use load_engine() or load_application() for delegated engines."
+        )
     registry = create_default_registry()
+    _raise_for_manifest_errors(manifest, registry)
     container = registry.wire(manifest)
     return RAGEngine(container)
 
@@ -66,6 +74,7 @@ def load_engine(path: str | Path) -> DocumentEngine:
     """
     manifest = resolve_manifest(path)
     registry = create_default_registry()
+    _raise_for_manifest_errors(manifest, registry)
     container = registry.wire(manifest)
     adapter_name = manifest.engine.adapter if manifest.engine else "native"
 
@@ -88,7 +97,9 @@ def load_application(path: str | Path) -> ApplicationService:
     API and CLI therefore honor `${VAR}`, `secret://` and `engine.adapter`.
     """
     manifest = resolve_manifest(path)
-    container = create_default_registry().wire(manifest)
+    registry = create_default_registry()
+    _raise_for_manifest_errors(manifest, registry)
+    container = registry.wire(manifest)
     native = RAGEngine(container)
     adapter_name = manifest.engine.adapter if manifest.engine else "native"
     if adapter_name == "native":
@@ -103,3 +114,12 @@ def load_application(path: str | Path) -> ApplicationService:
             "Expected 'native' or 'langgraph'."
         )
     return ApplicationService(native, selected)
+
+
+def _raise_for_manifest_errors(
+    manifest: PipelineManifest, registry: ComponentRegistry
+) -> None:
+    """Fail startup before constructing components when activation is invalid."""
+    errors = validate_capabilities(manifest, registry)
+    if errors:
+        raise ConfigurationError("Invalid runtime manifest: " + "; ".join(errors))

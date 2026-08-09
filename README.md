@@ -47,7 +47,7 @@ Most RAG stacks today force you to choose between:
 | | LangChain / LlamaIndex | Haystack | This framework |
 |---|---|---|---|
 | **Composition style** | Imperative chains | Pipelines + nodes | **Declarative manifests** (knowledge architecture as code) |
-| **Agents** | Bolted on | Limited | **Delegated via adapter** to a selected external engine (LangGraph) behind a vendor-neutral `DocumentEngine` port — this framework owns governance/audit/tenant-isolation around it, not a native agent runtime |
+| **Agents** | Bolted on | Limited | **Delegated via adapter** to LangGraph behind `DocumentEngine`; guard, tenant isolation and redaction are enforced today, while unsupported audit/policy/review/telemetry declarations fail startup |
 | **Graph memory** | External plugins | External | **Delegated** GraphRAG traversal (V3); a native graph data model may be retained, undecided |
 | **Governance** | Manual | Limited | **Policy-as-code**, owned and current (V2.0), not deferred |
 | **Multimodal** | Partial | Partial | **Delegated** VLM execution (V5); parsing/citation enrichment may stay native |
@@ -198,7 +198,8 @@ Use after code changes:
 ```bash
 ./scripts/check.sh quick    # Syntax & import order
 ./scripts/check.sh full     # Quick + unit + contract tests
-# Windows PowerShell: .\scripts\check.ps1 quick|full
+# Windows PowerShell (works even when local scripts are disabled):
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\check.ps1 full
 ```
 
 ### Full validation workflows

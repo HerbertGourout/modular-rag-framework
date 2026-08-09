@@ -104,7 +104,10 @@ def main() -> int:
         for name, version, license_text in violations:
             print(f"  {name}=={version}: {license_text}")
         rel = BASELINE_PATH.relative_to(PROJECT_ROOT).as_posix()
-        print(f"\nAdd an entry to {rel} with a recorded reason to accept, or replace the dependency.")
+        print(
+            f"\nAdd an entry to {rel} with a recorded reason to accept, "
+            "or replace the dependency."
+        )
         return 1
 
     if accepted:

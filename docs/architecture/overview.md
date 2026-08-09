@@ -12,8 +12,9 @@ plane over knowledge, governance, and observability, built around three pillars:
 1. **Declarative orchestration** — pipelines are described in YAML (manifests), not in imperative Python.
 2. **Composable retrieval** — chunking, embedding, indexing, fusion, and reranking are swappable contracts.
 3. **Engine-neutral execution** — a vendor-neutral `DocumentEngine` port (`contracts/engine.py`)
-   lets the same governed pipeline run on the native sequential engine or a selected external
-   engine (LangGraph, [ADR-0006](../adr/0006-external-engine-selection.md)); per
+   selects the native sequential engine or an external engine adapter (LangGraph,
+   [ADR-0006](../adr/0006-external-engine-selection.md)) with explicit, validated control-plane
+   capability differences; per
    [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md), generic multi-agent
    orchestration is delegated to that external engine, not built as a native specialized-agent
    runtime.

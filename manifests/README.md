@@ -14,7 +14,7 @@ processes every field the manifest declares.
 | Preset | Notes |
 |---|---|
 | `local-hybrid-rag.yaml` | V1, native engine. Only V1 components; every type is registered and every field is wired. Validated in CI (`scripts/check.sh full`). Used by `examples/simple_qa/`. |
-| `secure-enterprise-rag.yaml` | V2, native engine. Converted from a broken V4-style placeholder (Étape 7): governance (`tenant_enforcement`, `redactor`, inline `policy_engine`, Postgres `audit_sink`), `quality.gate` in blocking mode, `${QDRANT_URL}`/`secret://QDRANT_API_KEY`/`secret://AUDIT_DATABASE_URL` resolved via `app/config_resolution.py`. Requires those env vars set, and a reachable Postgres/Qdrant to actually run (not just wire). |
+| `secure-enterprise-rag.yaml` | V2, native engine. Governance (`tenant_enforcement`, `redactor`, inline `policy_engine`, Postgres `audit_sink`) plus telemetry; `${QDRANT_URL}`/`secret://QDRANT_API_KEY`/`secret://AUDIT_DATABASE_URL` resolve via `app/config_resolution.py`. Offline golden-set gates are intentionally not runtime fields (ADR-0008). Requires those env vars and reachable Postgres/Qdrant to run. |
 | `langgraph-rag.yaml` | V2, `engine.adapter: langgraph`. Renamed from `agentic-rag.yaml` — the old `planner`/`agents` fields described a native multi-agent runtime that was never built (removed as dead code in Lot 17); multi-step behavior is delegated to LangGraph via the `DocumentEngine` port instead. |
 
 Each file also carries its own `# Status:` header comment with the same information, kept in

@@ -43,7 +43,7 @@ from modular_rag.adapters.auth.keycloak_verifier import KeycloakTokenVerifier
 
 app = create_app(
     "manifests/presets/local-hybrid-rag.yaml",
-    token_verifier=KeycloakTokenVerifier(realm_url="...", audience="..."),
+    token_verifier=KeycloakTokenVerifier(issuer_url="...", audience="..."),
     rate_limit_per_minute=120,
 )
 ```

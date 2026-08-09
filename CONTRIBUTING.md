@@ -246,10 +246,10 @@ Use the standardized validation script for all checks:
 Windows PowerShell uses the equivalent native script:
 
 ```powershell
-.\scripts\check.ps1 quick
-.\scripts\check.ps1 full
-.\scripts\check.ps1 integration
-.\scripts\check.ps1 all
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\check.ps1 quick
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\check.ps1 full
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\check.ps1 integration
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\check.ps1 all
 ```
 
 See [docs/guides/validation.md](docs/guides/validation.md) for full reference.
@@ -309,7 +309,7 @@ flowchart LR
 - [ ] Local V1 gate run (`/qa-v1` or Ruff + unit + contract + layering audit)
 - [ ] High-risk AI-generated changes reviewed by a second provider or human reviewer
 - [ ] New adapter registered in `app/default_factories.py`
-- [ ] `./scripts/check.sh full` (Linux/macOS) or `.\scripts\check.ps1 full` (Windows) passes
+- [ ] `./scripts/check.sh full` (Linux/macOS) or `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\check.ps1 full` (Windows) passes
 - [ ] CI/CD (lint + test + coverage) passes
 - [ ] `docs/architecture/` updated if layering or contracts changed
 - [ ] ADR written if a structural decision was made

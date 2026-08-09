@@ -723,7 +723,7 @@ docs/
 manifests/
 ├── presets/
 │   ├── local-hybrid-rag.yaml         ← V1 local dev (HuggingFace + Qdrant localhost + GPT-4o-mini) — Runnable
-│   ├── secure-enterprise-rag.yaml    ← V2 native (tenant isolation + policy engine + Postgres audit + quality gate) — Runnable
+│   ├── secure-enterprise-rag.yaml    ← V2 native (tenant isolation + policy engine + Postgres audit) — Runnable
 │   └── langgraph-rag.yaml            ← V2 delegated (engine.adapter: langgraph) — Runnable
 ├── blueprints/
 │   ├── graph-memory-rag.yaml         ← GraphRAG sketch — delegated traversal not provided by selected engine
@@ -736,7 +736,7 @@ manifests/
 | Manifest | Version | Status | LLM | Embedder | Governance | Notable |
 |---|---|---|---|---|---|---|
 | `local-hybrid-rag` | V1 | Runnable | gpt-4o-mini | bge-small-en-v1.5 | none | Development, Qdrant localhost |
-| `secure-enterprise-rag` | V2 | Runnable | gpt-4o | bge-base-en-v1.5 | tenant isolation + redaction + inline policy engine + Postgres audit | Blocking quality gate; requires QDRANT_URL/QDRANT_API_KEY/AUDIT_DATABASE_URL |
+| `secure-enterprise-rag` | V2 | Runnable | gpt-4o | bge-base-en-v1.5 | tenant isolation + redaction + inline policy engine + Postgres audit | Requires QDRANT_URL/QDRANT_API_KEY/AUDIT_DATABASE_URL; regression gates run offline |
 | `langgraph-rag` | V2 | Runnable | gpt-4o | bge-base-en-v1.5 | none | `engine.adapter: langgraph` — real `LangGraphEngineAdapter`, not native agents |
 | `graph-memory-rag` | — | Blueprint | gpt-4o | bge-base-en-v1.5 | — | GraphRAG traversal delegated, unavailable in selected engine today |
 | `multimodal-rag` | — | Blueprint | claude-opus-4-7 | multimodal (unregistered) | — | VLM execution delegated; parsing/enrichment status open |

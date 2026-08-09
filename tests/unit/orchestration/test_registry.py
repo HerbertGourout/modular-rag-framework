@@ -7,7 +7,13 @@ from __future__ import annotations
 
 import pytest
 
-from modular_rag.contracts.manifests import ComponentConfig, PipelineManifest
+from modular_rag.contracts.manifests import (
+    ComponentConfig,
+    EngineSelection,
+    GovernanceSection,
+    PipelineManifest,
+    QualitySection,
+)
 from modular_rag.core.errors import RegistryError
 from modular_rag.orchestration.registry import ComponentRegistry
 
@@ -54,7 +60,6 @@ def test_optional_components_default_to_none_when_absent_from_manifest() -> None
 
     assert container.reranker is None
     assert container.guard is None
-    assert container.evaluator is None
     assert container.telemetry is None
 
 
@@ -131,7 +136,6 @@ def test_default_registry_has_the_documented_builtin_type_names() -> None:
     assert set(reg._factories["reranker"]) == {"cross-encoder"}
     assert set(reg._factories["generator"]) == {"openai", "anthropic"}
     assert set(reg._factories["guard"]) == {"basic"}
-    assert set(reg._factories["evaluator"]) == {"exact-match"}
     assert set(reg._factories["tenant_policy"]) == {"tenant-isolation"}
     assert set(reg._factories["policy_engine"]) == {"inline"}
     assert set(reg._factories["redactor"]) == {"patterns"}
@@ -139,7 +143,28 @@ def test_default_registry_has_the_documented_builtin_type_names() -> None:
     assert set(reg._factories["audit_sink"]) == {"in-memory", "postgres"}
     assert set(reg._factories["telemetry"]) == {"structlog", "null"}
     assert set(reg._factories["lifecycle_ledger"]) == {"in-memory", "postgres"}
-    assert set(reg._factories["quality_gate"]) == {"baseline"}
+
+
+def test_wire_rejects_offline_evaluation_fields_in_a_runtime_manifest() -> None:
+    reg = _fake_registry()
+    manifest = _minimal_manifest(
+        evaluation=ComponentConfig(type="exact-match"),
+        quality=QualitySection(gate=ComponentConfig(type="baseline")),
+    )
+
+    with pytest.raises(RegistryError, match="offline golden-set"):
+        reg.wire(manifest)
+
+
+def test_wire_rejects_langgraph_control_plane_components_it_does_not_consume() -> None:
+    reg = _fake_registry()
+    manifest = _minimal_manifest(
+        engine=EngineSelection(adapter="langgraph"),
+        governance=GovernanceSection(audit_sink=ComponentConfig(type="fake-audit")),
+    )
+
+    with pytest.raises(RegistryError, match="governance.audit_sink"):
+        reg.wire(manifest)
 
 
 def test_postgres_audit_sink_and_lifecycle_ledger_are_manifest_activatable() -> None:

@@ -44,12 +44,12 @@ pip install -e ".[all]"
 ```bash
 ./scripts/check.sh quick
 # OR
-ruff check src/modular_rag/ tests/ --select E,F,I --quiet
+ruff check . --select E,F,I --quiet
 ```
 
 ```powershell
 # Windows PowerShell
-.\scripts\check.ps1 quick
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\check.ps1 quick
 ```
 
 **Blocks on:** syntax errors (E9xx), undefined names (F8xx), import order violations (I001-I002).
@@ -65,7 +65,7 @@ tests, contract tests
 ```bash
 ./scripts/check.sh full
 # OR manually:
-python -m compileall -q src/modular_rag
+python -m compileall -q src/modular_rag scripts examples docker
 python scripts/check_layering.py --strict
 mypy src/modular_rag/ --no-error-summary   # compare count against .claude/mypy-baseline.txt
 pytest tests/unit/ -v
@@ -74,7 +74,7 @@ pytest tests/contract/ -v
 
 ```powershell
 # Windows PowerShell
-.\scripts\check.ps1 full
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\check.ps1 full
 ```
 
 **Blocks on:** failed unit tests, failed contract tests, syntax/import/layering errors, mypy
@@ -96,7 +96,7 @@ pytest tests/integration/ -v -m integration
 
 ```powershell
 docker run -d -p 6333:6333 qdrant/qdrant
-.\scripts\check.ps1 integration
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\check.ps1 integration
 ```
 
 **Blocks on:** failed integration tests, Qdrant connection errors.
@@ -118,7 +118,7 @@ pytest tests/e2e/ -v -m e2e
 ```powershell
 $env:OPENAI_API_KEY="sk-..."
 docker run -d -p 6333:6333 qdrant/qdrant
-.\scripts\check.ps1 e2e
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\check.ps1 e2e
 ```
 
 **Blocks on:** failed E2E tests, missing LLM API key, Qdrant unavailable.
@@ -131,7 +131,7 @@ docker run -d -p 6333:6333 qdrant/qdrant
 ```
 
 ```powershell
-.\scripts\check.ps1 all
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\check.ps1 all
 ```
 
 **Runs:** Tier 1 → Tier 2 → Tier 3 → Tier 4.
@@ -142,8 +142,8 @@ docker run -d -p 6333:6333 qdrant/qdrant
 
 | Stage | Command | Scope | Time | Blocks | Requires |
 |-------|---------|-------|------|--------|----------|
-| **Lint** | `ruff check src/modular_rag tests/` | Syntax, imports, undefined | ~15s | E,F,I errors | Nothing |
-| **Compile** | `python -m compileall src/modular_rag` | Byte-compilation | ~5s | Syntax errors | Nothing |
+| **Lint** | `ruff check .` | Syntax, imports, undefined | ~15s | E,F,I errors | Nothing |
+| **Compile** | `python -m compileall src/modular_rag scripts examples docker` | Byte-compilation | ~5s | Syntax errors | Nothing |
 | **Layering** | `python scripts/check_layering.py --strict` | Hexagonal import boundaries | ~5s | Any non-baselined violation | Nothing |
 | **Type** | `mypy src/modular_rag/` | Type hints, ratcheted | ~30s | Count above baseline | Python 3.11+ |
 | **Unit** | `pytest tests/unit/ -v` | No ext services | ~5-7s | Failed tests | pytest |

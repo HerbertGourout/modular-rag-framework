@@ -8,7 +8,7 @@ This directory contains architectural decisions for the Modular RAG Framework. E
 
 ### [ADR-0001: Modular Architecture with Six Planes](0001-modular-architecture.md)
 
-**Status:** Accepted  
+**Status:** Accepted
 **Date:** 2026-05-20
 
 Organizes the system into six independent planes (Control, Ingestion, Knowledge, Reasoning, Safety, Evaluation) with strict dependency rules. Each plane communicates only through contracts (Python Protocols), enabling component swappability and testability.
@@ -94,7 +94,7 @@ contract regardless of which engine is picked.
 
 ### [ADR-0007: Layer Boundaries and Control-Plane Activation](0007-layer-boundaries-and-control-plane-activation.md)
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-08-07
 
 Proposes the concrete dependency model and activation path needed to make ADR-0005 operational:
@@ -105,6 +105,20 @@ never-functional legacy manifest fields.
 **Key insight:** A capability is not delivered merely because its class exists; it must be
 reachable through a supported entry point, manifest-wired where applicable, and covered by that
 path's tests.
+
+---
+
+### [ADR-0008: Offline Evaluation and Honest Engine Activation](0008-offline-evaluation-and-engine-activation.md)
+
+**Status:** Accepted
+**Date:** 2026-08-08
+
+Separates golden-set evaluation/regression gates from online answer execution and makes runtime
+engine incompatibilities fail startup. LangGraph manifests cannot claim audit, policy-engine,
+review or telemetry controls until a tested bridge consumes them.
+
+**Key insight:** a gold-dependent quality score cannot truthfully block an ordinary production
+question, and a selected engine must never silently ignore a declared control.
 
 ---
 
