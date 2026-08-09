@@ -10,8 +10,6 @@ def register_defaults(reg: ComponentRegistry) -> None:
     from modular_rag.adapters.lifecycle.postgres_ledger import PostgresLifecycleLedger
     from modular_rag.adapters.vectorstores.qdrant_store import QdrantStore
     from modular_rag.core.models.policy import Policy
-    from modular_rag.eval.quality_gate import QualityGate
-    from modular_rag.eval.scorers.exact_match import ExactMatchEvaluator
     from modular_rag.generation.synthesizers.anthropic_gen import AnthropicGenerator
     from modular_rag.generation.synthesizers.openai_gen import OpenAIGenerator
     from modular_rag.ingestion.chunkers.adaptive import AdaptiveChunker
@@ -41,7 +39,6 @@ def register_defaults(reg: ComponentRegistry) -> None:
     reg.register("generator", "openai", lambda cfg: OpenAIGenerator(**cfg.config))
     reg.register("generator", "anthropic", lambda cfg: AnthropicGenerator(**cfg.config))
     reg.register("guard", "basic", lambda cfg: BasicSecurityGuard(**cfg.config))
-    reg.register("evaluator", "exact-match", lambda cfg: ExactMatchEvaluator())
     reg.register("tenant_policy", "tenant-isolation", lambda cfg: TenantIsolationPolicy())
     reg.register(
         "policy_engine",
@@ -58,7 +55,6 @@ def register_defaults(reg: ComponentRegistry) -> None:
     reg.register(
         "lifecycle_ledger", "postgres", lambda cfg: PostgresLifecycleLedger(**cfg.config)
     )
-    reg.register("quality_gate", "baseline", lambda cfg: QualityGate(**cfg.config))
 
 
 def create_default_registry() -> ComponentRegistry:

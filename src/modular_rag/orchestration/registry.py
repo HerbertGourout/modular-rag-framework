@@ -14,6 +14,52 @@ log = structlog.get_logger(__name__)
 _Factory = Callable[[ComponentConfig], Any]
 
 
+def runtime_manifest_errors(manifest: PipelineManifest) -> list[str]:
+    """Return declarations that the selected online runtime cannot consume.
+
+    Evaluation scorers and regression gates require a golden answer/dataset and
+    therefore belong to the offline evaluation runner, not the online answer
+    pipeline. LangGraph currently implements only the security-critical guard,
+    tenant-isolation and redaction subset of the owned control plane.
+    """
+    errors: list[str] = []
+    if manifest.evaluation is not None:
+        errors.append(
+            "evaluation is an offline golden-set concern and cannot be declared in a "
+            "runnable pipeline manifest"
+        )
+    if manifest.quality is not None and (
+        manifest.quality.gate is not None or manifest.quality.eval_profile is not None
+    ):
+        errors.append(
+            "quality is an offline evaluation concern and cannot be declared in a runnable "
+            "pipeline manifest"
+        )
+
+    adapter = manifest.engine.adapter if manifest.engine else "native"
+    if adapter not in {"native", "langgraph"}:
+        errors.append(
+            f"Unknown engine.adapter {adapter!r}. Expected 'native' or 'langgraph'."
+        )
+    if adapter == "langgraph":
+        governance = manifest.governance
+        unsupported = {
+            "governance.policy_engine": governance.policy_engine if governance else None,
+            "governance.review_queue": governance.review_queue if governance else None,
+            "governance.audit_sink": governance.audit_sink if governance else None,
+            "observability.telemetry": (
+                manifest.observability.telemetry if manifest.observability else None
+            ),
+        }
+        for path, value in unsupported.items():
+            if value is not None:
+                errors.append(
+                    f"{path} is not consumed by engine.adapter='langgraph'; "
+                    "remove it or select the native engine"
+                )
+    return errors
+
+
 class ComponentRegistry:
     """Map component type names → factory functions, then wire a manifest into a Container."""
 
@@ -26,7 +72,6 @@ class ComponentRegistry:
             "reranker": {},
             "generator": {},
             "guard": {},
-            "evaluator": {},
             "tenant_policy": {},
             "policy_engine": {},
             "redactor": {},
@@ -34,7 +79,6 @@ class ComponentRegistry:
             "audit_sink": {},
             "telemetry": {},
             "lifecycle_ledger": {},
-            "quality_gate": {},
         }
 
     def register(self, role: str, type_name: str, factory: _Factory) -> None:
@@ -62,6 +106,9 @@ class ComponentRegistry:
         return factory(cfg)
 
     def wire(self, manifest: PipelineManifest) -> Container:
+        activation_errors = runtime_manifest_errors(manifest)
+        if activation_errors:
+            raise RegistryError("Invalid runtime manifest: " + "; ".join(activation_errors))
         container = Container(manifest)
         container.register("chunker", self._build("chunker", manifest.chunker))
         container.register("embedder", self._build("embedder", manifest.embedder))
@@ -72,8 +119,6 @@ class ComponentRegistry:
         container.register("generator", self._build("generator", manifest.generator))
         if manifest.security:
             container.register("guard", self._build("guard", manifest.security))
-        if manifest.evaluation:
-            container.register("evaluator", self._build("evaluator", manifest.evaluation))
         if manifest.governance:
             governance = manifest.governance
             for role, cfg in (
@@ -94,9 +139,6 @@ class ComponentRegistry:
                 "lifecycle_ledger",
                 self._build("lifecycle_ledger", manifest.lifecycle.ledger),
             )
-        if manifest.quality and manifest.quality.gate:
-            container.register("quality_gate", self._build("quality_gate", manifest.quality.gate))
-
         # Post-wiring: inject embedder and store into vector/hybrid retriever.
         # VectorRetriever needs an Embedder to embed queries and a QdrantStore to
         # call retrieve_by_vector() — both are separate components in the manifest.

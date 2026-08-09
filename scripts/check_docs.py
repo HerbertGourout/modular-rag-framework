@@ -236,7 +236,10 @@ def _check_forbidden_terms(path: Path) -> list[Finding]:
                     Finding(
                         path=path,
                         line=lineno,
-                        message=f'forbidden term "{term}" (dead/never-built API, see script docstring)',
+                        message=(
+                            f'forbidden term "{term}" '
+                            "(dead/never-built API, see script docstring)"
+                        ),
                         baseline_key=f"{rel_path}|{term}",
                     )
                 )
@@ -268,7 +271,10 @@ def _check_blueprint_labeling() -> list[Finding]:
                     Finding(
                         path=path,
                         line=1,
-                        message="preset manifest contains 'BLUEPRINT' marker — mislabeled or misplaced",
+                        message=(
+                            "preset manifest contains 'BLUEPRINT' marker — "
+                            "mislabeled or misplaced"
+                        ),
                     )
                 )
 

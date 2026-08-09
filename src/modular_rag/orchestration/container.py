@@ -7,7 +7,6 @@ import structlog
 from modular_rag.contracts.audit import AuditSink
 from modular_rag.contracts.chunking import Chunker
 from modular_rag.contracts.embeddings import Embedder
-from modular_rag.contracts.evaluation import Evaluator
 from modular_rag.contracts.generation import Generator
 from modular_rag.contracts.indexing import Indexer
 from modular_rag.contracts.lifecycle import LifecycleLedger
@@ -77,10 +76,6 @@ class Container:
         return self._store.get("guard")
 
     @property
-    def evaluator(self) -> Evaluator | None:
-        return self._store.get("evaluator")
-
-    @property
     def telemetry(self) -> Telemetry | None:
         return self._store.get("telemetry")
 
@@ -107,7 +102,3 @@ class Container:
     @property
     def policy_engine(self) -> Any | None:
         return self._store.get("policy_engine")
-
-    @property
-    def quality_gate(self) -> Any | None:
-        return self._store.get("quality_gate")

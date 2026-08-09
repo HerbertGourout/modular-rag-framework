@@ -1,8 +1,8 @@
 # Capability Matrix — Current Operational Truth
 
 **Baseline snapshot date:** 2026-08-07 (before ADR-0007's Étapes 4-8 landed).
-**Last updated:** 2026-08-07 (after Étapes 4-8 — layering fixes, manifest V2 activation,
-manifest reorg, dead-code removal).
+**Last updated:** 2026-08-08 (ADR-0008 — offline evaluation boundary and fail-closed engine
+activation).
 **Scope:** [ADR-0007](../adr/0007-layer-boundaries-and-control-plane-activation.md)'s
 boundary and manifest-activation correction.
 
@@ -17,10 +17,8 @@ commit history around Lot 19) if you need the exact "before" comparison point.
 Before the Step-3 checker tests were added, the repository contained 214 Python files and 155
 Markdown files. Compilation passed and the local service-free suite reported 548 passing tests
 (466 unit + 82 contract). After adding the 27 dependency-policy tests, the same suite reported
-575 passing tests. As of the finalization pass, the suite reports 588 tests (498 unit +
-90 contract) — net change from adding `tests/contract/test_telemetry_conformance.py`,
-`tests/unit/observability/test_telemetry.py`, and new registry tests, minus the 6 tests removed
-with `KnowledgeGraph` (Étape 8).
+575 passing tests. As of the 2026-08-08 finalization pass, the suite reports 593 tests
+(503 unit + 90 contract).
 
 Built-in manifest factories, current as of this update:
 
@@ -33,7 +31,6 @@ Built-in manifest factories, current as of this update:
 | `reranker` | `cross-encoder` |
 | `generator` | `openai`, `anthropic` |
 | `guard` | `basic` |
-| `evaluator` | `exact-match` |
 | `tenant_policy` | `tenant-isolation` |
 | `policy_engine` | `inline` |
 | `redactor` | `patterns` |
@@ -41,7 +38,10 @@ Built-in manifest factories, current as of this update:
 | `audit_sink` | `in-memory`, `postgres` |
 | `telemetry` | `structlog`, `null` |
 | `lifecycle_ledger` | `in-memory`, `postgres` |
-| `quality_gate` | `baseline` |
+
+`ExactMatchEvaluator` and `QualityGate` are built-in Python evaluation utilities, not manifest
+factories. They require golden answers or aggregate benchmark metrics and are therefore used by
+the offline evaluation plane.
 
 The `planner` and `graph_store` registry roles (legacy placeholders, never had a registered
 factory) were removed from `ComponentRegistry` in Étape 8.
@@ -67,7 +67,7 @@ factory) were removed from `ComponentRegistry` in Étape 8.
 | LangGraph adapter | **Operational** | `load_engine()` or `load_application()` with `engine.adapter: langgraph`, including `manifests/presets/langgraph-rag.yaml` | Unit/conformance coverage; API and CLI import `load_application()` through `app.public` and therefore honor the selected adapter. Raw retrieval remains a native application use case because `DocumentEngine` intentionally exposes answer orchestration, not retrieval-only execution. |
 | Manifest YAML validation | **Operational** | `load_manifest()` / `PipelineManifest.model_validate()` | Unknown top-level fields are rejected (`extra="forbid"`). Legacy fields (`planner`/`agents`/`graph_store`/old-style `policies`/`modalities`) now hard-fail validation instead of being silently ignored (Étape 7). |
 | Environment layering, `${VAR}` and `secret://` | **Operational** for `mrag validate` and `load_pipeline()` | `resolve_manifest()`, called by both `mrag validate` and `load_pipeline()` | Verified end-to-end on `secure-enterprise-rag.yaml` (Étape 7): `${QDRANT_URL}`, `secret://QDRANT_API_KEY`, `secret://AUDIT_DATABASE_URL` all resolve. |
-| Capability dry-run validation | **Operational**, extended | `mrag validate` → `validate_capabilities()` | Now also checks `governance`/`observability`/`lifecycle`/`quality` component roles, plus a fail-closed check for `governance.tenant_enforcement=true` without `tenant_policy` (Étape 6). |
+| Capability dry-run validation | **Operational**, extended | `mrag validate` → `validate_capabilities()` | Checks registered runtime roles, tenant-enforcement coherence, engine compatibility, and rejects offline evaluation/gate declarations in runnable manifests. |
 | Legacy `planner`, `agents`, `graph_store`, `policies`, `modalities` fields | **Removed from the active schema** | Rejected by `PipelineManifest.model_validate()` | Only present in `manifests/blueprints/*.yaml`, which are never loaded through `resolve_manifest()` (Étape 7). |
 
 ## Owned control-plane capabilities
@@ -79,14 +79,14 @@ factory) were removed from `ComponentRegistry` in Étape 8.
 | Policy-as-code evaluation | **Operational** | Manifest `governance.policy_engine.type: inline`, policies declared inline in `config.policies` | Registered factory + manifest role (Étape 6); used in `secure-enterprise-rag.yaml`. |
 | Tenant isolation | **Operational** | Manifest `governance.tenant_policy.type: tenant-isolation`, gated by explicit `governance.tenant_enforcement: true` | Registered factory + manifest role; `tenant_enforcement=true` without `tenant_policy` now fails validation instead of silently no-op'ing (Étape 6/8). |
 | OIDC/Keycloak identity verification | **Programmatic only** (by design) | Pass a `TokenVerifier` to `create_app()` | ADR-0007 explicitly keeps this a service/interface concern, not a manifest-wired domain policy — mixing identity verification with policy enforcement is what the ADR warns against. |
-| Structured audit events | **Operational** | Manifest `governance.audit_sink.type: in-memory` or `postgres` | Both sinks registered (Étape 6); Postgres verified append-only by construction. |
-| Trace telemetry | **Operational** | Manifest `observability.telemetry.type: structlog` or `null` | Both registered; previously untested — added conformance + unit tests (Étape 6). |
-| Human review queue | **Operational** | Manifest `governance.review_queue.type: human-review` | Registered factory + manifest role. |
+| Structured audit events | **Operational (native)** | Manifest `governance.audit_sink.type: in-memory` or `postgres` | Consumed by `RAGEngine`. LangGraph manifests declaring an audit sink fail startup until an engine-independent bridge exists. |
+| Trace telemetry | **Operational (native)** | Manifest `observability.telemetry.type: structlog` or `null` | Consumed by `RAGEngine`. LangGraph manifests declaring telemetry fail startup. |
+| Human review queue | **Operational (native)** | Manifest `governance.review_queue.type: human-review` | Consumed by `RAGEngine`; rejected with LangGraph today. |
 | Document lifecycle and erasure | **Operational** | Manifest `lifecycle.ledger.type: in-memory` or `postgres` | Both registered (Postgres added Étape 6); engine methods tested. |
 | Index reconciliation | **Programmatic only** | Construct `IndexReconciler` with a configured container | Still not exposed through CLI/API or manifests — unchanged by this update. |
-| Exact-match evaluator | **Operational** | Manifest `evaluation.type: exact-match` | Registered; `Evaluator` Protocol contract-tested. Golden-set catalogue and NDCG still not built — see [ROADMAP.md](../../ROADMAP.md) V1.1. |
+| Exact-match evaluator | **Programmatic only** | Construct `ExactMatchEvaluator` for an offline benchmark | Contract/unit-tested. It requires an expected answer and is intentionally rejected in runnable pipeline manifests. |
 | Golden-set benchmark runner | **Programmatic only** | Construct `BenchmarkRunner` | Implemented and unit-tested; no shipped golden-set catalogue (`eval/datasets/` is empty) or user-facing runner. |
-| Quality gates | **Operational** | Manifest `quality.gate.type: baseline`, `report_only`/`blocking` mode | Registered factory + manifest role (Étape 6); used in `secure-enterprise-rag.yaml` in blocking mode. |
+| Quality gates | **Programmatic only** | Apply `QualityGate` to offline benchmark metrics | Unit-tested `report_only`/`blocking` behavior. Intentionally rejected in runnable pipeline manifests; see ADR-0008. |
 | Data-classification vocabulary | **Construction only** | `DataClassification` enum and fixtures | No classification-aware policy enforcement consumes the values — unchanged by this update. |
 | Cost/latency evidence reporting (V3.1) | **Not built** | None | `eval/cost_reporting/` doesn't exist on disk. |
 | Drift detection / eval trigger (V3.2) | **Not built** | None | `eval/drift_detection.py`/`eval/feedback_collection/` don't exist on disk. |
@@ -111,8 +111,9 @@ Resolved by Étapes 4-8 (previously listed here as open debt):
    (Étape 4).
 3. ~~`app/default_factories.py` is the accidental composition root~~ — moved to
    `app/default_factories.py` (Étape 4).
-4. ~~Owned control-plane implementations are test-injected, not manifest-wired~~ — governance/
-   observability/lifecycle/quality sections are now manifest-activatable (Étape 6).
+4. ~~Owned runtime control-plane implementations are test-injected, not manifest-wired~~ —
+   governance/observability/lifecycle sections are manifest-activatable on the native engine.
+   Offline evaluation/gates were removed from runtime wiring by ADR-0008.
 5. ~~Runnable presets and non-runnable blueprints share the same folder~~ — split into
    `manifests/presets/` and `manifests/blueprints/` (Étape 7).
 
@@ -123,3 +124,5 @@ Resolved by Étapes 4-8 (previously listed here as open debt):
 
 Still open:
 8. `IndexReconciler` remains programmatic-only, not exposed through CLI/API/manifests.
+9. Audit, telemetry, policy-engine and human-review bridging above the delegated-engine boundary
+   remains unimplemented; incompatible LangGraph manifests now fail startup rather than no-op.

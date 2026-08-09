@@ -114,7 +114,7 @@ authoritative classification and runtime prerequisites.
 | Preset | Status | Use case |
 |---|---|---|
 | `local-hybrid-rag.yaml` | **Runnable** | Local development, no auth, GPT-4o-mini — the reference starting point |
-| `secure-enterprise-rag.yaml` | **Runnable** (V2) | Enterprise deployment — tenant isolation, PII redaction, inline policy engine, durable Postgres audit trail, blocking quality gate. Needs `QDRANT_URL`/`QDRANT_API_KEY`/`AUDIT_DATABASE_URL` set. |
+| `secure-enterprise-rag.yaml` | **Runnable** (V2) | Enterprise deployment — tenant isolation, PII redaction, inline policy engine, durable Postgres audit trail and telemetry. Offline regression gates run separately. Needs `QDRANT_URL`/`QDRANT_API_KEY`/`AUDIT_DATABASE_URL` set. |
 | `langgraph-rag.yaml` | **Runnable** (V2) | Complex multi-step questions routed through `engine.adapter: langgraph` — a real `LangGraphEngineAdapter`, not native agents. Renamed from `agentic-rag.yaml`. |
 | `manifests/blueprints/graph-memory-rag.yaml` | Blueprint | Entity-relationship reasoning — GraphRAG traversal is delegated per ADR-0005/0006 and not provided by the selected engine yet |
 | `manifests/blueprints/multimodal-rag.yaml` | Blueprint | PDF with charts, images, tables — `embedder.type: multimodal` isn't a registered factory; VLM execution is delegated |

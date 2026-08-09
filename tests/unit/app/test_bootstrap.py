@@ -143,6 +143,18 @@ def test_load_engine_raises_on_an_unknown_adapter_name(tmp_path: Path) -> None:
         load_engine(manifest_file)
 
 
+def test_load_pipeline_rejects_a_delegated_engine_instead_of_silently_using_native(
+    tmp_path: Path,
+) -> None:
+    manifest_file = tmp_path / "manifest.yaml"
+    manifest_file.write_text(
+        _MINIMAL_MANIFEST + "engine:\n  adapter: langgraph\n", encoding="utf-8"
+    )
+
+    with pytest.raises(ConfigurationError, match="only supports.*native"):
+        load_pipeline(manifest_file)
+
+
 def test_a_v1_manifest_migrated_to_v2_and_switched_to_langgraph_loads_correctly(
     tmp_path: Path,
 ) -> None:

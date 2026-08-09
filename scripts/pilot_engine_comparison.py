@@ -43,13 +43,26 @@ class _FakeRetriever:
 
     def __init__(self) -> None:
         self._chunks = [
-            Chunk(doc_id="doc-1", content="Hybrid retrieval fuses BM25 and vector search via RRF.", tenant_id="acme"),
-            Chunk(doc_id="doc-2", content="Tenant isolation denies cross-tenant chunk access.", tenant_id="acme"),
+            Chunk(
+                doc_id="doc-1",
+                content="Hybrid retrieval fuses BM25 and vector search via RRF.",
+                tenant_id="acme",
+            ),
+            Chunk(
+                doc_id="doc-2",
+                content="Tenant isolation denies cross-tenant chunk access.",
+                tenant_id="acme",
+            ),
         ]
 
     def retrieve(self, query: Query, k: int = 10) -> list[RetrievedChunk]:
         return [
-            RetrievedChunk(chunk=c, score=0.9 - 0.1 * i, rank=i + 1, retrieval_method=RetrievalMethod.HYBRID)
+            RetrievedChunk(
+                chunk=c,
+                score=0.9 - 0.1 * i,
+                rank=i + 1,
+                retrieval_method=RetrievalMethod.HYBRID,
+            )
             for i, c in enumerate(self._chunks[:k])
         ]
 

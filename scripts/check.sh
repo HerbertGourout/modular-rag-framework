@@ -43,7 +43,7 @@ check_quick() {
     print_header "QUICK CHECK — Syntax & Import Order (~30s)"
     
     echo "Linting Python syntax, undefined names, import order..."
-    if ruff check src/modular_rag/ tests/ --select E,F,I --fix-only --output-format=concise; then
+    if ruff check . --select E,F,I --output-format=concise; then
         print_success "Ruff syntax check passed"
     else
         print_error "Ruff syntax check failed"
@@ -59,11 +59,11 @@ check_quick() {
 # Use: pre-merge, CI/CD, or before releasing
 # ============================================================================
 check_full() {
-    print_header "FULL CHECK — Compilation + Layering + Types + Manifest + Unit + Contract (~2-5 min)"
+    print_header "FULL CHECK — Lint + Compile + Layering + Docs + Types + Manifests + Tests"
 
     # Step 1: Ruff linting (syntax, imports, naming)
-    echo "Step 1/7: Linting code quality..."
-    if ruff check src/modular_rag/ tests/ --select E,F,I,N,W,UP,B,C4 --output-format=concise; then
+    echo "Step 1/9: Linting code quality..."
+    if ruff check . --select E,F,I,N,W,UP,B,C4 --output-format=concise; then
         print_success "Ruff linting passed"
     else
         print_error "Ruff linting failed"
@@ -72,8 +72,8 @@ check_full() {
 
     # Step 2: Compilation check
     echo ""
-    echo "Step 2/7: Compilation check..."
-    if python -m compileall -q src/modular_rag; then
+    echo "Step 2/9: Compilation check..."
+    if python -m compileall -q src/modular_rag scripts examples docker; then
         print_success "Compilation check passed"
     else
         print_error "Compilation check failed"
@@ -82,7 +82,7 @@ check_full() {
 
     # Step 3: Strict layering audit
     echo ""
-    echo "Step 3/7: Hexagonal layering audit..."
+    echo "Step 3/9: Hexagonal layering audit..."
     if python scripts/check_layering.py --strict; then
         print_success "Layering audit passed"
     else
@@ -90,9 +90,27 @@ check_full() {
         return 1
     fi
 
-    # Step 4: Type checking (mypy), ratcheted against .claude/mypy-baseline.txt
     echo ""
-    echo "Step 4/7: Type checking (baseline-ratcheted)..."
+    echo "Step 4/9: Documentation validation..."
+    if python scripts/check_docs.py; then
+        print_success "Documentation validation passed"
+    else
+        print_error "Documentation validation failed"
+        return 1
+    fi
+
+    echo ""
+    echo "Step 5/9: Whitespace validation..."
+    if git diff --check; then
+        print_success "Whitespace validation passed"
+    else
+        print_error "Whitespace validation failed"
+        return 1
+    fi
+
+    # Step 6: Type checking (mypy), ratcheted against .claude/mypy-baseline.txt
+    echo ""
+    echo "Step 6/9: Type checking (baseline-ratcheted)..."
     local mypy_baseline
     mypy_baseline="$(grep -v '^#' .claude/mypy-baseline.txt | grep -v '^$' | head -1)"
     local mypy_errors
@@ -104,12 +122,12 @@ check_full() {
         print_success "Type checking: $mypy_errors errors (baseline: $mypy_baseline)"
     fi
 
-    # Step 5: Runnable-manifest validation (see manifests/README.md for the classification).
+    # Step 7: Runnable-manifest validation (see manifests/README.md for the classification).
     # Every file under manifests/presets/ must wire cleanly (ADR-0007 Étape 7 exit criterion) —
     # fake-but-present secrets satisfy ${VAR}/secret:// interpolation for the wiring smoke test
     # without needing a real Postgres/Qdrant connection (components lazy-connect on first use).
     echo ""
-    echo "Step 5/7: Runnable manifest validation (all manifests/presets/*.yaml)..."
+    echo "Step 7/9: Runnable manifest validation (all manifests/presets/*.yaml)..."
     if QDRANT_URL="http://localhost:6333" QDRANT_API_KEY="smoke-test-key" AUDIT_DATABASE_URL="postgresql://smoke-test/db" python -c "
 from pathlib import Path
 from modular_rag.app.bootstrap import load_application
@@ -126,9 +144,9 @@ for path in paths:
         return 1
     fi
 
-    # Step 6: Unit tests (no external services)
+    # Step 8: Unit tests (no external services)
     echo ""
-    echo "Step 6/7: Running unit tests..."
+    echo "Step 8/9: Running unit tests..."
     if pytest tests/unit/ -v --tb=short -q; then
         print_success "Unit tests passed"
     else
@@ -136,9 +154,9 @@ for path in paths:
         return 1
     fi
 
-    # Step 7: Contract tests (Protocol conformance)
+    # Step 9: Contract tests (Protocol conformance)
     echo ""
-    echo "Step 7/7: Running contract conformance tests..."
+    echo "Step 9/9: Running contract conformance tests..."
     if pytest tests/contract/ -v --tb=short -q; then
         print_success "Contract tests passed"
     else

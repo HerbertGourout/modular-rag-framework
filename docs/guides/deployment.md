@@ -10,15 +10,16 @@ faster to diagnose locally than in a container log.
 
 The three boxes below are intentionally separate processes, not because the framework
 requires it, but because it lets each one scale, fail, and be replaced independently. The
-FastAPI application is stateless — it holds no data of its own — so the vector database
-(persistent knowledge) and the LLM API (the reasoning step) are the only two components that
-actually need to survive a container restart.
+The FastAPI process is replaceable, but it is not universally stateless. Depending on the
+manifest, it can hold a BM25 index, rate-limit counters, an in-memory review queue, an in-memory
+audit sink, or an in-memory lifecycle ledger. Qdrant/PostgreSQL provide durable state only for
+the components explicitly configured to use them.
 
 ```mermaid
 %%{init: {"theme": "base"}}%%
 flowchart TD
     LB["Load Balancer / API Gateway"]
-    LB --> API["FastAPI Application\n(modular_rag.api)\nstateless"]
+    LB --> API["FastAPI Application\n(modular_rag.api)\nmay hold process-local state"]
     API --> Qdrant[("Qdrant Vector DB\n(localhost:6333)\npersistent")]
     API --> LLM[("LLM API\n(OpenAI / Anthropic)")]
 ```
@@ -126,7 +127,8 @@ folders remain future-facing stubs. Programmatic callers can already pass an exp
 `environment_path` to `resolve_manifest()`, while API/CLI startup resolves one selected manifest
 including `${VAR}` and `secret://` references. `secure-enterprise-rag.yaml` is a runnable V2
 preset, not a blueprint: it wires tenant isolation, redaction, inline policy evaluation,
-PostgreSQL audit, telemetry, and a blocking quality gate. Install `.[v1,postgres]`, supply
+PostgreSQL audit, and telemetry. Quality gates apply to offline golden-set regression runs, not
+online answers (ADR-0008). Install `.[v1,postgres]`, supply
 `QDRANT_URL`, `QDRANT_API_KEY`, and `AUDIT_DATABASE_URL`, and configure API identity separately.
 
 ## Health check
@@ -143,7 +145,10 @@ curl http://localhost:8000/ready
 
 ## Scaling
 
-- **Horizontal**: The `RAGEngine` is stateless — scale the API containers freely. The BM25 index must be rebuilt per-container on startup (or replaced with a shared search service in V4). `RateLimitMiddleware`'s (Lot 16a) in-memory window is also per-process — each replica rate-limits independently, not against one shared counter; a Redis-backed limiter is the documented upgrade path if that matters at your scale.
+- **Horizontal**: replicas are safe only after every required stateful capability is externalized
+  or deliberately rebuilt per replica. BM25 is process-local, the default rate limiter counts
+  per process, and the in-memory audit/review/lifecycle implementations diverge across replicas.
+  Use shared services or single-replica operation when those semantics matter.
 - **Qdrant**: Use the Qdrant cluster mode for production workloads.
 - **Embedding**: Consider a dedicated embedding service (e.g., Infinity, TEI) to avoid reloading the model on each container restart. Wire it via the `adapters/embeddings/` adapter.
 

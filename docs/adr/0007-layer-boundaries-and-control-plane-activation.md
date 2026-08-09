@@ -75,6 +75,11 @@ This applies to redaction, tenant policy, audit, telemetry, review queue, lifecy
 evaluation, and quality gates. Identity verification remains a service/interface concern rather
 than a domain policy: a verifier establishes identity; a tenant policy enforces it.
 
+> **Superseded in part by ADR-0008:** exact-match evaluation and baseline regression gates need
+> golden answers/aggregate benchmark metrics and are therefore offline evaluation capabilities,
+> not online pipeline components. Runnable manifests now reject those fields until a dedicated
+> manifest-driven evaluation runner exists.
+
 A declared manifest section that cannot be activated must fail validation. Silent no-ops are
 not compatible with manifests as the source of truth.
 

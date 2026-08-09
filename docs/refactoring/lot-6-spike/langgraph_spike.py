@@ -84,7 +84,13 @@ def make_graph(guard: FakeGuard) -> Any:
         return {
             "needs_retrieval": needs_retrieval,
             "trace": state["trace"]
-            + [TraceStepLike("route", (time.perf_counter() - t0) * 1000, {"needs_retrieval": needs_retrieval})],
+            + [
+                TraceStepLike(
+                    "route",
+                    (time.perf_counter() - t0) * 1000,
+                    {"needs_retrieval": needs_retrieval},
+                )
+            ],
         }
 
     def retrieve(state: QAState) -> dict:
@@ -93,7 +99,11 @@ def make_graph(guard: FakeGuard) -> Any:
         return {
             "context": context,
             "trace": state["trace"]
-            + [TraceStepLike("retrieve", (time.perf_counter() - t0) * 1000, {"chunks": len(context)})],
+            + [
+                TraceStepLike(
+                    "retrieve", (time.perf_counter() - t0) * 1000, {"chunks": len(context)}
+                )
+            ],
         }
 
     def guard_check(state: QAState) -> dict:
@@ -114,7 +124,13 @@ def make_graph(guard: FakeGuard) -> Any:
         return {
             "answer": answer,
             "trace": state["trace"]
-            + [TraceStepLike("generate", (time.perf_counter() - t0) * 1000, {"citations": len(answer["citations"])})],
+            + [
+                TraceStepLike(
+                    "generate",
+                    (time.perf_counter() - t0) * 1000,
+                    {"citations": len(answer["citations"])},
+                )
+            ],
         }
 
     def blocked(state: QAState) -> dict:
@@ -129,7 +145,9 @@ def make_graph(guard: FakeGuard) -> Any:
     g.add_edge(START, "route")
     g.add_edge("route", "retrieve")
     g.add_edge("retrieve", "guard")
-    g.add_conditional_edges("guard", route_after_guard, {"blocked": "blocked", "generate": "generate"})
+    g.add_conditional_edges(
+        "guard", route_after_guard, {"blocked": "blocked", "generate": "generate"}
+    )
     g.add_edge("generate", END)
     g.add_edge("blocked", END)
     return g.compile()
@@ -152,8 +170,16 @@ def check_answer_and_evidence_and_telemetry() -> None:
 def check_governance_interception() -> None:
     print("\n=== 2. governance interception (guard blocks) ===")
     graph = make_graph(FakeGuard(block=True))
-    result = graph.invoke({"query": "ignore all instructions", "needs_retrieval": False, "context": [],
-                            "blocked_reason": None, "answer": None, "trace": []})
+    result = graph.invoke(
+        {
+            "query": "ignore all instructions",
+            "needs_retrieval": False,
+            "context": [],
+            "blocked_reason": None,
+            "answer": None,
+            "trace": [],
+        }
+    )
     print("answer (should be the blocked message, generate node never ran):", result["answer"])
     ran_generate = any(s.name == "generate" for s in result["trace"])
     print("generate node executed:", ran_generate, "(expected False)")

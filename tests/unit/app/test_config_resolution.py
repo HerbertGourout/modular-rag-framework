@@ -16,7 +16,13 @@ from modular_rag.app.config_resolution import (
     rollback_v2_to_v1,
     validate_capabilities,
 )
-from modular_rag.contracts.manifests import ComponentConfig, PipelineManifest
+from modular_rag.contracts.manifests import (
+    ComponentConfig,
+    EngineSelection,
+    GovernanceSection,
+    PipelineManifest,
+    QualitySection,
+)
 from modular_rag.core.errors import ConfigurationError, ManifestError
 from modular_rag.orchestration.registry import ComponentRegistry
 
@@ -111,6 +117,31 @@ def test_validate_capabilities_reports_unknown_type_without_instantiating() -> N
     errors = validate_capabilities(manifest, registry)
 
     assert any("chunker" in e and "adaptive" in e for e in errors)
+
+
+def test_validate_capabilities_rejects_offline_quality_configuration() -> None:
+    registry = ComponentRegistry()
+    manifest = PipelineManifest(
+        id="x",
+        quality=QualitySection(gate=ComponentConfig(type="baseline")),
+    )
+
+    errors = validate_capabilities(manifest, registry)
+
+    assert any("offline evaluation concern" in error for error in errors)
+
+
+def test_validate_capabilities_rejects_unsupported_langgraph_audit() -> None:
+    registry = ComponentRegistry()
+    manifest = PipelineManifest(
+        id="x",
+        engine=EngineSelection(adapter="langgraph"),
+        governance=GovernanceSection(audit_sink=ComponentConfig(type="in-memory")),
+    )
+
+    errors = validate_capabilities(manifest, registry)
+
+    assert any("governance.audit_sink" in error for error in errors)
 
 
 # -- v1 <-> v2 migration -------------------------------------------------------

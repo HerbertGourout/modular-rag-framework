@@ -15,15 +15,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Production-grade modular RAG framework for Publicis enterprise use cases, built around three
 things: a **bounded native engine** (hybrid retrieval, generation, security — the V1 pipeline,
-`NativeEngineAdapter`), an **owned control plane** (governance, audit, evaluation,
-config/manifests, tenant isolation, portability — native and manifest-activatable across every
-version, not just V1), and **delegated external engines** for generic multi-agent orchestration
+`NativeEngineAdapter`), an **owned control plane** (governance, audit, offline evaluation,
+config/manifests, tenant isolation, portability — native, with runtime activation explicitly
+validated per engine), and **delegated external engines** for generic multi-agent orchestration
 and GraphRAG traversal (LangGraph today, selected via [ADR-0006](docs/adr/0006-external-engine-selection.md),
 reached through the `DocumentEngine` port). The historical "V1 Core RAG → V2 Agentic → V3 Graph
 Memory → V4 Governance → V5 Multimodal" progression in block 09 still organizes the detailed
 roadmap, but per [ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md) (accepted
 2026-08-04) and [ADR-0007](docs/adr/0007-layer-boundaries-and-control-plane-activation.md)
-(accepted 2026-08-07), most version numbers no longer map to "built natively in that version" —
+(accepted 2026-08-07), plus [ADR-0008](docs/adr/0008-offline-evaluation-and-engine-activation.md),
+most version numbers no longer map to "built natively in that version" —
 see block 09 for the current owned/delegated split, which is reconciled with the ADRs, not an
 interim marker awaiting a future rewrite.
 

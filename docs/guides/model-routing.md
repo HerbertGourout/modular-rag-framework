@@ -175,8 +175,8 @@ when the plan is clear.
 Default local gate:
 
 ```powershell
-python scripts/check_layering.py
-ruff check src/modular_rag tests
+python scripts/check_layering.py --strict
+ruff check .
 pytest tests/unit tests/contract
 ```
 

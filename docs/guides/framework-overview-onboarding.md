@@ -44,12 +44,12 @@ execution engine (native or a selected external one) actually runs a request.
 ### Key facts (verified against current code, not aspirational)
 
 - **V1 (Core RAG)**: complete — ingestion, hybrid retrieval (vector + BM25 + RRF), reranking,
-  generation, security guards, tenant isolation, audit trail, document lifecycle, quality gates,
+  generation, security guards, tenant isolation, audit trail, document lifecycle, offline quality gates,
   API/CLI hardening, dependency/licence gates, an immutable container build.
 - **Engine abstraction**: complete — `contracts/engine.py`'s `DocumentEngine` port has two real
   implementations (`NativeEngineAdapter`, wrapping the native pipeline; `LangGraphEngineAdapter`,
-  running the same governed components through a real LangGraph `StateGraph`), selectable per
-  manifest with no governance rewrite.
+  running guard, tenant isolation and redaction through a real LangGraph `StateGraph`). Manifests
+  that request unsupported LangGraph audit/policy/review/telemetry controls fail startup.
 - **V2.0's Policy Engine**: real and shipped (`security/policies/policy_engine.py`,
   `TenantIsolationPolicy`) — not deferred, per ADR-0005 §5.1.
 - **V2.1 (multi-agent teams), V3.0 (GraphRAG), V3.2 (fine-tuning execution), V5.0 (multimodal
@@ -112,7 +112,7 @@ It **is**:
 - ✅ Modular (swap any component without touching others)
 - ✅ Security-first (see [architecture/security.md](../architecture/security.md))
 - ✅ Observable (`TraceStep`, `AuditEvent`)
-- ✅ Engine-portable (native or LangGraph today, same governance either way)
+- ✅ Engine-portable with explicit, fail-closed capability differences per engine
 
 ### Core concepts
 
@@ -143,9 +143,9 @@ generator:
     model: gpt-4o-mini
 ```
 
-**4. Evaluation-as-contract** — `eval/quality_gate.py`'s `QualityGate` runs report-only or
-blocking against versioned `Metrics` (answer-scoped and retrieval-scoped fields kept distinct,
-fixed in Lot 13 after finding they were conflated).
+**4. Evaluation-as-contract** — offline golden-set runs produce versioned `Metrics`, then
+`eval/quality_gate.py` applies report-only or blocking regression thresholds. These gold-dependent
+checks are intentionally separate from online answer manifests (ADR-0008).
 
 **5. Observability built-in** — every retrieval/generation/guard step emits a real `TraceStep`
 (`core/models/trace.py`); every governed run emits an `AuditEvent` when an `audit_sink` is
@@ -186,7 +186,7 @@ configured), see `orchestration/CLAUDE.md` and
 ## Current Status
 
 V1 (Core RAG) is complete: hybrid retrieval, security guards, tenant isolation, audit trail,
-document lifecycle (identity/idempotency/delete), quality gates, a hardened API/CLI, a
+document lifecycle (identity/idempotency/delete), offline quality gates, a hardened API/CLI, a
 dependency/licence gate, and an immutable container build. On top of that, a full 18-lot
 refactoring programme validated the `DocumentEngine` port against a second, real, structurally
 different engine (LangGraph) and closed with a real pilot comparison. See
@@ -281,10 +281,10 @@ what has and hasn't been run against real infrastructure.
 |--------|-----------|-----------------|
 | **Architecture** | Imperative chains / pipelines | Hexagonal, protocol-driven, layering enforced in CI |
 | **Configuration** | Python code | YAML manifests |
-| **Evaluation** | External tools (Ragas, etc.) | Built-in, contract-enforced quality gates |
+| **Evaluation** | External tools (Ragas, etc.) | Built-in offline scorers and regression gates |
 | **Audit trail** | Manual logging | Structured `AuditEvent`s, PII/secret payload allowlist |
 | **Multi-tenant** | Not a primary concern | Fail-closed tenant isolation, real Keycloak verifier |
-| **Agent/graph orchestration** | Native, broad | Delegated to a selected engine (LangGraph today) via a vendor-neutral port — the differentiator is the governance/audit/portability layer around it, not a competing native runtime |
+| **Agent/graph orchestration** | Native, broad | Delegated to LangGraph via a vendor-neutral port; unsupported control-plane combinations fail startup rather than being ignored |
 | **Observability** | Manual tracing | Automatic `TraceStep` + `AuditEvent` |
 
 ### vs. Proprietary Cloud Solutions (Bedrock / Vertex AI)
@@ -338,8 +338,9 @@ run `/validate-architecture`.
 
 ### Your first evaluation
 
-Use the `/prepare-evaluation` skill: create a golden set → wire it through `eval/quality_gate.py`'s
-`QualityGate` in report-only mode first → promote to blocking once a baseline is agreed.
+Use the `/prepare-evaluation` skill: create a golden set → run `BenchmarkRunner` → pass its
+quality summary to `QualityGate` in report-only mode first → promote to blocking once a baseline
+is agreed.
 
 ### Your first policy
 
@@ -369,7 +370,7 @@ as a reference.
 ## FAQ
 
 **Can I use this for production today?**
-V1 is complete: hybrid retrieval, security, tenant isolation, audit trail, quality gates, a
+V1 is complete: hybrid retrieval, security, tenant isolation, audit trail, offline quality gates, a
 hardened API, and a container build all exist and are tested. Read
 `docs/refactoring/README.md` §5 for the honest list of what's still open before treating any
 specific deployment as fully proven (e.g., some backup/restore commands are documented but

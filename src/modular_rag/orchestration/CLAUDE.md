@@ -106,8 +106,9 @@ class ComponentRegistry:
 ```
 
 Roles pre-declared in `__init__`: `chunker`, `embedder`, `indexer`, `retriever`, `reranker`,
-`generator`, `guard`, `evaluator`, `tenant_policy`, `policy_engine`, `redactor`,
-`review_queue`, `audit_sink`, `telemetry`, `lifecycle_ledger`, `quality_gate`. The `planner` and
+`generator`, `guard`, `tenant_policy`, `policy_engine`, `redactor`, `review_queue`, `audit_sink`,
+`telemetry`, `lifecycle_ledger`. Exact-match evaluation and quality gates are offline utilities,
+not runtime registry roles (ADR-0008). The `planner` and
 `graph_store` placeholder roles (never had a registered factory) were removed in Étape 8 — do
 not reintroduce them without a concrete, wired consumer.
 

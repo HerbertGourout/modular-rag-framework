@@ -54,9 +54,6 @@ security:
   config:
     max_query_length: 2000
 
-evaluation:
-  type: exact-match
-
 engine:
   adapter: native
 
@@ -95,11 +92,3 @@ governance:
 observability:
   telemetry:
     type: structlog
-
-quality:
-  gate:
-    type: baseline
-    config:
-      mode: blocking
-      baseline:
-        exact_match: 0.85

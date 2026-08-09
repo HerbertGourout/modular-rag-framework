@@ -96,7 +96,9 @@ def main() -> int:
                 )
 
     baseline = _load_baseline()
-    active_violations = violations if args.strict else [v for v in violations if v.key() not in baseline]
+    active_violations = (
+        violations if args.strict else [v for v in violations if v.key() not in baseline]
+    )
     baseline_violations = [] if args.strict else [v for v in violations if v.key() in baseline]
 
     if not active_violations:

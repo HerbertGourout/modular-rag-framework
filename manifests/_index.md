@@ -36,7 +36,7 @@ file under `presets/` loads, validates, and wires cleanly — non-executable ske
 | Preset | Version | Use case | Native or delegated (ADR-0005) |
 |---|---|---|---|
 | [`local-hybrid-rag.yaml`](presets/local-hybrid-rag.yaml) | V1 | Local development: no authentication, lightweight models (GPT-4o-mini, bge-small), Qdrant on localhost. Recommended starting point for any new contributor or quick demo. | Native |
-| [`secure-enterprise-rag.yaml`](presets/secure-enterprise-rag.yaml) | V2 | Enterprise deployment: tenant isolation, PII redaction, inline policy engine, durable Postgres audit trail, blocking quality gate. Requires `QDRANT_URL`/`QDRANT_API_KEY`/`AUDIT_DATABASE_URL` env vars and reachable Postgres/Qdrant to actually run. | Native |
+| [`secure-enterprise-rag.yaml`](presets/secure-enterprise-rag.yaml) | V2 | Enterprise deployment: tenant isolation, PII redaction, inline policy engine, durable Postgres audit trail and telemetry. Offline quality gates are run separately. Requires `QDRANT_URL`/`QDRANT_API_KEY`/`AUDIT_DATABASE_URL` and reachable Postgres/Qdrant. | Native |
 | [`langgraph-rag.yaml`](presets/langgraph-rag.yaml) | V2 | Multi-step questions routed through `engine.adapter: langgraph` — a real `LangGraphEngineAdapter`, not a native agent runtime. Renamed from `agentic-rag.yaml`; the native five-agent design its old field names implied was removed in Lot 17. | Delegated |
 
 ## `blueprints/` — design sketches, not loadable

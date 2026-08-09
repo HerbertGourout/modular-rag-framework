@@ -24,16 +24,20 @@ function Invoke-Checked([string]$Label, [scriptblock]$Command) {
 
 function Invoke-Quick {
     Invoke-Checked "Ruff syntax and imports" {
-        & $Python -m ruff check src/modular_rag tests --select E,F,I
+        & $Python -m ruff check . --select E,F,I
     }
 }
 
 function Invoke-Full {
     Invoke-Checked "Ruff" {
-        & $Python -m ruff check src/modular_rag tests --select E,F,I,N,W,UP,B,C4
+        & $Python -m ruff check . --select E,F,I,N,W,UP,B,C4
     }
-    Invoke-Checked "Compilation" { & $Python -m compileall -q src/modular_rag }
+    Invoke-Checked "Compilation" {
+        & $Python -m compileall -q src/modular_rag scripts examples docker
+    }
     Invoke-Checked "Strict layering" { & $Python scripts/check_layering.py --strict }
+    Invoke-Checked "Documentation" { & $Python scripts/check_docs.py }
+    Invoke-Checked "Whitespace" { git diff --check }
 
     Write-Host "`n== MyPy baseline ==" -ForegroundColor Cyan
     $baseline = Get-Content .claude/mypy-baseline.txt |
@@ -102,7 +106,7 @@ switch ($Mode) {
     "e2e" { Invoke-E2E }
     "all" { Invoke-Full; Invoke-Integration; Invoke-E2E }
     default {
-        Write-Host "Usage: .\scripts\check.ps1 quick|full|integration|e2e|all"
+        Write-Host "Usage: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\check.ps1 quick|full|integration|e2e|all"
         Write-Host "Linux/macOS equivalent: ./scripts/check.sh <mode>"
     }
 }
