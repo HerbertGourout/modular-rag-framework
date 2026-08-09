@@ -74,8 +74,9 @@ one."
 1. [docs/architecture/overview.md](architecture/overview.md) — the complete technical
    specification, the system's six planes, the V1→V5 roadmap with the detail of what each
    version adds.
-2. [docs/adr/](adr/) — the seven accepted decisions covering modularity, contracts,
-   security/governance, product boundaries, external-engine selection, and layer activation.
+2. [docs/adr/](adr/) — the eight accepted decisions covering modularity, contracts,
+   security/governance, product boundaries, external-engine selection, layer activation, and
+   offline-evaluation/engine-activation honesty.
 3. [docs/architecture/module-model.md](architecture/module-model.md) and
    [structure.md](architecture/structure.md) — the complete map of the code, file by file.
 4. [docs/archive/2026-05-20-initial-review.md](archive/2026-05-20-initial-review.md) — the
