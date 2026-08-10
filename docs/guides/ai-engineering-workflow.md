@@ -23,26 +23,83 @@ sequenceDiagram
     participant H as Human
     participant CC as Claude Code
     participant CX as Codex
+    participant R as .review/codex-review.md
 
     H->>CC: 1. Define the goal and risk level
     CC->>CC: 2. Read CLAUDE.md, implement the smallest safe change
-    CC->>CC: 3. Run /qa-v1 when the local environment is ready
+    CC->>CC: 3. Run targeted deterministic validation
     CC->>CX: Hand off the diff
     CX->>CX: 4. Read AGENTS.md, CLAUDE.md, and the Git diff
-    CX->>H: 5. Report review findings (no edits by default)
-    H->>H: 6. Accept or reject findings
-    H->>CC: 7. Chosen writer applies targeted fixes
-    CC->>H: 8. Local checks + docs updated, ready for PR
+    CX->>R: 5. Write material findings (no implementation edits)
+    H->>R: 6. Review and accept or reject findings
+    H->>CC: 7. Request accepted fixes
+    CC->>R: 8. Read and independently verify every finding
+    CC->>CC: 9. Apply targeted fixes and rerun validation
+    CC->>H: 10. /qa-v1 or /release result, ready for PR
 ```
 
 1. Human defines the goal and risk level.
 2. Claude Code reads `CLAUDE.md` and implements the smallest safe change.
-3. Claude Code runs `/qa-v1` when the local environment is ready.
+3. Claude Code runs the smallest relevant deterministic validation.
 4. Codex reads `AGENTS.md`, `CLAUDE.md`, and the Git diff.
-5. Codex reviews without editing by default.
-6. Human accepts or rejects findings.
-7. The chosen writer applies targeted fixes.
-8. Local checks and docs are updated before the GitHub PR.
+5. Codex reviews without editing implementation files and writes the result to
+   `.review/codex-review.md`.
+6. Human accepts or rejects findings; Claude Code reads the complete review and
+   independently verifies accepted findings before changing code.
+7. Claude Code applies targeted fixes and reruns the appropriate validations.
+8. A second Codex pass may be requested when needed; after two passes, prefer human
+   intervention over an automated review loop.
+9. Run `/qa-v1` or the appropriate `/release` workflow before the GitHub PR or release.
+
+## Practical Handoff Example
+
+Assume the task is: "add `--tenant-id` to `mrag ingest`."
+
+### 1. Ask Claude Code to implement
+
+```text
+Read CLAUDE.md.
+Add --tenant-id to mrag ingest, keep the change narrow, update the relevant
+tests and documentation, and run the targeted validations. Do not commit or push.
+```
+
+Claude Code implements the change and leaves the working tree ready for review.
+
+### 2. Ask Codex to review
+
+```text
+Review the current Git diff as an independent staff engineer.
+Follow AGENTS.md and CLAUDE.md. Review only this task and its diff.
+Do not modify implementation files. Write the complete final review to
+.review/codex-review.md and report only material findings.
+```
+
+Codex replaces the local review file with one of these final statuses:
+
+- `CHANGES_REQUIRED` when a `BLOCKER` or `HIGH` finding remains.
+- `READY_FOR_FINAL_VALIDATION` when no `BLOCKER` or `HIGH` finding remains.
+
+The review file is local and ignored by Git. Its versioned reference format is
+`.review/codex-review.example.md`.
+
+### 3. Ask Claude Code to process accepted findings
+
+```text
+Read .review/codex-review.md completely. Verify every finding independently.
+Fix valid BLOCKER and HIGH findings, evaluate MEDIUM findings against the task
+scope, and avoid unrelated LOW-priority refactoring. Run the appropriate
+validations. Do not commit or push.
+```
+
+Claude Code must not apply a recommendation blindly. The human still decides which
+findings are accepted, and deterministic tests remain the final authority.
+
+### 4. Finish the task
+
+Request one more Codex pass if a material correction needs independent verification.
+Do not exceed two Codex passes without human intervention. Once the review status is
+`READY_FOR_FINAL_VALIDATION`, run `/qa-v1`; use `/release` only for a release and when
+its required services and credentials are available.
 
 ## Provider Responsibilities
 
@@ -224,7 +281,8 @@ Run the smallest relevant checks and report anything unavailable.
 ```text
 Read AGENTS.md and CLAUDE.md.
 Review the current Git diff only.
-Do not edit files.
+Do not edit implementation files.
+Write the final review to .review/codex-review.md.
 Prioritize bugs, regressions, security issues, missing tests, manifest problems,
 and layering violations.
 ```

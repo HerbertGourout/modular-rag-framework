@@ -147,6 +147,14 @@ When Claude Code is paired with Codex, Claude Code is the default builder and Co
 is the independent challenger. See `AGENTS.md`, `docs/guides/ai-engineering-workflow.md`,
 and `docs/guides/model-routing.md`.
 
+When `.review/codex-review.md` has `Status: CHANGES_REQUIRED`, read the complete
+review and verify every finding against the repository before changing code. Do not
+apply recommendations blindly: fix valid `BLOCKER` and `HIGH` findings, evaluate
+`MEDIUM` findings against the current task scope, and defer `LOW` findings that
+would cause unrelated refactoring. Rerun the appropriate validation scope after
+fixes. Claude Code remains the default sole writer, and Codex approval never
+replaces deterministic validation.
+
 **→ Full command reference:** [docs/guides/validation.md](docs/guides/validation.md)
 **→ Validation strategies:** [.claude/settings.json (permissions)](.claude/settings.json)
 **→ Testing rules:** [.claude/rules/tests.md](.claude/rules/tests.md)
