@@ -39,6 +39,18 @@ Use one writer and one or more reviewers:
 Codex may implement targeted fixes only after the review findings are accepted or
 the user asks Codex to continue as the writer.
 
+## Review Handoff
+
+When a review is requested, Codex reviews the current Git diff against the
+appropriate base and does not modify application files. Write the final review to
+`.review/codex-review.md`, using `.review/codex-review.example.md` as the template,
+and report only the material findings defined above. A targeted diff review must
+not expand into a repository-wide audit unless explicitly requested.
+
+Set `Status` to `CHANGES_REQUIRED` while any `BLOCKER` or `HIGH` finding remains;
+otherwise set it to `READY_FOR_FINAL_VALIDATION`. `MEDIUM` and `LOW` findings do
+not block a release automatically.
+
 ## Review Prompt
 
 Use this stance by default for reviews:
