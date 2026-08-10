@@ -25,11 +25,19 @@ runner = CliRunner()
 
 
 class _FakePipeline:
-    def __init__(self, *, answer_error: Exception | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        answer_error: Exception | None = None,
+        ingest_error: Exception | None = None,
+        requires_identity: bool = False,
+    ) -> None:
         self.manifest_id = "fake-pipeline"
         self.chunker = object()
         self.ingested: list[Chunk] = []
+        self.requires_identity = requires_identity
         self._answer_error = answer_error
+        self._ingest_error = ingest_error
         self.last_tenant_id: str | None = "unset"
         self.closed = False
 
@@ -37,6 +45,11 @@ class _FakePipeline:
         self.closed = True
 
     def ingest_chunks(self, chunks: list[Chunk]) -> int:
+        if self._ingest_error is not None:
+            # Mirrors RAGEngine.ingest_chunks()'s real fail-closed ordering:
+            # the tenant check raises before anything is embedded/indexed —
+            # self.ingested must stay empty, proving no partial indexing.
+            raise self._ingest_error
         self.ingested.extend(chunks)
         return len(chunks)
 
@@ -146,7 +159,9 @@ def test_ingest_command_reports_chunk_count_via_public_chunker_property(
     fake_pipeline = _FakePipeline()
     fake_chunk = Chunk(doc_id=new_id(), content="hello")
     monkeypatch.setattr(cli_module, "load_pipeline", lambda path: fake_pipeline)
-    monkeypatch.setattr(cli_module, "ingest_path", lambda path, chunker: [fake_chunk])
+    monkeypatch.setattr(
+        cli_module, "ingest_path", lambda path, chunker, tenant_id=None: [fake_chunk]
+    )
 
     result = runner.invoke(app, ["ingest", str(doc_file), "--manifest", str(manifest)])
 
@@ -202,6 +217,129 @@ def test_manifest_schema_command_prints_valid_json_schema() -> None:
     assert schema["additionalProperties"] is False
 
 
+def test_ingest_command_threads_the_tenant_id_option_into_ingest_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Tenant-aware ingestion: --tenant-id must reach the ingestion pipeline
+    function, the same way it already reaches `answer()` for `ask`."""
+    manifest = tmp_path / "m.yaml"
+    manifest.write_text("id: x\n", encoding="utf-8")
+    doc_file = tmp_path / "doc.txt"
+    doc_file.write_text("hello world", encoding="utf-8")
+    fake_pipeline = _FakePipeline()
+    fake_chunk = Chunk(doc_id=new_id(), content="hello", tenant_id="acme-corp")
+    received: dict[str, object] = {}
+
+    def _fake_ingest_path(path: object, chunker: object, tenant_id: str | None = None):
+        received["tenant_id"] = tenant_id
+        return [fake_chunk]
+
+    monkeypatch.setattr(cli_module, "load_pipeline", lambda path: fake_pipeline)
+    monkeypatch.setattr(cli_module, "ingest_path", _fake_ingest_path)
+
+    result = runner.invoke(
+        app,
+        ["ingest", str(doc_file), "--manifest", str(manifest), "--tenant-id", "acme-corp"],
+    )
+
+    assert result.exit_code == 0
+    assert received["tenant_id"] == "acme-corp"
+    assert fake_pipeline.ingested == [fake_chunk]
+
+
+def test_ingest_command_exits_with_a_typed_code_when_tenant_is_required_but_missing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Tenant-aware ingestion, follow-up to the tenant fail-closed fix on
+    `ask`: omitting --tenant-id against a tenant_policy-enabled manifest
+    must deny with a typed exit code (3, same as `ask`'s equivalent denial),
+    not an uncaught traceback — `RAGEngine.ingest_chunks()`'s fail-closed
+    `enforce_ingest()` check is what actually raises here; this test proves
+    the CLI surfaces it correctly, not that the policy check itself works
+    (already covered by tests/unit/security/policies/test_tenant_isolation.py
+    and tests/unit/orchestration/test_engine.py)."""
+    from modular_rag.core.errors import PolicyViolationError
+
+    manifest = tmp_path / "m.yaml"
+    manifest.write_text("id: x\n", encoding="utf-8")
+    doc_file = tmp_path / "doc.txt"
+    doc_file.write_text("hello world", encoding="utf-8")
+    fake_pipeline = _FakePipeline(
+        ingest_error=PolicyViolationError(
+            "Chunk has no tenant_id — denied by default (fail-closed, Lot 11b)."
+        )
+    )
+    monkeypatch.setattr(cli_module, "load_pipeline", lambda path: fake_pipeline)
+    monkeypatch.setattr(
+        cli_module,
+        "ingest_path",
+        lambda path, chunker, tenant_id=None: [Chunk(doc_id=new_id(), content="x")],
+    )
+
+    result = runner.invoke(app, ["ingest", str(doc_file), "--manifest", str(manifest)])
+
+    assert result.exit_code == 3
+    assert "tenant_id" in result.output
+    assert fake_pipeline.ingested == []  # no partial indexing: ingest_chunks raised, nothing kept
+
+
+def test_ingest_command_denies_an_empty_directory_when_tenant_is_required(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Codex review finding (tenant-aware ingestion, follow-up to the tenant
+    fail-closed fix on `ask`): `RAGEngine.ingest_chunks()`'s
+    per-chunk `enforce_ingest()` loop is a no-op on an empty list, so an
+    empty directory (or one containing only unsupported file types) against
+    a tenant_policy-enabled manifest previously "succeeded" with
+    `Indexed 0 chunks` and exit code 0, with no tenant ever checked — the
+    fail-closed guarantee only held when there was at least one chunk to
+    reject. The CLI must deny explicitly, before ever calling
+    ingest_directory/ingest_path, whenever the pipeline requires identity
+    and none was given — regardless of what the directory contains."""
+    manifest = tmp_path / "m.yaml"
+    manifest.write_text("id: x\n", encoding="utf-8")
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+    fake_pipeline = _FakePipeline(requires_identity=True)
+    ingest_directory_called = False
+
+    def _fail_if_called(path: object, chunker: object, tenant_id: str | None = None):
+        nonlocal ingest_directory_called
+        ingest_directory_called = True
+        return []
+
+    monkeypatch.setattr(cli_module, "load_pipeline", lambda path: fake_pipeline)
+    monkeypatch.setattr(cli_module, "ingest_directory", _fail_if_called)
+
+    result = runner.invoke(app, ["ingest", str(empty_dir), "--manifest", str(manifest)])
+
+    assert result.exit_code == 3
+    assert "tenant" in result.output.lower()
+    assert ingest_directory_called is False  # denied before parsing anything
+    assert fake_pipeline.ingested == []
+
+
+def test_ingest_command_succeeds_on_an_empty_directory_when_no_tenant_is_required(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The unsecured/local case must still work exactly as before — 0 chunks
+    indexed, exit code 0, no denial."""
+    manifest = tmp_path / "m.yaml"
+    manifest.write_text("id: x\n", encoding="utf-8")
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+    fake_pipeline = _FakePipeline(requires_identity=False)
+    monkeypatch.setattr(cli_module, "load_pipeline", lambda path: fake_pipeline)
+    monkeypatch.setattr(
+        cli_module, "ingest_directory", lambda path, chunker, tenant_id=None: []
+    )
+
+    result = runner.invoke(app, ["ingest", str(empty_dir), "--manifest", str(manifest)])
+
+    assert result.exit_code == 0
+    assert "Indexed 0 chunks" in result.stdout
+
+
 def test_ingest_command_on_a_directory_uses_ingest_directory(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -212,7 +350,9 @@ def test_ingest_command_on_a_directory_uses_ingest_directory(
     fake_pipeline = _FakePipeline()
     fake_chunks = [Chunk(doc_id=new_id(), content="a"), Chunk(doc_id=new_id(), content="b")]
     monkeypatch.setattr(cli_module, "load_pipeline", lambda path: fake_pipeline)
-    monkeypatch.setattr(cli_module, "ingest_directory", lambda path, chunker: fake_chunks)
+    monkeypatch.setattr(
+        cli_module, "ingest_directory", lambda path, chunker, tenant_id=None: fake_chunks
+    )
 
     result = runner.invoke(app, ["ingest", str(doc_dir), "--manifest", str(manifest)])
 

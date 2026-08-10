@@ -112,3 +112,18 @@ def test_offsets_are_faithful_to_source():
     chunks = FixedSizeChunker(chunk_size=50, chunk_overlap=10).chunk(doc)
     for chunk in chunks:
         assert doc.content[chunk.start_char : chunk.end_char] == chunk.content
+
+
+def test_document_tenant_id_propagates_to_every_chunk():
+    """Tenant-aware ingestion depends on this: test-specialist review found
+    deleting this propagation broke no test — closes that gap."""
+    doc = Document(source="test.txt", content=_words(200), tenant_id="acme-corp")
+    chunks = FixedSizeChunker(chunk_size=50, chunk_overlap=10).chunk(doc)
+    assert len(chunks) > 1
+    assert all(c.tenant_id == "acme-corp" for c in chunks)
+
+
+def test_document_with_no_tenant_id_yields_chunks_with_none():
+    doc = _doc("hello world")
+    chunks = FixedSizeChunker().chunk(doc)
+    assert all(c.tenant_id is None for c in chunks)

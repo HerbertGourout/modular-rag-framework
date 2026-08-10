@@ -349,12 +349,13 @@ All Pydantic v2 `BaseModel`. No ORM, no DB mapping.
 
 #### `ingestion/pipelines/default.py`
 
-**`ingest_path(path, chunker) → list[Chunk]`**
+**`ingest_path(path, chunker, tenant_id=None) → list[Chunk]`**
 - Detects the appropriate parser (TextParser or PDFParser)
-- Applies: parser → normalizer → enricher → chunker
+- Applies: parser → normalizer → enricher → tenant_id override → chunker
+- `tenant_id`, when given, always wins over whatever the `Document` already carries
 
-**`ingest_directory(directory, chunker) → list[Chunk]`**
-- Recursively walks the directory, calls `ingest_path` on every supported file
+**`ingest_directory(directory, chunker, tenant_id=None) → list[Chunk]`**
+- Recursively walks the directory, calls `ingest_path` on every supported file with the same `tenant_id`
 
 ---
 
@@ -607,8 +608,8 @@ DI Container. Internal `_store: dict[str, Any]`.
 **`cli/__init__.py`** → `app` (Typer instance, `mrag` entry point)
 
 Commands:
-- `mrag ingest <path> --manifest <yaml>`: loads the pipeline, ingests the documents, prints the number indexed
-- `mrag ask "<question>" --manifest <yaml>`: loads the pipeline, asks the question, prints the answer + citations formatted with scores
+- `mrag ingest <path> --manifest <yaml> [--tenant-id <id>]`: loads the pipeline, ingests the documents, prints the number indexed. `--tenant-id` applies to every chunk from this call; required against a manifest with `governance.tenant_policy` wired — checked explicitly before parsing/indexing anything (including an empty or all-unsupported-files input), not only via the per-chunk policy check downstream.
+- `mrag ask "<question>" --manifest <yaml> [--tenant-id <id>]`: loads the pipeline, asks the question, prints the answer + citations formatted with scores. `--tenant-id` is the same fail-closed identity requirement, on the query side.
 - `mrag version`: prints `__version__`
 
 ---

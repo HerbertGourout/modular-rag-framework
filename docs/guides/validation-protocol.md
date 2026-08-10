@@ -292,10 +292,21 @@ pytest tests/ -m "e2e"               # Only E2E
 ### CLI commands
 ```bash
 mrag ingest ./my_docs --manifest manifests/presets/local-hybrid-rag.yaml
+mrag ingest ./my_docs --manifest manifests/presets/secure-enterprise-rag.yaml --tenant-id acme
 mrag ask "What is RAG?" --manifest manifests/presets/local-hybrid-rag.yaml
 mrag ask "What is RAG?" --manifest manifests/presets/local-hybrid-rag.yaml --tenant-id acme
 mrag validate manifests/presets/local-hybrid-rag.yaml
 ```
+
+The `secure-enterprise-rag.yaml` command above requires `QDRANT_URL`, `QDRANT_API_KEY`, and
+`AUDIT_DATABASE_URL` to be set (resolved via `${VAR}`/`secret://` — see
+[deployment.md](deployment.md)) and a live Qdrant + PostgreSQL. Codex review finding: this preset
+also selects the 768-dimensional `BAAI/bge-base-en-v1.5` embedder without an explicit
+`indexer.config.vector_size`, so a fresh Qdrant collection is created at the `QdrantStore`
+default (384) and ingestion fails on the dimension mismatch — a known, separate issue (embedder
+↔ indexer dimension isn't cross-validated anywhere yet), not something `--tenant-id` introduces
+or this guide's scope to fix. Demonstrating `--tenant-id` end-to-end against this preset today
+requires first setting `indexer.config.vector_size: 768` in a local copy of the manifest.
 
 ### REST API
 

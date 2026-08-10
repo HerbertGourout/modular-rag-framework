@@ -42,6 +42,14 @@ def test_enforce_ingest_denies_missing_tenant_id():
         TenantIsolationPolicy().enforce_ingest(None)
 
 
+def test_enforce_ingest_denies_empty_string_tenant_id():
+    """Symmetric with enforce_query's equivalent test — an empty string is
+    the one falsy value `str | None` still permits through, not caught by
+    an `is None` check alone."""
+    with pytest.raises(PolicyViolationError, match="tenant_id"):
+        TenantIsolationPolicy().enforce_ingest("")
+
+
 def test_enforce_ingest_allows_a_populated_tenant_id():
     TenantIsolationPolicy().enforce_ingest("acme-corp")
 
