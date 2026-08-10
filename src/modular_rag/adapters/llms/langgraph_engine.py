@@ -213,7 +213,11 @@ class LangGraphEngineAdapter:
         k = self._c.manifest.retriever.config.get("k", 20)
         chunks = self._c.retriever.retrieve(query, k=k)
 
-        if tenant_policy and query.tenant_id:
+        if tenant_policy:
+            # enforce_query() above already raised if query.tenant_id were
+            # falsy, so it is guaranteed non-None here — narrows the type
+            # instead of masking it with `# type: ignore[arg-type]`.
+            assert query.tenant_id is not None
             chunks = tenant_policy.filter_chunks(query.tenant_id, chunks)
 
         ms = (time.perf_counter() - t0) * 1000
@@ -294,9 +298,16 @@ class LangGraphEngineAdapter:
         }
 
     def _initial_state(self, request: EngineRequest, context: ExecutionContext) -> _GraphState:
-        query = request.query
-        if context.tenant_id and not query.tenant_id:
-            query = query.model_copy(update={"tenant_id": context.tenant_id})
+        # ExecutionContext.tenant_id is the sole authoritative identity
+        # source (contract docstring) — always overwrite whatever tenant_id
+        # `request.query` already carries, unconditionally, matching
+        # NativeEngineAdapter's identical rule (it never even looks at
+        # request.query.tenant_id). Lot 1 (tenant fail-closed): the previous
+        # "only fill in if query.tenant_id was empty" condition let a
+        # pre-set query.tenant_id outrank the authenticated context — a
+        # spoofing vector for any future caller that constructs an
+        # EngineRequest with its own Query.tenant_id.
+        query = request.query.model_copy(update={"tenant_id": context.tenant_id})
         return _GraphState(
             query=query,
             context=context,

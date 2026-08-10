@@ -41,6 +41,16 @@ class RAGEngine:
         reaching into the private `_c` container directly."""
         return self._c.manifest.id
 
+    @property
+    def tenant_policy_active(self) -> bool:
+        """Whether a `Container.tenant_policy` is wired — the same predicate
+        every tenant-isolation check in this class already gates on
+        (`if self._c.tenant_policy:`). Public so an interface layer (e.g.
+        `api/__init__.py::create_app()`) can decide whether authentication
+        must be mandatory without reaching into the private `_c` container
+        (Lot 1, tenant fail-closed)."""
+        return self._c.tenant_policy is not None
+
     def close(self) -> None:
         """Release resources owned by the wired container."""
         self._c.close()

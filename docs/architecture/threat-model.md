@@ -28,9 +28,9 @@ flowchart LR
     subgraph Untrusted["Untrusted"]
         Caller["API/CLI caller"]
     end
-    subgraph Boundary1["Trust boundary 1 — no authentication today (gap, Lot 16a)"]
-        API["api/ FastAPI app"]
-        CLI["cli/ Typer app"]
+    subgraph Boundary1["Trust boundary 1 — caller entry points"]
+        API["api/ FastAPI app\n(token_verifier mandatory for a\ntenant-isolated manifest, Lot 1)"]
+        CLI["cli/ Typer app\n(operator-supplied --tenant-id,\nno TokenVerifier — local trust)"]
     end
     subgraph Boundary2["Trust boundary 2 — pipeline process"]
         Engine["orchestration/RAGEngine\nor NativeEngineAdapter/DocumentEngine"]
@@ -49,12 +49,19 @@ flowchart LR
     Engine --> PG
 ```
 
-**Boundary 1 is the framework's most significant open boundary**: nothing between "untrusted
-caller" and "pipeline execution" verifies who is calling. This is the exact gap named in
-`docs/refactoring-plan.md` §2 ("API security | No auth, rate limits, or request-size limits...")
-and is why Lot 11b (identity/tenant propagation) and Lot 16a (API/CLI hardening — "authentication,
-authorization, rate and request-size limits") both exist as later, not earlier, lots: there is
-currently no identity to propagate.
+**Boundary 1, updated by Lot 1 (tenant fail-closed, 2026-08-10):** this obligation applies to the
+**API only** — the CLI has no `TokenVerifier` concept at all; `mrag ask --tenant-id` trusts the
+value an operator running the command directly supplies, the same local-trust model as any other
+CLI flag, not a verified identity. For the API, authentication
+(`create_app(..., token_verifier=...)`, Lot 16a) is no longer unconditionally optional. It
+remains optional only for a manifest with no `governance.tenant_policy` wired (unauthenticated
+local/dev use is still the default posture for those). For a manifest that *does* wire a
+`tenant_policy` — `secure-enterprise-rag.yaml` and any tenant-isolated deployment — a
+`token_verifier` is effectively mandatory: `create_app()` refuses to start without one, rather
+than serving a tenant-isolated pipeline unauthenticated. This closes the gap this section
+originally described (`docs/refactoring-plan.md` §2, "API security | No auth..."), for that one
+case; an unauthenticated single-tenant deployment (no `tenant_policy` at all) remains a real,
+accepted open boundary by design, not a gap.
 
 **Boundary 3** already has partial mitigation via lazy-imported adapters and manifest-driven
 configuration (no hardcoded credentials, per `.claude/rules/adapters.md` §5), but no TLS/mTLS
@@ -65,7 +72,7 @@ policy is defined for these outbound calls — flagged as a gap in §5 below, ow
 
 | Actor | Motivation | Capability |
 |---|---|---|
-| Anonymous internet caller (once deployed publicly) | Data exfiltration, service abuse, cost exhaustion (LLM API spend) | Whatever `api/`'s exposed surface allows — today, unrestricted (no auth, no rate limit) |
+| Anonymous internet caller (once deployed publicly) | Data exfiltration, service abuse, cost exhaustion (LLM API spend) | Whatever `api/`'s exposed surface allows — unrestricted only for a manifest with no `tenant_policy` wired; a tenant-isolated manifest requires a valid bearer token (Lot 1) or the API refuses to start. Rate limiting: see §4's Denial-of-service row below for current status. |
 | Authenticated-but-wrong-tenant caller (post Lot 11b) | Cross-tenant data access, intentional or accidental | API/CLI access with valid credentials for a *different* tenant |
 | Malicious document submitter | Prompt injection via poisoned corpus content, indirect exfiltration | Ability to get a document ingested (depends entirely on deployment — this framework does not itself define who can call `ingest`) |
 | Insider with `.env`/manifest access | Credential theft, policy tampering | Local filesystem or CI/CD access |
@@ -78,7 +85,7 @@ the owning lot if still open.
 
 | STRIDE | Threat | Concrete mechanism here | Current mitigation | Owning lot if open |
 |---|---|---|---|---|
-| **S**poofing | Caller impersonates another tenant/user | No identity verification on `api/`'s `/answer`, `/retrieve` endpoints today | None | Lot 11b (identity propagation), Lot 16a (authentication) |
+| **S**poofing | Caller impersonates another tenant/user | For a manifest with no `tenant_policy` wired, no identity verification on `api/`'s `/answer`/`/retrieve` — an accepted, by-design gap for unauthenticated single-tenant deployments | `TokenVerifier` (Lot 16a) + fail-closed `TenantIsolationPolicy` (Lot 11b), and mandatory for any manifest that wires `tenant_policy` (Lot 1: `create_app()` refuses to start without a verifier in that case) | Closed for tenant-isolated manifests; open by design otherwise |
 | **T**ampering | Malicious document poisons the corpus to bias retrieval/generation | Any document reaching `RAGEngine.ingest()` is trusted as-is; no provenance check | `docs/architecture/security.md` names "Provenance tracking + source allowlist" as the target mitigation — **not implemented** | Not yet assigned a lot; flag for Lot 17 scope review |
 | **T**ampering | Policy YAML edited to weaken enforcement | `PolicyEngine` loads whatever YAML is on disk at startup, no integrity check | Git history provides an audit trail of changes (`.claude/rules/security-layers.md` Layer 07), but no runtime tamper-detection | Open — candidate for Lot 16c (deployment hardening) |
 | **R**epudiation | A tenant denies having asked a query that leaked data, or denies a policy violation occurred | `Trace` (performance) + `AuditEvent` (compliance) now both exist (Lot 10), with `RUN_SUCCEEDED`/`RUN_FAILED` evidence and a `correlation_id` | Partially mitigated by Lot 10; full non-repudiation needs Lot 11b's identity propagation so `AuditEvent.actor`/`tenant_id` are trustworthy, not caller-supplied metadata | Lot 11b |

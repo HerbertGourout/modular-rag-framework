@@ -12,6 +12,7 @@ from modular_rag.api.errors import to_http_exception
 from modular_rag.api.middleware import MaxBodySizeMiddleware, RateLimitMiddleware
 from modular_rag.app.public import (
     AuthenticationError,
+    ConfigurationError,
     TenantContext,
     TokenVerifier,
 )
@@ -57,15 +58,51 @@ def create_app(
     `TenantContext.tenant_id` is threaded into the pipeline call so
     `Container.tenant_policy` (if configured) enforces/filters by the
     *authenticated* tenant, never a caller-supplied one — there is no request
-    field a caller can set to claim a tenant identity. `None` (the default)
-    leaves every route open, matching every other optional-component
-    precedent in this codebase (guard, redactor, tenant_policy itself) —
-    unauthenticated local/dev use. Any deployment serving more than one
-    tenant's data must configure a verifier
-    (`adapters.auth.keycloak_verifier.KeycloakTokenVerifier` is the reference
-    implementation, Lot 11b).
+    field a caller can set to claim a tenant identity.
+
+    `None` (the default) leaves every route open **only for a manifest with
+    no `tenant_policy` wired** — unauthenticated local/dev use, matching
+    every other optional-component precedent in this codebase (guard,
+    redactor, tenant_policy itself). A manifest that *does* wire a
+    `tenant_policy` (Codex review finding, Lot 1 follow-up: this is exactly
+    what `governance.tenant_enforcement` is supposed to gate, but
+    `registry.py::wire()` wires `tenant_policy` on presence alone,
+    independent of that flag — see `validate_capabilities()`'s matching
+    rejection of the inverse contradiction) makes `token_verifier` effectively
+    mandatory: `create_app()` raises `ConfigurationError` at startup rather
+    than silently leaving routes open against a tenant-isolated pipeline —
+    see below. Any deployment serving more than one tenant's data must
+    configure a verifier (`adapters.auth.keycloak_verifier.KeycloakTokenVerifier`
+    is the reference implementation, Lot 11b) *before* selecting a
+    tenant-isolated manifest, or the service will refuse to start — not fail
+    per-request at 401/403 after deployment.
+
+    Raises `ConfigurationError` immediately (before the FastAPI app is even
+    constructed) if the loaded pipeline has a `tenant_policy` wired
+    (`pipeline.requires_identity` — true whenever `governance.tenant_policy`
+    is set, *regardless* of `governance.tenant_enforcement`'s value, because
+    `RAGEngine`/`LangGraphEngineAdapter` both gate enforcement on the
+    former's presence, not the latter's flag; see
+    `RAGEngine.tenant_policy_active`) but no `token_verifier` was given
+    (Lot 1, tenant fail-closed): without this check, `token_verifier=None`
+    would leave `_authenticate()` always returning `identity=None`, and a
+    request with no tenant_id anywhere would only be caught downstream by
+    `TenantIsolationPolicy` — as a 403 on every single request, a confusing
+    silent misconfiguration rather than a clear refusal to start. Failing at
+    startup instead matches `validate_capabilities()`'s existing precedent
+    for a declared-but-not-activatable manifest section (ADR-0007 §3: "a
+    declared manifest section that cannot be activated must fail
+    validation").
     """
     pipeline = load_pipeline(manifest_path)
+    if pipeline.requires_identity and token_verifier is None:
+        raise ConfigurationError(
+            f"Manifest {manifest_path!r} has a tenant_policy wired "
+            "(governance.tenant_policy) but create_app() was not given a "
+            "token_verifier. Refusing to start an API that would silently serve a "
+            "tenant-isolated pipeline to unauthenticated callers — pass "
+            "token_verifier=... (e.g. KeycloakTokenVerifier) to create_app()."
+        )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -121,7 +158,10 @@ def create_app(
     ) -> AnswerResponse:
         try:
             ans = pipeline.answer(
-                req.question, tenant_id=identity.tenant_id if identity else None
+                req.question,
+                tenant_id=identity.tenant_id if identity else None,
+                user_id=identity.user_id if identity else None,
+                roles=identity.roles if identity else frozenset(),
             )
         except Exception as exc:
             raise to_http_exception(exc) from exc

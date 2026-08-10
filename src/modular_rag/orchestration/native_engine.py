@@ -54,6 +54,12 @@ class NativeEngineAdapter:
         # ExecutionContext"): it is the authoritative identity source per
         # ExecutionContext's own docstring, forwarded into RAGEngine.answer()
         # so a configured Container.tenant_policy can enforce against it.
+        # `str | None` (Lot 1, tenant fail-closed) — a `None` context.tenant_id
+        # (no verified identity) is forwarded unchanged, never coerced into a
+        # placeholder value; RAGEngine.answer()'s own tenant_policy check
+        # denies it when tenant isolation is configured. Note `request.query
+        # .tenant_id` is never consulted here — `context.tenant_id` is the
+        # sole source, matching LangGraphEngineAdapter's identical rule.
         answer = self._engine.answer(request.query.text, tenant_id=context.tenant_id)
         metadata = {"trace_id": answer.trace_id} if answer.trace_id else {}
         return EngineResult(

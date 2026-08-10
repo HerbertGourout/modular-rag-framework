@@ -131,6 +131,67 @@ def test_validate_capabilities_rejects_offline_quality_configuration() -> None:
     assert any("offline evaluation concern" in error for error in errors)
 
 
+def test_validate_capabilities_rejects_tenant_enforcement_true_without_a_tenant_policy() -> None:
+    registry = ComponentRegistry()
+    registry.register("tenant_policy", "tenant-isolation", lambda cfg: object())
+    manifest = PipelineManifest(
+        id="x",
+        governance=GovernanceSection(tenant_enforcement=True, tenant_policy=None),
+    )
+
+    errors = validate_capabilities(manifest, registry)
+
+    assert any("tenant_enforcement=true" in e and "tenant_policy" in e for e in errors)
+
+
+def test_validate_capabilities_rejects_a_wired_tenant_policy_with_enforcement_false() -> None:
+    """Codex review finding (Lot 1 follow-up): `registry.py::wire()` wires
+    `Container.tenant_policy` whenever `governance.tenant_policy` is present,
+    completely independent of `tenant_enforcement`'s boolean — so a manifest
+    declaring `tenant_enforcement: false` alongside a `tenant_policy` block
+    is not a harmless no-op, it's a manifest that lies about its own runtime
+    behavior: isolation is wired and will be enforced regardless of what the
+    flag says. `ApplicationService.requires_identity` correctly reflects the
+    real wiring (defense in depth — see its docstring), but that alone lets
+    this contradictory manifest through `mrag validate` silently. Reject it
+    at validation time instead, symmetric to the existing
+    tenant_enforcement=true-without-a-policy check above."""
+    registry = ComponentRegistry()
+    registry.register("tenant_policy", "tenant-isolation", lambda cfg: object())
+    manifest = PipelineManifest(
+        id="x",
+        governance=GovernanceSection(
+            tenant_enforcement=False,
+            tenant_policy=ComponentConfig(type="tenant-isolation"),
+        ),
+    )
+
+    errors = validate_capabilities(manifest, registry)
+
+    assert any(
+        "tenant_policy" in e and "tenant_enforcement" in e and "false" in e.lower()
+        for e in errors
+    )
+
+
+def test_validate_capabilities_accepts_tenant_enforcement_true_with_a_tenant_policy() -> None:
+    """The one combination that must NOT be rejected by either new/existing
+    check — guards against an overly broad condition on either side."""
+    registry = ComponentRegistry()
+    registry.register("tenant_policy", "tenant-isolation", lambda cfg: object())
+    manifest = PipelineManifest(
+        id="x",
+        governance=GovernanceSection(
+            tenant_enforcement=True,
+            tenant_policy=ComponentConfig(type="tenant-isolation"),
+        ),
+    )
+
+    errors = validate_capabilities(manifest, registry)
+
+    assert not any("tenant_enforcement" in e for e in errors)
+
+
 def test_validate_capabilities_rejects_unsupported_langgraph_audit() -> None:
     registry = ComponentRegistry()
     manifest = PipelineManifest(

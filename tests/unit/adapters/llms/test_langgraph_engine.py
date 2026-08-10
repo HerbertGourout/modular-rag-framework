@@ -303,6 +303,43 @@ def test_parity_with_native_adapter_on_a_missing_tenant_id() -> None:
         langgraph.run(_request(), _context(tenant_id=None))
 
 
+def test_context_tenant_id_overrides_a_conflicting_query_tenant_id() -> None:
+    """Lot 1 (tenant fail-closed): `ExecutionContext.tenant_id` is the sole
+    authoritative identity source (contract docstring) — a `Query` that
+    already carries a *different* tenant_id must not outrank it. Closes a
+    spoofing vector: the previous `if context.tenant_id and not
+    query.tenant_id` condition let a pre-set query.tenant_id win whenever it
+    was non-empty, regardless of what the authenticated context said."""
+    generator = _FakeGenerator()
+    hits = [_hit("mine", tenant_id="acme-corp"), _hit("theirs", tenant_id="attacker-tenant")]
+    adapter = LangGraphEngineAdapter(
+        _container(
+            retriever=_FakeRetriever(hits=hits),
+            generator=generator,
+            tenant_policy=TenantIsolationPolicy(),
+        )
+    )
+
+    adapter.run(
+        _request(tenant_id="attacker-tenant"),
+        _context(tenant_id="acme-corp"),
+    )
+
+    assert len(generator.received_context) == 1
+    assert generator.received_context[0].chunk.tenant_id == "acme-corp"
+
+
+def test_query_tenant_id_alone_is_still_denied_when_context_has_none() -> None:
+    """The mirror image of the spoofing test above: a caller-set
+    query.tenant_id must not substitute for a missing authenticated
+    identity either — context.tenant_id=None wins and enforce_query()
+    still denies."""
+    adapter = LangGraphEngineAdapter(_container(tenant_policy=TenantIsolationPolicy()))
+
+    with pytest.raises(PolicyViolationError, match="tenant_id"):
+        adapter.run(_request(tenant_id="attacker-tenant"), _context(tenant_id=None))
+
+
 def test_execution_context_tenant_id_propagates_when_query_has_none() -> None:
     """ExecutionContext.tenant_id fills in when the Query itself has none set
     — mirrors NativeEngineAdapter's own propagation (Lot 11b)."""

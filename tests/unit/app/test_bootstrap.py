@@ -8,7 +8,13 @@ from pathlib import Path
 
 import pytest
 
-from modular_rag.app.bootstrap import load_engine, load_manifest, load_native_engine, load_pipeline
+from modular_rag.app.bootstrap import (
+    load_application,
+    load_engine,
+    load_manifest,
+    load_native_engine,
+    load_pipeline,
+)
 from modular_rag.contracts.engine import DocumentEngine
 from modular_rag.core.errors import ConfigurationError, ManifestError
 from modular_rag.orchestration.engine import RAGEngine
@@ -131,6 +137,43 @@ def test_load_engine_selects_langgraph(tmp_path: Path) -> None:
 
     assert isinstance(engine, LangGraphEngineAdapter)
     assert isinstance(engine, DocumentEngine)
+
+
+def test_load_application_requires_identity_is_false_without_a_tenant_policy(
+    tmp_path: Path,
+) -> None:
+    manifest_file = tmp_path / "manifest.yaml"
+    manifest_file.write_text(_MINIMAL_MANIFEST, encoding="utf-8")
+
+    application = load_application(manifest_file)
+
+    assert application.requires_identity is False
+
+
+def test_load_application_requires_identity_is_true_with_a_wired_tenant_policy(
+    tmp_path: Path,
+) -> None:
+    """Lot 1 (tenant fail-closed): `requires_identity` reflects whether
+    `Container.tenant_policy` actually gets wired — driven by
+    `governance.tenant_policy`'s presence, not `governance.tenant_enforcement`'s
+    value (`registry.py::wire()` wires `tenant_policy` whenever the former is
+    set, regardless of the latter's boolean — see `RAGEngine.tenant_policy_active`
+    and its docstring). Exercised against a real manifest + the real default
+    registry, not a hand-built fake, closing the gap where only fakes proved
+    this property's behavior."""
+    manifest_file = tmp_path / "manifest.yaml"
+    manifest_file.write_text(
+        _MINIMAL_MANIFEST + "governance:\n"
+        "  tenant_enforcement: true\n"
+        "  tenant_policy:\n"
+        "    type: tenant-isolation\n"
+        "    config: {}\n",
+        encoding="utf-8",
+    )
+
+    application = load_application(manifest_file)
+
+    assert application.requires_identity is True
 
 
 def test_load_engine_raises_on_an_unknown_adapter_name(tmp_path: Path) -> None:

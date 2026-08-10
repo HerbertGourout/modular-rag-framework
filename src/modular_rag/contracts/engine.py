@@ -86,12 +86,30 @@ class ExecutionContext:
     """Identity/tenant/correlation/cancellation carried through every
     DocumentEngine call. Engine-neutral — never contains vendor-specific
     state. `tenant_id` is the hook Lot 11b's fail-closed enforcement attaches
-    to; it is not itself an enforcement mechanism here."""
+    to; it is not itself an enforcement mechanism here.
 
-    tenant_id: str
+    `tenant_id` is `str | None` (Lot 1, tenant fail-closed): `None` means
+    "no verified identity" and must be propagated as-is, never fabricated
+    into a placeholder string. `TenantIsolationPolicy.enforce_query()`
+    denies on any falsy `tenant_id` — a fabricated non-empty value (e.g.
+    `"default"`) would silently defeat that fail-closed check. This field is
+    the single authoritative identity source: an adapter must overwrite
+    whatever tenant_id a `Query` already carries with this one, never merge
+    or prefer the `Query`'s (see `NativeEngineAdapter`/`LangGraphEngineAdapter`).
+
+    `roles` mirrors `contracts.identity.TenantContext.roles` — propagated
+    for future RBAC/audit-actor consumers. No owned control-plane logic
+    reads it yet; per docs/architecture/document-engine-contract.md's
+    extension-envelope discipline ("never branch core control-plane logic
+    on `extensions`' contents"), it is a typed field here, not stuffed into
+    `extensions`.
+    """
+
+    tenant_id: str | None
     correlation_id: str
     request_id: str
     user_id: str | None = None
+    roles: frozenset[str] = field(default_factory=frozenset)
     cancellation_token: CancellationToken | None = None
     governance_hook: GovernanceHook | None = None
     extensions: dict[str, Any] = field(default_factory=dict)  # extension envelope, see policy doc

@@ -36,6 +36,45 @@ def runtime_manifest_errors(manifest: PipelineManifest) -> list[str]:
             "pipeline manifest"
         )
 
+    if manifest.governance:
+        # Codex review finding (Lot 1, second pass): these two tenant
+        # invariants used to live only in app/config_resolution.py::
+        # validate_capabilities(), which every bootstrap loader
+        # (load_pipeline/load_engine/load_application) calls before
+        # wire() — but ComponentRegistry.wire() is itself a public
+        # primitive, reachable directly (tests, docs, any future caller
+        # of create_default_registry()), and only ran this function,
+        # which didn't check either invariant. Moved here so both entry
+        # points share one enforcement point — validate_capabilities()
+        # already folds this function's errors into its own return value.
+        # (No local `governance = manifest.governance` alias here on
+        # purpose: the `langgraph` block below reassigns that same name
+        # from an Optional-typed expression, which mypy then flags as
+        # incompatible with the non-Optional type this block's assignment
+        # would have narrowed it to — direct attribute access sidesteps it.)
+        if manifest.governance.tenant_enforcement and manifest.governance.tenant_policy is None:
+            errors.append(
+                "governance.tenant_enforcement=true requires governance.tenant_policy to be "
+                "set — declared intent with no activatable implementation is not a valid "
+                "manifest (ADR-0007 §3)."
+            )
+        if (
+            not manifest.governance.tenant_enforcement
+            and manifest.governance.tenant_policy is not None
+        ):
+            # Container.tenant_policy gates enforcement on presence alone
+            # (RAGEngine/LangGraphEngineAdapter both check
+            # `if self._c.tenant_policy:`, never this flag) — a manifest
+            # with tenant_enforcement=false and a tenant_policy configured
+            # is not a harmless no-op, it wires and enforces isolation
+            # regardless of what the flag claims.
+            errors.append(
+                "governance.tenant_policy is set but governance.tenant_enforcement=false — "
+                "this manifest claims tenant isolation is off while wiring a component that "
+                "enforces it unconditionally regardless of this flag. Set "
+                "tenant_enforcement=true, or remove tenant_policy."
+            )
+
     adapter = manifest.engine.adapter if manifest.engine else "native"
     if adapter not in {"native", "langgraph"}:
         errors.append(
