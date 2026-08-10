@@ -382,6 +382,18 @@ def test_answer_succeeds_when_tenant_policy_configured_and_query_has_a_tenant_id
     assert answer.text == "fake answer"
 
 
+def test_tenant_policy_active_is_false_without_a_configured_tenant_policy() -> None:
+    engine, _ = _engine()
+
+    assert engine.tenant_policy_active is False
+
+
+def test_tenant_policy_active_is_true_with_a_configured_tenant_policy() -> None:
+    engine, _ = _engine(tenant_policy=TenantIsolationPolicy())
+
+    assert engine.tenant_policy_active is True
+
+
 def _hit(tenant_id: str | None) -> RetrievedChunk:
     chunk = Chunk(doc_id=new_id(), content="hit", tenant_id=tenant_id)
     return RetrievedChunk(chunk=chunk, score=0.5, rank=1, retrieval_method=RetrievalMethod.HYBRID)

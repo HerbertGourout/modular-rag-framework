@@ -167,6 +167,41 @@ def test_wire_rejects_langgraph_control_plane_components_it_does_not_consume() -
         reg.wire(manifest)
 
 
+def test_wire_rejects_a_wired_tenant_policy_with_enforcement_false() -> None:
+    """Codex review finding (Lot 1, second pass): `validate_capabilities()`
+    rejected this contradiction, but `ComponentRegistry.wire()` — a public
+    primitive callable directly, bypassing `load_pipeline()`/`load_engine()`/
+    `load_application()` and their `_raise_for_manifest_errors()` call —
+    only ran `runtime_manifest_errors()`, which didn't check tenant
+    invariants at all. Before this fix, this exact manifest wired
+    successfully and actively enforced isolation despite
+    `tenant_enforcement=False` claiming otherwise."""
+    reg = _fake_registry()
+    reg.register("tenant_policy", "fake-tenant-policy", lambda cfg: object())
+    manifest = _minimal_manifest(
+        governance=GovernanceSection(
+            tenant_enforcement=False,
+            tenant_policy=ComponentConfig(type="fake-tenant-policy"),
+        )
+    )
+
+    with pytest.raises(RegistryError, match="tenant_policy"):
+        reg.wire(manifest)
+
+
+def test_wire_rejects_tenant_enforcement_true_without_a_tenant_policy() -> None:
+    """The inverse contradiction, same bypass: `tenant_enforcement=True` with
+    no `tenant_policy` declares an intent to isolate with nothing to enforce
+    it — `validate_capabilities()` caught it, direct `wire()` did not."""
+    reg = _fake_registry()
+    manifest = _minimal_manifest(
+        governance=GovernanceSection(tenant_enforcement=True, tenant_policy=None)
+    )
+
+    with pytest.raises(RegistryError, match="tenant_enforcement=true"):
+        reg.wire(manifest)
+
+
 def test_postgres_audit_sink_and_lifecycle_ledger_are_manifest_activatable() -> None:
     """Registration-only check (Étape 6): these were previously Python-injectable
     only. Constructing via the factory with a `dsn` config must not require a

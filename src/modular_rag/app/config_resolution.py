@@ -151,12 +151,14 @@ def validate_capabilities(manifest: PipelineManifest, registry: ComponentRegistr
         _check("redactor", manifest.governance.redactor)
         _check("review_queue", manifest.governance.review_queue)
         _check("audit_sink", manifest.governance.audit_sink)
-        if manifest.governance.tenant_enforcement and manifest.governance.tenant_policy is None:
-            errors.append(
-                "governance.tenant_enforcement=true requires governance.tenant_policy to be "
-                "set — declared intent with no activatable implementation is not a valid "
-                "manifest (ADR-0007 §3)."
-            )
+        # The tenant_enforcement/tenant_policy consistency checks used to live
+        # here, but this function is only reached through the bootstrap
+        # loaders (load_pipeline/load_engine/load_application) — a direct
+        # ComponentRegistry.wire() call (a public primitive) bypassed them
+        # entirely (Codex review finding, Lot 1 second pass). Moved into
+        # orchestration/registry.py::runtime_manifest_errors(), which both
+        # this function (below) and wire() itself now share as one
+        # enforcement point.
     if manifest.observability:
         _check("telemetry", manifest.observability.telemetry)
     if manifest.lifecycle:

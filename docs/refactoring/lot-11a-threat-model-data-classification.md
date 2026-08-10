@@ -2,6 +2,12 @@
 
 **Status:** COMPLETE
 **Date:** 2026-08-05
+
+> **Superseded in part by Lot 1 (tenant fail-closed, 2026-08-10):** this lot's own deliverable,
+> `docs/architecture/threat-model.md`, described trust boundary 1 as having "no authentication
+> today" (a real gap at the time). Lot 1 closed that gap for any manifest that wires a
+> `tenant_policy` — `threat-model.md` itself has been updated to reflect this; this evidence
+> record is kept as-is, describing what Lot 11a delivered at the time.
 **Depends on:** none directly; consumes Lot 7's `ExecutionContext.tenant_id` and Lot 10's
 `AuditEvent`/`Trace` as reference points for what's already in place.
 **Blocks:** Lot 11b (identity/tenant propagation needs the classification scheme to enforce

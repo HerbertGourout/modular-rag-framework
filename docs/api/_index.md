@@ -14,5 +14,11 @@ RAG pipeline as a service, without embedding heavy Python dependencies
 - [rest.md](rest.md) — complete reference for the endpoints (`/health`, `/answer`,
   `/retrieve`), request/response schemas, error codes, Python and `curl` examples.
 
-At this stage (pre-V4), the API has no built-in authentication — see the "Authentication"
-section of [rest.md](rest.md) for the recommended posture while waiting for `adapters/auth/`.
+The API has built-in authentication: `create_app(..., token_verifier=...)` (Lot 16a) requires a
+valid `Authorization: Bearer <token>` header on `/answer`/`/retrieve` when configured, verified
+by `adapters/auth/keycloak_verifier.py`'s `KeycloakTokenVerifier` (Lot 11b) or any
+`contracts.identity.TokenVerifier` implementation. It is optional only for a manifest with no
+`governance.tenant_policy` wired (unauthenticated local/dev use); for a manifest that does wire
+one, `token_verifier` is effectively mandatory — `create_app()` refuses to start without it
+(Lot 1, tenant fail-closed). See the "Authentication" section of [rest.md](rest.md) for the full
+behavior.

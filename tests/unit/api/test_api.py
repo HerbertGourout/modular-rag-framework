@@ -23,7 +23,7 @@ from fastapi.testclient import TestClient
 
 import modular_rag.api as api_module
 from modular_rag.contracts.identity import TenantContext
-from modular_rag.core.errors import AuthenticationError
+from modular_rag.core.errors import AuthenticationError, ConfigurationError
 from modular_rag.core.ids import new_id
 from modular_rag.core.models.answer import Answer
 from modular_rag.core.models.chunk import Chunk
@@ -52,18 +52,31 @@ class _FakeTokenVerifier:
 
 
 class _FakePipeline:
-    def __init__(self, *, answer_error: Exception | None = None) -> None:
+    def __init__(
+        self, *, answer_error: Exception | None = None, requires_identity: bool = False
+    ) -> None:
         self.manifest_id = "fake-pipeline"
         self.closed = False
+        self.requires_identity = requires_identity
         self._answer_error = answer_error
         self.last_answer_tenant_id: str | None = "unset"
+        self.last_answer_user_id: str | None = "unset"
+        self.last_answer_roles: frozenset[str] = frozenset()
         self.last_retrieve_tenant_id: str | None = "unset"
 
     def close(self) -> None:
         self.closed = True
 
-    def answer(self, question: str, tenant_id: str | None = None) -> Answer:
+    def answer(
+        self,
+        question: str,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
+        roles: frozenset[str] = frozenset(),
+    ) -> Answer:
         self.last_answer_tenant_id = tenant_id
+        self.last_answer_user_id = user_id
+        self.last_answer_roles = roles
         if self._answer_error is not None:
             raise self._answer_error
         return Answer(query_id=new_id(), text=f"answer to: {question}", trace_id="trace-123")
@@ -234,6 +247,55 @@ def test_answer_threads_the_authenticated_tenant_id_into_the_pipeline_call(
     assert pipeline.last_answer_tenant_id == "acme"
 
 
+def test_answer_threads_the_authenticated_user_id_and_roles_into_the_pipeline_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Lot 1 (tenant fail-closed): user_id/roles from the verified identity
+    reach ApplicationService.answer(), not just tenant_id."""
+    identity = TenantContext(tenant_id="acme", user_id="u1", roles=frozenset({"admin"}))
+    verifier = _FakeTokenVerifier({"good-token": identity})
+    pipeline = _FakePipeline()
+    client = _client(pipeline, monkeypatch, token_verifier=verifier)
+
+    response = client.post(
+        "/answer", json={"question": "hi"}, headers={"Authorization": "Bearer good-token"}
+    )
+
+    assert response.status_code == 200
+    assert pipeline.last_answer_user_id == "u1"
+    assert pipeline.last_answer_roles == frozenset({"admin"})
+
+
+def test_create_app_refuses_to_start_when_identity_is_required_but_no_verifier_is_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Lot 1 (tenant fail-closed): a manifest that enforces tenant isolation
+    must not be servable without authentication configured — failing at
+    `create_app()` (before any request is served) rather than letting every
+    request 403 silently, matching `validate_capabilities()`'s existing
+    'declared but not activatable' refusal precedent (ADR-0007 §3)."""
+    monkeypatch.setattr(
+        api_module, "load_pipeline", lambda path: _FakePipeline(requires_identity=True)
+    )
+
+    with pytest.raises(ConfigurationError, match="tenant_policy"):
+        api_module.create_app("unused-manifest-path.yaml")
+
+
+def test_create_app_starts_when_identity_is_required_and_a_verifier_is_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        api_module, "load_pipeline", lambda path: _FakePipeline(requires_identity=True)
+    )
+
+    app = api_module.create_app(
+        "unused-manifest-path.yaml", token_verifier=_FakeTokenVerifier({})
+    )
+
+    assert TestClient(app).get("/health").status_code == 200
+
+
 def test_retrieve_threads_the_authenticated_tenant_id_into_the_pipeline_call(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -286,3 +348,153 @@ def test_health_is_exempt_from_the_rate_limit(monkeypatch: pytest.MonkeyPatch) -
 
     for _ in range(5):
         assert client.get("/health").status_code == 200
+
+
+def test_retrieve_requires_a_bearer_token_when_a_verifier_is_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`test_answer_requires_a_bearer_token_when_a_verifier_is_configured`
+    covers `/answer`; `/retrieve` shares the same `_authenticate` dependency
+    but had no test of its own."""
+    verifier = _FakeTokenVerifier({})
+    client = _client(_FakePipeline(), monkeypatch, token_verifier=verifier)
+
+    response = client.get("/retrieve", params={"q": "hi"})
+
+    assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Lot 1 (tenant fail-closed) — end-to-end HTTP-level cross-tenant leak check,
+# against a *real* ApplicationService/RAGEngine/TenantIsolationPolicy, not
+# fakes standing in for them. `_FakePipeline` above stubs the pipeline
+# entirely, which proves wiring (identity threaded through) but not that the
+# real enforcement chain actually filters cross-tenant content out of the
+# HTTP response body.
+# ---------------------------------------------------------------------------
+
+
+class _TwoTenantRetriever:
+    """Always returns both tenants' chunks — isolation must come from
+    `TenantIsolationPolicy.filter_chunks()`, not from the retriever."""
+
+    def retrieve(self, query, k: int = 10):  # type: ignore[no-untyped-def]
+        return [
+            RetrievedChunk(
+                chunk=Chunk(doc_id=new_id(), content="acme-secret-plan", tenant_id="acme"),
+                score=0.9,
+                rank=1,
+            ),
+            RetrievedChunk(
+                chunk=Chunk(doc_id=new_id(), content="globex-secret-plan", tenant_id="globex"),
+                score=0.9,
+                rank=2,
+            ),
+        ]
+
+    async def aretrieve(self, query, k: int = 10):  # type: ignore[no-untyped-def]
+        return self.retrieve(query, k)
+
+    def name(self) -> str:
+        return "two-tenant-fake-retriever"
+
+
+class _EchoChunksGenerator:
+    """Concatenates every chunk's content into the answer text, so a
+    cross-tenant leak in the retrieved context is visible in the HTTP
+    response body, not just in an internal assertion."""
+
+    def generate(self, query, context, trace):  # type: ignore[no-untyped-def]
+        return Answer(
+            query_id=query.id,
+            text=" ".join(rc.chunk.content for rc in context) or "no context",
+        )
+
+    async def agenerate(self, query, context, trace):  # type: ignore[no-untyped-def]
+        return self.generate(query, context, trace)
+
+    def name(self) -> str:
+        return "echo-chunks-generator"
+
+
+def _real_two_tenant_application():  # type: ignore[no-untyped-def]
+    from modular_rag.app.application import ApplicationService
+    from modular_rag.app.container import Container
+    from modular_rag.contracts.manifests import ComponentConfig, PipelineManifest
+    from modular_rag.orchestration.engine import RAGEngine
+    from modular_rag.orchestration.native_engine import NativeEngineAdapter
+    from modular_rag.security.policies.tenant_isolation import TenantIsolationPolicy
+
+    manifest = PipelineManifest(
+        id="two-tenant-test",
+        chunker=ComponentConfig(type="fake"),
+        embedder=ComponentConfig(type="fake"),
+        indexer=ComponentConfig(type="fake"),
+        retriever=ComponentConfig(type="fake"),
+        generator=ComponentConfig(type="fake"),
+    )
+    container = Container(manifest)
+    container.register("chunker", object())
+    container.register("embedder", object())
+    container.register("indexer", object())
+    container.register("retriever", _TwoTenantRetriever())
+    container.register("generator", _EchoChunksGenerator())
+    container.register("tenant_policy", TenantIsolationPolicy())
+    native = RAGEngine(container)
+    return ApplicationService(native, NativeEngineAdapter(native))
+
+
+def test_answer_never_leaks_another_tenants_content_in_the_http_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """End-to-end (real ApplicationService + RAGEngine + TenantIsolationPolicy,
+    fakes only for retriever/generator): tenant A's authenticated `/answer`
+    response must contain only A's content, never B's — proves the fix holds
+    all the way to the HTTP response body, not just at the ExecutionContext
+    boundary."""
+    application = _real_two_tenant_application()
+    verifier = _FakeTokenVerifier(
+        {
+            "acme-token": TenantContext(tenant_id="acme", user_id="alice"),
+            "globex-token": TenantContext(tenant_id="globex", user_id="bob"),
+        }
+    )
+    monkeypatch.setattr(api_module, "load_pipeline", lambda path: application)
+    client = TestClient(api_module.create_app("unused.yaml", token_verifier=verifier))
+
+    acme_response = client.post(
+        "/answer", json={"question": "status?"}, headers={"Authorization": "Bearer acme-token"}
+    )
+    globex_response = client.post(
+        "/answer", json={"question": "status?"}, headers={"Authorization": "Bearer globex-token"}
+    )
+
+    assert acme_response.status_code == 200
+    assert globex_response.status_code == 200
+    assert "acme-secret-plan" in acme_response.json()["text"]
+    assert "globex-secret-plan" not in acme_response.json()["text"]
+    assert "globex-secret-plan" in globex_response.json()["text"]
+    assert "acme-secret-plan" not in globex_response.json()["text"]
+
+
+def test_answer_is_denied_with_a_valid_token_that_has_no_effect_without_a_tenant(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A syntactically valid, verified token is not enough on its own if the
+    resulting identity somehow carried no tenant — belt-and-suspenders check
+    that `TenantIsolationPolicy` (not just the API layer) is the real
+    enforcement point. `TenantContext.tenant_id` is `str`, not `str | None`,
+    so this is exercised via an empty string, the one falsy value the type
+    still permits."""
+    application = _real_two_tenant_application()
+    verifier = _FakeTokenVerifier({"empty-tenant-token": TenantContext(tenant_id="", user_id="x")})
+    monkeypatch.setattr(api_module, "load_pipeline", lambda path: application)
+    client = TestClient(api_module.create_app("unused.yaml", token_verifier=verifier))
+
+    response = client.post(
+        "/answer",
+        json={"question": "status?"},
+        headers={"Authorization": "Bearer empty-tenant-token"},
+    )
+
+    assert response.status_code == 403

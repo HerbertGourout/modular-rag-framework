@@ -171,6 +171,21 @@ def test_run_propagates_execution_context_tenant_id_to_the_underlying_query() ->
     assert container.generator.last_query.tenant_id == "acme-corp"
 
 
+def test_run_with_none_context_tenant_id_leaves_the_underlying_query_tenant_id_none() -> None:
+    """Lot 1 (tenant fail-closed): a `None` context.tenant_id (no verified
+    identity) must reach RAGEngine.answer() as `None`, not a fabricated
+    placeholder — this is the adapter-boundary half of the fix; the other
+    half (ApplicationService no longer fabricating `"default"`) is covered
+    in tests/unit/app/test_application.py."""
+    rag_engine, container = _rag_engine_and_container()
+    adapter = NativeEngineAdapter(rag_engine)
+    context = ExecutionContext(tenant_id=None, correlation_id="c", request_id="r")
+
+    adapter.run(EngineRequest(query=Query(text="What is RAG?")), context)
+
+    assert container.generator.last_query.tenant_id is None
+
+
 def test_name_and_version_are_non_empty() -> None:
     adapter = NativeEngineAdapter(_rag_engine())
     assert adapter.name() == "native"

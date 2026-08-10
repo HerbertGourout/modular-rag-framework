@@ -3,6 +3,13 @@
 **Date:** 2026-08-05
 **Status:** COMPLETE
 
+> **Superseded in part by Lot 1 (tenant fail-closed, 2026-08-10):** this record's description of
+> `token_verifier` as unconditionally optional/default-open was accurate at the time but no
+> longer reflects current behavior — `create_app()` now refuses to start without one when the
+> loaded manifest wires a `tenant_policy`. See `docs/refactoring-plan.md`'s Lot 16a entry and
+> `docs/api/rest.md`'s Authentication section for the current, accurate posture. This file is
+> kept as a historical record of what Lot 16a itself delivered, not edited further.
+
 ## Scope (from `docs/refactoring-plan.md` §5, Phase D)
 
 > Harden FastAPI factory/startup, typed safe errors, authentication, authorization, rate and

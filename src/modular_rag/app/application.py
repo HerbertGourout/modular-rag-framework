@@ -37,17 +37,43 @@ class ApplicationService:
     def chunker(self) -> Chunker:
         return self._native.chunker
 
+    @property
+    def requires_identity(self) -> bool:
+        """True when the wired pipeline enforces tenant isolation. A caller
+        that exposes this service over a network boundary (e.g.
+        `api/__init__.py::create_app()`) must refuse to start without an
+        authentication mechanism in that case — silently serving a
+        tenant-isolated pipeline to unauthenticated callers is exactly the
+        fail-open failure mode Lot 1 closes."""
+        return self._native.tenant_policy_active
+
     def ingest_chunks(self, chunks: list[Chunk]) -> int:
         return self._native.ingest_chunks(chunks)
 
-    def answer(self, question: str, tenant_id: str | None = None) -> Answer:
+    def answer(
+        self,
+        question: str,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
+        roles: frozenset[str] = frozenset(),
+    ) -> Answer:
+        """Answer a question through the selected `DocumentEngine`.
+
+        `tenant_id`/`user_id`/`roles` come from a verified identity (API:
+        the authenticated `TenantContext`; CLI: the operator-supplied
+        `--tenant-id`) or are `None`/empty when there is none — never
+        fabricated into a placeholder value (Lot 1, tenant fail-closed:
+        this used to coerce a missing `tenant_id` into `"default"`, which
+        defeated `TenantIsolationPolicy.enforce_query()`'s fail-closed check
+        downstream, since `"default"` is a non-empty, truthy string)."""
         request_id = str(uuid.uuid4())
-        effective_tenant = tenant_id or "default"
         query = Query(text=question, tenant_id=tenant_id)
         context = ExecutionContext(
-            tenant_id=effective_tenant,
+            tenant_id=tenant_id,
             correlation_id=str(uuid.uuid4()),
             request_id=request_id,
+            user_id=user_id,
+            roles=roles,
         )
         result = self._selected.run(EngineRequest(query=query), context)
         return Answer(

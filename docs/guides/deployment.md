@@ -159,7 +159,7 @@ opt-in in V1 so that local iteration stays fast and frictionless. Before anythin
 client-facing goes live, work through this list explicitly rather than assuming a preset
 switch handles it:
 
-1. Configure `create_app(..., token_verifier=...)` (Lot 16a) — `adapters/auth/keycloak_verifier.py`'s `KeycloakTokenVerifier` is the reference `TokenVerifier` implementation. Without one, `/answer` and `/retrieve` are unauthenticated. See [rest.md](../api/rest.md#authentication).
+1. Configure `create_app(..., token_verifier=...)` (Lot 16a) — `adapters/auth/keycloak_verifier.py`'s `KeycloakTokenVerifier` is the reference `TokenVerifier` implementation. Without one, `/answer` and `/retrieve` are unauthenticated *if* the manifest has no `governance.tenant_policy` wired. `secure-enterprise-rag.yaml` (step 2 below) does wire one, so for it this is not optional: `create_app()` refuses to start without a `token_verifier` at all (Lot 1, tenant fail-closed) — configure OIDC issuer/audience before first launch, not after a failed one. See [rest.md](../api/rest.md#authentication).
 2. Start from `secure-enterprise-rag.yaml`, or explicitly enable `BasicSecurityGuard`, `PatternRedactor`, an audit sink, and `TenantIsolationPolicy`. The tenant policy denies requests without an authenticated tenant identity.
 3. Tune `create_app(..., rate_limit_per_minute=..., max_body_bytes=...)` (Lot 16a) for your expected load — see [backup-restore.md](backup-restore.md#overload--soak-evidence-deferred-from-lot-14) for a load-test script to calibrate against.
 4. Keep secrets out of YAML: use `${QDRANT_URL}` and `secret://QDRANT_API_KEY`/`secret://AUDIT_DATABASE_URL`. `load_pipeline()`, `load_engine()`, and `load_application()` all call `resolve_manifest()` before wiring.
@@ -169,7 +169,11 @@ switch handles it:
 ## Authenticated container deployment
 
 The shipped `docker/server.py` enables Keycloak verification when both variables below are set;
-setting only one fails startup rather than silently exposing an unauthenticated API:
+setting only one fails startup rather than silently exposing an unauthenticated API. Against
+`secure-enterprise-rag.yaml` specifically, setting *neither* now also fails startup (Lot 1,
+tenant fail-closed: `create_app()` refuses to run a tenant-isolated manifest without a
+`token_verifier` at all) — there is no combination of these two variables that leaves this
+preset's API silently open:
 
 ```bash
 docker run -d --name mrag-secure -p 8000:8000 \

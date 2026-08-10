@@ -35,7 +35,12 @@
 > - **Lot 16a COMPLETE** (2026-08-05): `create_app()` gained optional `token_verifier`
 >   (`HTTPBearer`-based auth, closes Lot 11b's "no API/CLI auth middleware" residual gap),
 >   `max_body_bytes` (413), and `rate_limit_per_minute` (429 + `Retry-After`) — all
->   optional/default-open, matching every other optional-component precedent. New
+>   optional/default-open, matching every other optional-component precedent **at the time**.
+>   **Updated by Lot 1** (tenant fail-closed, 2026-08-10): `token_verifier` is no longer
+>   unconditionally optional — `create_app()` now refuses to start when the loaded manifest
+>   wires a `tenant_policy` and no `token_verifier` was given, per Codex's second-pass review
+>   finding that the old "all optional" claim here had gone stale. `max_body_bytes`/
+>   `rate_limit_per_minute` remain unconditionally optional. New
 >   `api/errors.py`'s `to_http_exception()` replaces `detail=str(exc)` with typed safe mapping
 >   (401/403 pass-through for auth/security errors whose message is itself the safe explanation;
 >   everything else gets a generic message + correlation id, real exception logged server-side).

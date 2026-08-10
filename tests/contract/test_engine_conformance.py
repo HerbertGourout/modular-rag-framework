@@ -54,6 +54,18 @@ def test_fake_engine_implements_document_engine_protocol() -> None:
     assert isinstance(FakeDocumentEngine(), DocumentEngine)
 
 
+def test_execution_context_accepts_a_none_tenant_id() -> None:
+    """The port itself must accept `tenant_id=None` without error — it is
+    not an enforcement mechanism (Lot 1, tenant fail-closed); enforcement is
+    an adapter/policy concern. `FakeDocumentEngine` doesn't read the tenant
+    at all, which is the point: the port allows `None` through unchanged."""
+    engine = FakeDocumentEngine()
+
+    result = engine.run(_request("What is RAG?"), _context(tenant_id=None))
+
+    assert result.text
+
+
 def test_capabilities_is_a_frozenset_of_engine_capability() -> None:
     engine = FakeDocumentEngine()
     assert isinstance(engine.capabilities, frozenset)

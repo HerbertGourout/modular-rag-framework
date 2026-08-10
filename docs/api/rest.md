@@ -33,7 +33,7 @@ Base URL: `http://localhost:8000`
 | Parameter | Default | Purpose |
 |---|---|---|
 | `manifest_path` | required | Pipeline manifest YAML — same as the CLI's `--manifest`. |
-| `token_verifier` | `None` | A `contracts.identity.TokenVerifier` (e.g. `adapters.auth.keycloak_verifier.KeycloakTokenVerifier`, Lot 11b). When set, `/answer` and `/retrieve` require a valid `Authorization: Bearer <token>` header. `None` leaves every route open — dev/local use, matching every other optional-component precedent in this codebase (guard, redactor, tenant_policy). **Any deployment serving more than one tenant's data must configure one.** |
+| `token_verifier` | `None` | A `contracts.identity.TokenVerifier` (e.g. `adapters.auth.keycloak_verifier.KeycloakTokenVerifier`, Lot 11b). When set, `/answer` and `/retrieve` require a valid `Authorization: Bearer <token>` header. `None` leaves every route open **only if the loaded manifest has no `governance.tenant_policy` wired** — dev/local use, matching every other optional-component precedent in this codebase (guard, redactor, tenant_policy). **A manifest that wires a `tenant_policy` makes this parameter mandatory: `create_app()` raises `ConfigurationError` at startup instead of leaving the API unauthenticated (Lot 1, tenant fail-closed)** — the service refuses to start rather than silently exposing tenant-isolated data. |
 | `max_body_bytes` | `1_000_000` (1 MB) | Requests with a `Content-Length` over this are rejected `413` before the body is read. |
 | `rate_limit_per_minute` | `60` | Per-client (by `X-Forwarded-For` or socket address) fixed-window request limit; over it returns `429` with a `Retry-After` header. In-memory, single-process — not shared across horizontally-scaled replicas; a Redis-backed limiter is the production upgrade path if this API is ever deployed with more than one worker. |
 
@@ -199,9 +199,13 @@ is no `doc_id`, `source`, `rank`, or `retrieval_method` in the response.
 ## Authentication
 
 `create_app(..., token_verifier=...)` (Lot 16a) — see the parameters table above. With no
-verifier configured, the API is unauthenticated (dev/local use only). With one configured,
-`/answer` and `/retrieve` require `Authorization: Bearer <token>`; `/health` and `/ready` never
-do. `adapters/auth/keycloak_verifier.py`'s `KeycloakTokenVerifier` (Lot 11b) is the reference
+verifier configured **and no `governance.tenant_policy` wired on the loaded manifest**, the API
+is unauthenticated (dev/local use only). If the manifest *does* wire a `tenant_policy`, a
+verifier is no longer optional: `create_app()` raises `ConfigurationError` at startup when one
+isn't given (Lot 1, tenant fail-closed) — plan for this at deployment time, not after a failed
+launch. With a verifier configured, `/answer` and `/retrieve` require
+`Authorization: Bearer <token>`; `/health` and `/ready` never do.
+`adapters/auth/keycloak_verifier.py`'s `KeycloakTokenVerifier` (Lot 11b) is the reference
 implementation, verifying against a real Keycloak realm's JWKS endpoint.
 
 There is no per-tenant API-key scheme — identity comes only from the verified token's
