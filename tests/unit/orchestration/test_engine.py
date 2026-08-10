@@ -437,6 +437,26 @@ def test_ingest_chunks_raises_when_tenant_policy_configured_and_chunk_has_no_ten
         engine.ingest_chunks([chunk])
 
 
+def test_ingest_chunks_indexes_nothing_when_any_chunk_in_the_batch_lacks_a_tenant_id() -> None:
+    """Tenant-aware ingestion acceptance criterion: "aucune indexation
+    partielle en cas de refus." The tenant check must run over the *entire* batch before any
+    embedding/indexing starts — put the offending chunk last, so a
+    step-by-step implementation that checked-then-indexed one chunk at a
+    time would fail this test even though the single-chunk regression test
+    above already passes."""
+    engine, container = _engine(tenant_policy=TenantIsolationPolicy())
+    chunks = [
+        Chunk(doc_id=new_id(), content="a", tenant_id="acme-corp"),
+        Chunk(doc_id=new_id(), content="b", tenant_id="acme-corp"),
+        Chunk(doc_id=new_id(), content="c"),  # no tenant_id — last in the list
+    ]
+
+    with pytest.raises(PolicyViolationError, match="tenant_id"):
+        engine.ingest_chunks(chunks)
+
+    assert container.indexer.indexed == []
+
+
 def test_ingest_chunks_succeeds_when_tenant_policy_configured_and_chunk_has_a_tenant_id() -> None:
     engine, container = _engine(tenant_policy=TenantIsolationPolicy())
     chunk = Chunk(doc_id=new_id(), content="hello world", tenant_id="acme-corp")

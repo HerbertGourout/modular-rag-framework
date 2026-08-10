@@ -50,9 +50,9 @@ flowchart LR
 ```
 
 **Boundary 1, updated by Lot 1 (tenant fail-closed, 2026-08-10):** this obligation applies to the
-**API only** — the CLI has no `TokenVerifier` concept at all; `mrag ask --tenant-id` trusts the
-value an operator running the command directly supplies, the same local-trust model as any other
-CLI flag, not a verified identity. For the API, authentication
+**API only** — the CLI has no `TokenVerifier` concept at all; both `mrag ask --tenant-id` and
+`mrag ingest --tenant-id` trust the value an operator running the command directly supplies, the
+same local-trust model as any other CLI flag, not a verified identity. For the API, authentication
 (`create_app(..., token_verifier=...)`, Lot 16a) is no longer unconditionally optional. It
 remains optional only for a manifest with no `governance.tenant_policy` wired (unauthenticated
 local/dev use is still the default posture for those). For a manifest that *does* wire a

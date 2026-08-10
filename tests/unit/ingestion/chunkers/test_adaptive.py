@@ -106,3 +106,18 @@ def test_offsets_are_faithful_to_source():
     chunks = AdaptiveChunker(min_chunk_tokens=0).chunk(doc)
     for chunk in chunks:
         assert doc.content[chunk.start_char : chunk.end_char] == chunk.content
+
+
+def test_document_tenant_id_propagates_to_every_chunk():
+    """Tenant-aware ingestion depends on this: test-specialist review found
+    deleting this propagation broke no test — closes that gap."""
+    doc = Document(source="test.md", content=STRUCTURED_DOC, tenant_id="acme-corp")
+    chunks = AdaptiveChunker().chunk(doc)
+    assert len(chunks) > 0
+    assert all(c.tenant_id == "acme-corp" for c in chunks)
+
+
+def test_document_with_no_tenant_id_yields_chunks_with_none():
+    doc = _doc(STRUCTURED_DOC)
+    chunks = AdaptiveChunker().chunk(doc)
+    assert all(c.tenant_id is None for c in chunks)

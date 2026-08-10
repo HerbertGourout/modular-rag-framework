@@ -50,15 +50,37 @@ def _close_application(application: object | None) -> None:
 def ingest(
     path: Path = typer.Argument(..., help="File or directory to ingest"),  # noqa: B008
     manifest: Path = typer.Option(..., "--manifest", "-m", help="Pipeline manifest YAML"),  # noqa: B008
+    tenant_id: str | None = typer.Option(
+        None, "--tenant-id", help="Tenant identity for a tenant_policy-enabled manifest"
+    ),
 ) -> None:
-    """Parse, chunk, embed and index documents from a file or directory."""
+    """Parse, chunk, embed and index documents from a file or directory.
+
+    `--tenant-id` (tenant-aware ingestion, follow-up to the tenant
+    fail-closed fix on `ask`): applied to every parsed document before
+    chunking, so every resulting chunk carries it. Omit it for a
+    local/unsecured manifest with no `tenant_policy` configured — ingestion
+    behaves exactly as before. Against a manifest that *does* wire a
+    `tenant_policy`, `pipeline.requires_identity` is true and `--tenant-id`
+    is required — checked explicitly below, not only via
+    `Container.tenant_policy.enforce_ingest()`'s per-chunk loop downstream,
+    which is a no-op on an empty batch (an empty directory or a
+    directory containing only unsupported file types would otherwise
+    "succeed" with 0 chunks indexed and no tenant ever checked).
+    """
     pipeline = None
     try:
         pipeline = load_pipeline(manifest)
+        if pipeline.requires_identity and not tenant_id:
+            raise SecurityError(
+                "This manifest requires a tenant identity (a tenant_policy is "
+                "configured) — pass --tenant-id. Denied before parsing/indexing "
+                "any content, including an empty or all-unsupported-files input."
+            )
         if path.is_dir():
-            chunks = ingest_directory(path, pipeline.chunker)
+            chunks = ingest_directory(path, pipeline.chunker, tenant_id=tenant_id)
         else:
-            chunks = ingest_path(path, pipeline.chunker)
+            chunks = ingest_path(path, pipeline.chunker, tenant_id=tenant_id)
         n = pipeline.ingest_chunks(chunks)
     except Exception as exc:
         typer.echo(f"ERROR: {exc}", err=True)
