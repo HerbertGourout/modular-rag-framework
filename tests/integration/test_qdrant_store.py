@@ -2,6 +2,7 @@
 import pytest
 
 from modular_rag.adapters.vectorstores.qdrant_store import QdrantStore
+from modular_rag.core.errors import ConfigurationError
 from modular_rag.core.ids import new_id
 from modular_rag.core.models.chunk import Chunk
 
@@ -126,6 +127,25 @@ def test_retrieve_by_vector_with_tenant_id_excludes_other_tenants(store):
     ids = {r.chunk.id for r in results}
     assert acme.id in ids
     assert other.id not in ids
+
+
+@pytest.mark.integration
+def test_ensure_collection_raises_on_dimension_mismatch_against_a_real_existing_collection():
+    """The "already-existing collection" half of ADR-0009's dimension
+    guarantee (docs/adr/0009-vector-indexer-dimension-reconciliation.md) —
+    QdrantStore._ensure_collection() must reject a genuine mismatch against
+    a real, already-created Qdrant collection, not just the hand-built fakes
+    in tests/unit/adapters/vectorstores/test_qdrant_store.py (test-specialist
+    review)."""
+    collection = "test_qdrant_store_dim_mismatch"
+    original = QdrantStore(url="http://localhost:6333", collection=collection, vector_size=4)
+    original.clear()  # creates the collection at 4 dimensions
+    try:
+        mismatched = QdrantStore(url="http://localhost:6333", collection=collection, vector_size=8)
+        with pytest.raises(ConfigurationError):
+            mismatched.list_ids()
+    finally:
+        original.clear()
 
 
 @pytest.mark.integration

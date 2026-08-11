@@ -5,6 +5,7 @@ from typing import Any
 
 import structlog
 
+from modular_rag.contracts.indexing import VectorIndexer
 from modular_rag.contracts.manifests import ComponentConfig, PipelineManifest
 from modular_rag.core.errors import RegistryError
 from modular_rag.orchestration.container import Container
@@ -192,6 +193,24 @@ class ComponentRegistry:
                     target._embedder = embedder
                 if store is not None and hasattr(target, "_store"):
                     target._store = store
+
+        # ADR-0009: a dimension-sensitive Indexer (Qdrant today; any future
+        # vector store implementing VectorIndexer) needs the wired Embedder
+        # to reconcile its configured vector size — derived when the
+        # manifest left it unset, validated with ConfigurationError on an
+        # explicit mismatch. `isinstance()` against a Protocol is a pure
+        # in-memory structural check (no network call, and does not itself
+        # touch `embedder.dimensions`). `bind_embedder()` is a real
+        # `VectorIndexer` protocol method (not a private-attribute
+        # convention orchestration merely hopes an implementation reads —
+        # Codex review, second pass) — the store decides internally whether
+        # to call `ensure_vector_size(embedder.dimensions)` immediately or
+        # defer it to its own first real connection, so a custom embedder
+        # whose `.dimensions` requires loading a real model is never forced
+        # to do so merely because wire() ran (CLAUDE.md §05.7's lazy-import
+        # invariant; see ADR-0009).
+        if embedder is not None and isinstance(store, VectorIndexer):
+            store.bind_embedder(embedder)
 
         log.info("registry.wired", pipeline_id=manifest.id)
         return container

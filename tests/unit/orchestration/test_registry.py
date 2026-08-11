@@ -14,7 +14,7 @@ from modular_rag.contracts.manifests import (
     PipelineManifest,
     QualitySection,
 )
-from modular_rag.core.errors import RegistryError
+from modular_rag.core.errors import ConfigurationError, RegistryError
 from modular_rag.orchestration.registry import ComponentRegistry
 
 
@@ -238,3 +238,175 @@ def test_unregistered_audit_sink_type_is_rejected_not_silently_ignored() -> None
     errors = validate_capabilities(manifest, reg)
 
     assert any("audit_sink" in e and "does-not-exist" in e for e in errors)
+
+
+# ---------------------------------------------------------------------------
+# ADR-0009 ("VectorIndexer sub-protocol and dimension reconciliation"):
+# `wire()` calls `bind_embedder()` — a real, protocol-declared VectorIndexer
+# method (Codex review, second pass: an earlier version of this used
+# `setattr(store, "_embedder", embedder)`, an undeclared private-attribute
+# convention nothing in the Protocol required an implementation to honor) —
+# it does not call `ensure_vector_size()` or read `embedder.dimensions`
+# itself; what the store does with the bound embedder (reconcile immediately,
+# or defer to its own first real connection) is entirely up to the
+# implementation. `isinstance()` on a Protocol checks *every* inherited
+# member (contracts.indexing.Indexer's `index`/`delete`/`clear`/`list_ids`/
+# `name`, plus `bind_embedder`/`ensure_vector_size`) — a fake missing any one
+# of them would silently fail the isinstance check and skip binding
+# entirely, so `_FakeVectorIndexer` below implements the full Indexer
+# surface, not just the two new methods. `_SlottedVectorIndexer` additionally
+# proves the design needs no dynamic-attribute cooperation at all: it
+# declares `__slots__` with no `_embedder` name, so any attempt by
+# orchestration to `setattr` an undeclared attribute onto it would raise
+# `AttributeError` — `wire()` never does that, only ever calling the public
+# `bind_embedder()` method.
+# ---------------------------------------------------------------------------
+
+
+class _FakeEmbedderWithDimensions:
+    def __init__(self, dimensions: int) -> None:
+        self._dimensions = dimensions
+
+    def embed(self, texts):  # type: ignore[no-untyped-def]
+        return [[0.0] * self._dimensions for _ in texts]
+
+    async def aembed(self, texts):  # type: ignore[no-untyped-def]
+        return self.embed(texts)
+
+    @property
+    def dimensions(self) -> int:
+        return self._dimensions
+
+    def name(self) -> str:
+        return "fake-embedder-with-dimensions"
+
+
+class _FakeVectorIndexer:
+    def __init__(self) -> None:
+        self.bind_embedder_calls: list[object] = []
+        self.ensure_vector_size_calls: list[int] = []
+        self._raise: Exception | None = None
+
+    def index(self, chunks):  # type: ignore[no-untyped-def]
+        pass
+
+    def delete(self, ids):  # type: ignore[no-untyped-def]
+        pass
+
+    def clear(self) -> None:
+        pass
+
+    def list_ids(self):  # type: ignore[no-untyped-def]
+        return []
+
+    def name(self) -> str:
+        return "fake-vector-indexer"
+
+    def bind_embedder(self, embedder: object) -> None:
+        self.bind_embedder_calls.append(embedder)
+
+    def ensure_vector_size(self, dimensions: int) -> None:
+        self.ensure_vector_size_calls.append(dimensions)
+        if self._raise is not None:
+            raise self._raise
+
+
+class _SlottedVectorIndexer:
+    """A `VectorIndexer` that forbids arbitrary attributes (Codex review,
+    second pass) — proves `wire()` cooperates with `bind_embedder()` alone
+    and never reaches for a private attribute no Protocol member declares."""
+
+    __slots__ = ("bound_embedder",)
+
+    def __init__(self) -> None:
+        self.bound_embedder: object | None = None
+
+    def index(self, chunks):  # type: ignore[no-untyped-def]
+        pass
+
+    def delete(self, ids):  # type: ignore[no-untyped-def]
+        pass
+
+    def clear(self) -> None:
+        pass
+
+    def list_ids(self):  # type: ignore[no-untyped-def]
+        return []
+
+    def name(self) -> str:
+        return "slotted-vector-indexer"
+
+    def bind_embedder(self, embedder: object) -> None:
+        self.bound_embedder = embedder
+
+    def ensure_vector_size(self, dimensions: int) -> None:
+        pass
+
+
+def test_wire_binds_the_embedder_via_the_public_protocol_method() -> None:
+    """ADR-0009 + Codex review (second pass): `wire()` must call
+    `bind_embedder()`, not merely set a private attribute an implementation
+    could ignore, reject via `__slots__`, or repurpose for unrelated state."""
+    from modular_rag.contracts.indexing import VectorIndexer
+
+    reg = _fake_registry()
+    embedder = _FakeEmbedderWithDimensions(768)
+    indexer = _FakeVectorIndexer()
+    reg.register("embedder", "fake-embedder", lambda cfg: embedder)
+    reg.register("indexer", "fake-indexer", lambda cfg: indexer)
+    assert isinstance(indexer, VectorIndexer)  # sanity: the fake really conforms
+
+    reg.wire(_minimal_manifest())
+
+    assert indexer.bind_embedder_calls == [embedder]
+    assert indexer.ensure_vector_size_calls == []  # not called eagerly by wire() itself
+
+
+def test_wire_binds_the_embedder_on_an_implementation_with_no_dynamic_attributes() -> None:
+    """The `__slots__`-based fake would raise `AttributeError` on any
+    `setattr(store, "_embedder", ...)`-style injection — proves `wire()`
+    only ever calls the public `bind_embedder()` method."""
+    from modular_rag.contracts.indexing import VectorIndexer
+
+    reg = _fake_registry()
+    embedder = _FakeEmbedderWithDimensions(768)
+    indexer = _SlottedVectorIndexer()
+    reg.register("embedder", "fake-embedder", lambda cfg: embedder)
+    reg.register("indexer", "fake-indexer", lambda cfg: indexer)
+    assert isinstance(indexer, VectorIndexer)  # sanity: the fake really conforms
+
+    reg.wire(_minimal_manifest())  # must not raise AttributeError
+
+    assert indexer.bound_embedder is embedder
+
+
+def test_wire_skips_embedder_binding_when_indexer_is_not_a_vector_indexer() -> None:
+    """The default `_fake_registry()` indexer is a bare `object()` — must
+    not crash `wire()` just because it doesn't implement `VectorIndexer`
+    (e.g. a future lexical-only Indexer)."""
+    reg = _fake_registry()
+
+    container = reg.wire(_minimal_manifest())  # must not raise
+
+    assert container.indexer is not None
+
+
+def test_wire_succeeds_even_when_ensure_vector_size_would_raise() -> None:
+    """ADR-0009: `ensure_vector_size()` is never called by `wire()` itself —
+    an explicit `vector_size` mismatch only surfaces later, whenever the
+    store itself decides to reconcile (see
+    tests/unit/adapters/vectorstores/test_qdrant_store.py and
+    tests/unit/app/test_preset_vector_dimensions.py for that path)."""
+    reg = _fake_registry()
+    embedder = _FakeEmbedderWithDimensions(768)
+    indexer = _FakeVectorIndexer()
+    indexer._raise = ConfigurationError(
+        "vector_size=384 does not match embedder dimensions=768"
+    )
+    reg.register("embedder", "fake-embedder", lambda cfg: embedder)
+    reg.register("indexer", "fake-indexer", lambda cfg: indexer)
+
+    reg.wire(_minimal_manifest())  # must not raise
+
+    assert indexer.bind_embedder_calls == [embedder]
+    assert indexer.ensure_vector_size_calls == []

@@ -122,6 +122,27 @@ question, and a selected engine must never silently ignore a declared control.
 
 ---
 
+### [ADR-0009: VectorIndexer Sub-Protocol and Dimension Reconciliation](0009-vector-indexer-dimension-reconciliation.md)
+
+**Status:** Accepted
+**Date:** 2026-08-11
+
+Adds an opt-in `VectorIndexer(Indexer, Protocol)` sub-protocol so dimension-sensitive stores
+(Qdrant today) can reconcile their configured `vector_size` against the wired embedder's real
+output dimension — derived when unset, validated when explicit, rejected with
+`ConfigurationError` before any collection is created or used (including against an
+already-existing collection, and on a retry after a prior failure), and named-vector collections
+rejected cleanly rather than with an opaque `AttributeError`. `wire()` hands the embedder off via
+`bind_embedder()`, a real protocol method — not a private attribute an implementation might
+ignore — and `QdrantStore` defers the actual reconciliation into its own lazy client-creation
+path, so a custom embedder's real dimension is never computed until the pipeline actually needs a
+live store.
+
+**Key insight:** non-vector `Indexer` implementations are entirely unaffected — reconciliation is
+opt-in via a narrow sub-protocol, not a field added to `Indexer` itself.
+
+---
+
 ## Decision Making Process
 
 1. **Identification**: Problem identified in sprint planning, client feedback, or architecture review.

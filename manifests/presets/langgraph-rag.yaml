@@ -26,7 +26,39 @@ embedder:
 indexer:
   type: qdrant
   config:
-    collection: documents
+    # ADR-0009 (docs/adr/0009-vector-indexer-dimension-reconciliation.md):
+    # must NOT be "documents" — local-hybrid-rag.yaml already uses that name
+    # on the same default localhost:6333, with bge-small-en-v1.5 (384-dim) vs
+    # this manifest's bge-base-en-v1.5 (768-dim). Sharing a collection name
+    # across two different embedding dimensions is exactly the class of bug
+    # this closes; QdrantStore now correctly raises ConfigurationError the
+    # moment both presets ever point at the same live collection, rather
+    # than silently corrupting it.
+    #
+    # BREAKING CHANGE for existing deployments of this preset: this rename
+    # (from "documents") means any Qdrant instance already populated by a
+    # prior run of this exact preset now points at a new, empty collection —
+    # the old vectors under "documents" are not lost, just no longer
+    # queried. Before upgrading a live deployment, pick one:
+    #   1. Reingest into "langgraph_documents" (simplest; safe even if you
+    #      also run local-hybrid-rag.yaml against the same Qdrant instance).
+    #   2. If "documents" was *only* ever populated by this preset (i.e. you
+    #      were not also running local-hybrid-rag.yaml against the same
+    #      instance, so there is no 384-dim data mixed in), avoid reingesting
+    #      by copying the physical collection instead: `create_snapshot()` on
+    #      "documents", then `recover_snapshot()` into a real
+    #      "langgraph_documents" collection (see qdrant-client's snapshot
+    #      API). A Qdrant collection *alias* is NOT a substitute here: this
+    #      store's own existence check (`QdrantStore._ensure_collection()`)
+    #      only enumerates physical collections via `get_collections()`, not
+    #      aliases, so pointing `collection: langgraph_documents` at an alias
+    #      rather than a real collection makes this store try to create a
+    #      colliding physical collection of that name instead of using the
+    #      aliased one.
+    #   3. Override `collection` back to a name of your choosing in a local
+    #      manifest copy if you have already guaranteed isolation some other
+    #      way (e.g. a dedicated Qdrant instance per preset).
+    collection: langgraph_documents
     url: "http://localhost:6333"
 
 retriever:

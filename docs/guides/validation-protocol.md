@@ -300,13 +300,13 @@ mrag validate manifests/presets/local-hybrid-rag.yaml
 
 The `secure-enterprise-rag.yaml` command above requires `QDRANT_URL`, `QDRANT_API_KEY`, and
 `AUDIT_DATABASE_URL` to be set (resolved via `${VAR}`/`secret://` — see
-[deployment.md](deployment.md)) and a live Qdrant + PostgreSQL. Codex review finding: this preset
-also selects the 768-dimensional `BAAI/bge-base-en-v1.5` embedder without an explicit
-`indexer.config.vector_size`, so a fresh Qdrant collection is created at the `QdrantStore`
-default (384) and ingestion fails on the dimension mismatch — a known, separate issue (embedder
-↔ indexer dimension isn't cross-validated anywhere yet), not something `--tenant-id` introduces
-or this guide's scope to fix. Demonstrating `--tenant-id` end-to-end against this preset today
-requires first setting `indexer.config.vector_size: 768` in a local copy of the manifest.
+[deployment.md](deployment.md)) and a live Qdrant + PostgreSQL. This preset selects the
+768-dimensional `BAAI/bge-base-en-v1.5` embedder without an explicit `indexer.config.vector_size`
+— as of [ADR-0009](../adr/0009-vector-indexer-dimension-reconciliation.md), `QdrantStore` derives
+its collection's vector size from the wired embedder automatically in this case (768, not the old
+384 default), so no manual override is needed to demonstrate `--tenant-id` end-to-end against
+this preset. An explicit `indexer.config.vector_size` that disagreed with the embedder would
+instead fail fast with a clear `ConfigurationError`, before any collection is created or used.
 
 ### REST API
 
