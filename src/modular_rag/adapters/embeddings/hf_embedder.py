@@ -10,6 +10,29 @@ class HuggingFaceEmbedder:
     Default model: BAAI/bge-small-en-v1.5 (384-dim, ~130 MB, strong English).
     """
 
+    # ADR-0009 (docs/adr/0009-vector-indexer-dimension-reconciliation.md):
+    # `.dimensions` used to unconditionally call `_get_model()`, forcing a
+    # real sentence-transformers download/load — fine when embedding text
+    # anyway, but a `VectorIndexer` (e.g. `QdrantStore`) now reads
+    # `.dimensions` to reconcile its collection's vector size, and could
+    # otherwise force a model load merely because a pipeline was wired or a
+    # store opened its first connection, not because anything actually
+    # needed to embed text yet (architecture-reviewer finding, breaks
+    # CLAUDE.md §05.7's lazy-import invariant). Known models' dimensions are
+    # fixed, publicly documented facts about released model architectures,
+    # not something that changes — a static table keeps `.dimensions` free
+    # for every model this repository's own presets actually use; an
+    # unrecognized model name still falls back to loading it for real, since
+    # there is no way to know an arbitrary model's output size without it —
+    # ADR-0009 defers exactly that fallback's cost to the store's own first
+    # real use (see `QdrantStore._get_client()`), not wiring time.
+    _DIMENSIONS = {
+        "BAAI/bge-small-en-v1.5": 384,
+        "BAAI/bge-base-en-v1.5": 768,
+        "BAAI/bge-large-en-v1.5": 1024,
+        "sentence-transformers/all-MiniLM-L6-v2": 384,
+    }
+
     def __init__(
         self,
         model: str = "BAAI/bge-small-en-v1.5",
@@ -35,8 +58,11 @@ class HuggingFaceEmbedder:
 
     @property
     def dimensions(self) -> int:
+        known = self._DIMENSIONS.get(self._model_name)
+        if known is not None:
+            return known
         model = self._get_model()
-        return model.get_sentence_embedding_dimension()
+        return int(model.get_sentence_embedding_dimension())
 
     def name(self) -> str:
         return f"hf-{self._model_name.split('/')[-1]}"

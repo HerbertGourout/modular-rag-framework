@@ -5,6 +5,29 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed — embedder/Qdrant vector-dimension consistency (2026-08-11)
+
+[ADR-0009](docs/adr/0009-vector-indexer-dimension-reconciliation.md): `QdrantStore` no longer
+defaults silently to a 384-dimensional collection regardless of the wired embedder's real output
+size. `secure-enterprise-rag.yaml` and `langgraph-rag.yaml` (both `bge-base-en-v1.5`, 768-dim)
+were previously exposed to this — a fresh deployment of either would have created an
+incompatible 384-dim collection. Vector size is now derived from the wired `Embedder` when
+`indexer.config.vector_size` is left unset, and validated with a clear `ConfigurationError`
+before any collection is created or used when it is set explicitly and disagrees.
+
+- **BREAKING for existing `langgraph-rag.yaml` deployments**: its collection name changed from
+  `documents` to `langgraph_documents`, to stop colliding with `local-hybrid-rag.yaml`'s
+  same-named, 384-dim collection on the same default `localhost:6333`. Existing data under
+  `documents` is not deleted, just no longer queried by this preset. Before upgrading a live
+  deployment: reingest into `langgraph_documents`, or copy the physical collection via
+  `create_snapshot()`/`recover_snapshot()` into a real `langgraph_documents` collection. A
+  Qdrant collection *alias* is not a working substitute: `QdrantStore._ensure_collection()` only
+  recognizes physical collections, not aliases, so it would try to create a colliding physical
+  collection under the alias's name instead of using it. See the migration note in
+  `manifests/presets/langgraph-rag.yaml` for exact commands.
+- New `VectorIndexer(Indexer, Protocol)` sub-protocol (`contracts/indexing.py`) — opt-in, so
+  non-vector `Indexer` implementations are unaffected.
+
 ### Refactoring programme — engine-agnostic control plane (2026-08-04 to 2026-08-05)
 
 Full 18-lot refactoring programme (`docs/refactoring-plan.md`), accepting
