@@ -75,12 +75,12 @@ for path in paths:
     }
 }
 
-function Test-Port([int]$Port) {
-    (Test-NetConnection -ComputerName 127.0.0.1 -Port $Port -WarningAction SilentlyContinue).TcpTestSucceeded
+function Test-Port([string]$HostName = "127.0.0.1", [int]$Port) {
+    (Test-NetConnection -ComputerName $HostName -Port $Port -WarningAction SilentlyContinue).TcpTestSucceeded
 }
 
 function Invoke-Integration {
-    if (-not (Test-Port 6333)) {
+    if (-not (Test-Port -Port 6333)) {
         Write-Warning "Qdrant is not available on localhost:6333; integration tests skipped."
         return
     }
@@ -89,10 +89,41 @@ function Invoke-Integration {
     }
 }
 
+# tests/e2e/ holds two scenarios with different prerequisites:
+#   - test_simple_qa_pipeline.py needs Qdrant + an LLM API key.
+#   - test_secure_preset_e2e.py needs Qdrant + PostgreSQL, and deliberately needs NO LLM key
+#     (deterministic embedder/generator — see that file's own module docstring).
+# All three prerequisites are required up front and this throws if any is missing, rather than
+# letting `pytest -m e2e` run with one scenario's tests silently skipped — a skip-heavy "all
+# skipped" run still exits 0, which would let this gate report success without actually
+# exercising the secure/governance scenario (Codex review, HIGH-001).
 function Invoke-E2E {
-    if (-not (Test-Port 6333)) { throw "Qdrant is not available on localhost:6333" }
+    # Resolve the same overrides tests/e2e/test_secure_preset_e2e.py itself honors
+    # (MRAG_TEST_QDRANT_URL / MRAG_TEST_POSTGRES_DSN) instead of hardcoding localhost —
+    # a container/CI network commonly points these elsewhere, and probing the wrong host
+    # made this gate fail even when the actual test target was reachable (Codex review,
+    # MED-001).
+    # [Uri].Port alone is wrong for a portless URL/DSN: it silently returns the *scheme's*
+    # default (80 for http://, -1 for a scheme .NET doesn't recognize like postgresql://) —
+    # neither is 6333/5432. .IsDefaultPort is true exactly when no explicit port was in the
+    # original string, which is when we need our own service default instead of trusting
+    # .Port (Codex review, MED-001 — matches tests/e2e/test_secure_preset_e2e.py's own
+    # `parsed.port or default_port` fallback exactly).
+    $qdrantUrlRaw = if ($env:MRAG_TEST_QDRANT_URL) { $env:MRAG_TEST_QDRANT_URL } else { "http://localhost:6333" }
+    $qdrantUri = [Uri]$qdrantUrlRaw
+    $qdrantPort = if ($qdrantUri.IsDefaultPort) { 6333 } else { $qdrantUri.Port }
+    $postgresDsnRaw = if ($env:MRAG_TEST_POSTGRES_DSN) { $env:MRAG_TEST_POSTGRES_DSN } else { "postgresql://postgres:postgres@localhost:5432/postgres" }
+    $postgresUri = [Uri]$postgresDsnRaw
+    $postgresPort = if ($postgresUri.IsDefaultPort) { 5432 } else { $postgresUri.Port }
+
+    if (-not (Test-Port -HostName $qdrantUri.Host -Port $qdrantPort)) {
+        throw "Qdrant is not reachable at $($qdrantUri.Host):$qdrantPort (from MRAG_TEST_QDRANT_URL, default localhost:6333)"
+    }
+    if (-not (Test-Port -HostName $postgresUri.Host -Port $postgresPort)) {
+        throw "PostgreSQL is not reachable at $($postgresUri.Host):$postgresPort (from MRAG_TEST_POSTGRES_DSN, default localhost:5432; required by tests/e2e/test_secure_preset_e2e.py)"
+    }
     if (-not $env:OPENAI_API_KEY -and -not $env:ANTHROPIC_API_KEY) {
-        throw "Set OPENAI_API_KEY or ANTHROPIC_API_KEY before running E2E tests"
+        throw "Set OPENAI_API_KEY or ANTHROPIC_API_KEY before running E2E tests (required by tests/e2e/test_simple_qa_pipeline.py; test_secure_preset_e2e.py itself needs none)"
     }
     Invoke-Checked "E2E tests" {
         & $Python -m pytest tests/e2e -q -m e2e -p no:cacheprovider --basetemp "$RunTemp/e2e"

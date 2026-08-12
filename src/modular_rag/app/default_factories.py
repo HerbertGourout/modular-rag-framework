@@ -5,12 +5,14 @@ from modular_rag.orchestration.registry import ComponentRegistry
 
 def register_defaults(reg: ComponentRegistry) -> None:
     from modular_rag.adapters.audit.postgres_sink import PostgresAuditSink
+    from modular_rag.adapters.embeddings.deterministic_embedder import DeterministicEmbedder
     from modular_rag.adapters.embeddings.hf_embedder import HuggingFaceEmbedder
     from modular_rag.adapters.embeddings.openai_embedder import OpenAIEmbedder
     from modular_rag.adapters.lifecycle.postgres_ledger import PostgresLifecycleLedger
     from modular_rag.adapters.vectorstores.qdrant_store import QdrantStore
     from modular_rag.core.models.policy import Policy
     from modular_rag.generation.synthesizers.anthropic_gen import AnthropicGenerator
+    from modular_rag.generation.synthesizers.deterministic_gen import DeterministicGenerator
     from modular_rag.generation.synthesizers.openai_gen import OpenAIGenerator
     from modular_rag.ingestion.chunkers.adaptive import AdaptiveChunker
     from modular_rag.ingestion.chunkers.fixed import FixedSizeChunker
@@ -32,12 +34,14 @@ def register_defaults(reg: ComponentRegistry) -> None:
         "embedder", "sentence-transformers", lambda cfg: HuggingFaceEmbedder(**cfg.config)
     )
     reg.register("embedder", "openai-embeddings", lambda cfg: OpenAIEmbedder(**cfg.config))
+    reg.register("embedder", "deterministic", lambda cfg: DeterministicEmbedder(**cfg.config))
     reg.register("indexer", "qdrant", lambda cfg: QdrantStore(**cfg.config))
     reg.register("retriever", "vector", lambda cfg: VectorRetriever(**cfg.config))
     reg.register("retriever", "hybrid", lambda cfg: HybridRetriever(**cfg.config))
     reg.register("reranker", "cross-encoder", lambda cfg: CrossEncoderReranker(**cfg.config))
     reg.register("generator", "openai", lambda cfg: OpenAIGenerator(**cfg.config))
     reg.register("generator", "anthropic", lambda cfg: AnthropicGenerator(**cfg.config))
+    reg.register("generator", "deterministic", lambda cfg: DeterministicGenerator(**cfg.config))
     reg.register("guard", "basic", lambda cfg: BasicSecurityGuard(**cfg.config))
     reg.register("tenant_policy", "tenant-isolation", lambda cfg: TenantIsolationPolicy())
     reg.register(

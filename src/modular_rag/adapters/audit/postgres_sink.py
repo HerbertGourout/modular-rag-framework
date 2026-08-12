@@ -101,5 +101,19 @@ class PostgresAuditSink:
         # NativeEngineAdapter's capability declarations in Lot 8.
         self.record(event)
 
+    def close(self) -> None:
+        """Release the underlying connection, if one was ever opened.
+
+        `Container.close()` discovers this via `getattr(component, "close", None)` —
+        without it, this sink's connection was never released by `app.close()` despite
+        the container's own docstring promising a "best-effort graceful shutdown of
+        registered resources" for every component that has a `close()` method (Codex
+        review, MED-003). Idempotent: calling this more than once, or on a sink that
+        never opened a connection, is a safe no-op.
+        """
+        if self._conn is not None:
+            self._conn.close()
+            self._conn = None
+
     def name(self) -> str:
         return "postgres"

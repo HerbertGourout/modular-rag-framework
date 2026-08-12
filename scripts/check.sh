@@ -194,23 +194,83 @@ check_integration() {
 }
 
 # ============================================================================
-# E2E CHECK — Full pipeline (requires Qdrant + LLM API key)
+# E2E CHECK — Full pipeline (requires Qdrant + PostgreSQL + an LLM API key)
 # Use: production verification, demos
+#
+# tests/e2e/ holds two scenarios with different prerequisites:
+#   - test_simple_qa_pipeline.py needs Qdrant + an LLM API key.
+#   - test_secure_preset_e2e.py needs Qdrant + PostgreSQL, and deliberately
+#     needs NO LLM key (deterministic embedder/generator — see that file's
+#     own module docstring).
+# This check requires all three prerequisites up front and fails fast if any
+# is missing, rather than letting `pytest -m e2e` run with one scenario's
+# tests silently skipped — a skip-heavy "all skipped" run still exits 0,
+# which would let this gate report success without actually exercising the
+# secure/governance scenario (Codex review, HIGH-001).
 # ============================================================================
 check_e2e() {
     print_header "E2E CHECK — Full Pipeline (~2-5 min)"
-    
+
+    # Resolve the same overrides tests/e2e/test_secure_preset_e2e.py itself honors
+    # (MRAG_TEST_QDRANT_URL / MRAG_TEST_POSTGRES_DSN) instead of hardcoding localhost —
+    # a container/CI network commonly points these elsewhere, and probing the wrong host
+    # made this gate fail even when the actual test target was reachable (Codex review,
+    # MED-001). Three host:port shapes must all resolve the same way
+    # `urllib.parse.urlparse().hostname`/`.port` does in the Python test (Codex review,
+    # MED-002 fixed the third case below — a naive `%%:*` split on an IPv6 literal like
+    # "[::1]:6333" takes everything before the *first* colon, which is inside the address
+    # itself, yielding host="[" instead of "::1"):
+    #   1. host:port explicit           -> split on the last colon
+    #   2. host only (no colon)         -> fall back to the service default port
+    #   3. [ipv6]:port or [ipv6] only   -> strip the brackets, port from after "]:" if present
+    _parse_host_port() {
+        local hostport="$1" default_port="$2" host port
+        if [[ "$hostport" == \[*\]* ]]; then
+            host="${hostport#\[}"
+            host="${host%%\]*}"
+            if [[ "$hostport" == *\]:* ]]; then
+                port="${hostport##*\]:}"
+            else
+                port="$default_port"
+            fi
+        elif [[ "$hostport" == *:* ]]; then
+            host="${hostport%%:*}"
+            port="${hostport##*:}"
+        else
+            host="$hostport"
+            port="$default_port"
+        fi
+        echo "$host $port"
+    }
+
+    local qdrant_url qdrant_hostport qdrant_host qdrant_port
+    qdrant_url="${MRAG_TEST_QDRANT_URL:-http://localhost:6333}"
+    qdrant_hostport="${qdrant_url#*://}"
+    qdrant_hostport="${qdrant_hostport%%/*}"
+    read -r qdrant_host qdrant_port <<< "$(_parse_host_port "$qdrant_hostport" 6333)"
+
+    local postgres_dsn postgres_hostport postgres_host postgres_port
+    postgres_dsn="${MRAG_TEST_POSTGRES_DSN:-postgresql://postgres:postgres@localhost:5432/postgres}"
+    postgres_hostport="${postgres_dsn#*@}"
+    postgres_hostport="${postgres_hostport%%/*}"
+    read -r postgres_host postgres_port <<< "$(_parse_host_port "$postgres_hostport" 5432)"
+
     # Check prerequisites
-    if ! nc -z localhost 6333 2>/dev/null; then
-        print_error "Qdrant not running. Start with: docker run -p 6333:6333 qdrant/qdrant"
+    if ! nc -z "$qdrant_host" "$qdrant_port" 2>/dev/null; then
+        print_error "Qdrant not reachable at ${qdrant_host}:${qdrant_port} (from MRAG_TEST_QDRANT_URL, default localhost:6333). Start locally with: docker run -p 6333:6333 qdrant/qdrant"
         return 1
     fi
-    
+
+    if ! nc -z "$postgres_host" "$postgres_port" 2>/dev/null; then
+        print_error "PostgreSQL not reachable at ${postgres_host}:${postgres_port} (from MRAG_TEST_POSTGRES_DSN, default localhost:5432; required by tests/e2e/test_secure_preset_e2e.py). Start locally with: docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:16"
+        return 1
+    fi
+
     if [[ -z "${OPENAI_API_KEY:-}" ]] && [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
-        print_error "No LLM API key set. Export OPENAI_API_KEY or ANTHROPIC_API_KEY"
+        print_error "No LLM API key set. Export OPENAI_API_KEY or ANTHROPIC_API_KEY (required by tests/e2e/test_simple_qa_pipeline.py; test_secure_preset_e2e.py itself needs none)"
         return 1
     fi
-    
+
     echo "Running end-to-end pipeline tests..."
     if pytest tests/e2e/ -v --tb=short -q -m e2e; then
         print_success "E2E tests passed"
@@ -250,7 +310,8 @@ ${BLUE}Commands:${NC}
   quick        Fast syntax & import check (~30s) — use daily
   full         Unit + contract tests (~2-5 min) — use pre-merge
   integration  With Qdrant integration (~1-2 min) — requires service
-  e2e          Full pipeline tests (~2-5 min) — requires Qdrant + LLM key
+  e2e          Full pipeline tests (~2-5 min) — requires Qdrant + PostgreSQL; an LLM key
+               is only needed for the non-deterministic scenario (see tests/e2e/)
   all          All validations in sequence — pre-release
   help         Show this help message
 
@@ -264,16 +325,23 @@ ${BLUE}Examples:${NC}
   # Full validation with integration
   ./scripts/check.sh all
 
-  # With Qdrant and API key
-  export MRAG_OPENAI_API_KEY=sk-...
+  # With Qdrant, PostgreSQL, and an API key (the SDK's own standard var name — not
+  # MRAG_OPENAI_API_KEY, which nothing in this codebase reads)
+  export OPENAI_API_KEY=sk-...
   docker run -p 6333:6333 qdrant/qdrant &
+  docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:16
   ./scripts/check.sh all
+
+  # Against a remote/container Qdrant + PostgreSQL instead of localhost
+  export MRAG_TEST_QDRANT_URL=http://myhost:6333
+  export MRAG_TEST_POSTGRES_DSN=postgresql://user:pass@myhost:5432/mydb
+  ./scripts/check.sh e2e
 
 ${BLUE}Quick lookup:${NC}
   • quick  — ~30s   → syntax, imports, undefined names
   • full   — ~2-5m  → quick + unit tests + contracts
   • integ  — ~1-2m  → full + Qdrant integration tests
-  • e2e    — ~2-5m  → integ + LLM pipeline tests
+  • e2e    — ~2-5m  → integ + Qdrant/PostgreSQL-backed pipeline tests
   • all    — ~10m   → all validation scopes
 
 See CLAUDE.md block 04 for command reference.
