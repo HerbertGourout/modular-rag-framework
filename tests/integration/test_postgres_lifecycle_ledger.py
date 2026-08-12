@@ -21,10 +21,17 @@ def ledger():
     ledger._get_connection().execute(
         "DELETE FROM document_lifecycle WHERE document_key = 'test-key-1'"
     )
-    yield ledger
-    ledger._get_connection().execute(
-        "DELETE FROM document_lifecycle WHERE document_key = 'test-key-1'"
-    )
+    try:
+        yield ledger
+    finally:
+        # `_get_connection()` transparently reopens if the test already closed the ledger
+        # (e.g. the close()/idempotency tests below) — close explicitly afterward either
+        # way, rather than leaking whichever connection this cleanup ends up using
+        # (Codex review, MED-002).
+        ledger._get_connection().execute(
+            "DELETE FROM document_lifecycle WHERE document_key = 'test-key-1'"
+        )
+        ledger.close()
 
 
 @pytest.mark.integration
@@ -117,3 +124,20 @@ def test_restore_record_writes_verbatim(ledger):
     read = ledger.get("test-key-1")
     assert read.version == original.version
     assert read.created_at == original.created_at
+
+
+@pytest.mark.integration
+def test_close_releases_the_connection_and_is_idempotent(ledger):
+    ledger.record_ingested("test-key-1", "tenant-a", "hash-a", ["c1"])  # forces a real connection
+    assert ledger._conn is not None
+
+    ledger.close()
+    assert ledger._conn is None
+
+    ledger.close()  # must not raise on an already-closed / never-opened ledger
+
+
+@pytest.mark.integration
+def test_close_on_a_ledger_that_never_connected_is_a_safe_no_op():
+    unused_ledger = PostgresLifecycleLedger(dsn=DSN)
+    unused_ledger.close()  # no _get_connection() call ever made — must not raise

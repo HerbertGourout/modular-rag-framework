@@ -112,7 +112,7 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
     "integration: requires Qdrant on localhost:6333 (deselect with '-m not integration')",
-    "e2e: requires Qdrant + LLM API key (deselect with '-m not e2e')",
+    "e2e: full pipeline against real backing services (Qdrant, plus PostgreSQL for a governed/audited preset) — an LLM API key is only required for an LLM-backed preset; the deterministic secure-preset scenario needs no external key at all (deselect with '-m not e2e')",
 ]
 
 [tool.mypy]

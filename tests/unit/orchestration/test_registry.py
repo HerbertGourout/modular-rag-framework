@@ -130,11 +130,15 @@ def test_default_registry_has_the_documented_builtin_type_names() -> None:
     reg = create_default_registry()
 
     assert set(reg._factories["chunker"]) == {"fixed", "adaptive"}
-    assert set(reg._factories["embedder"]) == {"sentence-transformers", "openai-embeddings"}
+    assert set(reg._factories["embedder"]) == {
+        "sentence-transformers",
+        "openai-embeddings",
+        "deterministic",
+    }
     assert set(reg._factories["indexer"]) == {"qdrant"}
     assert set(reg._factories["retriever"]) == {"vector", "hybrid"}
     assert set(reg._factories["reranker"]) == {"cross-encoder"}
-    assert set(reg._factories["generator"]) == {"openai", "anthropic"}
+    assert set(reg._factories["generator"]) == {"openai", "anthropic", "deterministic"}
     assert set(reg._factories["guard"]) == {"basic"}
     assert set(reg._factories["tenant_policy"]) == {"tenant-isolation"}
     assert set(reg._factories["policy_engine"]) == {"inline"}

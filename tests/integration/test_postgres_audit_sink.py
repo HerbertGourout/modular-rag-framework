@@ -18,8 +18,15 @@ DSN = os.environ.get(
 def sink():
     s = PostgresAuditSink(dsn=DSN)
     s._get_connection().execute("DELETE FROM audit_events WHERE tenant_id = 'test-tenant'")
-    yield s
-    s._get_connection().execute("DELETE FROM audit_events WHERE tenant_id = 'test-tenant'")
+    try:
+        yield s
+    finally:
+        # `_get_connection()` transparently reopens if the test already closed the sink
+        # (e.g. the close()/idempotency tests below) — close explicitly afterward either
+        # way, rather than leaking whichever connection this cleanup ends up using
+        # (Codex review, MED-002).
+        s._get_connection().execute("DELETE FROM audit_events WHERE tenant_id = 'test-tenant'")
+        s.close()
 
 
 def _event(**overrides: object) -> AuditEvent:
@@ -64,3 +71,20 @@ def test_record_is_append_only_on_conflicting_id(sink):
 @pytest.mark.integration
 def test_name_reports_postgres(sink):
     assert sink.name() == "postgres"
+
+
+@pytest.mark.integration
+def test_close_releases_the_connection_and_is_idempotent(sink):
+    sink.record(_event())  # force a real connection to actually exist first
+    assert sink._conn is not None
+
+    sink.close()
+    assert sink._conn is None
+
+    sink.close()  # must not raise on an already-closed / never-opened sink
+
+
+@pytest.mark.integration
+def test_close_on_a_sink_that_never_connected_is_a_safe_no_op():
+    unused_sink = PostgresAuditSink(dsn=DSN)
+    unused_sink.close()  # no _get_connection() call ever made — must not raise

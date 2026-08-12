@@ -1,0 +1,98 @@
+# Lot 4 (secure preset e2e correction) — a deterministic twin of
+# manifests/presets/secure-enterprise-rag.yaml for tests/e2e/test_secure_preset_e2e.py.
+#
+# NOT a deployment reference config — deliberately kept out of manifests/presets/
+# so it is never mistaken for one (manifests/README.md reserves that directory for
+# Runnable production references). This file exists to reproduce the *governance
+# stack* of the secure preset (tenant isolation, redaction, policy-as-code, durable
+# audit) end to end, without requiring an OpenAI API key or a real embedding-model
+# download:
+#   - embedder/generator: "deterministic" (adapters/embeddings/deterministic_embedder.py,
+#     generation/synthesizers/deterministic_gen.py) instead of sentence-transformers/openai.
+#   - reranker: omitted. The real preset's cross-encoder reranker needs its own real
+#     model download — orthogonal to what this scenario verifies (tenant isolation,
+#     citations, audit, restart persistence), and keeping it out avoids a second
+#     external dependency this test doesn't need.
+#   - collection: "e2e_secure_deterministic" — unique, so this never collides with
+#     any other manifest's collection at a different vector dimension (see ADR-0009,
+#     docs/adr/0009-vector-indexer-dimension-reconciliation.md, for exactly the class
+#     of bug a shared collection name across dimensions causes).
+#   - governance block: identical shape to the real preset (tenant_enforcement,
+#     tenant_policy, redactor, policy_engine with the same two rules, audit_sink) —
+#     this is the part under test.
+#
+# Local reproduction (see tests/e2e/test_secure_preset_e2e.py's module docstring for
+# the full command): requires Qdrant on localhost:6333 and PostgreSQL on
+# localhost:5432 (override via MRAG_TEST_QDRANT_URL / MRAG_TEST_POSTGRES_DSN env vars,
+# same convention as tests/integration/test_qdrant_store.py /
+# tests/integration/test_postgres_audit_sink.py). No LLM API key of any kind.
+version: "2.0"
+id: secure-deterministic-e2e
+description: "Deterministic twin of secure-enterprise-rag.yaml for a reproducible, no-external-key e2e test of tenant isolation + audit + citations."
+tenant: e2e
+environment: test
+
+chunker:
+  type: adaptive
+  config:
+    chunk_size: 512
+    chunk_overlap: 64
+
+embedder:
+  type: deterministic
+
+indexer:
+  type: qdrant
+  config:
+    collection: e2e_secure_deterministic
+    url: "http://localhost:6333"
+
+retriever:
+  type: hybrid
+  config:
+    vector_weight: 0.7
+    bm25_weight: 0.3
+    k: 20
+    reranker_k: 5
+
+generator:
+  type: deterministic
+
+security:
+  type: basic
+  config:
+    max_query_length: 2000
+
+engine:
+  adapter: native
+
+governance:
+  tenant_enforcement: true
+  tenant_policy:
+    type: tenant-isolation
+  redactor:
+    type: patterns
+  policy_engine:
+    type: inline
+    config:
+      policies:
+        - name: no-pii-export
+          rules:
+            - name: deny-pii-export-requests
+              condition: "export"
+              action: deny
+              priority: 10
+        - name: hr-data-restriction
+          rules:
+            - name: deny-hr-restricted-queries
+              condition: "hr-restricted"
+              action: deny
+              priority: 10
+  audit_sink:
+    type: postgres
+    config:
+      dsn: "postgresql://postgres:postgres@localhost:5432/postgres"
+
+observability:
+  telemetry:
+    type: structlog

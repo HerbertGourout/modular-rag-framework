@@ -1,8 +1,10 @@
 """Contract conformance tests for Generator implementations.
 
-Note: both generators lazily load their API client, so Protocol conformance
-is testable without the openai/anthropic packages or API keys. Generation
-behaviour is covered in tests/unit/generation/synthesizers/.
+Note: OpenAIGenerator/AnthropicGenerator both lazily load their API client,
+so Protocol conformance is testable without the openai/anthropic packages or
+API keys. DeterministicGenerator (Lot 4, secure preset e2e correction) never
+calls out to anything at all. Generation behaviour is covered in
+tests/unit/generation/synthesizers/.
 """
 from __future__ import annotations
 
@@ -10,9 +12,10 @@ import pytest
 
 from modular_rag.contracts.generation import Generator
 from modular_rag.generation.synthesizers.anthropic_gen import AnthropicGenerator
+from modular_rag.generation.synthesizers.deterministic_gen import DeterministicGenerator
 from modular_rag.generation.synthesizers.openai_gen import OpenAIGenerator
 
-GENERATORS = [OpenAIGenerator(), AnthropicGenerator()]
+GENERATORS = [OpenAIGenerator(), AnthropicGenerator(), DeterministicGenerator()]
 
 
 @pytest.mark.parametrize("generator", GENERATORS, ids=lambda g: type(g).__name__)

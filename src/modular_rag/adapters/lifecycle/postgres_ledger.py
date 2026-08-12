@@ -213,3 +213,15 @@ class PostgresLifecycleLedger:
 
     def name(self) -> str:
         return "postgres"
+
+    def close(self) -> None:
+        """Release the underlying connection, if one was ever opened.
+
+        Same gap, same fix as `adapters/audit/postgres_sink.py::PostgresAuditSink.close()`
+        (Codex review, MED-003): without this, `Container.close()`'s
+        `getattr(component, "close", None)` discovery silently found nothing to call,
+        leaking this ledger's connection on every `app.close()`. Idempotent.
+        """
+        if self._conn is not None:
+            self._conn.close()
+            self._conn = None
