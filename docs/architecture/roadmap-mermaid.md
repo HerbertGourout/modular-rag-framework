@@ -28,7 +28,7 @@ timeline
                 : FastAPI REST + Typer CLI
     section V2 Policy + Security
         2026 Q3 : Policy-as-code (native)
-                : Adversarial detector
+                : Adversarial detector (implemented, not yet registered in any manifest — see security.md)
                 : Multi-agent orchestration (⚙️ delegated)
     section V3 Graph + Evidence
         2026 Q4 : Cost/latency reporting (native)
@@ -87,12 +87,14 @@ flowchart TD
 ## V1 component wiring
 
 This diagram answers a question the module dependency graph deliberately leaves out: which
-*specific* built-in implementation gets wired for each contract in the default V1 setup.
+*specific* built-in implementation gets wired for each contract in the default V1 setup, using
+`manifests/presets/local-hybrid-rag.yaml` as the concrete example.
 `ComponentRegistry` reads the manifest, resolves each `type:` string to a concrete class
-(here `AdaptiveChunker`, `BGEEmbedder`, `QdrantIndexer`...), and hands the wired instances to
-the `Container`. Swap any single box by editing one line in the YAML manifest — nothing else
-on this diagram changes as a result, which is the guarantee the manifest-first design is
-meant to provide.
+(here `AdaptiveChunker`, `HuggingFaceEmbedder` — manifest `type: "sentence-transformers"`,
+default model `bge-small-en-v1.5`, hence "BGE" if you see that name elsewhere — `QdrantStore`...),
+and hands the wired instances to the `Container` (`orchestration/container.py`). Swap any single
+box by editing one line in the YAML manifest — nothing else on this diagram changes as a result,
+which is the guarantee the manifest-first design is meant to provide.
 
 ```mermaid
 %%{init: {"theme": "base"}}%%
@@ -101,8 +103,8 @@ flowchart LR
     Registry --> Container[Container]
 
     Container --> Chunker[AdaptiveChunker]
-    Container --> Embedder[BGEEmbedder]
-    Container --> Indexer[QdrantIndexer]
+    Container --> Embedder[HuggingFaceEmbedder]
+    Container --> Indexer[QdrantStore]
     Container --> Retriever[HybridRetriever]
     Container --> Reranker[CrossEncoderReranker]
     Container --> Generator[OpenAIGenerator]
@@ -128,39 +130,55 @@ flowchart LR
 > (including the delegation fork), see
 > [docs/architecture/runtime-flow.md](runtime-flow.md).
 
-## V4 policy evaluation loop
+## Policy + human-review evaluation loop
 
-This sequence is what makes the framework safe to deploy for regulated or multi-tenant
-clients (see [docs/business-case.md](../business-case.md), section 4): the `PolicyEngine`
-is consulted *before* the query even reaches the security guard or the engine, and every
-branch — `DENY`, `REQUIRE_REVIEW`, or `ALLOW`/`WARN` — writes to the audit trail. A `DENY`
-never reaches the LLM at all; a `REQUIRE_REVIEW` produces a pending response instead of an
-answer, so a human reviews it before the requester sees anything. This is the mechanism a
-DPO or auditor would ask to see evidence of — and it does not exist yet in the shipped code
-(see [ROADMAP.md](../../ROADMAP.md), V4 section); this diagram documents the target design.
+**This is shipped, native, and wired into the live request path today** — Lots 11b and 11c
+(`docs/refactoring-plan.md`) delivered it; this is no longer a target design a previous version
+of this document described as not yet existing. `PolicyEngine.enforce_query()` is confirmed
+(directly against `orchestration/engine.py`'s `_run_steps()`) to run before `SecurityGuard.
+check_query()`, and a `DENY` genuinely never reaches the LLM: `PolicyViolationError` is raised
+before retrieval or generation happen at all. This is the mechanism a DPO or auditor would ask to
+see evidence of (see [docs/business-case.md](../business-case.md) section 4) — and it is real.
+
+**One correction to how `REQUIRE_REVIEW` behaves, versus what a previous version of this
+diagram showed:** it does **not** produce a distinct "pending" response withheld from the
+caller. The real behavior (`RAGEngine._run_steps()`'s human-review step) generates the answer
+normally, then — if `review_queue.should_review(answer)` says yes — returns that *same* answer
+to the caller immediately, with `metadata["requires_review"] = True` set on it, while separately
+enqueuing a `ReviewItem` for a human reviewer and recording a `GUARD_DECISION` audit event. The
+requester is not blocked waiting on a human; the flagging is informational metadata on an answer
+they already received, plus an asynchronous review-queue entry. A caller that wants to actually
+withhold flagged answers from end users has to check `answer.metadata["requires_review"]` itself
+and decide what to do with that — this codebase doesn't withhold on your behalf.
 
 ```mermaid
 %%{init: {"theme": "base"}}%%
 sequenceDiagram
-    participant Q as Query
+    participant Q as Caller
     participant PE as PolicyEngine
     participant Guard as SecurityGuard
-    participant Engine as RAGEngine
-    participant Audit as AuditTrail
+    participant Gen as Retrieve + Generate
+    participant RQ as ReviewQueue
+    participant Audit as AuditSink
 
     Q->>PE: enforce_query(query)
-    PE-->>Q: ALLOW / WARN / DENY / REQUIRE_REVIEW
-
     alt DENY
-        PE->>Audit: log(violation, query, rule)
         PE-->>Q: PolicyViolationError
-    else REQUIRE_REVIEW
-        PE->>Audit: log(pending_review, query)
-        PE-->>Q: ReviewRequiredResponse
-    else ALLOW or WARN
+        PE->>Audit: GUARD_DECISION + RUN_FAILED
+    else ALLOW / WARN
         Q->>Guard: check_query(query)
-        Guard->>Engine: _run(query)
-        Engine-->>Q: Answer
-        Engine->>Audit: log(trace, answer, policy_context)
+        alt blocked
+            Guard-->>Q: SecurityError
+            Guard->>Audit: GUARD_DECISION + RUN_FAILED
+        else allowed
+            Guard->>Gen: retrieve, rerank, generate, check_answer, redact
+            Gen-->>Q: Answer (returned either way)
+            Gen->>RQ: enqueue(ReviewItem) — only if should_review(answer)
+            Note over Gen,RQ: Answer.metadata["requires_review"]=True in this case,<br/>but the caller still receives it synchronously
+            Gen->>Audit: RUN_SUCCEEDED (+ GUARD_DECISION if flagged for review)
+        end
     end
 ```
+
+See [runtime-flow.md](runtime-flow.md) for the complete, step-by-step governed request sequence
+this diagram summarizes, including the double-audit-event behavior on a denial.

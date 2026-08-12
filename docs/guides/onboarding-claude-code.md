@@ -74,7 +74,7 @@ cli/ + api/  →  app/  →  orchestration/  →  contracts/ + core/
 | [.claude/.instructions.md](../../.claude/.instructions.md) | Claude's mandatory rules | ✅ YES (sections 1-5) |
 | [CONTRIBUTING.md](../../CONTRIBUTING.md) | Git workflow, branching, PR process | ✅ YES |
 | [.claude/settings.json](../../.claude/settings.json) | Permissions, hooks configuration | 🟡 REFERENCE ONLY |
-| [docs/guides/validation.md](validation.md) | Command reference | 🟡 REFERENCE ONLY |
+| [docs/guides/validation-protocol.md](validation-protocol.md) | Command reference | 🟡 REFERENCE ONLY |
 
 ---
 
@@ -366,7 +366,7 @@ git checkout -b feature/feature-2  # Separate branch for feature 2
 - 📖 [CLAUDE.md](../../CLAUDE.md) — All project rules
 - 📖 [docs/architecture/overview.md](../architecture/overview.md) — Technical architecture
 - 📖 [CONTRIBUTING.md](../../CONTRIBUTING.md) — Git workflow + PR process
-- 📖 [docs/guides/validation.md](validation.md) — All validation commands
+- 📖 [docs/guides/validation-protocol.md](validation-protocol.md) — All validation commands
 - 📖 [.claude/AGENTS.md](../../.claude/AGENTS.md) — Human-readable reference for the 8 subagents (not auto-loaded by Claude Code itself — the agents work because of `.claude/agents/*.md`); the actual invocable commands are the skills under `.claude/skills/*/SKILL.md`
 
 ---

@@ -22,8 +22,8 @@
 
 ## 1. Why this document exists
 
-The framework grew fast: five planned versions (V1 through V5), roughly thirty
-documentation files, ADRs, manifests, a thirteen-layer hexagonal architecture. A newcomer —
+The framework grew fast: five planned versions (V1 through V5), well over a hundred
+documentation files, ADRs, manifests, a multi-layer hexagonal architecture. A newcomer —
 whether they're here to write code or to understand what the tool lets them do for a client
 — faces a volume of information that doesn't indicate where to start. This document maps
 that path.
@@ -74,9 +74,9 @@ one."
 1. [docs/architecture/overview.md](architecture/overview.md) — the complete technical
    specification, the system's six planes, the V1→V5 roadmap with the detail of what each
    version adds.
-2. [docs/adr/](adr/) — the eight accepted decisions covering modularity, contracts,
-   security/governance, product boundaries, external-engine selection, layer activation, and
-   offline-evaluation/engine-activation honesty.
+2. [docs/adr/](adr/) — the nine accepted decisions covering modularity, contracts,
+   security/governance, product boundaries, external-engine selection, layer activation,
+   offline-evaluation/engine-activation honesty, and vector-indexer dimension reconciliation.
 3. [docs/architecture/module-model.md](architecture/module-model.md) and
    [structure.md](architecture/structure.md) — the complete map of the code, file by file.
 4. [docs/archive/2026-05-20-initial-review.md](archive/2026-05-20-initial-review.md) — the
@@ -199,7 +199,9 @@ terms, blind to paraphrasing. Combining the two (RRF fusion, detailed in
 [docs/architecture/overview.md](architecture/overview.md), section 11) gives the best of
 both worlds without sacrificing either.
 
-**Status**: ✅ complete and functional end to end — see `examples/simple_qa/`.
+**Status**: 🟡 implementation complete and covered by unit/contract tests; the current live
+LLM + Qdrant execution of `examples/simple_qa/` remains pending in `ROADMAP.md` and integration/E2E
+are not run in CI.
 
 ### V2 — Agentic: questions that need several reasoning steps
 

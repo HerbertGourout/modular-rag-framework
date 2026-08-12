@@ -22,6 +22,24 @@ This guide explains how to use Claude Code's sub-agents to explore complex topic
 
 ---
 
+**Important — read before the examples below**: every "Expected output" block in this guide is
+an illustrative *template* showing the shape a subagent's response might take, not a real,
+verified report about this codebase. Several of them contain specific claims that are simply
+false today — a `Chroma` vectorstore adapter that doesn't exist (only `QdrantStore` does), a
+`clear_cache()` method that isn't part of the real `Retriever` Protocol, chunkers named
+`RegexChunker` that were never built (the real ones are `FixedSizeChunker`/`AdaptiveChunker`).
+Treat the *structure* of these examples as the useful part (how to phrase a subagent prompt, how
+to organize the findings), not the specific facts inside them — those are corrected inline below
+only where the error is severe enough to actively mislead; the rest are left as placeholder-style
+illustrations by design, the same way a code example elsewhere might use `<name>` as a stand-in.
+
+Also distinct from the "4 sub-agent types" below: this project separately has **8 pre-configured,
+named domain-specialist subagents** (`@retrieval-specialist`, `@security-specialist`, etc. — see
+[.claude/AGENTS.md](../../.claude/AGENTS.md)). The two aren't the same feature — the types below
+are ad-hoc, task-scoped subagents you describe in a prompt each time; the 8 named ones are
+persistent personas with their own tool access already configured. Both are real Claude Code
+capabilities, used for different things.
+
 ## The 4 Sub-Agent Types
 
 ### 1. 🗺️ Mapping Sub-Agent
@@ -104,17 +122,24 @@ Return: Protocol definition + compliance matrix
 **Expected output**:
 
 ```
-VectorRetriever Protocol Analysis
-==================================
+Retriever Protocol Analysis
+============================
+(Note: `VectorRetriever` is a concrete class implementing `Retriever`, not itself a Protocol —
+corrected from an earlier version of this example, which named a "VectorRetriever Protocol"
+that doesn't exist.)
 
 Protocol Definition (contracts/retrieval.py):
-  - def retrieve(query: str, k: int) -> List[Document]
+  - def retrieve(query: Query, k: int) -> list[RetrievedChunk]
+  - def aretrieve(query: Query, k: int) -> list[RetrievedChunk]  (async)
   - def name() -> str
-  - def clear_cache() -> None
+  (there is no clear_cache() method — another correction from an earlier version)
 
 Implementations (Compliant ✅):
-  - adapters/vectorstores/qdrant_retriever.py → Implements all 3 methods
-  - adapters/vectorstores/chroma_retriever.py → Implements all 3 methods
+  - retrieval/retrievers/vector.py (VectorRetriever) → Implements all 3 methods
+  - retrieval/retrievers/bm25.py (BM25Retriever) → Implements all 3 methods
+  - retrieval/retrievers/hybrid.py (HybridRetriever) → Implements all 3 methods
+  (there is no Chroma adapter in this codebase — only Qdrant is a supported vector store today,
+  via adapters/vectorstores/qdrant_store.py)
 
 Implementations (Non-Compliant ❌):
   - None
@@ -123,8 +148,8 @@ Violations Detected:
   - None (all implementations match Protocol exactly)
 
 Breaking Changes Risk (if Protocol changed):
-  - 2 implementations would need updates
-  - 3 tests would need updates
+  - 3 implementations would need updates
+  - Their unit + contract tests would need updates
   - Example code would need updates
 ```
 
@@ -325,8 +350,9 @@ Risk: LOW (isolated, compliant with Protocol)
 git checkout -b feature/hybrid-retriever
 
 # Step 1: Implement HybridRetriever
-# Claude: "Implement src/modular_rag/retrieval/hybrid_retriever.py
-#  - class HybridRetriever(VectorRetriever)
+# Claude: "Implement src/modular_rag/retrieval/retrievers/hybrid.py
+#  - class HybridRetriever(Retriever) -- implements the Protocol directly,
+#    does not inherit from VectorRetriever
 #  - Use BM25Retriever + VectorRetriever
 #  - Fusion: reciprocal rank fusion"
 
@@ -538,5 +564,5 @@ Synthesis (you):
 
 - [CLAUDE.md](../../CLAUDE.md) — Project rules (share with sub-agents)
 - [docs/guides/onboarding-claude-code.md](onboarding-claude-code.md) — Team onboarding
-- [docs/guides/validation.md](validation.md) — Validation commands
+- [docs/guides/validation-protocol.md](validation-protocol.md) — Validation commands
 - [.claude/.instructions.md](../../.claude/.instructions.md) — Architecture rules

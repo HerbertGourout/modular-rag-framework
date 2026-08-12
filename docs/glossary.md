@@ -92,8 +92,9 @@ instead of, or in addition to, plain text chunks — enables multi-hop reasoning
 affected, in cascade, by X?") that vector/BM25 search alone cannot answer. V3 scope. Per
 [ADR-0005](adr/0005-document-ai-control-plane-boundary.md)/[ADR-0006](adr/0006-external-engine-selection.md),
 the traversal itself is delegated to the selected external engine (LangGraph), not built as a
-native retrieval path; see [Knowledge graph](#knowledge-graph) below for what does stay native.
-See [onboarding.md](onboarding.md), section 3.
+native retrieval path — see [Knowledge graph](#knowledge-graph) below: the native graph data
+model that used to back this was removed entirely in Étape 8, so nothing GraphRAG-related stays
+native today. See [onboarding.md](onboarding.md), section 3.
 
 ### Guard / SecurityGuard
 A component that inspects a query before retrieval (`check_query()`) or an answer after
@@ -107,27 +108,23 @@ any component can be swapped by implementing its Protocol, without the rest of t
 needing to change. See [ADR-0001](adr/0001-modular-architecture.md).
 
 ### Knowledge graph
-A graph of entities (`GraphNode`) and typed relationships (`GraphEdge`), modeled in
-`memory/graph/knowledge_graph.py`. Plain Python dict/list in the current implementation —
-despite an earlier version of this module's own docstring, it does not use NetworkX. Retained
-with a documented caveat in Lot 17 (`docs/refactoring/lot-17-prototype-retirement.md`): its
-`neighbours()`/`subgraph_for_query()` methods are genuine multi-hop-traversal logic, which is
-exactly the capability [ADR-0005](adr/0005-document-ai-control-plane-boundary.md) §5.2
-delegates to the external engine — whether this class counts as a keepable native "data model"
-or should itself be delegated remains genuinely undecided, not resolved by any lot to date. Not
-wired into any retriever or pipeline today. See [structure.md](architecture/structure.md),
-`memory/graph/`.
+Historically, a graph of entities (`GraphNode`) and typed relationships (`GraphEdge`), modeled
+in `memory/graph/knowledge_graph.py` as a plain Python dict/list (despite an earlier version of
+that module's own docstring, it never used NetworkX). Lot 17 initially kept this class with a
+documented "undecided" caveat — its `neighbours()`/`subgraph_for_query()` methods were genuine
+multi-hop-traversal logic, exactly the capability
+[ADR-0005](adr/0005-document-ai-control-plane-boundary.md) §5.2 delegates to the external
+engine, which made "keep as a passive native data model" hard to justify. Étape 8
+([ADR-0007](adr/0007-layer-boundaries-and-control-plane-activation.md)) resolved that
+undecided caveat: the class was **removed entirely** (zero consumers anywhere outside its own
+test), along with `core.enums.GraphRelation`. `memory/graph/` is empty today, restorable via git
+history if a real, wired need emerges. See [structure.md](architecture/structure.md).
 
 ### Manifest
 A YAML file describing a complete pipeline configuration — which chunker, embedder,
 retriever, reranker, generator, guard, and telemetry backend to use, and with what
 parameters. The single source of truth for what's wired into a running pipeline; no
 component runs unless it's declared here. See [manifests/_index.md](../manifests/_index.md).
-
-### MG²-RAG
-Multi-granularity cross-modal graph — the V5 design for reasoning across text, image, and
-table nodes in a single graph structure rather than treating each modality as a separate
-index. See [ROADMAP.md](../ROADMAP.md), V5.
 
 ### Multi-hop reasoning
 Answering a question that requires following more than one relationship (A relates to B,
@@ -146,10 +143,12 @@ A component implementing `contracts/retrieval.py`'s `Retriever` Protocol —
 `VectorRetriever`, `HybridRetriever` (which fuses the first two via RRF).
 
 ### Trace / TraceStep
-The audit record of one pipeline execution. Every retrieval, generation, or agent step
-appends a `TraceStep` (name, tokens, latency) to the request's `Trace` via `add_step()`,
-which atomically updates running totals. The final `Answer.trace_id` links back to it for
-debugging and observability. See [data-model.md](architecture/data-model.md), section 6.
+The execution trace of one pipeline request (distinct from the compliance `AuditEvent` stream).
+The query guard, retrieval, optional reranker, and generator append `TraceStep` records; tenant
+and policy checks, post-generation guarding, redaction, and human review do not yet have their
+own named steps. `add_step()` updates running totals, and `Answer.trace_id` provides correlation.
+See [data-model.md](architecture/data-model.md), section 6, and
+[observability.md](guides/observability.md) for the exact coverage.
 
 ### ULID (Universally Unique Lexicographically Sortable Identifier)
 The ID format used for every entity in `core/models/` (`Document.id`, `Chunk.id`,

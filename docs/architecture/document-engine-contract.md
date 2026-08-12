@@ -9,8 +9,9 @@
 
 `DocumentEngine` is the one place vendor types are allowed to leak in — and only inside an
 adapter's implementation, never in this Protocol's own signatures. Everything on either side of
-it (the control plane calling in; an adapter like the future LangGraph one implementing it)
-talks in the neutral types below, never in the external engine's own API shapes.
+it (the control plane calling in; an adapter like the shipped LangGraph one,
+`adapters/llms/langgraph_engine.py`'s `LangGraphEngineAdapter`, implementing it) talks in the
+neutral types below, never in the external engine's own API shapes.
 
 ## Versioning
 
@@ -53,11 +54,14 @@ talks in the neutral types below, never in the external engine's own API shapes.
 
 ## Deprecation window
 
-Once a second adapter exists (Lot 15's LangGraph adapter, alongside Lot 8's native one), any
+A second adapter now exists (Lot 15's LangGraph adapter, alongside Lot 8's native one) — any
 contract change must keep both green through `tests/contract/test_engine_conformance.py` for at
 least one full lot cycle before an old field/capability is removed — this is the same "add
 before move" principle the rest of the programme follows
-(`docs/refactoring-plan.md` §8, item 2).
+(`docs/refactoring-plan.md` §8, item 2). `test_engine_conformance.py` parameterizes over both
+`NativeEngineAdapter` and `LangGraphEngineAdapter` (plus a minimal fake in
+`tests/contract/fakes/document_engine.py` used to test the port's own semantics in isolation from
+either real adapter) against the identical conformance suite.
 
 ## Extension-envelope discipline
 
@@ -79,12 +83,22 @@ contract itself. Rules for using it:
 
 `GovernanceHook` is intentionally a minimal, locally-defined Protocol in `contracts/engine.py`
 rather than a direct dependency on `contracts.security.SecurityGuard` — `engine.py` must not
-import from another contract module for a capability this specific. A concrete adapter wiring a
-real `SecurityGuard` behind a `GovernanceHook` is Lot 11c scope, not this one; the semantic
-conformance suite proves the *contract* is enforceable (a blocking hook stops `generate` from
-running, and is correctly ignored by an engine that doesn't declare
-`EngineCapability.GOVERNANCE_INTERCEPT`), not that any specific guard implementation is wired
-yet.
+import from another contract module for a capability this specific. The semantic conformance
+suite proves the *contract* is enforceable (a blocking hook stops `generate` from running, and is
+correctly ignored by an engine that doesn't declare `EngineCapability.GOVERNANCE_INTERCEPT`).
+
+Beyond the contract-level proof, `LangGraphEngineAdapter`'s `_node_guard()` now wires this for
+real: it reads `state["context"].governance_hook`, and — only when the adapter declares
+`GOVERNANCE_INTERCEPT` and a hook is actually present — calls `hook.check("generate", {"query":
+...})`, blocking the run on a `decision.allowed=False` exactly as the conformance suite requires.
+This sits *alongside*, not instead of, that same node's direct `Container.guard.check_query()`
+call (the adapter's own inline comment is explicit about the distinction: the direct guard call
+must behave identically to `RAGEngine`/`NativeEngineAdapter`'s own `SecurityError` convention, an
+adapter-specific parity requirement from Lot 15; the port-level `GovernanceHook` is the separate,
+generic mechanism any `DocumentEngine` caller can rely on regardless of which adapter is
+selected). `NativeEngineAdapter` has no `GovernanceHook`-equivalent wiring to stay parallel with —
+its own governance path is `RAGEngine`'s direct calls into `Container.guard`/`policy_engine`/
+`tenant_policy`, which predate the `DocumentEngine` port entirely.
 
 ## Cancellation, concretely
 

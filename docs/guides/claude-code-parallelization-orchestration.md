@@ -154,59 +154,52 @@ async def hybrid_retrieve(query: str):
 
 ### Implementation
 
-**File:** `src/modular_rag/retrieval/hybrid_retriever.py`
+**File:** `src/modular_rag/retrieval/retrievers/hybrid.py` (the real, shipped file — corrected
+below; an earlier version of this example used a nonexistent path/module layout, a
+`RetrieverProtocol`/`SearchResult` naming that doesn't exist in this codebase — the real names
+are `Retriever`/`RetrievedChunk` — a `core.trace` import path instead of the real
+`core.models.trace`, and an `async def retrieve()` signature, when the real Protocol defines
+`retrieve()` and `aretrieve()` as two separate sync/async methods, not one async-only method)
 
 ```python
-from modular_rag.contracts.retrieval import RetrieverProtocol, SearchResult
-from modular_rag.core.trace import Trace, TraceStep
-import asyncio
+from modular_rag.contracts.retrieval import Retriever
+from modular_rag.core.models.retrieved import RetrievedChunk
+from modular_rag.retrieval.fusion.rrf import reciprocal_rank_fusion
 
-class HybridRetriever(RetrieverProtocol):
-    """Hybrid retriever using parallel vector + BM25 retrieval."""
-    
-    def __init__(self, vector_retriever: RetrieverProtocol, bm25_retriever: RetrieverProtocol):
-        self.vector_retriever = vector_retriever
-        self.bm25_retriever = bm25_retriever
-    
-    async def retrieve(self, query: str, k: int = 10) -> list[SearchResult]:
-        """Retrieve using parallel fan-out/fan-in pattern."""
-        step = TraceStep(component="HybridRetriever", method="retrieve")
-        
-        try:
-            # PARALLEL EXECUTION (fan-out)
-            vector_results, bm25_results = await asyncio.gather(
-                self.vector_retriever.retrieve(query, k),
-                self.bm25_retriever.retrieve(query, k),
-                return_exceptions=True  # Don't fail if one retriever errors
-            )
-            
-            # Handle errors from parallel tasks
-            if isinstance(vector_results, Exception):
-                vector_results = []
-            if isinstance(bm25_results, Exception):
-                bm25_results = []
-            
-            # FUSE RESULTS (fan-in)
-            fused = self._rrf_fusion(vector_results, bm25_results)
-            
-            step.metadata = {
-                "vector_count": len(vector_results),
-                "bm25_count": len(bm25_results),
-                "fused_count": len(fused)
-            }
-            
-            return fused[:k]
-            
-        except Exception as e:
-            step.status = "error"
-            raise
-        finally:
-            Trace.add_step(step)
-    
-    def _rrf_fusion(self, vec_results, bm25_results):
-        """Fuse using Reciprocal Rank Fusion."""
-        # Implementation details omitted for brevity
-        pass
+class HybridRetriever(Retriever):
+    """Combines VectorRetriever + BM25Retriever via Reciprocal Rank Fusion.
+
+    Both underlying retrievers are actually called sequentially in the shipped
+    implementation, not fanned out with asyncio.gather — an earlier version of this example
+    presented a parallel fan-out/fan-in pattern as the real implementation; it illustrates a
+    valid pattern *this specific class doesn't use*, not this class's real behavior."""
+
+    def __init__(
+        self,
+        vector_retriever: Retriever,
+        bm25_retriever: Retriever,
+        vector_weight: float = 0.7,
+        bm25_weight: float = 0.3,
+        rrf_k: int = 60,
+        k: int = 20,
+    ):
+        self._vector = vector_retriever
+        self._bm25 = bm25_retriever
+        self._vector_weight = vector_weight
+        self._bm25_weight = bm25_weight
+        self._rrf_k = rrf_k
+        self._k = k
+
+    def retrieve(self, query, k: int = 10) -> list[RetrievedChunk]:
+        vector_results = self._vector.retrieve(query, k)
+        bm25_results = self._bm25.retrieve(query, k)
+        fused = reciprocal_rank_fusion(
+            [vector_results, bm25_results], k=k, rrf_k=self._rrf_k
+        )
+        return fused
+
+    def name(self) -> str:
+        return "hybrid"
 ```
 
 ### When to Use Component-Level Parallelization
@@ -672,5 +665,5 @@ agents:
 - [`.claude/settings.json`](../../.claude/settings.json) - Parallelization configuration
 - [`/parallel-feature-analysis` skill](../../.claude/skills/parallel-feature-analysis/SKILL.md)
 - [`/design-retriever-fusion` skill](../../.claude/skills/design-retriever-fusion/SKILL.md)
-- [CLAUDE.md - V2 Agentic Workflows](../../CLAUDE.md#09---roadmap-v1--v5-with-strategic-features)
+- [CLAUDE.md block 09 - Roadmap (owned vs. delegated per ADR-0005)](../../CLAUDE.md#09--roadmap-v1--v5-with-strategic-features)
 - [ADR-0001: Modular Architecture](../../docs/adr/0001-modular-architecture.md)

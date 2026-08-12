@@ -75,6 +75,7 @@ A Chunk is a sub-segment of a Document, produced by a `Chunker`. Unlike `Documen
 | `start_char` | `int` | `0` | Byte offset of chunk start in the original document |
 | `end_char` | `int` | `0` | Byte offset of chunk end |
 | `page` | `int \| None` | `None` | Page number (for PDF sources) |
+| `tenant_id` | `str \| None` | `None` | Owning tenant (Lot 11b). `None` (legacy/unclassified content) is treated as *inaccessible* by `TenantIsolationPolicy.filter_chunks()`, never implicitly public — see `overview.md` §3's Safety plane and the root README's Core Concepts §6. |
 | `metadata` | `dict[str, Any]` | `{}` | Inherited or enriched metadata |
 
 **Invariants**
@@ -150,7 +151,7 @@ A `RetrievedChunk` wraps a `Chunk` with retrieval metadata: how it was found, wh
 | `chunk` | `Chunk` | required | The chunk that was retrieved |
 | `score` | `float` | required | Relevance score (0.0–1.0 after normalisation, or RRF score) |
 | `rank` | `int` | required | 1-based rank after fusion and/or reranking |
-| `retrieval_method` | `RetrievalMethod` | `HYBRID` | How this chunk was found: `vector`, `bm25`, `hybrid`, `graph` |
+| `retrieval_method` | `RetrievalMethod` | `HYBRID` | How this chunk was found: `vector`, `bm25`, or `hybrid` — `graph` and `multimodal` were removed from this enum (Étape 8 cleanup, 2026-08-07): both described delegated capabilities (ADR-0005 §5.2) with zero producing code and zero consumers, so they were dropped rather than kept as unreachable enum values. Restorable via git history if a native graph/multimodal retriever is ever built. |
 
 **Invariants**
 - `frozen=True` — scores and ranks must not be changed after retrieval.
@@ -245,6 +246,7 @@ A `Trace` is the audit record for a single pipeline execution. It accumulates `T
 
 | Field | Type | Default | Description |
 |---|---|---|---|
+| `schema_version` | `str` | `TRACE_SCHEMA_VERSION` (currently `"1.2"`) | Versions the shape of this model itself, not the pipeline run |
 | `id` | `str` | `new_id()` | ULID — referenced by `Answer.trace_id` |
 | `query_id` | `str` | required | Correlates with the originating `Query` |
 | `pipeline_id` | `str` | `""` | Manifest or pipeline name |
@@ -252,8 +254,16 @@ A `Trace` is the audit record for a single pipeline execution. It accumulates `T
 | `total_latency_ms` | `float` | `0.0` | Running total — updated by `add_step()` |
 | `total_input_tokens` | `int` | `0` | Running total |
 | `total_output_tokens` | `int` | `0` | Running total |
-| `routing_strategy` | `str` | `""` | Execution strategy/engine identifier recorded on the trace (the native `QueryRouter` this once referred to was removed in Lot 17; nothing currently sets this field) |
+| `failed` | `bool` | `False` | Set when `RAGEngine._run()` catches an exception; the trace still reaches `telemetry.record_trace()` before the exception re-raises (Lot 10) |
+| `failure_reason` | `str \| None` | `None` | Set alongside `failed` |
 | `created_at` | `datetime` | `utcnow()` | Start of pipeline execution |
+
+**`routing_strategy` no longer exists on this model.** It was removed in Étape 8
+([ADR-0007](../adr/0007-layer-boundaries-and-control-plane-activation.md)), which is also why
+`TRACE_SCHEMA_VERSION` is `"1.2"` and not `"1.1"` — the field dated back to the deleted native
+`QueryRouter`, had zero real consumers, and always held its empty-string default in practice. A
+consumer reading older `Trace` JSON that happened to key off this field should treat its absence
+the same way the empty-string default always effectively meant: no dynamic routing occurred.
 
 **Key method**
 ```python
@@ -338,28 +348,59 @@ for rule in policy.sorted_rules():
 
 **File**: `core/models/metrics.py`
 
-`Metrics` is a flat bag of evaluation scores. All fields are optional floats or ints — an evaluator only fills the fields it can compute. `summary()` returns only the non-None fields, making it safe to log or compare across evaluators.
+`Metrics` is a flat bag of evaluation scores, grouped into four families. All scoring fields are
+optional floats or ints — an evaluator only fills the fields it can compute; `summary()` returns
+only the fields worth showing, making it safe to log or compare across evaluators that each
+populate a different subset. `METRICS_SCHEMA_VERSION` (currently `"1.0"`) is bumped when a
+field's *meaning* changes (e.g. a metric's formula) — not for a purely additive new field (Lot 13,
+`docs/refactoring-plan.md`).
 
-| Field | Type | Description |
-|---|---|---|
-| `recall_at_k` | `float \| None` | Fraction of relevant chunks retrieved in top-k |
-| `precision_at_k` | `float \| None` | Fraction of retrieved chunks that are relevant |
-| `ndcg` | `float \| None` | Normalised Discounted Cumulative Gain |
-| `mrr` | `float \| None` | Mean Reciprocal Rank |
-| `groundedness` | `float \| None` | Fraction of answer claims supported by retrieved context |
-| `faithfulness` | `float \| None` | Whether the answer contradicts the context |
-| `answer_relevance` | `float \| None` | Semantic similarity of answer to query |
-| `context_precision` | `float \| None` | Signal-to-noise ratio of the retrieved context |
-| `latency_ms` | `float \| None` | End-to-end pipeline latency |
-| `input_tokens` | `int \| None` | Total input tokens consumed |
-| `output_tokens` | `int \| None` | Total output tokens generated |
-| `cost_usd` | `float \| None` | Estimated cost in USD |
+| Field | Type | Family | Description |
+|---|---|---|---|
+| `schema_version` | `str` | — | `METRICS_SCHEMA_VERSION`; excluded from `summary()`'s output regardless of value (see below) |
+| `recall_at_k` | `float \| None` | Retrieval | Fraction of relevant chunks retrieved in top-k, over retrieved chunks vs. a relevant-chunk-id set |
+| `precision_at_k` | `float \| None` | Retrieval | Fraction of retrieved chunks that are relevant |
+| `ndcg` | `float \| None` | Retrieval | Normalised Discounted Cumulative Gain — **field exists in the schema, but no shipped evaluator computes it yet** (`ROADMAP.md` V1.1 — "NDCG@k" is explicitly tracked as not-yet-built) |
+| `mrr` | `float \| None` | Retrieval | Mean Reciprocal Rank |
+| `exact_match` | `float \| None` | Answer | `1.0`/`0.0` — genuine normalized string equality, answer vs. gold (`ExactMatchEvaluator`) |
+| `answer_precision` | `float \| None` | Answer | Token-set precision, answer vs. gold |
+| `answer_recall` | `float \| None` | Answer | Token-set recall, answer vs. gold |
+| `answer_relevance` | `float \| None` | Answer | Token-set **F1**, answer vs. gold — despite the name, this is answer-vs-*gold-answer* overlap, not a semantic-similarity-to-the-query metric; do not confuse it with a query-relevance score |
+| `groundedness` | `float \| None` | Answer | Fraction of answer claims supported by retrieved context — see `generation/validators/groundedness.py`'s own docstring for why this is explicitly a lexical-overlap heuristic, not a faithfulness metric, even where "groundedness" is used as a field name |
+| `faithfulness` | `float \| None` | Answer | Whether the answer contradicts the context |
+| `context_precision` | `float \| None` | Answer | Signal-to-noise ratio of the retrieved context |
+| `policy_violations` | `int \| None` | Policy/governance | Count of policy rules the run violated |
+| `latency_ms` | `float \| None` | Cost/latency | End-to-end pipeline latency |
+| `input_tokens` | `int \| None` | Cost/latency | Total input tokens consumed |
+| `output_tokens` | `int \| None` | Cost/latency | Total output tokens generated |
+| `cost_usd` | `float \| None` | Cost/latency | Estimated cost in USD |
+| `failed` | `bool` (default `False`) | Failure signal | `True` when the underlying engine call raised — see below; excluded from `summary()`'s output regardless of value |
+| `failure_reason` | `str \| None` | Failure signal | Set alongside `failed=True`; excluded from `summary()`'s output regardless of value |
 
-**Key method**
+**Why `failed`/`failure_reason` exist as their own family (Lot 13 — "distinguish infrastructure
+failure from zero quality").** Before these two fields existed, a benchmark case whose engine
+call *raised an exception* and a case that ran fine but scored zero on every metric produced the
+*same* `Metrics` object shape — all-`None` fields either way. That made a crashed evaluation run
+indistinguishable from a genuinely bad answer in any downstream report. `Metrics.for_failure(reason)`
+is the supported way to construct a failure record: every scoring field stays `None` (there is
+nothing to score), but `failed=True` and `failure_reason` make the crash explicit.
+
+**Key method — note the exclusion list, not just "non-None":**
 ```python
+_SUMMARY_EXCLUDED_FIELDS = frozenset({"schema_version", "failed", "failure_reason"})
+
 def summary(self) -> dict[str, float]:
-    return {k: v for k, v in self.model_dump().items() if v is not None}
+    return {
+        k: v
+        for k, v in self.model_dump().items()
+        if v is not None and k not in _SUMMARY_EXCLUDED_FIELDS
+    }
 ```
+`schema_version`/`failed`/`failure_reason` are excluded **unconditionally**, not merely because
+they might be `None` — `schema_version` is never `None` (it has a string default) and `failed`
+defaults to `False`, not `None`, so a naive "only non-None fields" description would incorrectly
+predict both appearing in every single `summary()` call. This exclusion list is precisely why
+they don't.
 
 **Example**
 ```python
@@ -368,6 +409,13 @@ from modular_rag.core.models.metrics import Metrics
 m = Metrics(recall_at_k=0.85, precision_at_k=0.70, latency_ms=1200.0, cost_usd=0.003)
 print(m.summary())
 # {'recall_at_k': 0.85, 'precision_at_k': 0.70, 'latency_ms': 1200.0, 'cost_usd': 0.003}
+# — NOT {'schema_version': '1.0', 'failed': False, ...} even though both have non-None values.
+
+failure = Metrics.for_failure("engine timed out after 30s")
+print(failure.summary())
+# {} — every scoring field is None, and the three failure-signal fields are excluded from
+# summary() regardless — check `.failed`/`.failure_reason` directly, not `.summary()`, to detect
+# this case.
 ```
 
 ---
@@ -383,18 +431,29 @@ flowchart TD
     Doc -->|"TextNormalizer.normalize(doc)"| DocN["Document\n(new instance — whitespace cleaned)"]
     DocN -->|"MetadataEnricher.enrich(doc)"| DocE["Document\n(normalised + enriched)"]
     DocE -->|"Chunker.chunk(doc)"| Chunks["list[Chunk]\n(embedding=None)"]
-    Chunks -->|"Embedder.embed([c.content ...])"| ChunksV["list[Chunk]\n(embedding filled in-place)"]
+    Chunks -->|"TenantPolicy.enforce_ingest(chunk.tenant_id)\nper chunk, fail-closed, only if tenant_policy wired"| TenantGate{"OK?"}
+    TenantGate -->|"Embedder.embed([chunk.content])\nONE CHUNK AT A TIME — not a single\nbatched call for the whole document,\nsee overview.md §10"| ChunksV["list[Chunk]\n(embedding filled in-place)"]
     ChunksV -->|"Indexer.index(chunks)"| Store[("Qdrant + BM25 index")]
 
     subgraph QT["Query time"]
-        Query["Query (frozen)"] -->|"SecurityGuard.check_query"| Guard1{GuardResult}
+        Query["Query (frozen)"] -->|"TenantPolicy.enforce_query\n(fail-closed, only if tenant_policy wired)"| TQ{"OK?"}
+        TQ -->|"SecurityGuard.check_query"| Guard1{GuardResult}
         Guard1 -->|allowed| Retrieve["Retriever.retrieve(query, k=20)\nvector + BM25 fused via RRF"]
         Store --> Retrieve
-        Retrieve -->|"list[RetrievedChunk]"| Rerank["Reranker.rerank(query, chunks, k=5)"]
+        Retrieve -->|"TenantPolicy.filter_chunks\n(only if tenant_policy wired)"| TF["list[RetrievedChunk]\n(tenant-scoped)"]
+        TF -->|"list[RetrievedChunk]"| Rerank["Reranker.rerank(query, chunks, k=5)"]
         Rerank -->|"list[RetrievedChunk]"| Generate["Generator.generate(query, context, trace)\ncontext = reranked chunk content\ncitations built from reranked chunks"]
         Generate -->|Answer| Guard2["SecurityGuard.check_answer +\nPatternRedactor.redact(answer.text)"]
         Guard2 --> Final["Answer\n(text + citations + trace_id)"]
     end
 ```
 
-The `Trace` object is created at the start of the query path and accumulates a `TraceStep` after each stage. The final `Answer.trace_id` links back to it for observability.
+The `Trace` object is created at the start of the query path and accumulates a `TraceStep` after
+each stage. The final `Answer.trace_id` links back to it for observability. The three
+`TenantPolicy`-labeled steps above are no-ops whenever no `tenant_policy` is wired in the
+manifest — this is the identical minimal-vs-governed pipeline distinction described in
+[`overview.md` §2](overview.md#2-guiding-principles) ("progressive rollout"); a
+`local-hybrid-rag.yaml` run skips all three, a `secure-enterprise-rag.yaml` run executes all
+three. See [`overview.md` §10](overview.md#10-ingestion-pipeline-v1-detail) for why embedding
+happens one chunk at a time rather than as a single batched call, and why that has real
+cost/latency consequences for large corpora with an API-backed embedder.

@@ -33,9 +33,12 @@ mrag ask "…" --manifest manifests/presets/local-hybrid-rag.yaml
 ```
 
 1. **CLI entry point** — [src/modular_rag/cli/__init__.py](../../src/modular_rag/cli/__init__.py):
-   the `ask` command loads the pipeline then calls `pipeline.ask(question)`.
+   the `ask` command loads the pipeline then calls `pipeline.answer(question, tenant_id=...)` —
+   **not** `pipeline.ask()`; `answer()` is the real method name on `RAGEngine`.
 2. **Bootstrap** — [src/modular_rag/app/bootstrap.py](../../src/modular_rag/app/bootstrap.py#L24):
    `load_pipeline()` reads the YAML manifest and asks the registry to build every component.
+   (`load_engine()`/`load_application()` are the entry points that also handle engine-adapter
+   selection — see step 5 below.)
 3. **The manifest** — [manifests/presets/local-hybrid-rag.yaml](../../manifests/presets/local-hybrid-rag.yaml):
    the **source of truth** for wiring: which chunker, which retriever, which weights, which generator.
 4. **The registry** — [src/modular_rag/orchestration/registry.py](../../src/modular_rag/orchestration/registry.py)
@@ -45,11 +48,21 @@ mrag ask "…" --manifest manifests/presets/local-hybrid-rag.yaml
    import concrete adapter implementations):
    `type: hybrid` in YAML → factory `HybridRetriever(**cfg.config)`. This is where (and only
    where) new components get registered.
-5. **The engine** — [src/modular_rag/orchestration/engine.py](../../src/modular_rag/orchestration/engine.py#L67):
-   `RAGEngine._run()` is the conductor. Read it in full (~50 lines); it walks through 5 stages
-   in order, each emitting a `TraceStep`:
+5. **The engine** — [src/modular_rag/orchestration/engine.py](../../src/modular_rag/orchestration/engine.py):
+   `RAGEngine._run_steps()` is the conductor for the native path (a manifest can instead select
+   `LangGraphEngineAdapter` via `engine.adapter: langgraph` — see
+   [document-engine-contract.md](../architecture/document-engine-contract.md) — but
+   `local-hybrid-rag.yaml` uses native, which this walkthrough follows). Read it in full; it is
+   **more than 5 fixed stages** — every step past retrieval is conditionally run only if its
+   component is configured on the manifest, and the *complete*, verified sequence (tenant-policy
+   check → policy-engine check → guard → retrieve → tenant-filter → rerank → generate → answer
+   guard → redact → human-review → audit) lives in
+   [runtime-flow.md](../architecture/runtime-flow.md) — read that file for the authoritative
+   step-by-step, not this bullet list, which only names the pieces most relevant for a first
+   read-through of `local-hybrid-rag.yaml` (which wires none of the optional governance
+   components, so those steps are genuinely no-ops for this specific walkthrough):
    - **query guard** → [security/filters/basic_guard.py](../../src/modular_rag/security/filters/basic_guard.py)
-     (12 injection patterns across 3 documented families)
+     (12 injection patterns across 3 documented families — see [security.md](../architecture/security.md))
    - **retrieval** → [retrieval/retrievers/hybrid.py](../../src/modular_rag/retrieval/retrievers/hybrid.py)
      which queries [vector.py](../../src/modular_rag/retrieval/retrievers/vector.py) (Qdrant) and
      [bm25.py](../../src/modular_rag/retrieval/retrievers/bm25.py), then fuses via
@@ -59,6 +72,9 @@ mrag ask "…" --manifest manifests/presets/local-hybrid-rag.yaml
      or [anthropic_gen.py](../../src/modular_rag/generation/synthesizers/anthropic_gen.py),
      citations built by [citations/builder.py](../../src/modular_rag/generation/citations/builder.py)
    - **answer guard** → the same guard's `check_answer()` (uncited-URL detection)
+   - to see the *rest* of the sequence (tenant isolation, policy engine, redaction, human review,
+     audit) exercised for real, read [security.md](../architecture/security.md) and follow
+     `secure-enterprise-rag.yaml` instead of `local-hybrid-rag.yaml`
 6. **The answer** — [core/models/answer.py](../../src/modular_rag/core/models/answer.py):
    `Answer` carries the text, the `Citation` list and the `Trace` id.
 
@@ -105,10 +121,11 @@ Golden rule ([ADR-0001](../adr/0001-modular-architecture.md)): all dependency ar
 | `retrieval/` | BM25, vector, hybrid RRF, rerankers | [retrievers/hybrid.py](../../src/modular_rag/retrieval/retrievers/hybrid.py) | `tests/unit/retrieval/` |
 | `generation/` | LLM generators, citations, lexical gate | [synthesizers/openai_gen.py](../../src/modular_rag/generation/synthesizers/openai_gen.py) | `tests/unit/generation/` |
 | `security/` | Safety (filters/, redaction/) ≠ Security (policies/) | [filters/basic_guard.py](../../src/modular_rag/security/filters/basic_guard.py) | `tests/unit/security/` |
-| `orchestration/` | RAGEngine, registry, router, state machine | [engine.py](../../src/modular_rag/orchestration/engine.py) | — |
-| `adapters/` | External bindings (Qdrant, HF, OpenAI…) | [vectorstores/](../../src/modular_rag/adapters/vectorstores/) | `tests/integration/` |
-| `eval/` | Exact-match scorers, retrieval metrics | [scorers/](../../src/modular_rag/eval/scorers/) | `tests/unit/eval/` |
-| `agents/`, `memory/` | V2/V3 stubs — do not extend in V1 | — | — |
+| `orchestration/` | `RAGEngine`, `ComponentRegistry`, `Container`, `NativeEngineAdapter`, `IndexReconciler`, state machine — **no router**: `QueryRouter`/`FlowCompiler` were removed in Lot 17 | [engine.py](../../src/modular_rag/orchestration/engine.py) | `tests/unit/orchestration/` |
+| `adapters/` | External bindings (Qdrant, HF, OpenAI, Keycloak, LangGraph, Postgres…) | [vectorstores/](../../src/modular_rag/adapters/vectorstores/) | `tests/integration/`, `tests/unit/adapters/` |
+| `eval/` | Exact-match scorer, retrieval metrics, benchmark runner, quality gate | [scorers/](../../src/modular_rag/eval/scorers/) | `tests/unit/eval/` |
+| `agents/` | Engine-delegation adapter-integration only (ADR-0005 §5.2) — no native multi-agent runtime; native prototypes removed in Lot 17 | — | — |
+| `memory/` | Key/value storage only (`memory/kv/`) — the graph data model was removed in Étape 8; see [structure.md](../architecture/structure.md#memory--keyvalue-storage-only) | — | — |
 
 **Mirror convention**: the test for `src/modular_rag/X/Y.py` lives at `tests/unit/X/test_Y.py`.
 Reading the test is often the fastest way to understand a file.
@@ -118,7 +135,16 @@ Reading the test is often the fastest way to understand a file.
 ## Level 4 — The "why": decisions and state of the art
 
 1. **The ADRs** — [docs/adr/](../adr/): 0001 (hexagonal layering), 0002 (contracts + plugins),
-   0003 (security & governance), 0004 (strategic features V1-V5).
+   0003 (security & governance) — all three still accepted, each now with a short 2026-08
+   amendment note where ADR-0005 superseded a specific claim. 0004 (strategic features V1-V5) is
+   archived, superseded by **0005** (document-AI control plane boundary — the single most
+   important ADR to read if you're getting oriented: it's why `agents/`, GraphRAG, fine-tuning
+   execution, and multimodal execution are delegated rather than built natively). **0006**
+   selects LangGraph as the external engine; **0007** fixes the layer-boundary/manifest-
+   activation gaps that made ADR-0005 real in practice; **0008** separates offline evaluation
+   from online answering and makes engine incompatibilities fail startup; **0009** adds
+   embedder/vector-store dimension reconciliation. Read 0001→0009 in order if you're new — each
+   builds on the last.
 2. **The research digests** — [docs/research/README.md](../research/README.md): 39 arXiv papers
    distilled into 7 digests. Every design choice in the code cites its digest
    ([CLAUDE.md](../../CLAUDE.md) coding rule 8); unsourced constants are flagged as such in the

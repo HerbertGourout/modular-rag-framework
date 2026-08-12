@@ -119,6 +119,9 @@ environment variable the underlying SDK actually reads, never a manifest committ
 mrag version
 ```
 
-Expected output: `Modular RAG Framework vX.Y.Z`.
+Expected output: `modular-rag X.Y.Z` (e.g. `modular-rag 0.0.1`) — `cli/__init__.py`'s `version()`
+command prints `f"modular-rag {__version__}"` directly, reading the same
+`importlib.metadata.version("modular-rag")`-backed value everything else in the codebase does
+(single source: `pyproject.toml`'s `[project].version`).
 
 > At the current pre-alpha stage (`v0.0.x`), this command confirms the package is importable. Full end-to-end verification will be available at `v0.1` with `examples/simple_qa/`.

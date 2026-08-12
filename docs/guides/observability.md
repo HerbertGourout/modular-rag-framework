@@ -12,20 +12,38 @@ The trace records each pipeline step with:
 
 The `Trace` accumulates totals: `total_input_tokens`, `total_output_tokens`, `total_latency_ms`.
 
+Step names are confirmed directly from `orchestration/engine.py`'s `_run_steps()`: `guard_query`
+(tenant/policy checks raise before this step even runs, so a denial produces *no* trace steps —
+see [threat-model.md](../architecture/threat-model.md) for what a denial produces instead),
+`retrieve`, `rerank` (only if a reranker is configured), then `generate` — the generator
+self-instruments its own `TraceStep` rather than the engine wrapping it in a second one (Lot 10
+fixed a real double-counting bug here; don't reintroduce an outer "generate" step if you're
+reading this as a guide for writing a similar component). There is no `guard_answer` step name in
+the current source — the post-generation guard check and the optional redaction/human-review
+steps that follow it do not currently emit their own named `TraceStep`s; their only visible trace
+signal today is a missing early-return (the run completed normally) or a `GUARD_DECISION` audit
+event if an `audit_sink` is configured — see below.
+
 ```mermaid
 %%{init: {"theme": "base"}}%%
 flowchart LR
     Engine["RAGEngine.answer()"] -->|"creates"| T["Trace\n(query_id, pipeline_id)"]
     T -->|"add_step()"| S1["TraceStep\nguard_query"]
     T -->|"add_step()"| S2["TraceStep\nretrieve"]
-    T -->|"add_step()"| S3["TraceStep\nrerank"]
-    T -->|"add_step()"| S4["TraceStep\ngenerate"]
-    T -->|"add_step()"| S5["TraceStep\nguard_answer"]
+    T -->|"add_step()"| S3["TraceStep\nrerank (optional)"]
+    T -->|"add_step()"| S4["TraceStep\ngenerate (self-instrumented)"]
     T -->|"record_trace(trace)"| Backend{"Telemetry backend"}
     Backend --> Struct["StructlogTelemetry\n(default: JSON to stdout)"]
     Backend --> Null["NullTelemetry\n(tests: no-op)"]
     Backend --> Custom["Custom adapter\n(e.g., Datadog)"]
 ```
+
+**Telemetry vs. audit — two different, both-optional recording paths.** `Telemetry` (this guide)
+is performance/debugging data — latency, token counts — sent wherever `observability.telemetry`
+points. Compliance evidence (who asked what, was it denied, was it redacted) is a completely
+separate mechanism, `AuditSink` (`contracts/audit.py`), configured via `governance.audit_sink` and
+covered in [audit-traceability.md](audit-traceability.md), not this guide. A pipeline can have
+either, both, or neither configured — they don't imply each other.
 
 ## Telemetry backends
 
@@ -44,16 +62,22 @@ Writes structured JSON to stdout:
 ```json
 {
   "event": "trace_recorded",
+  "schema_version": "1.2",
   "pipeline_id": "local-hybrid-rag",
   "query_id": "a1b2c3d4",
   "total_latency_ms": 1234.5,
   "total_input_tokens": 1800,
   "total_output_tokens": 320,
-  "routing_strategy": "simple_rag",
-  "steps": ["guard_query", "retrieve", "rerank", "generate", "guard_answer"],
+  "failed": false,
+  "steps": ["guard_query", "retrieve", "rerank", "generate"],
   "timestamp": "2026-05-21T10:00:00Z"
 }
 ```
+
+There is no `routing_strategy` field — an earlier version of this example showed one, left over
+from a native query-routing feature (`QueryRouter`) removed well before this pass; see
+[data-model.md](../architecture/data-model.md)'s `Trace` field table for the complete, current
+list, including `failed`/`failure_reason` for a run that raised.
 
 ### NullTelemetry
 
@@ -110,34 +134,23 @@ print(answer.trace_id)
 
 ## Evaluation metrics
 
-After running a benchmark, metrics are emitted via `record_metrics()`:
-
-| Metric | Description |
-|---|---|
-| `recall_at_k` | Fraction of relevant documents in top-k retrieved |
-| `precision_at_k` | Fraction of top-k that are relevant |
-| `ndcg` | Normalized Discounted Cumulative Gain |
-| `mrr` | Mean Reciprocal Rank |
-| `groundedness` | Overlap between answer and retrieved context |
-| `faithfulness` | Whether the answer contradicts the context |
-| `answer_relevance` | Whether the answer addresses the query |
-| `latency_ms` | End-to-end wall-clock time |
-| `input_tokens` | Total LLM input tokens |
-| `output_tokens` | Total LLM output tokens |
-| `cost_usd` | Estimated API cost |
+`record_metrics(pipeline_id, metrics)` takes a `Metrics` instance — a 16-field evaluation-score
+bag (retrieval, answer-quality, policy, cost/latency, and failure-signal families), not something
+this guide re-derives field by field. See [data-model.md](../architecture/data-model.md#metrics)
+for the complete, current table — an earlier version of this section listed only 11 of the 16
+real fields (missing `exact_match`, `answer_precision`, `answer_recall`, `context_precision`,
+`policy_violations`, `failed`, `failure_reason`, and `schema_version`), which is exactly the class
+of drift that table is meant to be the single source of truth against, rather than duplicating a
+now-incomplete copy here.
 
 ## Log configuration
 
-Set the log level via environment variable:
-
-```bash
-export MRAG_LOG_LEVEL=DEBUG   # verbose tracing
-export MRAG_LOG_LEVEL=INFO    # default
-export MRAG_LOG_LEVEL=WARNING # production (suppress trace-level output)
-```
-
-Structlog outputs JSON by default. To switch to a human-readable format for development, set:
-
-```bash
-export MRAG_LOG_FORMAT=console
-```
+**There is no `MRAG_LOG_LEVEL` or `MRAG_LOG_FORMAT` environment variable in this codebase** — an
+earlier version of this guide described both; neither is read anywhere in
+`observability/`. `StructlogTelemetry` writes structured JSON with no built-in level or format
+switch of its own. If you need Python's standard logging level or structlog's own output renderer
+configured differently (e.g. a human-readable console renderer for local development instead of
+JSON), configure `structlog` directly in your own application entry point, before calling
+`load_pipeline()`/`load_application()` — see
+[structlog's own configuration documentation](https://www.structlog.org/en/stable/configuration.html)
+for how; this framework does not wrap or simplify that configuration itself today.

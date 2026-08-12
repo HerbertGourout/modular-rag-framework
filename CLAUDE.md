@@ -75,7 +75,7 @@ pip install -e ".[v1,dev]"
 # ✓ FULL CHECK (2-5 min) — Use before merge
 ./scripts/check.sh full         # Quick + unit + contracts
 
-# 🔗 INTEGRATION (1-2 min) — With Qdrant
+# 🔗 INTEGRATION (1-2 min) — With Qdrant and PostgreSQL for the full suite
 ./scripts/check.sh integration
 
 # 🚀 E2E TESTS (2-5 min) — Full pipeline
@@ -96,10 +96,12 @@ pytest tests/contract/ -v
 # Single test
 pytest tests/unit/ingestion/chunkers/test_fixed.py::test_short_text_single_chunk -v
 
-# Integration tests (requires Qdrant on localhost:6333)
+# Integration tests (Qdrant tests require :6333; PostgreSQL adapter tests require :5432)
 pytest tests/integration/ -v -m integration
 
-# E2E tests (requires Qdrant + LLM API key)
+# E2E tests (requires Qdrant; test_secure_preset_e2e.py additionally requires PostgreSQL but
+# deliberately needs no LLM key — deterministic embedder/generator, see that file's own module
+# docstring; test_simple_qa_pipeline.py needs an LLM key)
 export OPENAI_API_KEY=sk-...   # the SDK's own standard var — NOT MRAG_OPENAI_API_KEY
                                 # (app/settings.py's MRAG_-prefixed Settings class was orphaned
                                 # and deleted in Étape 8 of ADR-0007; see
@@ -169,7 +171,10 @@ replaces deterministic validation.
 2. **No cross-domain imports.** Retrievers never import from `generation/`; guards never import from `ingestion/`. They share only `core/models/` types.
 3. **Manifests are the source of truth.** Register the component in `app/default_factories.py`, then select it by name in YAML. Never wire it in Python elsewhere.
 4. **Tests mirror `src/`.** `tests/unit/ingestion/chunkers/test_fixed.py` for `src/modular_rag/ingestion/chunkers/fixed.py`. Add a contract test in `tests/contract/` for every new Protocol implementation.
-5. **Observability is mandatory.** Every retrieval, generation, and agent method must emit a `TraceStep` via `Trace.add_step()`.
+5. **Observability is mandatory for new execution steps.** Retrieval and generation methods must
+   emit a `TraceStep` via `Trace.add_step()`. Current coverage is not universal: tenant/policy
+   checks, post-generation guard checks, redaction, and human review do not yet emit distinct
+   steps; see `docs/guides/observability.md`.
 6. **Extend, don't rewrite.** All core modules exist. Add to them rather than recreating.
 7. **Lazy imports for heavy deps.** All optional libraries (qdrant-client, rank-bm25, sentence-transformers, openai, anthropic, fitz) must be imported inside the method that uses them, not at module level.
 8. **State of the art first.** Before any *design* decision (fusion weights, chunking parameters, guard patterns, metric choices, architectural patterns), read the matching digest in `docs/research/` (DIGEST-retrieval, DIGEST-generation, DIGEST-chunking, DIGEST-evaluation, DIGEST-security, DIGEST-overviews, DIGEST-architecture — distilled from `.claude/research-papers/`) and cite the arXiv id backing the choice. A choice that contradicts the digest must be justified explicitly. Routine implementation (tests, fixes, wiring) does not require this.
@@ -186,7 +191,7 @@ After any change, run the appropriate scope:
 | Protocol conformance | `pytest tests/contract` | nothing |
 | Layering audit | `python scripts/check_layering.py` | nothing |
 | Vector store | `pytest tests/integration` | Qdrant on :6333 |
-| Full pipeline | `pytest tests/e2e` | Qdrant + LLM API key |
+| Full pipeline | `pytest tests/e2e` | Qdrant (+ PostgreSQL and/or an LLM API key depending on the scenario — see `.claude/rules/tests.md`) |
 
 A change to a contract (`contracts/`) requires updating the matching `tests/contract/test_*_conformance.py`. A new domain implementation requires a unit test in `tests/unit/<same_path>/`.
 
@@ -229,30 +234,34 @@ See [ROADMAP.md](ROADMAP.md) for complete timeline and success criteria per vers
 
 ### V1 — Core RAG + Evaluation + Audit `[Q2 2026]`
 
-**V1.0 — Hybrid Retrieval + Basic Security** ✅ (Current focus)
+**V1.0 — Hybrid Retrieval + Basic Security** 🟡 (implementation complete; live validation pending)
 - ✅ Core RAG pipeline (ingestion → retrieval → generation)
 - ✅ Hybrid retrieval (BM25 + vector + reranking)
 - ✅ Security guards (prompt injection, PII redaction)
-- ✅ Observability (TraceStep emissions throughout)
+- 🟡 Observability — `TraceStep` emissions are real but not universal: query guard, retrieval,
+  optional reranking, and generation are traced; tenant/policy denial, the post-generation guard
+  check, redaction, and human-review decisions do not yet emit their own step (see
+  [docs/guides/observability.md](docs/guides/observability.md))
 - ✅ ComponentRegistry + manifest wiring
-- ✅ Unit, contract, integration, e2e tests
-- ✅ `examples/simple_qa/` end-to-end
+- ✅ Unit and contract tests
+- 🟡 Integration and e2e suites exist but are not run in CI; live Qdrant/PostgreSQL/LLM
+  validation remains an explicit release check
+- 🟡 `examples/simple_qa/` is implemented but its current live LLM + Qdrant run remains
+  unchecked in `ROADMAP.md`
 
-**V1.1 — Evaluation-as-Contract** `[NEW — 1 month after V1.0]`
-- `contracts/evaluation.py`: MetricsProtocol for all components
-- `eval/metrics/`: NDCG, MRR, semantic similarity, factuality, cost/query
-- `eval/golden_sets/`: Domain-specific Q&A (finance, healthcare, manufacturing, default)
-- `eval/regression_dashboard.py`: Auto-detect F1 drops, prevent merges
-- **Key difference**: Every retriever/generator MUST implement metrics; tests contract conformance
-- **Success**: F1 on golden set > 0.85, zero regressions
+**V1.1 — Evaluation-as-Contract** 🟡 (partially built)
+- Implemented: `contracts/evaluation.py::Evaluator`, exact-match scoring, recall/precision/MRR,
+  `BenchmarkRunner`, in-memory `GoldenSet` classes, and a programmatic offline `QualityGate`.
+- Not built: NDCG, semantic/factuality scorers, populated per-domain datasets, a regression
+  dashboard, and a manifest-driven evaluation runner.
+- Per ADR-0008, evaluation and gold-dependent quality gates are offline capabilities, not online
+  runtime pipeline components.
 
-**V1.2 — Compliance Audit Trail** `[NEW — 2 months after V1.0]`
-- `security/audit/`: Immutable append-only event store
-- `security/audit/data_lineage_tracker.py`: Source → processing → response chain
-- `security/redaction/`: Proof of what was redacted, how
-- `security/compliance/`: Auto-generate GDPR/CCPA/HIPAA reports
-- **Key difference**: GDPR audit report < 10 seconds; zero unredacted PII in logs
-- **Success**: Audit trail immutable, data lineage traceable, compliance reports work
+**V1.2 — Compliance Audit Trail** 🟡 (partially built)
+- Implemented: structured `AuditEvent`/`AuditSink`, in-memory and append-only PostgreSQL sinks,
+  query/run audit emission, and pattern redaction.
+- Not built: end-to-end data-lineage tracking, formatted GDPR/CCPA/HIPAA report generation,
+  retention enforcement, or proof that every possible log/export is free of unredacted PII.
 
 ---
 
@@ -279,8 +288,11 @@ prototype implementation was removed in
 
 **V3.0 — GraphRAG** — traversal/reasoning execution delegated per
 [ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md) §5.2 to a selected external
-engine via the `DocumentEngine` port. A knowledge-graph *data model* may still live in
-`memory/` if Lot 6 evidence shows the external engine can't represent it — undecided.
+engine via the `DocumentEngine` port. Whether a knowledge-graph *data model* should still live
+in `memory/` was resolved, not left open: [ADR-0007](docs/adr/0007-layer-boundaries-and-control-plane-activation.md)
+Étape 8 removed the native `KnowledgeGraph` class entirely (zero consumers anywhere outside its
+own test), restorable via git history if a real, wired need emerges. No native graph capability
+exists in this codebase today.
 
 **V3.1 — Cost/Latency Evidence + Reporting** `[NEW — 2 months after V3.0]` — reframed per
 ADR-0005 §5.1: the in-house query-routing/model-selection logic is delegated; what stays
@@ -398,7 +410,8 @@ Why sequences matter:
 ### Wiring Notes (V1 Internals)
 - `VectorRetriever._embedder` and `VectorRetriever._store` are injected by `registry.wire()` post-wiring.
 - `HybridRetriever` uses `k` (retrieval count) and `reranker_k` from manifest config.
-- All components wired via `orchestration/registry.py` — never direct Python instantiation.
+- Built-in runtime components are registered in `app/default_factories.py` and selected through
+  manifests; offline evaluation helpers are intentionally constructed programmatically (ADR-0008).
 
 ---
 
@@ -416,8 +429,9 @@ trigger is native — the actual fine-tuning execution is delegated per ADR-0005
 external MLOps tooling, not built in this repo at any version.
 
 **"What if client asks for V5 features in V1?"**
-→ Explain the strategy honestly: V1 is proven native RAG with native governance/audit/eval built
-in every version. Multi-agent orchestration (V2.1), GraphRAG traversal (V3.0), fine-tuning
+→ Explain the strategy honestly: V1.0 is implemented but still awaits the live checks recorded
+in `ROADMAP.md`; native governance, audit, and offline evaluation are partially built, with their
+remaining gaps listed there. Multi-agent orchestration (V2.1), GraphRAG traversal (V3.0), fine-tuning
 execution (V3.2), and multimodal execution (V5.0) are delegated to a selected external engine
 per ADR-0005 — this framework's differentiator is owning governance/audit/eval/portability
 *around* that engine, not building those four capabilities in-house.
@@ -431,14 +445,14 @@ per ADR-0005 — this framework's differentiator is owning governance/audit/eval
 
 | Capability | LangChain | Haystack | **This Framework** |
 |---|---|---|---|
-| Evaluation | External | Built-in | ✅ **Contract-enforced (V1.1), native** |
-| Audit Trail | Manual logs | Limited | ✅ **GDPR-ready (V1.2), native** |
+| Evaluation | External | Built-in | 🟡 **Native offline primitives (V1.1)**; datasets/NDCG/dashboard remain open |
+| Audit Trail | Manual logs | Limited | 🟡 **Native structured audit (V1.2)**; lineage/compliance reports remain open |
 | Policies | None | Limited | ✅ **Policy-as-Code (V2.0), native** |
 | Multi-Agent | Bolted-on | Limited | ⚙️ **Delegated to a selected external engine (V2.1)**, exposed via `DocumentEngine` |
-| Cost Optimization | None | None | ✅ **Evidence/reporting native (V3.1)**; routing logic delegated |
+| Cost Optimization | None | None | ⬜ **Native evidence/reporting planned (V3.1)**; routing logic delegated |
 | Fine-Tuning | None | None | ⚙️ **Drift detection/eval trigger native; fine-tuning execution delegated (V3.2)** |
-| Graph Memory | External | External | ⚙️ **Delegated GraphRAG traversal (V3.0)**; a native graph data model is possible pending Lot 6 evidence |
-| Multi-Language | English-first | Limited | ✅ **20+ languages (V4.1), native** |
+| Graph Memory | External | External | ⚙️ **Delegated GraphRAG traversal (V3.0)**; the native graph data model was evaluated and removed (Étape 8, [ADR-0007](docs/adr/0007-layer-boundaries-and-control-plane-activation.md) — resolved: zero consumers, restorable via git history if a real, wired need emerges) — no native graph capability exists today |
+| Multi-Language | English-first | Limited | ⬜ **20+ languages (V4.1) — not yet built**; no `adapters/nlp/` module exists |
 | Multimodal | Partial | Partial | ⚙️ **Delegated VLM execution (V5.0)**; parsing/citation enrichment may stay native |
 
 ⚙️ = delegated per [ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md) — the

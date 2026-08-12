@@ -197,11 +197,11 @@ plain V1 pipeline.
 
 ### Resolved: `app.container` compatibility re-export (Étape 4, 2026-08-07)
 
-Decision #1 is resolved: yes, kept. `src/modular_rag/app/container.py` is now a two-line
-re-export (`from modular_rag.orchestration.container import Container`) rather than the real
-class definition. No named removal condition has been set yet — it stays until a caller audit
-confirms nothing outside `orchestration/`/tests imports `Container` via the old `app.container`
-path.
+Decision #1 is resolved: yes, kept. `src/modular_rag/app/container.py` is now a short
+compatibility re-export (a docstring, `from modular_rag.orchestration.container import
+Container`, and `__all__ = ["Container"]`) rather than the real class definition. No named
+removal condition has been set yet — it stays until a caller audit confirms nothing outside
+`orchestration/`/tests imports `Container` via the old `app.container` path.
 
 ### Resolved: knowledge-graph data model (Étape 8, 2026-08-07)
 

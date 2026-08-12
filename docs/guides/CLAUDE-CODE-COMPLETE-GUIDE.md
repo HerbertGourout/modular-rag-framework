@@ -2,8 +2,10 @@
 
 **For**: All developers  
 **Purpose**: Understand how Claude Code is configured and integrated into the Modular RAG Framework  
-**Updated**: June 20, 2026  
-**Status**: Production Ready ✅
+**Updated**: 2026-08 (see the dated correction notes throughout the body; the original June 2026
+version predates ADR-0005 and a documentation-audit correction pass, both reflected below)
+**Document status**: operational guide. The framework itself remains pre-alpha; see
+[`ROADMAP.md`](../../ROADMAP.md) and the capability matrix for implementation maturity.
 
 ---
 
@@ -82,19 +84,31 @@ Your configuration is built on **three non-negotiable principles**:
 
 **Definition**: Adopt Claude Code gradually through phases, never skip steps.
 
-**Implementation**:
+**Implementation** — corrected here: [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md)
+(accepted 2026-08-04) split what used to be a blanket "V2+ deferred" story into **owned** (native,
+built in this repo) and **delegated** (an external engine's job) halves. "Deferred" undersells
+what's already shipped:
 - V1 (Core RAG) ✅ — End-to-end working
-- V2 (Agentic) ⏳ — Deferred, rules documented
-- V3 (Graph Memory) ⏳ — Deferred
-- V4 (Governance) ⏳ — Deferred
-- V5 (Multimodal) ⏳ — Deferred
+- V2.0 (Policy Engine, tenant isolation) ✅ — Real and shipped, not deferred
+- V2.1 (multi-agent orchestration) ⚙️ — **Delegated** to a selected external engine (LangGraph),
+  not a native build target at any version
+- V3.0 (GraphRAG traversal) ⚙️ — **Delegated**; no native graph runtime exists (removed Étape 8)
+- V3.1/V3.2 (cost reporting, drift detection) — native, partially built; fine-tuning *execution*
+  itself is delegated
+- V4 (Governance: multi-tenant policy layering, audit retention, human review) — partially
+  shipped natively already (audit, redaction, human-review gate); remainder ⏳ deferred
+- V5.0 (Multimodal VLM execution) ⚙️ — **Delegated**; parsing/citation enrichment may stay native
 
 **What this means for you**:
-- Don't implement V2+ features yet (even if possible)
-- Follow the version progression in [CLAUDE.md block 09](../../CLAUDE.md#09--known-stubs--v2-scope)
-- Focus on V1: ingestion, retrieval, generation, eval, security
+- Don't build a native replacement for a delegated capability (multi-agent orchestration,
+  GraphRAG traversal, VLM execution, fine-tuning execution) — those go through the
+  `DocumentEngine` port to a selected external engine, per ADR-0005
+- Follow the version progression in [CLAUDE.md block 09](../../CLAUDE.md#09--roadmap-v1--v5-with-strategic-features)
+- Focus on what's still open in owned scope: V3.1/V4 remainder, not a native V2.1/V3.0/V5.0
 
-**Example**: Want to add an LLM adapter? → Check if it's V1 or V2+ scope → If V2+, defer to next phase
+**Example**: Want to add an LLM adapter? → If it's for `generation/` (a new provider), that's
+native V1 scope. If it's for generic agent orchestration, that's delegated — build the adapter
+integration, not a native runtime.
 
 ---
 
@@ -354,7 +368,7 @@ src/modular_rag/
 
 **Configuration**: Automatic discovery of every `.md` file under `.claude/rules/`. The scoping key is `paths:` in YAML frontmatter (a list of globs), not `applyTo` (that's a different tool's convention).
 
-**Example**: When editing `src/modular_rag/adapters/embeddings/huggingface.py`, `adapters.md` is automatically loaded into context — no invocation needed.
+**Example**: When editing `src/modular_rag/adapters/embeddings/hf_embedder.py`, `adapters.md` is automatically loaded into context — no invocation needed.
 
 > `.claude/.instructions.md` and `.claude/.prompt.md` are **not** rules and are **not** auto-discovered by Claude Code on their own — they're plain files that only load because `CLAUDE.md` now `@`-imports them (see Configuration Files Reference below).
 
@@ -430,7 +444,7 @@ coverage:      # pytest with coverage report
 | **.claude/.prompt.md** | Response style guide | ✅ Via `@`-import in CLAUDE.md (added 2026-06-22 — not auto-discovered on its own) | Architecture team |
 | **.claude/settings.json** | Permissions + hooks | ✅ Always (this is the real config Claude Code reads) | Architecture team |
 | **.claude/agents/*.md** | The 8 subagent definitions | ✅ Always (this is what actually registers `@retrieval-specialist` etc.) | Architecture team |
-| **.claude/skills/*/SKILL.md** | The 13 invocable skills (`/quick-check`, `/add-retriever`, ...) | ✅ Always discovered; each one only *runs* when invoked | Domain owners |
+| **.claude/skills/*/SKILL.md** | The 18 invocable skills (`/quick-check`, `/add-retriever`, ...) | ✅ Always discovered; each one only *runs* when invoked | Domain owners |
 | **.claude/AGENTS.md** | Human-readable reference describing the 8 subagents | ❌ Not auto-loaded — Claude Code reads `CLAUDE.md`, not `AGENTS.md`. This file is documentation only; the agents work because of `.claude/agents/*.md` above, not because of this file. | Architecture team |
 | **.claude/rules/*.md** | Domain-specific rules | ✅ Path-scoped (`paths:` frontmatter) or always-on if no `paths:` — see Mechanism 2 above | Domain owners |
 | **.env.example** | Template environment vars | ❌ Read by developers, not by Claude Code | Any developer |
@@ -555,7 +569,7 @@ the canonical scheme — the single source of truth for step names and ordering 
 
 **Example**: BM25 retriever plan
 ```
-Step 1: Implement BM25Retriever in src/modular_rag/retrieval/bm25_retriever.py (45 min)
+Step 1: Implement a retriever in src/modular_rag/retrieval/retrievers/<name>.py (45 min)
 Step 2: Write unit tests (30 min)
 Step 3: Register in app/default_factories.py (5 min)
 Step 4: Add contract conformance test (15 min)
@@ -590,15 +604,15 @@ Team:    ✅ Approved. Proceed.
 **Example**:
 ```bash
 # Step 1: Implement BM25Retriever
-# Claude: "Implement src/modular_rag/retrieval/bm25_retriever.py
-#  - Implement VectorRetriever Protocol
+# Claude: "Implement src/modular_rag/retrieval/retrievers/<name>.py
+#  - Implement the Retriever Protocol
 #  - Use rank_bm25 library
 #  - Follow existing patterns from FixedChunker"
 ./scripts/check.sh quick
 
 # Step 2: Write tests
-# Claude: "Add tests/unit/retrieval/test_bm25_retriever.py
-#  - Follow test_vector_retriever.py pattern"
+# Claude: "Add tests/unit/retrieval/test_<name>.py
+#  - Follow tests/unit/retrieval/test_vector.py"
 ./scripts/check.sh full
 
 # Step 3: Register
@@ -666,9 +680,9 @@ git commit -m "feat: Add BM25Retriever with RRF fusion support
 Implements BM25-based text retrieval as standalone adapter.
 
 Adds:
-- BM25Retriever in src/modular_rag/retrieval/bm25_retriever.py
-- Unit tests in tests/unit/retrieval/test_bm25_retriever.py
-- Contract conformance test
+- Retriever implementation under src/modular_rag/retrieval/retrievers/
+- Unit tests under tests/unit/retrieval/
+- Addition to tests/contract/test_retrieval_conformance.py
 - Registration in app/default_factories.py
 
 Protocol: Implements VectorRetriever (retrieve, name, clear_cache)
@@ -810,13 +824,13 @@ Lazy imports:
 ```
 You: /add-component
      Type: Retriever
-     Name: bm25_retriever
+     Name: my_retriever
      Desc: "BM25-based lexical retrieval"
 
 Claude creates:
-  ✓ src/modular_rag/retrieval/bm25_retriever.py
-  ✓ tests/unit/retrieval/test_bm25_retriever.py
-  ✓ tests/contract/test_bm25_retriever_conformance.py (stub)
+  ✓ src/modular_rag/retrieval/retrievers/my_retriever.py
+  ✓ tests/unit/retrieval/test_my_retriever.py
+  ✓ update to tests/contract/test_retrieval_conformance.py
   ✓ Hints for registration in app/default_factories.py
 ```
 
@@ -830,8 +844,8 @@ Claude creates:
 
 **Checks**:
 - ✅ Quick + full checks
-- ✅ Integration tests (requires Qdrant)
-- ✅ E2E tests (requires LLM API)
+- ✅ Integration tests (full directory requires Qdrant + PostgreSQL)
+- ✅ E2E tests (Qdrant + PostgreSQL + an LLM key for the complete multi-scenario gate)
 - ✅ Documentation builds
 - ✅ CHANGELOG.md updated
 - ✅ Version bumped in pyproject.toml
@@ -1055,7 +1069,7 @@ Goal: Maintain 0
 
 ---
 
-## Advanced: Specialized Sub-Agents (V1 Production-Ready)
+## Advanced: Specialized Sub-Agents for V1 Work
 
 ### What Are Specialized Sub-Agents?
 
@@ -1131,7 +1145,8 @@ Step 4: @test-specialist — Design test coverage
      Contract: 2 tests (Protocol conformance)
      Integration: 2 tests (with real Qdrant + index)"
 
-Result: Production-ready HybridRetriever in ~2 hours
+Result: implementation and review-ready HybridRetriever in ~2 hours; production qualification
+still requires service-backed validation and deployment evidence
 ```
 
 **See**: [.claude/AGENTS.md](../../.claude/AGENTS.md) — Full subagent reference  
@@ -1313,4 +1328,7 @@ of this conflation already fixed elsewhere in this repo.)*
 
 **Questions?** Slack: #dev-help | GitHub: @architecture | Docs: Read before asking
 
-**Last Updated**: June 20, 2026 ✅
+**Last Updated**: 2026-08 (this file carries multiple dated "corrected 2026-08-06" annotations
+throughout its body — the June 20, 2026 date this footer previously showed predated all of them
+and was never bumped alongside those fixes; the individual correction notes inline are the
+accurate record of what changed when) ✅

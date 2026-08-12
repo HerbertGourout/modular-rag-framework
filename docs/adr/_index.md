@@ -22,7 +22,7 @@ Organizes the system into six independent planes (Control, Ingestion, Knowledge,
 **Status:** Accepted  
 **Date:** 2026-05-22
 
-Every component is exposed through a Protocol (`@runtime_checkable`). Implementations are registered in `orchestration/registry.py` and selected via YAML manifests. No direct Python wiring.
+Every component is exposed through a Protocol (`@runtime_checkable`). Implementations are registered as factories in `app/default_factories.py` and wired by `orchestration/registry.py`'s generic `ComponentRegistry`, selected by name in YAML manifests. No direct Python wiring.
 
 **Key insight:** Contracts first, implementation second. Tests verify Protocol conformance before deployment.
 
@@ -183,13 +183,22 @@ opt-in via a narrow sub-protocol, not a field added to `Indexer` itself.
 
 ## Version Scope
 
-- **ADR-0001, 0002, 0003**: Core architecture (V1-V5 stable)
-- **ADR-0004**: Feature roadmap (V1→V5 progression) — partially superseded by ADR-0005
-- **ADR-0005**: Product boundary pivot — engine-independent control plane, delegated orchestration
-- **ADR-0006**: External engine selection (LangGraph) — Accepted
-- **ADR-0007**: Layer boundaries and control-plane activation — Proposed
+- **ADR-0001, 0002, 0003**: Core architecture (V1-V5 stable), each with a short 2026-08 amendment
+  note correcting specific claims that ADR-0005 or subsequent lots superseded — the underlying
+  decisions in all three remain accepted and unchanged.
+- **ADR-0004**: Feature roadmap (V1→V5 progression) — superseded (partial) by ADR-0005; archived
+  in full at [docs/archive/0004-strategic-features-v1-v5.md](../archive/0004-strategic-features-v1-v5.md),
+  this path now a stub.
+- **ADR-0005**: Product boundary pivot — engine-independent control plane, delegated orchestration. Accepted.
+- **ADR-0006**: External engine selection (LangGraph). Accepted.
+- **ADR-0007**: Layer boundaries and control-plane activation. Accepted.
+- **ADR-0008**: Offline evaluation and honest engine activation. Accepted.
+- **ADR-0009**: `VectorIndexer` sub-protocol and dimension reconciliation. Accepted.
 
-Future ADRs will be added as new major decisions arise.
+All nine ADRs are Accepted as of this writing — none are in Proposed status. Future ADRs will be
+added as new major decisions arise; per this project's own rule
+([CLAUDE.md §07](../../CLAUDE.md#07--security-rules)), any new top-level module, layer boundary,
+or contract modification requires one.
 
 ---
 
