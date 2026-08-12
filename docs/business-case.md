@@ -130,7 +130,10 @@ Senior engineers choose their employers partly based on the technical quality of
 Publicis Sapient accumulates methodological expertise across dozens of projects. This framework is the vehicle for capitalizing on that knowledge.
 
 - Patterns discovered on one project (optimal chunking for legal documents, reranking strategy for product FAQs) are encoded as reusable adapters and manifests.
-- One project's Ragas evaluations feed the next project's benchmarks.
+- One project's golden-set benchmarks (`eval/runners/benchmark.py`'s `BenchmarkRunner` against
+  `ExactMatchEvaluator`/retrieval metrics — the framework's own built-in scorers, not a Ragas
+  integration, which doesn't exist in this codebase today) feed the next project's regression
+  baselines via `QualityGate`.
 - Graph Memory (V3) could model accumulated sector knowledge as an asset that appreciates over
   time — GraphRAG traversal itself is delegated to a selected external engine (LangGraph) per
   [ADR-0005](adr/0005-document-ai-control-plane-boundary.md), not a native build, and the
@@ -144,9 +147,16 @@ Publicis Sapient accumulates methodological expertise across dozens of projects.
 
 Some projects require guarantees that OSS frameworks cannot provide.
 
-- **Data sovereignty**: fully on-premise or client private-cloud deployment, with no calls to external APIs.
+- **Data sovereignty path**: parsing, HuggingFace embedding, Qdrant retrieval, governance, and
+  audit can run on-premise. The shipped semantic generators are OpenAI/Anthropic adapters; a
+  no-external-API deployment still needs a contract-conformant local-LLM generator adapter.
 - **Explainability**: sourced citations, groundedness scores, and the full trace make it possible to justify every answer — a frequent requirement in decision-support projects.
-- **Definable SLAs**: OpenTelemetry telemetry measures latency, tokens, and costs at every step — making it possible to commit to contractual SLAs.
+- **Definable SLAs**: structured traces cover query guarding, retrieval, reranking, and
+  generation latency, giving a starting point for contractual
+  SLAs. (The `v4` dependency group pulls in OpenTelemetry SDK packages for a future
+  OTLP-exporter integration, but nothing in the codebase wires them into a running pipeline
+  yet — today's shipped telemetry path is `StructlogTelemetry`'s structured JSON, not
+  OpenTelemetry itself. Don't promise OTel-based observability to a client until that's built.)
 - **Large enterprise clients**: CIO and CISO stakeholders at large companies want governance, auditability, and control. This framework speaks directly to them.
 
 ---

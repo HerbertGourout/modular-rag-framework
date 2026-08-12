@@ -87,8 +87,8 @@ Implements hybrid retrieval combining vector + lexical scoring.
 Uses reciprocal rank fusion for combining results.
 
 Adds:
-- BM25Retriever adapter in adapters/search/
-- Unit tests in tests/unit/adapters/
+- BM25Retriever in retrieval/retrievers/bm25.py
+- Unit tests in tests/unit/retrieval/
 - Contract conformance test
 
 Fixes #42
@@ -252,7 +252,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\check.ps1 integr
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\check.ps1 all
 ```
 
-See [docs/guides/validation.md](docs/guides/validation.md) for full reference.
+See [docs/guides/validation-protocol.md](docs/guides/validation-protocol.md) for full reference
+(`validation.md` now redirects there — this points at the canonical file directly).
 
 ---
 
@@ -261,9 +262,11 @@ See [docs/guides/validation.md](docs/guides/validation.md) for full reference.
 ```bash
 pytest tests/unit            # fast, no external services
 python scripts/check_layering.py  # architecture import audit
-pytest tests/integration     # requires Qdrant running locally
+pytest tests/integration     # full directory requires Qdrant + PostgreSQL locally
 pytest tests/contract        # protocol conformance
-pytest tests/e2e             # full pipeline, requires LLM API key
+pytest tests/e2e             # full pipeline; always needs Qdrant, plus PostgreSQL for the
+                              # governed-preset scenario — an LLM API key is only required for
+                              # the LLM-backed scenario, not the deterministic secure-preset one
 ```
 
 Claude Code users can run `/qa-v1` for the local V1 gate.

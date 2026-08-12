@@ -40,7 +40,8 @@ Use subagents for:
 
 ### Creating a Subagent
 
-**File**: `.claude/agents/code-reviewer.md`
+**Illustrative file**: `.claude/agents/code-reviewer.md` (not currently present in this project;
+the checked-in reviewer is `.claude/agents/architecture-reviewer.md`)
 
 > **Correction (2026-06-22, revised)**: an earlier pass through this doc over-corrected. Only `name` and `description` are required, but there are **15 real optional fields**, not "exactly four": `tools`, `disallowedTools`, `model`, `permissionMode`, `maxTurns`, `skills`, `mcpServers`, `hooks`, `memory`, `background`, `effort`, `isolation`, `color`, `initialPrompt`. What's genuinely **not** real: a `permissions` block with `allow`/`deny` path arrays (the real, much simpler equivalent is the `permissionMode` enum: `default`/`acceptEdits`/`auto`/`dontAsk`/`bypassPermissions`/`plan`), an `autoMemory` boolean (the real field is `memory: user|project|local`, see below), and `expertise_level`/`domain`/`instructions` (not recognized — put that content in the body). Also: `claude-opus-4-6` **is** a real model ID (just not the current latest, which is `claude-opus-4-8`) — an earlier note here wrongly called it fake.
 
@@ -438,10 +439,14 @@ claude
 
 ### Available Models
 
+Model IDs are updated frequently — the ones below (as of this documentation pass) are the
+current Claude 5 family; treat any specific ID in this guide's JSON examples further down as
+illustrative syntax, not a claim about which model is current at the time you're reading this:
+
 ```
-claude-opus-4-8        # Most capable, most expensive
-claude-sonnet-4-6      # Balanced (default)
-claude-haiku-4-5       # Fast, cheap
+claude-opus-5           # Most capable, most expensive
+claude-sonnet-5         # Balanced (default)
+claude-haiku-4-5-20251001  # Fast, cheap
 ```
 
 ### Fallback Chains

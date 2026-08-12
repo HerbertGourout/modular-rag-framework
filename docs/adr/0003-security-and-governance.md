@@ -4,6 +4,34 @@
 **Date:** 2026-05-20  
 **Authors:** Herbert Gourout, Publicis Data Specialists
 
+> **Amendment, 2026-08 (the decision itself — Safety≠Security, guard chain, policy-as-code — is
+> unchanged and still accepted; several things this ADR scoped as future work have since shipped
+> or moved, corrected here rather than left to mislead a reader):**
+> - **Policy-as-Code is native and live today, not "V4."** `PolicyEngine` is wired into
+>   `RAGEngine._run_steps()` and runs on every governed query, per Lot 11b — see
+>   [CLAUDE.md block 09](../../CLAUDE.md#09--roadmap-v1--v5-with-strategic-features), which
+>   places Policy Engine at V2.0, P0 priority, not V4. The YAML-file-per-policy layout shown in
+>   this ADR's example (`policies/no-pii-export.yaml`) was never the shipped mechanism — policies
+>   are declared inline under a manifest's `governance.policy_engine.config.policies`, validated
+>   by the same Pydantic schema as the rest of the manifest. See
+>   [security.md](../architecture/security.md) for the real, current mechanism.
+> - **`AdversarialDetector` is real but not "added to the guard chain."** The class exists
+>   (`security/detectors/adversarial.py`) but is not registered in `app/default_factories.py`
+>   under any type name, so no manifest can select it — see security.md's "Components that exist
+>   but aren't wired" section.
+> - **"Agent plan inspection: coordinator checks..." describes a native multi-agent coordinator
+>   that no longer exists.** Per [ADR-0005](0005-document-ai-control-plane-boundary.md) §5.2
+>   (accepted 2026-08-04), generic multi-agent orchestration is delegated to a selected external
+>   engine; the coordinator prototype this line refers to was removed in
+>   [Lot 17](../refactoring/lot-17-prototype-retirement.md). There is no native agent-plan
+>   inspection step today.
+> - **The "Open item (V4)" about adding tenant context to `Query`** is resolved: `Query.tenant_id`
+>   is a real field (Lot 11b), enforced fail-closed by `TenantIsolationPolicy` — see
+>   [threat-model.md](../architecture/threat-model.md).
+> - The Safety-vs-Security separation itself, and `security/detectors/` +
+>   `security/filters/` vs. `security/policies/` as the dividing line, remain exactly as decided
+>   below and are unaffected by the above.
+
 ---
 
 ## Context

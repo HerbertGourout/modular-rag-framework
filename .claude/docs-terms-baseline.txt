@@ -15,11 +15,16 @@
 .claude/rules/security-layers.md|MRAG_OPENAI_API_KEY
 .claude/skills/release/SKILL.md|MRAG_OPENAI_API_KEY
 CLAUDE.md|MRAG_OPENAI_API_KEY
+README.md|MRAG_OPENAI_API_KEY
 docs/architecture/data-model.md|QueryRouter
+docs/guides/code-walkthrough.md|QueryRouter
+docs/guides/code-walkthrough.md|FlowCompiler
+docs/architecture/module-model.md|MRAG_OPENAI_API_KEY
 docs/architecture/module-model.md|QueryRouter
 docs/architecture/structure.md|QueryRouter
 docs/architecture/structure.md|FlowCompiler
 docs/guides/claude-code-complete-development-guide.md|MRAG_OPENAI_API_KEY
+docs/guides/observability.md|QueryRouter
 docs/guides/CLAUDE-CODE-COMPLETE-GUIDE.md|agentic_workflows.md
 docs/guides/claude-code-settings-reference.md|MRAG_OPENAI_API_KEY
 docs/guides/deployment.md|MRAG_OPENAI_API_KEY

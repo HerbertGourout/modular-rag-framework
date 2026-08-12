@@ -2,6 +2,16 @@
 
 This guide defines how to measure Claude Code adoption and success on the Modular RAG Framework. Track these metrics to ensure the initiative delivers value and maintains quality.
 
+**Read this as a template for a multi-person team, not a current-state report.** The examples
+below (developer counts, weekly adoption percentages, multi-reviewer approval chains) assume a
+team this project doesn't have today — the current, actual team size is one active developer with
+sole decision authority (a target of up to a handful more, not yet assembled; see
+[ADR-0005](../adr/0005-document-ai-control-plane-boundary.md)'s own authors line). Nothing here
+is a claim about today's adoption numbers. Use this framework once the team actually grows past
+one person; a single-developer project should skip the team-adoption-rate metrics entirely and
+focus on the ones that still apply solo (validation performance, test coverage, architecture
+violations).
+
 ---
 
 ## 90-Day Success Criteria
@@ -194,7 +204,10 @@ Violations per week = count(cross-domain imports + direct wiring + other violati
 
 **Target**: 0 (protected by hooks + code review)
 
-**Tool**: not automated yet — `futureHooks` is not a real Claude Code key (`.claude/settings.json` only has `hooks.PreToolUse`/`hooks.PostToolUse`), and no `scripts/validate_imports.py` exists. Today, run the `validate-security` skill manually, which checks the same three things by hand with grep:
+**Tool**: layering is automated by `scripts/check_layering.py --strict`; broader direct-wiring
+and lazy-import review remains manual. `futureHooks` is not a real Claude Code key and no
+`scripts/validate_imports.py` exists. Today, run the `validate-security` skill for the additional
+grep-based checks:
 ```bash
 # what the validate-security skill actually runs:
 # - cross-domain imports: grep across ingestion/retrieval/generation/security/agents/memory/eval

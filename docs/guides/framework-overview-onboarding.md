@@ -3,8 +3,10 @@
 **For**: All team members (developers, architects, product managers, stakeholders)
 **Purpose**: Understand what this framework is, why it exists, what it does now, and what's coming
 **Rewritten**: 2026-08-06 (documentation audit, `docs/archive/documentation-audit-2026-08.md`)
-**Status**: V1 complete; a full 18-lot engine-agnostic control-plane refactoring programme
-(2026-08-03 → 2026-08-06) has also shipped — see [docs/refactoring/README.md](../refactoring/README.md)
+**Status**: V1.0 implementation complete, with live Qdrant/LLM validation still pending;
+V1.1 evaluation and V1.2 audit are partially built. The 18-lot engine-agnostic control-plane
+refactoring programme is complete — see [ROADMAP.md](../../ROADMAP.md) for the current capability
+status and [docs/refactoring/README.md](../refactoring/README.md) for the historical programme.
 
 > **What changed in this rewrite**: the previous version (dated June 2026) described a native
 > V2 "multi-agent runtime (coordinator, planner, retriever, synthesizer, validator)" and native
@@ -43,7 +45,7 @@ execution engine (native or a selected external one) actually runs a request.
 
 ### Key facts (verified against current code, not aspirational)
 
-- **V1 (Core RAG)**: complete — ingestion, hybrid retrieval (vector + BM25 + RRF), reranking,
+- **V1.0 (Core RAG)**: implementation complete, live validation pending — ingestion, hybrid retrieval (vector + BM25 + RRF), reranking,
   generation, security guards, tenant isolation, audit trail, document lifecycle, offline quality gates,
   API/CLI hardening, dependency/licence gates, an immutable container build.
 - **Engine abstraction**: complete — `contracts/engine.py`'s `DocumentEngine` port has two real
@@ -147,9 +149,11 @@ generator:
 `eval/quality_gate.py` applies report-only or blocking regression thresholds. These gold-dependent
 checks are intentionally separate from online answer manifests (ADR-0008).
 
-**5. Observability built-in** — every retrieval/generation/guard step emits a real `TraceStep`
-(`core/models/trace.py`); every governed run emits an `AuditEvent` when an `audit_sink` is
-configured (`contracts/audit.py`, Lot 10).
+**5. Observability built-in, with explicit coverage gaps** — query guarding, retrieval,
+optional reranking, and generation emit `TraceStep` records (`core/models/trace.py`). Tenant and
+policy decisions, post-generation guarding, redaction, and human review do not yet emit separate
+steps. Native governed runs emit `AuditEvent` records when an `audit_sink` is configured; the
+LangGraph adapter rejects unsupported audit/telemetry declarations per ADR-0008.
 
 ---
 
@@ -185,15 +189,14 @@ configured), see `orchestration/CLAUDE.md` and
 
 ## Current Status
 
-V1 (Core RAG) is complete: hybrid retrieval, security guards, tenant isolation, audit trail,
-document lifecycle (identity/idempotency/delete), offline quality gates, a hardened API/CLI, a
-dependency/licence gate, and an immutable container build. On top of that, a full 18-lot
+V1.0's implementation is complete, while its live Qdrant/LLM validation remains pending.
+Tenant isolation, structured audit, document lifecycle, offline evaluation primitives, a
+hardened API/CLI, dependency/licence gates, and an immutable container build also exist; they do
+not make the incomplete V1.1/V1.2 deliverables complete. On top of that, a full 18-lot
 refactoring programme validated the `DocumentEngine` port against a second, real, structurally
 different engine (LangGraph) and closed with a real pilot comparison. See
-[docs/refactoring/README.md](../refactoring/README.md) for the full evidence trail, including
-an honest list of what's still open (two escalated licence findings, an orphaned `Settings`
-class, a few commands never executed against live infrastructure in the sandboxed environment
-that built them).
+[docs/refactoring/README.md](../refactoring/README.md) for the historical evidence trail and
+[ROADMAP.md](../../ROADMAP.md) for the authoritative remaining gaps.
 
 ---
 
@@ -370,11 +373,13 @@ as a reference.
 ## FAQ
 
 **Can I use this for production today?**
-V1 is complete: hybrid retrieval, security, tenant isolation, audit trail, offline quality gates, a
-hardened API, and a container build all exist and are tested. Read
-`docs/refactoring/README.md` §5 for the honest list of what's still open before treating any
-specific deployment as fully proven (e.g., some backup/restore commands are documented but
-never executed against live infrastructure yet).
+Treat the package as a pre-alpha framework requiring deployment-specific qualification, not as a
+turnkey production platform. V1.0 code, API/CLI hardening, tenant isolation, structured audit,
+offline evaluation primitives, and a container build exist, but integration/E2E are not run in
+CI, live V1.0 validation remains pending, V1.1/V1.2 have documented gaps, and readiness does not
+probe Qdrant/LLM connectivity. Start with [ROADMAP.md](../../ROADMAP.md), the
+[capability matrix](../architecture/capability-matrix.md), and the
+[deployment guide](deployment.md).
 
 **Do I have to use LangChain?**
 No. The framework orchestrates open-source components (Qdrant, rank-bm25, HuggingFace) directly,
@@ -386,7 +391,11 @@ abstractions in your own code.
 Yes — change the generator's `type`/`config` in your manifest.
 
 **What if I'm on-premise?**
-Works fully on-premise with HuggingFace embedders + Qdrant + local LLMs.
+Embedding and retrieval can run on-premise with HuggingFace and Qdrant. No built-in local-LLM
+generator is registered today: the native generators call OpenAI or Anthropic, while the
+deterministic generator is test-only and not a semantic LLM. A fully offline deployment therefore
+requires a new contract-conformant generator adapter, factory registration, tests, and manifest
+selection.
 
 **When will native multi-agent orchestration / GraphRAG ship?**
 They won't, as native builds — per ADR-0005, that capability is delegated to the selected

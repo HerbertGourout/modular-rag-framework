@@ -67,7 +67,9 @@ cli/api → app → orchestration → contracts/core
 
 **Rule 3: Wire via YAML + Registry**
 - ❌ No Python wiring inside modules
-- ✅ Register in `orchestration/registry.py` + select in YAML manifests
+- ✅ Register the factory in `app/default_factories.py` + select in YAML manifests
+  (`orchestration/registry.py` holds only the generic `ComponentRegistry` class — no concrete
+  factories live there; that's the application composition root's job)
 
 ### 3️⃣ Know Your Commands (< 2 min)
 
@@ -131,8 +133,8 @@ You: [Review output] "Looks good, merge!"
 
 ```
 Prompt:
-"Show me how VectorRetriever is implemented in retrieval/vector_retriever.py 
-and how it's wired in orchestration/registry.py. What patterns should I follow 
+"Show me how VectorRetriever is implemented in retrieval/retrievers/vector.py
+and how it's registered in app/default_factories.py. What patterns should I follow
 for a new BM25Retriever?"
 
 What Claude provides:
@@ -166,7 +168,7 @@ Ask Claude:
 **Option A: Protocol Exists** (most common)
 ```python
 # Check if it exists
-from modular_rag.contracts.retrieval import RetrieverProtocol
+from modular_rag.contracts.retrieval import Retriever
 
 # If yes → Implement it. Skip Step 2.2.
 ```
@@ -174,7 +176,7 @@ from modular_rag.contracts.retrieval import RetrieverProtocol
 **Option B: New Protocol Needed** (rare)
 ```python
 # Create in contracts/retrieval.py
-class BM25RetrieverProtocol(Protocol):
+class BM25Retriever(Protocol):
     """BM25-based lexical retrieval protocol."""
     
     def retrieve(self, query: str, k: int) -> list[Document]:
@@ -185,9 +187,9 @@ class BM25RetrieverProtocol(Protocol):
 Then create a conformance test:
 ```python
 # tests/contract/test_retrieval_conformance.py
-def test_bm25_retriever_conforms():
-    retriever = BM25Retriever(index_path="...")
-    assert isinstance(retriever, RetrieverProtocol)
+def test_my_retriever_conforms():
+    retriever = MyRetriever()
+    assert isinstance(retriever, Retriever)
     # Test all Protocol methods exist
 ```
 
@@ -196,14 +198,20 @@ def test_bm25_retriever_conforms():
 ```
 Adapter vs Domain Module?
 
-BM25Retriever is a SEARCH algorithm → Could be adapter or domain
-- Path A: adapters/search/bm25_retriever.py (external library)
-- Path B: retrieval/bm25_retriever.py (domain logic)
+BM25Retriever is retrieval-domain logic that happens to use an external library internally.
 
-Rule: If external library (rank-bm25) → Adapter
-      If pure domain logic → Domain module
+**Corrected rule** (an earlier version of this example got this backwards): lazily importing an
+external library does NOT by itself make something an adapter. `retrieval/retrievers/
+cross_encoder.py` lazily imports `sentence-transformers` and still lives in the domain module;
+`adapters/` is reserved for infrastructure bindings multiple domain modules could plug into
+(vector store clients, LLM SDK clients, auth/identity, engine delegation) — see
+[`.claude/rules/adapters.md`](../../.claude/rules/adapters.md). The real question is: does this
+implement a domain Protocol (`Retriever`, `Generator`, `Chunker`...) directly? If yes, it's a
+domain module, regardless of what it lazily imports inside.
 
-For BM25: It's an external library → adapters/search/bm25_retriever.py ✓
+For BM25: it implements `Retriever` directly → the real, shipped location is
+`retrieval/retrievers/bm25.py` ✓ (confirmed against the actual source — this is not a
+hypothetical path)
 ```
 
 #### Step 2.3: Plan Dependencies
@@ -212,7 +220,7 @@ For BM25: It's an external library → adapters/search/bm25_retriever.py ✓
 What will BM25Retriever depend on?
 
 BM25Retriever
-  ├── depends on: RetrieverProtocol (contracts/retrieval.py)
+  ├── depends on: Retriever (contracts/retrieval.py)
   ├── depends on: Document (core/models/document.py)
   ├── lazy imports: rank-bm25 (inside __init__)
   └── NO imports from: generation/, ingestion/, security/
@@ -239,23 +247,24 @@ Document structure (from contracts):
 ```
 Context:
 - Implementing: BM25Retriever adapter
-- Protocol: RetrieverProtocol from contracts/retrieval.py
-- Location: adapters/search/bm25_retriever.py
+- Protocol: Retriever from contracts/retrieval.py
+- Location: retrieval/retrievers/bm25.py (real, shipped location — implements `Retriever`
+  directly; the `adapters/search/` path considered above was rejected)
 - External library: rank-bm25 (lazy import)
-- Tests location: tests/unit/adapters/search/test_bm25_retriever.py
+- Tests location: tests/unit/retrieval/test_bm25.py
 
 Rules to follow:
-1. Hexagonal layering: Can only import contracts/, core/, and rank-bm25
+1. Hexagonal layering: Can only import contracts/, core/models/, and rank-bm25
 2. Lazy imports: rank-bm25 imported inside methods, not at module level
-3. Protocol compliance: All RetrieverProtocol methods implemented
+3. Protocol compliance: All Retriever methods implemented
 4. Observability: Emit TraceStep via Trace.add_step() for retrieval
 5. Type hints: Full type annotations, no Any
 
 Generate:
-1. Full implementation of BM25Retriever
-2. __init__ that accepts config (corpus_path, index_path, k)
-3. retrieve() method that returns List[Document]
-4. Unit tests in test_bm25_retriever.py (at least 3 test cases)
+1. Full implementation of the `Retriever` Protocol
+2. Configuration appropriate to the implementation
+3. `retrieve(Query, k) -> list[RetrievedChunk]`, `aretrieve()`, and `name()`
+4. Unit tests mirroring the implementation path
 
 Follow these patterns:
 - See VectorRetriever for trace emission pattern
@@ -263,35 +272,38 @@ Follow these patterns:
 - See test_vector_retriever.py for test structure
 ```
 
-**What Claude generates**:
+**What Claude generates** — corrected below to match the real Protocol shape (an earlier version
+of this example used a nonexistent `RetrieverProtocol` name for what is actually just called
+`Retriever`, returned `list[Document]` instead of the real `list[RetrievedChunk]`, imported
+`Trace`/`TraceStep` from a nonexistent `core.observability` module instead of the real
+`core.models.trace`, and called `Trace.add_step()` as if it were a static method instead of an
+instance method on a `trace` object the caller already holds):
 ```python
-# adapters/search/bm25_retriever.py
-from typing import Optional
-from pydantic import BaseModel
-from modular_rag.contracts.retrieval import RetrieverProtocol
-from modular_rag.core.models.document import Document
-from modular_rag.core.observability import Trace, TraceStep
+# retrieval/retrievers/bm25.py
+from modular_rag.contracts.retrieval import Retriever
+from modular_rag.core.models.query import Query
+from modular_rag.core.models.retrieved import RetrievedChunk
+from modular_rag.core.models.trace import Trace, TraceStep
 
-class BM25Config(BaseModel):
-    corpus_path: str
-    index_path: Optional[str] = None
-    k: int = 5
+class BM25Retriever(Retriever):
+    def __init__(self, k: int = 10):
+        self.k = k
+        self._index = None  # lazy-built on first index()/retrieve() call
 
-class BM25Retriever(RetrieverProtocol):
-    def __init__(self, config: BM25Config):
-        self.config = config
-        self.index = None
-    
-    def retrieve(self, query: str) -> list[Document]:
+    def retrieve(self, query: Query, k: int = 10) -> list[RetrievedChunk]:
         # Lazy import here (not at module level)
         from rank_bm25 import BM25Okapi
-        
-        # Retrieve logic
-        step = TraceStep(component="BM25Retriever", operation="retrieve")
-        results = ...
-        Trace.add_step(step)
+
+        results = ...  # tokenize query, score against self._index, wrap as RetrievedChunk
         return results
+
+    def name(self) -> str:
+        return "bm25"
 ```
+Note `TraceStep`/`Trace.add_step()` don't appear inside the retriever itself in the real
+codebase — the *caller* (`RAGEngine._run_steps()`) wraps the `retrieve()` call and appends the
+`TraceStep` after it returns, not the retriever emitting its own step. See
+[runtime-flow.md](../architecture/runtime-flow.md) for the real sequence.
 
 **Key patterns Claude should follow**:
 1. ✅ All imports from allowed layers
@@ -307,7 +319,7 @@ class BM25Retriever(RetrieverProtocol):
 ```
 Context:
 - Component: BM25Retriever
-- Test location: tests/unit/adapters/search/test_bm25_retriever.py
+- Test location: tests/unit/retrieval/test_bm25.py
 
 Test cases needed:
 1. test_retriever_initializes_with_valid_config()
@@ -328,52 +340,18 @@ Use pytest fixtures for setup.
 Mock rank-bm25 if needed to avoid installation.
 ```
 
-**What Claude generates**:
-```python
-# tests/unit/adapters/search/test_bm25_retriever.py
-import pytest
-from modular_rag.adapters.search.bm25_retriever import BM25Retriever, BM25Config
-from modular_rag.core.models.document import Document
-
-@pytest.fixture
-def config():
-    return BM25Config(corpus_path="tests/fixtures/corpus.txt", k=5)
-
-def test_retriever_initializes(config):
-    retriever = BM25Retriever(config)
-    assert retriever is not None
-
-def test_retrieve_returns_documents(config):
-    retriever = BM25Retriever(config)
-    results = retriever.retrieve("test query")
-    assert isinstance(results, list)
-    assert all(isinstance(d, Document) for d in results)
-```
+**Repository-specific correction**: the shipped class is
+`retrieval/retrievers/bm25.py::BM25Retriever`. It has no `BM25Config` or `corpus_path` constructor;
+tests create `Chunk` objects, call `index(chunks)`, and retrieve with a `Query`, receiving
+`RetrievedChunk` values. Use `tests/unit/retrieval/test_bm25.py` as the executable example rather
+than copying a generic adapter sketch.
 
 #### Step 3.3: Write Contract Conformance Test
 
-**Create**: `tests/contract/test_bm25_retriever_conformance.py`
-
-```python
-# Verify BM25Retriever properly implements RetrieverProtocol
-from modular_rag.adapters.search.bm25_retriever import BM25Retriever, BM25Config
-from modular_rag.contracts.retrieval import RetrieverProtocol
-
-def test_bm25_retriever_implements_protocol():
-    """BM25Retriever must implement RetrieverProtocol."""
-    config = BM25Config(corpus_path="...")
-    retriever = BM25Retriever(config)
-    
-    # Protocol methods must exist
-    assert hasattr(retriever, 'retrieve')
-    assert callable(retriever.retrieve)
-    
-    # Protocol contract: retrieve(query: str) -> list[Document]
-    result = retriever.retrieve("test")
-    assert isinstance(result, list)
-    assert all(hasattr(d, 'id') for d in result)
-    assert all(hasattr(d, 'text') for d in result)
-```
+**Contract coverage**: add the implementation to the parameterized cases in the existing
+`tests/contract/test_retrieval_conformance.py`. The real `Retriever` signature is
+`retrieve(query: Query, k: int = 10) -> list[RetrievedChunk]` plus `aretrieve()` and `name()`;
+do not create a parallel contract based on strings and `Document` results.
 
 **Time**: 30-45 minutes
 
@@ -421,7 +399,7 @@ Claude provides minimal fix focused on the error.
 ```
 Prompt to Claude:
 "Unit tests failed: [test error]. 
-The test is in tests/unit/adapters/search/test_bm25_retriever.py.
+The test is in tests/unit/retrieval/test_bm25.py.
 Show me the fix."
 
 Claude analyzes failure and provides fix.
@@ -431,7 +409,7 @@ Claude analyzes failure and provides fix.
 ```
 Prompt to Claude:
 "Contract conformance test failed. BM25Retriever must implement 
-all methods in RetrieverProtocol. Show me what's missing 
+all methods in Retriever. Show me what's missing
 by comparing the Protocol definition with the implementation."
 
 Claude identifies missing methods or incorrect signatures.
@@ -491,18 +469,18 @@ Documentation:
 git checkout -b feature/bm25-retriever
 
 # 2. Commit with atomic, descriptive message
-git commit -m "feat: Add BM25Retriever adapter with lazy imports
+git commit -m "feat: Add BM25Retriever with lazy imports
 
 Implements hybrid search combining BM25 lexical + vector retrieval.
-- BM25Retriever in adapters/search/ with RRF fusion
+- BM25Retriever in retrieval/retrievers/ with RRF fusion
 - Unit tests + contract conformance test
 - Lazy import of rank-bm25 to keep dependencies light
 - Full trace emission for observability
 
 Adds:
-- adapters/search/bm25_retriever.py (120 lines)
-- tests/unit/adapters/search/test_bm25_retriever.py (80 lines)
-- tests/contract/test_bm25_retriever_conformance.py (40 lines)"
+- retrieval/retrievers/bm25.py (120 lines)
+- tests/unit/retrieval/test_bm25.py (80 lines)
+- update to tests/contract/test_retrieval_conformance.py"
 
 # 3. Push and create PR
 git push origin feature/bm25-retriever
@@ -611,9 +589,9 @@ class BM25Retriever:
 
 ```python
 # ✅ CORRECT (method-level import)
-from modular_rag.contracts.retrieval import RetrieverProtocol
+from modular_rag.contracts.retrieval import Retriever
 
-class BM25Retriever(RetrieverProtocol):
+class BM25Retriever(Retriever):
     def retrieve(self, query: str) -> list[Document]:
         # Import only when needed
         from rank_bm25 import BM25Okapi
@@ -648,38 +626,34 @@ class HybridRetriever:
 - Breaks modularity
 - Makes testing harder
 
-**✅ CORRECT: Registry + YAML**
+**✅ CORRECT: Registry + YAML** — corrected below; an earlier version of this example used a
+flat `COMPONENT_REGISTRY` dict literal and a manifest wrapped under a `components:` key, neither
+of which is the real shape. Real manifests use flat top-level fields (`retriever:`, `embedder:`,
+...), and registration uses `ComponentRegistry.register(role, type_name, factory)` calls inside
+`app/default_factories.py`:
 
 ```python
-# 1. Register in orchestration/registry.py
-COMPONENT_REGISTRY = {
-    "bm25_retriever": BM25Retriever,
-    "hf_embedder": HFEmbedder,
-}
+# 1. Register in app/default_factories.py, inside register_defaults():
+reg.register("retriever", "hybrid", lambda cfg: HybridRetriever(**cfg.config))
+reg.register("retriever", "bm25", lambda cfg: BM25Retriever(**cfg.config))
+reg.register("embedder", "sentence-transformers", lambda cfg: HuggingFaceEmbedder(**cfg.config))
 
-# 2. Configure in manifests/presets/local-hybrid-rag.yaml
-components:
-  retriever:
-    type: "hybrid_retriever"
-    config:
-      bm25:
-        type: "bm25_retriever"
-        config:
-          corpus_path: "./docs/"
-          k: 5
-      embedder:
-        type: "hf_embedder"
-        config:
-          model: "all-minilm-l6-v2"
+# 2. Configure in manifests/presets/local-hybrid-rag.yaml — flat top-level fields, no
+#    "components:" wrapper:
+retriever:
+  type: "hybrid"
+  config:
+    k: 20
+    vector_weight: 0.7
+    bm25_weight: 0.3
+embedder:
+  type: "sentence-transformers"
+  config:
+    model_name: "BAAI/bge-small-en-v1.5"
 
-# 3. Use in code (late binding)
-def initialize_rag(manifest_path: str):
-    config = load_yaml(manifest_path)
-    retriever = registry.wire(
-        config.components.retriever,
-        registry=COMPONENT_REGISTRY
-    )
-    return retriever
+# 3. Wiring happens through app/bootstrap.py, not a hand-written initialize_rag() function:
+from modular_rag.app.bootstrap import load_pipeline
+pipeline = load_pipeline("manifests/presets/local-hybrid-rag.yaml")  # -> RAGEngine, fully wired
 ```
 
 **Benefit**: Swap implementations via YAML without code changes.
@@ -691,10 +665,10 @@ def initialize_rag(manifest_path: str):
 **Every major operation must emit a TraceStep**:
 
 ```python
-from modular_rag.core.observability import Trace, TraceStep
-from modular_rag.contracts.retrieval import RetrieverProtocol
+from modular_rag.core.models.trace import Trace, TraceStep
+from modular_rag.contracts.retrieval import Retriever
 
-class BM25Retriever(RetrieverProtocol):
+class BM25Retriever(Retriever):
     def retrieve(self, query: str) -> list[Document]:
         # Create trace step
         step = TraceStep(
@@ -735,17 +709,18 @@ class BM25Retriever(RetrieverProtocol):
 **Use this when**: Adding a new retrieval algorithm.
 
 **Files to create**:
-1. `adapters/search/<name>_retriever.py` (implementation)
-2. `tests/unit/adapters/search/test_<name>_retriever.py` (unit tests)
-3. `tests/contract/test_<name>_retriever_conformance.py` (contract tests)
+1. `retrieval/retrievers/<name>.py` (implementation — implements `Retriever` directly; see the
+   corrected "Adapter vs Domain Module" note above for why this isn't under `adapters/`)
+2. `tests/unit/retrieval/test_<name>.py` (unit tests)
+3. `tests/contract/test_retrieval_conformance.py` (add to the existing parametrize list)
 
 **Step-by-step**:
 
 ```python
 # Step 1: Import Protocol
-from modular_rag.contracts.retrieval import RetrieverProtocol
+from modular_rag.contracts.retrieval import Retriever
 from modular_rag.core.models.document import Document
-from modular_rag.core.observability import Trace, TraceStep
+from modular_rag.core.models.trace import Trace, TraceStep
 
 # Step 2: Create Config (Pydantic BaseModel)
 from pydantic import BaseModel, Field
@@ -755,7 +730,7 @@ class MyRetrieverConfig(BaseModel):
     param2: int = Field(default=5, ge=1)
 
 # Step 3: Implement Protocol
-class MyRetriever(RetrieverProtocol):
+class MyRetriever(Retriever):
     def __init__(self, config: MyRetrieverConfig):
         self.config = config
     
@@ -796,7 +771,7 @@ COMPONENT_REGISTRY["my_retriever"] = MyRetriever
 
 ```python
 from modular_rag.contracts.security import SecurityGuardProtocol
-from modular_rag.core.observability import Trace, TraceStep
+from modular_rag.core.models.trace import Trace, TraceStep
 
 class MyGuard(SecurityGuardProtocol):
     def check(self, text: str) -> tuple[bool, dict]:
@@ -839,7 +814,7 @@ class MyGuard(SecurityGuardProtocol):
 
 ```python
 from modular_rag.contracts.generation import GeneratorProtocol
-from modular_rag.core.observability import Trace, TraceStep
+from modular_rag.core.models.trace import Trace, TraceStep
 
 class MyGenerator(GeneratorProtocol):
     def __init__(self, config: GeneratorConfig):
@@ -877,44 +852,15 @@ Answer: """
 
 ---
 
-### Pattern 4: Implementing Evaluation Metrics
+### Pattern 4: Implementing an Offline Evaluator
 
 **Use this when**: Adding scoring/evaluation logic.
 
-```python
-from modular_rag.contracts.evaluation import MetricProtocol
-
-class MyMetric(MetricProtocol):
-    def compute(
-        self,
-        predicted: str,
-        reference: str,
-        **kwargs
-    ) -> float:
-        """
-        Compute metric score [0, 1].
-        
-        Args:
-            predicted: Model output
-            reference: Ground truth
-            **kwargs: Additional context
-        
-        Returns:
-            score: float in [0.0, 1.0]
-        """
-        # Your computation
-        score = ...
-        return score
-```
-
-**Register in eval/metrics/__init__.py**:
-```python
-from eval.metrics.my_metric import MyMetric
-
-ALL_METRICS = {
-    "my_metric": MyMetric,
-}
-```
+The real contract is `contracts/evaluation.py::Evaluator`, whose `evaluate()` method returns the
+framework's `Metrics` model from a query, answer, expected answer, and retrieved context. Follow
+`eval/scorers/exact_match.py` and `tests/contract/test_eval_conformance.py`; no `MetricProtocol`,
+`eval/metrics/` registry, or `ALL_METRICS` catalogue exists. Per ADR-0008, evaluators are
+programmatic offline components and are not registered as online manifest factories.
 
 ---
 
@@ -931,7 +877,7 @@ Prompt:
 "Show me how VectorRetriever is structured in 
 src/modular_rag/retrieval/vector_retriever.py.
 I need to understand:
-1. How it implements RetrieverProtocol
+1. How it implements Retriever
 2. How it emits TraceSteps
 3. Where rank-bm25 should be imported (lazy)
 4. How tests are structured"
@@ -945,8 +891,8 @@ Claude output:
 ```
 Prompt:
 "Implement BM25Retriever with:
-- Location: adapters/search/bm25_retriever.py
-- Protocol: RetrieverProtocol
+- Location: retrieval/retrievers/bm25.py
+- Protocol: Retriever
 - Config: BM25Config with corpus_path, index_path, k
 - Method: retrieve(query: str) -> list[Document]
 - Lazy imports for rank-bm25
@@ -966,7 +912,7 @@ Claude output:
 ```
 Prompt:
 "Generate unit tests for BM25Retriever in 
-tests/unit/adapters/search/test_bm25_retriever.py:
+tests/unit/retrieval/test_bm25.py:
 
 Test cases:
 1. test_initializes_with_valid_config
@@ -1000,14 +946,14 @@ Claude output:
 #### Step 5: Commit
 
 ```bash
-git add adapters/search/bm25_retriever.py
-git add tests/unit/adapters/search/test_bm25_retriever.py
-git add tests/contract/test_bm25_retriever_conformance.py
+git add retrieval/retrievers/bm25.py
+git add tests/unit/retrieval/test_bm25.py
+git add tests/contract/test_retrieval_conformance.py
 
-git commit -m "feat: Add BM25 retriever adapter for lexical search
+git commit -m "feat: Add BM25 retriever for lexical search
 
-Implements BM25Okapi lexical retrieval following RetrieverProtocol.
-- Adapters/search/bm25_retriever.py with lazy rank-bm25 import
+Implements BM25Okapi lexical retrieval following Retriever.
+- retrieval/retrievers/bm25.py with lazy rank-bm25 import
 - Full trace emission for observability
 - Config-driven corpus and index paths
 - Unit tests + contract conformance test
@@ -1015,127 +961,22 @@ Implements BM25Okapi lexical retrieval following RetrieverProtocol.
 Benefits:
 - Hybrid search combining vector + lexical scoring
 - Fast development cycle via RRF fusion
-- Production-ready with full observability"
+- Implementation complete with unit/contract coverage; service-backed and deployment
+  qualification remain separate release evidence"
 ```
 
 ---
 
-### Example 2: Add PII Redaction Guard
+### Example 2: Extend PII Redaction
 
-**Scenario**: Add custom PII pattern (credit card numbers).
-
-#### Structure
-
-```
-src/modular_rag/security/redaction/patterns/
-├── __init__.py
-├── pii_detector.py (existing)
-└── credit_card_detector.py (NEW)
-
-tests/unit/security/redaction/
-├── __init__.py
-└── test_credit_card_detector.py (NEW)
-```
-
-#### Implementation
-
-```python
-# security/redaction/patterns/credit_card_detector.py
-
-import re
-from modular_rag.contracts.security import PiiPatternProtocol
-
-class CreditCardDetector(PiiPatternProtocol):
-    """Detect credit card numbers (16-digit sequences)."""
-    
-    # Luhn algorithm check for valid credit cards
-    PATTERN = re.compile(r'\b(?:\d[ -]*?){13,19}\b')
-    
-    def detect(self, text: str) -> list[dict]:
-        """
-        Find credit card numbers in text.
-        
-        Returns:
-            List of {'start': int, 'end': int, 'text': str}
-        """
-        matches = []
-        for match in self.PATTERN.finditer(text):
-            card_text = match.group().replace(' ', '').replace('-', '')
-            if self._is_valid_card(card_text):
-                matches.append({
-                    'start': match.start(),
-                    'end': match.end(),
-                    'text': match.group(),
-                    'type': 'CREDIT_CARD',
-                })
-        return matches
-    
-    def _is_valid_card(self, card: str) -> bool:
-        """Validate using Luhn algorithm."""
-        if not card.isdigit() or len(card) < 13:
-            return False
-        
-        digits = [int(d) for d in card]
-        # Luhn check...
-        return True  # Simplified
-```
-
-#### Tests
-
-```python
-# tests/unit/security/redaction/test_credit_card_detector.py
-
-import pytest
-from modular_rag.security.redaction.patterns.credit_card_detector import (
-    CreditCardDetector,
-)
-
-@pytest.fixture
-def detector():
-    return CreditCardDetector()
-
-def test_detects_visa(detector):
-    text = "Pay with 4532-1234-5678-9010"
-    matches = detector.detect(text)
-    assert len(matches) == 1
-    assert matches[0]['type'] == 'CREDIT_CARD'
-
-def test_ignores_short_numbers(detector):
-    text = "My ID is 123456"
-    matches = detector.detect(text)
-    assert len(matches) == 0
-
-def test_detects_multiple(detector):
-    text = "Use 4532123456789010 or 5105105105105100"
-    matches = detector.detect(text)
-    assert len(matches) == 2
-```
-
-#### Registration
-
-```python
-# security/redaction/__init__.py
-
-from security.redaction.patterns.credit_card_detector import CreditCardDetector
-
-PII_DETECTORS = {
-    "pii": PiiDetector(),
-    "credit_card": CreditCardDetector(),
-    # ...
-}
-```
-
-#### Usage
-
-```yaml
-# manifests/presets/secure-rag.yaml
-
-security:
-  redaction:
-    detectors:
-      - type: "credit_card"
-        replace_with: "[REDACTED_CARD]"
-```
+The shipped implementation is the single module
+`security/redaction/patterns.py::PatternRedactor`, implementing the `Redactor` contract
+(`redact(text) -> str`, `name() -> str`). It already includes a Luhn-validated card pattern.
+There is no `PiiPatternProtocol`, detector registry, `security.redaction.detectors` manifest
+shape, or `secure-rag.yaml` preset. To add a new built-in redaction family, extend or replace the
+`Redactor` implementation, update `tests/unit/security/test_redaction.py`, register a new
+`redactor` type in `app/default_factories.py` if it is a separate implementation, and select it
+under `governance.redactor` in a valid V2 manifest.
 
 ---
 
@@ -1228,11 +1069,11 @@ with abstract methods retrieve, batch_retrieve
 **Diagnosis**:
 
 ```python
-from modular_rag.contracts.retrieval import RetrieverProtocol
+from modular_rag.contracts.retrieval import Retriever
 import inspect
 
 # Show all Protocol methods
-print(inspect.getmembers(RetrieverProtocol, predicate=inspect.ismethod))
+print(inspect.getmembers(Retriever, predicate=inspect.ismethod))
 
 # Check what MyRetriever has
 from my_module import MyRetriever
@@ -1245,7 +1086,7 @@ print(my_methods)
 **Fix**:
 
 ```python
-class MyRetriever(RetrieverProtocol):
+class MyRetriever(Retriever):
     # Add missing methods
     def batch_retrieve(self, queries: list[str]) -> list[list[Document]]:
         return [self.retrieve(q) for q in queries]
@@ -1276,7 +1117,7 @@ def retrieve(self, query: str) -> list[Document]:
 **Fix**:
 
 ```python
-from modular_rag.core.observability import Trace, TraceStep
+from modular_rag.core.models.trace import Trace, TraceStep
 
 def retrieve(self, query: str) -> list[Document]:
     step = TraceStep(component="MyRetriever", operation="retrieve")
@@ -1330,7 +1171,7 @@ class HybridRetriever:
 
 # ✅ CORRECT
 class HybridRetriever:
-    def __init__(self, bm25: RetrieverProtocol, vector: RetrieverProtocol):
+    def __init__(self, bm25: Retriever, vector: Retriever):
         self.bm25 = bm25  # Injected
         self.vector = vector  # Injected
 ```
@@ -1365,7 +1206,7 @@ from generation.openai_generator import OpenAIGenerator
 from security.pii_guard import PiiGuard
 
 # ✅ CORRECT
-from contracts.retrieval import RetrieverProtocol
+from contracts.retrieval import Retriever
 from core.models.document import Document
 ```
 
@@ -1471,15 +1312,15 @@ After writing code:
 
 **New Retriever**:
 ```
-adapters/search/<name>_retriever.py
-├── Import Protocol
-├── Define Config (Pydantic)
-├── Implement class (Protocol methods)
-├── Lazy imports (inside methods)
-├── Trace emissions
-└── Register in orchestration/registry.py
+retrieval/retrievers/<name>.py
+├── Import Protocol (contracts.retrieval.Retriever)
+├── Define Config (Pydantic, if needed)
+├── Implement class (Protocol methods: retrieve, name)
+├── Lazy imports (inside methods, for any external library)
+└── Register the factory in app/default_factories.py (NOT orchestration/registry.py — that
+    module holds the generic ComponentRegistry class only, no concrete factories)
 
-tests/unit/adapters/search/test_<name>_retriever.py
+tests/unit/retrieval/test_<name>.py
 ├── Fixtures (config, mock data)
 ├── Test initialization
 ├── Test retrieve() return type

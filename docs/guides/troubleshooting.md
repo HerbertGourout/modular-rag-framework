@@ -152,11 +152,19 @@ recipe.
 
 ### I get `NotImplementedError` from a component I expected to work
 
-**Why**: you're likely calling into a stub reserved for a later version —
-`adapters/llms/`, `adapters/auth/`, `adapters/graphstores/`, and `adapters/search/` are
-`.gitkeep`-only placeholders until V2–V4 (see [CLAUDE.md](../../CLAUDE.md) section 09).
-Check [ROADMAP.md](../../ROADMAP.md) to confirm the capability you're expecting has actually
-shipped before assuming it's a bug.
+**Why**: you're likely calling into a stub reserved for a later version, or a method a real
+adapter deliberately doesn't implement yet. Two of the four historically-`.gitkeep`-only
+`adapters/` subdirectories now hold real code — `adapters/llms/langgraph_engine.py`
+(`LangGraphEngineAdapter`) and `adapters/auth/keycloak_verifier.py` (`KeycloakTokenVerifier`) —
+so a `NotImplementedError` from either of those means a specific unimplemented method on a real
+class (check that class directly), not a missing file. `adapters/graphstores/` and
+`adapters/search/` are still genuinely `.gitkeep`-only placeholders (see
+[CLAUDE.md](../../CLAUDE.md) section 09 and [structure.md](../architecture/structure.md)). One
+other real, expected `NotImplementedError`: `QdrantStore.retrieve()` (the bare, embedder-less
+`Retriever`-shaped call) always raises it by design — use `VectorRetriever`, or call
+`retrieve_by_vector()` directly with a vector you already computed. Check
+[ROADMAP.md](../../ROADMAP.md) and [capability-matrix.md](../architecture/capability-matrix.md)
+to confirm the capability you're expecting has actually shipped before assuming it's a bug.
 
 ---
 

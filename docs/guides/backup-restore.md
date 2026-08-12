@@ -190,4 +190,5 @@ What to look for once this is actually run: a 429 rate should climb as `--concur
 as designed, not a failure. A genuine failure signature is 5xx responses or latency growing
 without bound as concurrency increases; either means the deployment's worker count, timeout
 settings (Lot 14's per-adapter `timeout` params), or `rate_limit_per_minute` need tuning before
-this is production-ready at that load.
+that deployment can be qualified for the tested load. This load test alone does not establish
+production readiness.

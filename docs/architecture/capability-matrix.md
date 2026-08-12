@@ -17,19 +17,24 @@ commit history around Lot 19) if you need the exact "before" comparison point.
 Before the Step-3 checker tests were added, the repository contained 214 Python files and 155
 Markdown files. Compilation passed and the local service-free suite reported 548 passing tests
 (466 unit + 82 contract). After adding the 27 dependency-policy tests, the same suite reported
-575 passing tests. As of the 2026-08-08 finalization pass, the suite reports 593 tests
-(503 unit + 90 contract).
+575 passing tests. As of the 2026-08-08 finalization pass, the suite reported 593 tests
+(503 unit + 90 contract). This count keeps growing as work continues — as of this documentation
+pass, `find src tests -name "*.py" -not -path "*__pycache__*" | wc -l` reports 226 Python files
+(107 under `src/`, 119 under `tests/`), and `pytest tests/unit tests/contract --collect-only -q`
+reports 717 tests (608 unit + 109 contract). Rather than re-freezing a new number here that will
+itself go stale, run that same `--collect-only` command for the live count — the historical
+numbers above are kept as a "before" reference point, not a claim about the current state.
 
 Built-in manifest factories, current as of this update:
 
 | Role | Registered types |
 |---|---|
 | `chunker` | `fixed`, `adaptive` |
-| `embedder` | `sentence-transformers`, `openai-embeddings` |
+| `embedder` | `sentence-transformers`, `openai-embeddings`, `deterministic` |
 | `indexer` | `qdrant` |
 | `retriever` | `vector`, `hybrid` |
 | `reranker` | `cross-encoder` |
-| `generator` | `openai`, `anthropic` |
+| `generator` | `openai`, `anthropic`, `deterministic` |
 | `guard` | `basic` |
 | `tenant_policy` | `tenant-isolation` |
 | `policy_engine` | `inline` |
@@ -38,6 +43,12 @@ Built-in manifest factories, current as of this update:
 | `audit_sink` | `in-memory`, `postgres` |
 | `telemetry` | `structlog`, `null` |
 | `lifecycle_ledger` | `in-memory`, `postgres` |
+
+The `deterministic` `embedder`/`generator` pair (`DeterministicEmbedder`, `DeterministicGenerator`)
+needs no network call or LLM API key — feature-hashing for embeddings, and an answer built
+directly from citation passages for generation — and exists specifically so the secure-preset e2e
+scenario (`tests/e2e/manifests/secure-deterministic-rag.yaml`) can exercise tenant isolation and
+audit end to end without requiring an external credential.
 
 `ExactMatchEvaluator` and `QualityGate` are built-in Python evaluation utilities, not manifest
 factories. They require golden answers or aggregate benchmark metrics and are therefore used by

@@ -5,7 +5,8 @@ installation, the four validation tiers, CI/CD alignment, common workflows, exit
 troubleshooting. It absorbs `docs/guides/validation.md`, which duplicated ~70% of this content
 under a different structure — see the note at the bottom for what changed.
 
-**Status:** V1 complete
+**Project status:** V1.0 implementation complete with live validation pending; V1.1/V1.2
+partially built. This page describes validation mechanics, not release completion.
 **Merged and corrected:** 2026-08-06 (documentation audit, `docs/archive/documentation-audit-2026-08.md`)
 
 ---
@@ -85,10 +86,13 @@ up — see the file's own header comment).
 ### Tier 3: Integration Check (~1-2 minutes)
 **When:** With services (Qdrant running)
 **What:** Integration tests
-**Requires:** Qdrant on localhost:6333
+**Requires:** Qdrant on localhost:6333 for vector-store/retrieval files and PostgreSQL on
+localhost:5432 for the audit/lifecycle adapter files. Run individual files when only one service
+is available; provision both for the complete directory.
 
 ```bash
 docker run -p 6333:6333 qdrant/qdrant &
+docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:16
 ./scripts/check.sh integration
 # OR
 pytest tests/integration/ -v -m integration
@@ -96,6 +100,7 @@ pytest tests/integration/ -v -m integration
 
 ```powershell
 docker run -d -p 6333:6333 qdrant/qdrant
+docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:16
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\check.ps1 integration
 ```
 
@@ -105,11 +110,17 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\check.ps1 integr
 ### Tier 4: E2E Check (~2-5 minutes)
 **When:** Full pipeline validation
 **What:** End-to-end tests
-**Requires:** Qdrant + LLM API key
+**Requires:** Qdrant always; PostgreSQL additionally for the governed/audited secure-preset
+scenario (`tests/e2e/test_secure_preset_e2e.py`); an LLM API key **only** for an LLM-backed
+scenario (`tests/e2e/test_simple_qa_pipeline.py`) — the secure-preset scenario deliberately uses
+the `deterministic` embedder/generator pair instead, needing no external LLM key at all (see
+[capability-matrix.md](../architecture/capability-matrix.md)).
 
 ```bash
-export OPENAI_API_KEY=sk-...
+export OPENAI_API_KEY=sk-...            # only needed for the LLM-backed scenario
 docker run -p 6333:6333 qdrant/qdrant &
+# PostgreSQL only needed for the secure-preset scenario — see that test file's own
+# module docstring for the exact local setup command
 ./scripts/check.sh e2e
 # OR
 pytest tests/e2e/ -v -m e2e
@@ -121,7 +132,8 @@ docker run -d -p 6333:6333 qdrant/qdrant
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\check.ps1 e2e
 ```
 
-**Blocks on:** failed E2E tests, missing LLM API key, Qdrant unavailable.
+**Blocks on:** failed E2E tests, Qdrant unavailable, PostgreSQL unavailable (secure-preset
+scenario only), missing LLM API key (LLM-backed scenario only).
 
 ### Tier All: Comprehensive (~10 minutes)
 **When:** Before major release, milestone verification
@@ -148,8 +160,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\check.ps1 all
 | **Type** | `mypy src/modular_rag/` | Type hints, ratcheted | ~30s | Count above baseline | Python 3.11+ |
 | **Unit** | `pytest tests/unit/ -v` | No ext services | ~5-7s | Failed tests | pytest |
 | **Contract** | `pytest tests/contract/ -v` | Protocol conformance | ~1s | Failed tests | pytest |
-| **Integration** | `pytest tests/integration/ -m integration -v` | With Qdrant | ~1-2m | Failed tests | Qdrant |
-| **E2E** | `pytest tests/e2e/ -m e2e -v` | Full pipeline | ~2-5m | Failed tests | Qdrant + LLM key |
+| **Integration** | `pytest tests/integration/ -m integration -v` | Vector and durable-adapter integration | ~1-2m | Failed tests | Qdrant + PostgreSQL for the full directory |
+| **E2E** | `pytest tests/e2e/ -m e2e -v` | Full pipeline | ~2-5m | Failed tests | Qdrant always; PostgreSQL + LLM key only for the scenarios that need them (see Tier 4 above) |
 
 ---
 
@@ -274,7 +286,7 @@ def test_chunker_conforms_to_protocol():
 def test_vector_store_persistence():
     ...
 
-# E2E tests (require Qdrant + LLM API key)
+# E2E tests (scenario-dependent: see Tier 4)
 @pytest.mark.e2e
 def test_full_pipeline():
     ...
@@ -357,7 +369,8 @@ cat tests/contract/test_chunker_conformance.py   # 1. Read the Protocol conforma
 vim src/modular_rag/ingestion/chunkers/my_chunker.py   # 2. Implement
 vim tests/unit/ingestion/chunkers/test_my_chunker.py   # 3. Add unit tests
 ./scripts/check.sh full                                # 4. Validate
-vim manifests/presets/local-hybrid-rag.yaml             # 5. Register in the manifest
+vim src/modular_rag/app/default_factories.py            # 5. Register the built-in type
+vim manifests/presets/local-hybrid-rag.yaml              # 6. Select it in a manifest
 ```
 
 ### Modify a core Protocol

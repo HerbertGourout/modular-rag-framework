@@ -4,6 +4,19 @@
 **Date:** 2026-05-20  
 **Authors:** Herbert Gourout, Publicis Data Specialists
 
+> **Amendment, 2026-08 (not a status change — the six-plane decision itself is unchanged and
+> still accepted):** the "Reasoning" plane row below lists `agents/` alongside "planning,
+> retrieval orchestration... generation" as this project's own native reasoning implementation.
+> Per [ADR-0005](0005-document-ai-control-plane-boundary.md) §5.2 (accepted 2026-08-04), generic
+> multi-agent orchestration is delegated to a selected external engine — `agents/` today hosts
+> engine-delegation adapter-integration code, not a native planner/coordinator runtime; the five
+> native agent classes this ADR originally had in mind were removed in
+> [Lot 17](../refactoring/lot-17-prototype-retirement.md). The six-plane *boundary* structure
+> itself (Control/Ingestion/Knowledge/Reasoning/Safety/Evaluation, contracts-only communication,
+> no plane importing another plane's implementation) is unaffected and remains exactly as decided
+> below — only which concrete modules populate the Reasoning plane's agent-orchestration slice
+> changed.
+
 ---
 
 ## Context

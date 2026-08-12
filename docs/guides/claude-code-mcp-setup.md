@@ -56,7 +56,7 @@ MCP runs in a **sandbox** separate from Claude Code, so integrations don't compr
 | `~/.claude.json` | User | MCP servers for all projects | No — per machine |
 | `.mcp.json` | Project | MCP servers for this repo | Yes — in git |
 | `~/.claude/CLAUDE.md` | User | MCP-related notes | No |
-| `.claude/CLAUDE.md` | Project | MCP setup docs | Yes — in git |
+| `CLAUDE.md` | Project | Project instructions and links to tooling guidance | Yes — in git |
 
 ### ~/.claude.json (User Scope)
 
