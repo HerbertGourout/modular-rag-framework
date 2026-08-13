@@ -1,6 +1,88 @@
 """Application composition for the built-in component catalogue."""
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from modular_rag.orchestration.registry import ComponentRegistry
+
+if TYPE_CHECKING:
+    from modular_rag.contracts.manifests import ComponentConfig
+    from modular_rag.retrieval.retrievers.hybrid import HybridRetriever
+    from modular_rag.retrieval.retrievers.sparse import PersistentSparseRetriever
+
+
+def _build_hybrid_retriever(cfg: ComponentConfig) -> HybridRetriever:
+    """Resolve `retriever.config.lexical` ("bm25-memory", the default, or
+    "sparse-qdrant") into a concrete lexical-backend object *before*
+    constructing `HybridRetriever` (Lot 5 — persistent sparse retrieval).
+
+    `HybridRetriever` lives in `retrieval/` and cannot import
+    `adapters.vectorstores.qdrant_sparse_store.QdrantSparseStore` directly
+    (`scripts/check_layering.py` — domain modules cannot import `adapters/`)
+    — this factory function, living in the unrestricted top-level `app/`
+    layer, is where that construction has to happen instead, mirroring how
+    `orchestration/registry.py`'s post-wiring step injects a `QdrantStore`
+    into `VectorRetriever` without either of *them* importing each other.
+    """
+    from modular_rag.adapters.vectorstores.qdrant_sparse_store import QdrantSparseStore
+    from modular_rag.core.errors import ConfigurationError
+    from modular_rag.retrieval.retrievers.hybrid import HybridRetriever
+    from modular_rag.retrieval.retrievers.sparse import PersistentSparseRetriever
+
+    config = dict(cfg.config)
+    lexical = config.pop("lexical", "bm25-memory")
+    sparse_collection = config.pop("sparse_collection", None)
+    # Codex review (Lot 5, MED-002): these four are QdrantSparseStore-only
+    # constructor parameters — HybridRetriever.__init__ does not accept any
+    # of them, so leaving them in `config` raised a bare TypeError as soon as
+    # a manifest tried to tune the sparse leg (e.g. `lexical: sparse-qdrant`
+    # + `avgdl: 128` under the same `retriever.config` block — reproduced
+    # before this fix). Popped unconditionally, regardless of which
+    # `lexical` backend ends up selected, so they can never leak through to
+    # `HybridRetriever(**config)` below.
+    sparse_timeout = config.pop("timeout", None)
+    sparse_avgdl = config.pop("avgdl", None)
+    sparse_k1 = config.pop("k1", None)
+    sparse_b = config.pop("b", None)
+
+    lexical_retriever = None
+    if lexical == "sparse-qdrant":
+        base_collection = config.get("collection", "documents")
+        store_kwargs: dict[str, object] = {
+            "url": config.get("url", "http://localhost:6333"),
+            "collection": sparse_collection or f"{base_collection}_sparse",
+            "api_key": config.get("api_key") or None,
+        }
+        # Only forwarded when explicitly set, so QdrantSparseStore's own
+        # constructor defaults (_DEFAULT_AVGDL, k1=1.2, b=0.75, timeout=30.0)
+        # stay the single source of truth rather than being duplicated here.
+        if sparse_timeout is not None:
+            store_kwargs["timeout"] = sparse_timeout
+        if sparse_avgdl is not None:
+            store_kwargs["avgdl"] = sparse_avgdl
+        if sparse_k1 is not None:
+            store_kwargs["k1"] = sparse_k1
+        if sparse_b is not None:
+            store_kwargs["b"] = sparse_b
+        lexical_retriever = PersistentSparseRetriever(
+            store=QdrantSparseStore(**store_kwargs)  # type: ignore[arg-type]
+        )
+    elif lexical != "bm25-memory":
+        raise ConfigurationError(
+            f"Unknown HybridRetriever lexical backend {lexical!r}. "
+            "Expected 'bm25-memory' or 'sparse-qdrant'."
+        )
+
+    return HybridRetriever(lexical_retriever=lexical_retriever, **config)
+
+
+def _build_sparse_qdrant_retriever(cfg: ComponentConfig) -> PersistentSparseRetriever:
+    """Standalone `retriever.type: "sparse-qdrant"` registration (Lot 5) —
+    same store-injection reasoning as `_build_hybrid_retriever` above."""
+    from modular_rag.adapters.vectorstores.qdrant_sparse_store import QdrantSparseStore
+    from modular_rag.retrieval.retrievers.sparse import PersistentSparseRetriever
+
+    return PersistentSparseRetriever(store=QdrantSparseStore(**cfg.config))
 
 
 def register_defaults(reg: ComponentRegistry) -> None:
@@ -19,7 +101,6 @@ def register_defaults(reg: ComponentRegistry) -> None:
     from modular_rag.ingestion.lifecycle.in_memory_ledger import InMemoryLifecycleLedger
     from modular_rag.observability import NullTelemetry, StructlogTelemetry
     from modular_rag.retrieval.rerankers.cross_encoder import CrossEncoderReranker
-    from modular_rag.retrieval.retrievers.hybrid import HybridRetriever
     from modular_rag.retrieval.retrievers.vector import VectorRetriever
     from modular_rag.security.audit.store import InMemoryAuditSink
     from modular_rag.security.filters.basic_guard import BasicSecurityGuard
@@ -37,7 +118,8 @@ def register_defaults(reg: ComponentRegistry) -> None:
     reg.register("embedder", "deterministic", lambda cfg: DeterministicEmbedder(**cfg.config))
     reg.register("indexer", "qdrant", lambda cfg: QdrantStore(**cfg.config))
     reg.register("retriever", "vector", lambda cfg: VectorRetriever(**cfg.config))
-    reg.register("retriever", "hybrid", lambda cfg: HybridRetriever(**cfg.config))
+    reg.register("retriever", "hybrid", _build_hybrid_retriever)
+    reg.register("retriever", "sparse-qdrant", _build_sparse_qdrant_retriever)
     reg.register("reranker", "cross-encoder", lambda cfg: CrossEncoderReranker(**cfg.config))
     reg.register("generator", "openai", lambda cfg: OpenAIGenerator(**cfg.config))
     reg.register("generator", "anthropic", lambda cfg: AnthropicGenerator(**cfg.config))

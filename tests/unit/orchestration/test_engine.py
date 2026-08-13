@@ -852,3 +852,187 @@ def test_deleting_via_the_indexer_directly_does_not_touch_the_retrievers_lexical
 
     assert chunk not in container.indexer.indexed  # gone from the vector/persistent side
     assert chunk in retriever.indexed_via_bm25  # still present on the lexical side — stale
+
+
+# ---------------------------------------------------------------------------
+# Lot 5 (persistent sparse retrieval): a retriever that tracks per-call backend
+# failures (HybridRetriever.last_degraded_sources) must have that surfaced in
+# the "retrieve" TraceStep's metadata, not just logged — duck-typed via
+# getattr(), so a retriever that doesn't set this attribute (e.g. the plain
+# _FakeRetriever used throughout this file) is unaffected.
+# ---------------------------------------------------------------------------
+
+
+class _FakeRetrieverWithDegradedSources(_FakeRetriever):
+    def __init__(self, hits: list | None = None, degraded: list[str] | None = None) -> None:
+        super().__init__(hits)
+        self.last_degraded_sources = degraded or []
+
+
+def test_retrieve_trace_step_carries_degraded_sources_when_the_retriever_reports_them() -> None:
+    telemetry = _FakeTelemetry()
+    retriever = _FakeRetrieverWithDegradedSources(degraded=["vector"])
+    engine, _ = _engine(retriever=retriever, telemetry=telemetry)
+
+    engine.answer("What is RAG?")
+
+    retrieve_step = next(s for s in telemetry.recorded[0].steps if s.name == "retrieve")
+    assert retrieve_step.metadata["degraded_sources"] == ["vector"]
+
+
+def test_retrieve_trace_step_omits_degraded_sources_when_none_reported() -> None:
+    telemetry = _FakeTelemetry()
+    retriever = _FakeRetrieverWithDegradedSources(degraded=[])
+    engine, _ = _engine(retriever=retriever, telemetry=telemetry)
+
+    engine.answer("What is RAG?")
+
+    retrieve_step = next(s for s in telemetry.recorded[0].steps if s.name == "retrieve")
+    assert "degraded_sources" not in retrieve_step.metadata
+
+
+def test_retrieve_trace_step_omits_degraded_sources_when_the_retriever_does_not_report_them() -> None:
+    """Plain _FakeRetriever (used throughout this file) has no
+    last_degraded_sources attribute at all — getattr() must not raise."""
+    telemetry = _FakeTelemetry()
+    engine, _ = _engine(retriever=_FakeRetriever(), telemetry=telemetry)
+
+    engine.answer("What is RAG?")
+
+    retrieve_step = next(s for s in telemetry.recorded[0].steps if s.name == "retrieve")
+    assert "degraded_sources" not in retrieve_step.metadata
+
+
+# ---------------------------------------------------------------------------
+# test-specialist finding (Lot 5): every existing ingest_chunks() test above
+# uses `_FakeRetriever`, which implements `.index()` directly on itself —
+# meaning `if hasattr(retriever, "index"): retriever.index(chunks)` in
+# engine.py always took the same branch, both before and after this Lot's
+# change (dropping the `getattr(retriever, "_bm25", None)` fallback). None of
+# them would catch `HybridRetriever.index()` ever being renamed, removed, or
+# failing to delegate to its lexical backend — the exact regression class
+# this Lot's change is meant to guard against. This test wires a *real*
+# HybridRetriever (only its Qdrant-touching `_vector` leg is faked, to avoid
+# a live Qdrant dependency) so the assertion exercises the actual
+# HybridRetriever.index() -> self._lexical.index() delegation path.
+# ---------------------------------------------------------------------------
+
+
+class _NoOpVectorLeg:
+    def retrieve(self, query, k: int = 10):  # type: ignore[no-untyped-def]
+        return []
+
+
+class _RecordingLexicalLeg:
+    def __init__(self) -> None:
+        self.indexed: list[Chunk] = []
+
+    def name(self) -> str:
+        return "bm25"
+
+    def index(self, chunks: list[Chunk]) -> int:
+        self.indexed.extend(chunks)
+        return len(chunks)
+
+    def retrieve(self, query, k: int = 10):  # type: ignore[no-untyped-def]
+        return []
+
+
+def test_ingest_chunks_feeds_a_real_hybridretriever_via_its_public_index_method() -> None:
+    from modular_rag.retrieval.retrievers.hybrid import HybridRetriever
+
+    hybrid = HybridRetriever()
+    hybrid._vector = _NoOpVectorLeg()
+    lexical = _RecordingLexicalLeg()
+    hybrid._lexical = lexical
+    engine, container = _engine(retriever=hybrid)
+    chunk = Chunk(doc_id=new_id(), content="hello world")
+
+    n = engine.ingest_chunks([chunk])
+
+    assert n == 1
+    assert chunk in container.indexer.indexed
+    assert chunk in lexical.indexed
+
+
+# ---------------------------------------------------------------------------
+# Codex review (Lot 5, HIGH-001): a prior fix here (Codex review, MED-002)
+# added a compensating `self._c.indexer.delete(chunk_ids)` on lexical-index
+# failure, intending to "roll back" the dense write. That was a real
+# data-loss bug: `Indexer.index()` is an *upsert* — a chunk id in the batch
+# can already exist in the dense index with previously-ingested, still-valid
+# content (stable-id re-ingestion via this public entry point, or the
+# lifecycle update path), and the blind delete removed that pre-existing
+# version too, not just the new upsert. Reverted to no automatic
+# compensation — the tests below pin that reverted (safe) behavior and the
+# specific pre-existing-version-survives regression the review's own
+# reproduction named.
+# ---------------------------------------------------------------------------
+
+
+class _FailingIndexRetriever:
+    def name(self) -> str:
+        return "failing-lexical"
+
+    def index(self, chunks: list[Chunk]) -> int:
+        raise RuntimeError("sparse backend down")
+
+
+def test_ingest_chunks_does_not_delete_from_the_dense_index_when_lexical_indexing_fails() -> None:
+    """The exception must still propagate (fail-loud, unchanged), but the
+    dense write must be left alone — no compensating delete."""
+    engine, container = _engine(retriever=_FailingIndexRetriever())
+    chunk = Chunk(doc_id=new_id(), content="hello world")
+
+    with pytest.raises(RuntimeError, match="sparse backend down"):
+        engine.ingest_chunks([chunk])
+
+    assert chunk in container.indexer.indexed
+
+
+class _DeleteTrackingIndexer(_FakeIndexer):
+    def __init__(self) -> None:
+        super().__init__()
+        self.delete_calls: list[list[str]] = []
+
+    def delete(self, ids: list[str]) -> None:
+        self.delete_calls.append(list(ids))
+        super().delete(ids)
+
+
+def test_ingest_chunks_does_not_delete_a_pre_existing_dense_version_on_lexical_failure() -> None:
+    """Codex review (Lot 5, HIGH-001) regression test, reproducing the
+    review's own scenario: a chunk id already indexed with valid content
+    *before* this batch must survive a lexical-index failure during a
+    same-id re-ingestion — not be silently wiped by an over-eager
+    'compensation'. Tracks `delete()` calls directly rather than relying on
+    a fake indexer's upsert semantics (the review's real-world failure mode
+    — Qdrant's `upsert` replacing a point by id — isn't faithfully
+    reproducible with `_FakeIndexer`'s list-append model; asserting
+    `delete()` is simply never invoked closes the actual regression this
+    Lot's fix targets, independent of that fidelity gap)."""
+    manifest = PipelineManifest(
+        id="test-pipeline",
+        chunker=ComponentConfig(type="fake"),
+        embedder=ComponentConfig(type="fake"),
+        indexer=ComponentConfig(type="fake"),
+        retriever=ComponentConfig(type="fake"),
+        generator=ComponentConfig(type="fake"),
+    )
+    container = Container(manifest)
+    container.register("chunker", _FakeChunker())
+    container.register("embedder", _FakeEmbedder())
+    tracking_indexer = _DeleteTrackingIndexer()
+    container.register("indexer", tracking_indexer)
+    container.register("retriever", _FailingIndexRetriever())
+    container.register("generator", _FakeGenerator())
+    engine = RAGEngine(container)
+    stable_id = "00000000-0000-4000-8000-000000000001"
+    old_chunk = Chunk(id=stable_id, doc_id=new_id(), content="known-good-old")
+    tracking_indexer.index([old_chunk])
+
+    new_chunk = Chunk(id=stable_id, doc_id=old_chunk.doc_id, content="new-version-that-fails")
+    with pytest.raises(RuntimeError, match="sparse backend down"):
+        engine.ingest_chunks([new_chunk])
+
+    assert tracking_indexer.delete_calls == []

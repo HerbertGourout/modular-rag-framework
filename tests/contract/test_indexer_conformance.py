@@ -22,11 +22,26 @@ from __future__ import annotations
 
 import pytest
 
+from modular_rag.adapters.vectorstores.qdrant_sparse_store import QdrantSparseStore
 from modular_rag.adapters.vectorstores.qdrant_store import QdrantStore
 from modular_rag.contracts.indexing import Indexer, VectorIndexer
 from modular_rag.core.errors import ConfigurationError
+from modular_rag.retrieval.retrievers.sparse import PersistentSparseRetriever
 
-INDEXERS = [QdrantStore()]
+# QdrantSparseStore's and PersistentSparseRetriever's constructors are
+# network-free too (Lot 5, persistent sparse retrieval), same lazy-client
+# pattern as QdrantStore — their index()/delete()/clear()/list_ids()
+# behaviour needs a live Qdrant, covered by
+# tests/integration/test_qdrant_sparse_store.py instead, same exclusion as
+# QdrantStore/VectorRetriever/HybridRetriever in .claude/rules/tests.md.
+# Both included: QdrantSparseStore is the actual Indexer implementation
+# (architecture-reviewer review — the prior version only listed the
+# delegating PersistentSparseRetriever wrapper); PersistentSparseRetriever
+# is kept too since it's *also* a real, separately-registrable Indexer
+# (`retriever.type: sparse-qdrant`), not just a Retriever. Neither is a
+# VectorIndexer — sparse vectors have no dimension-reconciliation concern
+# (ADR-0009 is dense-vector-specific).
+INDEXERS = [QdrantStore(), QdrantSparseStore(), PersistentSparseRetriever()]
 VECTOR_INDEXERS = [QdrantStore()]
 
 

@@ -219,6 +219,38 @@ def test_repair_does_not_invent_content_for_missing_chunks() -> None:
     assert "c2" not in indexer.list_ids()  # not fabricated
 
 
+def test_check_cannot_detect_a_stable_id_holding_diverged_content_across_stores() -> None:
+    """Codex review (Lot 5, MED-001): characterizes a real, documented
+    blind spot — not a bug to fix here (see IndexReconciler's own module
+    docstring and RAGEngine.ingest_chunks()'s comment on the exact scenario
+    this reproduces: a stable-id re-ingestion where the dense write
+    succeeds with new content but the paired lexical write fails, leaving
+    stale old content under the same, still-present id).
+
+    `check()` only ever compares *id sets* — it has no content/hash/version
+    input at all (see `_FakeIndexer`/`_FakeRetriever` above: id-only by
+    design, matching the real `Indexer`/`Retriever` contracts' `list_ids()`
+    signature). So a chunk id present on both sides, no matter how
+    different its *actual* content is between the dense and lexical store,
+    is indistinguishable here from a chunk id present on both sides with
+    identical content — this test pins that `check()` reports clean for
+    exactly the scenario where it structurally cannot know otherwise.
+    """
+    ledger = InMemoryLifecycleLedger()
+    ledger.record_ingested("doc-1", "acme-corp", "hash-a", ["c1"])
+    # "c1" present in both stores — check() has no way to see that, in a
+    # real deployment, the dense store's payload for "c1" could hold
+    # brand-new content while the lexical store's payload for the same id
+    # still holds the pre-failure, stale version.
+    indexer = _FakeIndexer(ids=["c1"])
+    retriever = _FakeRetriever(ids=["c1"])
+    reconciler = IndexReconciler(_container(indexer, retriever, ledger))
+
+    report = reconciler.check()
+
+    assert report.is_clean is True  # no id-set divergence — content divergence is invisible here
+
+
 def test_repair_skips_lexical_deletion_when_retriever_cannot_delete() -> None:
     ledger = InMemoryLifecycleLedger()
     ledger.record_ingested("doc-1", "acme-corp", "hash-a", ["c1"])

@@ -222,7 +222,9 @@ class RAGEngine:
     def ingest_chunks(self, chunks: list) -> int:
         """Embed and index pre-chunked content. Use when chunks are produced externally.
 
-        Also feeds the BM25 index inside HybridRetriever so lexical retrieval works.
+        Also feeds the retriever's own lexical index (BM25 or a persistent
+        sparse backend — whichever `HybridRetriever.lexical` selects) so
+        lexical retrieval works.
         """
         if self._c.tenant_policy:
             # Lot 11b (docs/refactoring-plan.md): "enforce fail-closed policy before
@@ -233,12 +235,57 @@ class RAGEngine:
             if chunk.embedding is None:
                 chunk.embedding = self._c.embedder.embed([chunk.content])[0]
         self._c.indexer.index(chunks)
-        # Feed BM25 — covers standalone BM25Retriever and HybridRetriever._bm25
+        # Lot 5: HybridRetriever now has its own index() delegating to whichever
+        # lexical backend is configured — no more reaching into a private
+        # `_bm25` attribute (covers standalone lexical retrievers too, e.g. a
+        # bare BM25Retriever or PersistentSparseRetriever wired directly).
         retriever = self._c.retriever
-        for target in [retriever, getattr(retriever, "_bm25", None)]:
-            if target is not None and hasattr(target, "index"):
-                target.index(chunks)
-                break
+        if hasattr(retriever, "index"):
+            try:
+                retriever.index(chunks)
+            except Exception as exc:
+                # Codex review (Lot 5, HIGH-001): a *previous* fix here
+                # (Codex review, MED-002) attempted a compensating
+                # `self._c.indexer.delete(chunk_ids)` on lexical-index
+                # failure, reasoning it would "roll back" the dense write.
+                # That reasoning was wrong and reproduced as a genuine
+                # data-loss bug: `Indexer.index()` is an *upsert* — a chunk
+                # id in this batch can already exist in the dense index with
+                # previously-ingested, still-valid content (stable-id
+                # re-ingestion via the public `ingest_chunks()` entry point,
+                # or the lifecycle update path). The blind delete removed
+                # that pre-existing valid version too, not just the new
+                # upsert — confirmed by seeding the dense index with a known
+                # id/content, re-ingesting the same id with content that
+                # then fails lexical indexing, and observing the dense index
+                # end up *empty*, not reverted to the seeded version.
+                # `Indexer` has no "read/restore prior state" or "was this
+                # id new" primitive (only index/delete/clear/list_ids — and
+                # list_ids() alone can't answer "was this specific id
+                # already there" without an O(collection size) full scan on
+                # every ingest call), so a *safe* rollback would need a
+                # contract change, not a quick fix here. Reverted to: no
+                # automatic compensation, but the partial state is still
+                # logged clearly (not silent).
+                #
+                # Codex review (Lot 5, MED-001): recovery via
+                # `orchestration.reconciliation.IndexReconciler` is only a
+                # partial answer, not a blanket guarantee — it detects a
+                # chunk id missing entirely from one side (the case a
+                # *new* chunk's failed lexical write produces), but compares
+                # id sets only, never content or a version/hash (see that
+                # class's own docstring), so it will *not* catch a
+                # stable-id re-ingestion where the dense side now holds new
+                # content but the lexical side still holds the old content
+                # under the same, still-present id. Requires a configured
+                # `lifecycle_ledger` at all to run; without one, this
+                # divergence has no detection path today.
+                log.error(
+                    "engine.ingest_lexical_failed_dense_not_rolled_back",
+                    chunk_ids=[c.id for c in chunks],
+                    error=str(exc),
+                )
+                raise
         log.info("engine.ingested", chunks=len(chunks))
         return len(chunks)
 
@@ -376,7 +423,14 @@ class RAGEngine:
         # 2. retrieval
         sm.transition(PipelineState.RETRIEVING)
         context = self._retrieve(query, k=self._c.manifest.retriever.config.get("k", 20))
-        trace.add_step(TraceStep(name="retrieve", metadata={"chunks": len(context)}))
+        # Lot 5: surface a per-source backend failure in observability, not just
+        # a log line — duck-typed (only HybridRetriever sets this today),
+        # matching every other Container-adjacent hasattr() check in this file.
+        retrieve_metadata: dict[str, Any] = {"chunks": len(context)}
+        degraded_sources = getattr(self._c.retriever, "last_degraded_sources", None)
+        if degraded_sources:
+            retrieve_metadata["degraded_sources"] = list(degraded_sources)
+        trace.add_step(TraceStep(name="retrieve", metadata=retrieve_metadata))
 
         # 2b. tenant isolation — filter retrieved context (Lot 11b). `query.tenant_id`
         # is guaranteed set here: step 0 already denied the run otherwise.

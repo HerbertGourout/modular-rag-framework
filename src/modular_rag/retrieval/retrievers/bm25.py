@@ -11,6 +11,18 @@ from modular_rag.core.models.retrieved import RetrievedChunk
 class BM25Retriever:
     """In-memory BM25 retriever using rank-bm25.
 
+    Explicit local/development adapter (Lot 5 — persistent sparse retrieval):
+    the whole corpus lives in this process's memory, so it does not survive
+    a restart and is never shared across replicas — a second process (or the
+    same process after a restart) starts with an empty index. `HybridRetriever`
+    defaults to this backend when a manifest's `retriever.config.lexical` is
+    left unset or set to `"bm25-memory"` — it's the zero-infrastructure
+    choice for a single local process. Durable/multi-instance deployments
+    must set `lexical: sparse-qdrant` instead (see `app/default_factories.py`'s
+    `_build_hybrid_retriever`, which resolves that manifest key into a real
+    `retrieval.retrievers.sparse.PersistentSparseRetriever`, persisted to
+    Qdrant).
+
     `index()` appends to (not replaces) the existing corpus, rebuilding the
     underlying `BM25Okapi` model each call — `rank_bm25` has no incremental
     update API, so a full rebuild is the only option; a second `index()` call

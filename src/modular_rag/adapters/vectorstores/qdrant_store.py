@@ -117,6 +117,18 @@ class QdrantStore:
             try:
                 self._ensure_collection()
             except Exception:
+                # Codex review (Lot 5, MED-001): the rejected client's own
+                # HTTP transport was previously never closed here — just
+                # discarded by clearing `self._client`. A caller that
+                # retries (e.g. against a still-incompatible collection
+                # during a migration) leaks one more open connection per
+                # attempt. close() itself is best-effort: a failure closing
+                # an already-broken client must not mask the original
+                # validation error.
+                try:
+                    client.close()
+                except Exception:
+                    pass
                 self._client = None
                 raise
         return self._client
@@ -183,7 +195,19 @@ class QdrantStore:
                 PointStruct(
                     id=chunk.id,
                     vector=chunk.embedding,
+                    # Codex review (Lot 5, HIGH-001): `**chunk.metadata` must be
+                    # spread FIRST, not last — a chunk indexed after
+                    # TenantIsolationPolicy.enforce_ingest() validated
+                    # chunk.tenant_id could still carry a caller-supplied
+                    # metadata["tenant_id"] (Chunk.metadata accepts any key
+                    # unvalidated). Writing the structured fields *after* the
+                    # spread guarantees they always win regardless of dict
+                    # order — this exact ordering bug was reproduced and fixed
+                    # in the new QdrantSparseStore.index() first; applied here
+                    # too for dense/sparse parity (this store had the same bug
+                    # already, predating this Lot).
                     payload={
+                        **chunk.metadata,
                         "doc_id": chunk.doc_id,
                         "content": chunk.content,
                         "modality": chunk.modality,
@@ -200,7 +224,6 @@ class QdrantStore:
                         # but for the wrong reason, and would incorrectly drop
                         # legitimately tenant-scoped content too).
                         "tenant_id": chunk.tenant_id,
-                        **chunk.metadata,
                     },
                 )
             )

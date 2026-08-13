@@ -47,7 +47,14 @@ v1 = [
     "sentence-transformers>=3.0",
     "openai>=1.30",
     "anthropic>=0.28",
-    "qdrant-client>=1.9",
+    # Codex review (Lot 5, HIGH-002): raised from >=1.9 — QdrantSparseStore
+    # (adapters/vectorstores/qdrant_sparse_store.py) uses `Modifier.IDF` and
+    # `QdrantClient.query_points()`, neither present in the officially
+    # tagged qdrant-client 1.9.0; the unified Query API (query_points) is
+    # documented as available from client/server 1.10 onward. requirements-lock.txt
+    # already resolves to 1.18.0, which is what this environment's tests
+    # actually ran against — this only corrects the declared floor to match.
+    "qdrant-client>=1.10",
     "rank-bm25>=0.2",
     "cohere>=5.5",
     # Opt-in subword token counting for chunkers (token_counter: "tiktoken" in manifests);

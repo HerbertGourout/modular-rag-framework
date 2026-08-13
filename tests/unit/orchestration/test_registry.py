@@ -136,7 +136,7 @@ def test_default_registry_has_the_documented_builtin_type_names() -> None:
         "deterministic",
     }
     assert set(reg._factories["indexer"]) == {"qdrant"}
-    assert set(reg._factories["retriever"]) == {"vector", "hybrid"}
+    assert set(reg._factories["retriever"]) == {"vector", "hybrid", "sparse-qdrant"}
     assert set(reg._factories["reranker"]) == {"cross-encoder"}
     assert set(reg._factories["generator"]) == {"openai", "anthropic", "deterministic"}
     assert set(reg._factories["guard"]) == {"basic"}
