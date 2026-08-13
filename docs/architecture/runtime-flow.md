@@ -120,7 +120,7 @@ sequenceDiagram
     participant TP as TenantPolicy
     participant Emb as Embedder
     participant Idx as Indexer
-    participant BM as BM25Retriever
+    participant Lex as Lexical retriever (BM25Retriever or PersistentSparseRetriever)
 
     Note over U,IP: Call 1 — parse/chunk only, no external service, no engine involved
     U->>IP: ingest_path(path, chunker, tenant_id=...)
@@ -143,8 +143,8 @@ sequenceDiagram
     end
     E->>Idx: index(chunks) → int
     Idx-->>E: n_indexed
-    E->>BM: index(chunks)
-    Note over BM: also feeds the in-memory BM25 index —<br/>lost if this process exits, see overview.md §3
+    E->>Lex: index(chunks)
+    Note over Lex: also feeds the lexical index — in-memory and lost on process<br/>exit for the bm25-memory default, persistent for sparse-qdrant<br/>(manifest retriever.config.lexical), see overview.md §3
     E-->>U: n_indexed
 ```
 
@@ -170,7 +170,7 @@ flowchart LR
     DocE -->|chunk, tenant_id stamped| Chunks[list Chunk\nembedding=None]
     Chunks -->|"enforce_ingest per chunk\n(only if tenant_policy wired)"| TGate{OK?}
     TGate -->|"embed, one chunk at a time"| ChunksV[list Chunk\nwith embedding]
-    ChunksV -->|index| Store[(Qdrant\n+ BM25, in-memory)]
+    ChunksV -->|index| Store[(Qdrant dense\n+ lexical: BM25 in-memory, or a\nsecond Qdrant collection)]
 
     Query[Query\nfrozen] -->|"enforce_query\n(only if tenant_policy wired)"| TQ{OK?}
     TQ -->|check_query| Guard{SecurityGuard}

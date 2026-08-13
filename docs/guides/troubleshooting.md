@@ -75,10 +75,14 @@ because the SDK client reads the env var once at construction time, not per requ
 **Why, in order of likelihood**:
 1. You ingested into a different Qdrant collection than the one the manifest queries (check
    the manifest's `collection` value matches on both sides).
-2. The BM25 half of hybrid retrieval is in-memory and rebuilt per process —if you ingested in
-   one process and are querying in a freshly started one, the BM25 index is empty even though
-   Qdrant still has the vectors from before. (See [installation.md](installation.md) and
-   [data-model.md](../architecture/data-model.md) on why BM25 has no persistence in V1.)
+2. If the manifest's `retriever.config.lexical` is left unset or `"bm25-memory"` (the local
+   preset's default), the lexical half of hybrid retrieval is in-memory and rebuilt per process —
+   if you ingested in one process and are querying in a freshly started one, the BM25 index is
+   empty even though Qdrant still has the vectors from before. (See
+   [installation.md](installation.md) and [data-model.md](../architecture/data-model.md) on why
+   BM25 has no persistence there.) A manifest with `lexical: sparse-qdrant` instead (see
+   `manifests/presets/secure-enterprise-rag.yaml`) does not have this gap — its lexical index is
+   a persistent Qdrant collection, same durability as the vector side.
 3. The question genuinely doesn't match anything in the corpus — try `GET /retrieve` or
    `mrag ask` with a very literal question drawn straight from a sentence you know is in
    the ingested documents, to rule out a real retrieval-quality problem.

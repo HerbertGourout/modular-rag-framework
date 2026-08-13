@@ -743,14 +743,18 @@ outright during the ADR-0007 stabilization pass. Every adapter reads its configu
 **Q: I ingested documents with the CLI, then asked a question in a separate `mrag ask` call, and
 retrieval quality feels worse than when I ran ingestion and querying in one script. Why?**
 A: This is the BM25/vector persistence asymmetry described in [Getting
-Started](#getting-started) above. `HybridRetriever` fuses a persistent vector index (Qdrant) with
-an in-memory BM25 lexical index that is rebuilt empty every time a new process starts. A separate
-CLI invocation for `mrag ask` starts a fresh process with zero BM25 state, so `HybridRetriever`
-falls back to vector-only retrieval for that call — supported, but not the fused hybrid behavior
-you get from a single long-running process. If your deployment needs BM25 to survive across
-process boundaries or multiple workers, you need a shared lexical backend (this is a known,
-tracked gap — see [`docs/refactoring-plan.md`](docs/refactoring-plan.md) §2 — not something the
-framework solves today).
+Started](#getting-started) above — and it only applies to the **default** lexical backend.
+`HybridRetriever` fuses a persistent vector index (Qdrant) with a lexical leg selected by the
+manifest's `retriever.config.lexical` key: `"bm25-memory"` (the default — an in-memory BM25 index
+rebuilt empty every time a new process starts) or `"sparse-qdrant"` (a persistent Qdrant sparse
+collection that survives process boundaries and is shared across workers, same durability
+guarantee as the vector index — see `manifests/presets/secure-enterprise-rag.yaml`, which sets
+this). On the `bm25-memory` default, a separate CLI invocation for `mrag ask` starts a fresh
+process with zero BM25 state, so `HybridRetriever` falls back to vector-only retrieval for that
+call — supported, but not the fused hybrid behavior you get from a single long-running process.
+If your deployment needs the lexical leg to survive process boundaries or multiple workers, set
+`lexical: sparse-qdrant` (requires Qdrant client/server **1.10+**) rather than supplying your own
+external backend.
 
 **Q: Why did `POST /answer` return HTTP 422 for every request in an old build I have checked
 out?** A: A now-fixed bug: `QuestionRequest`/`AnswerResponse` were originally nested inside

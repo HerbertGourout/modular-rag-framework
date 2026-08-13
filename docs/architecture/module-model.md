@@ -87,9 +87,15 @@ src/modular_rag/
 │   │   └── deterministic_embedder.py  DeterministicEmbedder — feature-hashed, no model/network,
 │   │                                  for e2e tests and dependency-free local pipelines
 │   ├── vectorstores/
-│   │   └── qdrant_store.py            QdrantStore — implements Indexer + VectorIndexer (ADR-0009)
-│   │                                  and the low-level `retrieve_by_vector()` VectorRetriever
-│   │                                  calls into (not a full standalone Retriever on its own)
+│   │   ├── qdrant_store.py            QdrantStore — implements Indexer + VectorIndexer (ADR-0009)
+│   │   │                              and the low-level `retrieve_by_vector()` VectorRetriever
+│   │   │                              calls into (not a full standalone Retriever on its own)
+│   │   └── qdrant_sparse_store.py     QdrantSparseStore — implements Indexer against a dedicated
+│   │                                  sparse-only Qdrant collection (Modifier.IDF); the
+│   │                                  low-level `retrieve_by_text()` PersistentSparseRetriever
+│   │                                  calls into. Deliberately a *separate* collection from
+│   │                                  qdrant_store.py's, not named vectors on the same points —
+│   │                                  see its own module docstring for why
 │   ├── audit/
 │   │   └── postgres_sink.py           PostgresAuditSink — durable, append-only AuditSink
 │   │                                  (lazy `psycopg` import; no `.close()` today — a known,
@@ -136,14 +142,21 @@ src/modular_rag/
 │                              see overview.md §10 for why that boundary is drawn there.
 │
 ├── retrieval/          ← Domain module: Query → list[RetrievedChunk]. Public exports via
-│                          retrieval/__init__.py: BM25Retriever, VectorRetriever, HybridRetriever.
+│                          retrieval/__init__.py: BM25Retriever, VectorRetriever, HybridRetriever,
+│                          PersistentSparseRetriever.
 │   ├── retrievers/
-│   │   ├── bm25.py            BM25Retriever (rank-bm25, lazy import; in-memory index — see
-│   │   │                      overview.md §3 Knowledge plane for the persistence caveat this creates)
+│   │   ├── bm25.py            BM25Retriever (rank-bm25, lazy import; in-memory index — dev-only,
+│   │   │                      see overview.md §3 Knowledge plane for the persistence caveat)
 │   │   ├── vector.py          VectorRetriever (wraps a wired Embedder + VectorIndexer-capable store)
-│   │   └── hybrid.py          HybridRetriever (fuses vector + BM25 via RRF; degrades to
-│   │                          vector-only or BM25-only when one side returns nothing — see
-│   │                          overview.md §11)
+│   │   ├── sparse.py          PersistentSparseRetriever (delegates to an injected
+│   │   │                      adapters.vectorstores.qdrant_sparse_store.QdrantSparseStore — the
+│   │   │                      durable-deployment alternative to bm25.py's in-memory index; see
+│   │   │                      overview.md §3)
+│   │   └── hybrid.py          HybridRetriever (fuses vector + an injectable lexical backend —
+│   │                          BM25Retriever by default, or PersistentSparseRetriever when a
+│   │                          manifest sets retriever.config.lexical: sparse-qdrant — via RRF;
+│   │                          degrades to vector-only or lexical-only when one side returns
+│   │                          nothing — see overview.md §11)
 │   ├── fusion/
 │   │   └── rrf.py             reciprocal_rank_fusion() (rrf_k=60)
 │   └── rerankers/

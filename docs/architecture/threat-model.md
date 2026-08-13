@@ -18,7 +18,7 @@ not in the code.
 
 | Asset | Where it lives today | Classification (§ data-classification-policy.md) |
 |---|---|---|
-| Ingested source documents / chunks | Vector store (Qdrant) + in-memory BM25 index (`retrieval/`) | Caller-determined; defaults to `restricted` once Lot 11b enforces a default |
+| Ingested source documents / chunks | Vector store (Qdrant, dense) + lexical index — manifest-selected: in-memory BM25 (`retrieval/retrievers/bm25.py`, the `bm25-memory` default, process-local) or a second, dedicated persistent Qdrant collection (`adapters/vectorstores/qdrant_sparse_store.py`, `sparse-qdrant` — `manifests/presets/secure-enterprise-rag.yaml`'s choice; carries the same tenant-partitioning and at-rest exposure as the dense collection, unlike the in-memory default) | Caller-determined; defaults to `restricted` once Lot 11b enforces a default |
 | Query text | In-flight only (`core.models.query.Query`); not persisted beyond `Trace`/`AuditEvent` | Same as the document(s) it's asking about |
 | Generated answers + citations | Returned to caller; recorded in `Trace` (Lot 10) | Inherits from source chunks used |
 | Trace/telemetry data | Wherever `Telemetry.record_trace()` is configured to sink (in-memory by default) | `internal` — performance data, not by itself confidentiality-bearing, but can leak query/answer content via `TraceStep.metadata` if a caller isn't careful |
