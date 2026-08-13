@@ -199,6 +199,34 @@ def test_get_client_does_not_publish_a_client_when_ensure_collection_fails(monke
     assert store._client is None
 
 
+def test_get_client_closes_the_rejected_client_when_ensure_collection_fails(monkeypatch):
+    """Codex review (Lot 5, MED-001): the rejected client's own HTTP
+    transport was previously never closed here — just discarded by
+    clearing `self._client` — leaking one open connection per failed/
+    retried wiring attempt (e.g. against a still-incompatible collection
+    during a migration)."""
+    import qdrant_client as qdrant_client_module
+
+    closed = []
+
+    class _FakeClient:
+        def close(self) -> None:
+            closed.append(True)
+
+    monkeypatch.setattr(qdrant_client_module, "QdrantClient", lambda **kwargs: _FakeClient())
+    store = QdrantStore()
+    monkeypatch.setattr(
+        store,
+        "_ensure_collection",
+        lambda: (_ for _ in ()).throw(ConfigurationError("dimension mismatch")),
+    )
+
+    with pytest.raises(ConfigurationError):
+        store._get_client()
+
+    assert closed == [True]
+
+
 def test_get_client_re_validates_on_retry_after_ensure_collection_failed(monkeypatch):
     """The regression this closes: a second `_get_client()` call after a
     first failed one must re-run `_ensure_collection()` — not silently
@@ -343,3 +371,69 @@ def test_ensure_collection_raises_a_configuration_error_for_named_vector_collect
 
     with pytest.raises(ConfigurationError, match="named vector"):
         store._ensure_collection()
+
+
+# ---------------------------------------------------------------------------
+# Codex review (Lot 5, HIGH-001): `Chunk.metadata` accepts arbitrary keys
+# unvalidated, including ones that collide with the store's own structured
+# payload fields (doc_id, tenant_id, etc.). Pre-existing bug in this store
+# (predates Lot 5, found while writing the equivalent test for the new
+# QdrantSparseStore) — `**chunk.metadata` was spread *after* the structured
+# fields in `index()`'s payload dict, so a chunk indexed after
+# TenantIsolationPolicy.enforce_ingest() validated `chunk.tenant_id` could
+# still carry metadata={"tenant_id": "<other tenant>"} and have that spoofed
+# value silently win.
+# ---------------------------------------------------------------------------
+
+
+class _FakeUpsertClient:
+    def __init__(self) -> None:
+        self.upserted_points: list = []
+
+    def upsert(self, collection_name: str, points: list) -> None:  # type: ignore[no-untyped-def]
+        self.upserted_points.extend(points)
+
+
+def test_index_does_not_let_metadata_override_the_real_tenant_id(monkeypatch):
+    from modular_rag.core.ids import new_id
+    from modular_rag.core.models.chunk import Chunk
+
+    store = QdrantStore()
+    fake_client = _FakeUpsertClient()
+    monkeypatch.setattr(store, "_get_client", lambda: fake_client)
+    chunk = Chunk(
+        id=new_id(),
+        doc_id="doc-1",
+        content="hello world",
+        tenant_id="tenant-a",
+        metadata={"tenant_id": "tenant-b"},
+    )
+    chunk.embedding = [0.1, 0.2]
+
+    store.index([chunk])
+
+    payload = fake_client.upserted_points[0].payload
+    assert payload["tenant_id"] == "tenant-a"
+
+
+def test_index_still_preserves_legitimate_non_colliding_metadata(monkeypatch):
+    from modular_rag.core.ids import new_id
+    from modular_rag.core.models.chunk import Chunk
+
+    store = QdrantStore()
+    fake_client = _FakeUpsertClient()
+    monkeypatch.setattr(store, "_get_client", lambda: fake_client)
+    chunk = Chunk(
+        id=new_id(),
+        doc_id="doc-1",
+        content="hello world",
+        tenant_id="tenant-a",
+        metadata={"source": "manual-upload.txt"},
+    )
+    chunk.embedding = [0.1, 0.2]
+
+    store.index([chunk])
+
+    payload = fake_client.upserted_points[0].payload
+    assert payload["source"] == "manual-upload.txt"
+    assert payload["tenant_id"] == "tenant-a"

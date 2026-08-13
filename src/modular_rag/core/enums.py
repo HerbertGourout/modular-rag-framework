@@ -13,16 +13,21 @@ class Modality(StrEnum):
 
 
 class RetrievalMethod(StrEnum):
-    """VECTOR/BM25/HYBRID are the only values any registered retriever ever sets
-    (Étape 8 cleanup, 2026-08-07): GRAPH and MULTIMODAL described delegated
-    capabilities (ADR-0005 §5.2) with zero producing code and zero consumers
-    anywhere in this codebase — removed rather than kept as an unreachable
-    enum value. Restorable via git history if a native graph/multimodal
-    retriever is ever built."""
+    """VECTOR/BM25/HYBRID/SPARSE are the only values any registered retriever
+    ever sets (Étape 8 cleanup, 2026-08-07, plus SPARSE added Lot 5): GRAPH and
+    MULTIMODAL described delegated capabilities (ADR-0005 §5.2) with zero
+    producing code and zero consumers anywhere in this codebase — removed
+    rather than kept as an unreachable enum value. Restorable via git history
+    if a native graph/multimodal retriever is ever built. SPARSE is the
+    opposite case: real producing code
+    (`retrieval.retrievers.sparse.PersistentSparseRetriever`) and a real
+    consumer (`retrieval.retrievers.hybrid.HybridRetriever`'s
+    `lexical="sparse-qdrant"` option)."""
 
     VECTOR = "vector"
     BM25 = "bm25"
     HYBRID = "hybrid"
+    SPARSE = "sparse"
 
 
 class PolicyAction(StrEnum):

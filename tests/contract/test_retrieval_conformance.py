@@ -1,8 +1,15 @@
 """Contract conformance tests for Retriever implementations.
 
-Note: VectorRetriever and HybridRetriever require external services (Qdrant).
-This file tests only the BM25Retriever which works fully in-process.
-Integration tests for Qdrant-backed retrievers live in tests/integration/.
+Note: VectorRetriever and HybridRetriever require external services (Qdrant),
+so full retrieve()-behavior conformance below covers only the BM25Retriever,
+which works fully in-process. Integration tests for Qdrant-backed retrievers
+live in tests/integration/. test-specialist review (Lot 5): PersistentSparseRetriever
+is the same category (a real retrieve() call needs a live Qdrant-backed
+store) — but its *structural* Protocol conformance is real and network-free
+to check (an unwired instance still has every method, per `contracts.
+retrieval.Retriever` being `@runtime_checkable`), so it gets the same
+isinstance-only treatment as `QdrantSparseStore`/`PersistentSparseRetriever`
+already get in tests/contract/test_indexer_conformance.py.
 """
 from __future__ import annotations
 
@@ -13,6 +20,11 @@ from modular_rag.core.ids import new_id
 from modular_rag.core.models.chunk import Chunk
 from modular_rag.core.models.query import Query
 from modular_rag.retrieval.retrievers.bm25 import BM25Retriever
+from modular_rag.retrieval.retrievers.sparse import PersistentSparseRetriever
+
+
+def test_persistent_sparse_retriever_implements_retriever_protocol():
+    assert isinstance(PersistentSparseRetriever(), Retriever)
 
 
 def _chunks(n: int = 10) -> list[Chunk]:

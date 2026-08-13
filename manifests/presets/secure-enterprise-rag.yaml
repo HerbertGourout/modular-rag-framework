@@ -36,6 +36,22 @@ retriever:
     bm25_weight: 0.4
     k: 20
     reranker_k: 5
+    # Lot 5 (persistent sparse retrieval): this is the durable-deployment preset —
+    # the lexical leg must survive a restart and stay consistent across
+    # replicas, neither of which the default in-memory BM25 provides. Backed
+    # by a dedicated Qdrant collection (kept separate from `indexer.config.
+    # collection` above — see QdrantSparseStore's module docstring for why).
+    lexical: sparse-qdrant
+    sparse_collection: enterprise_docs_sparse
+    # architecture-reviewer finding (Lot 5): unlike the vector leg (whose
+    # VectorRetriever gets its real, indexer.config-derived QdrantStore via
+    # ComponentRegistry.wire()'s post-wiring injection, making its own
+    # url/api_key constructor args dead for a wired pipeline), the sparse
+    # leg's QdrantSparseStore is built directly from *this* config block by
+    # app/default_factories.py — omitting these here would silently point it
+    # at localhost with no credentials regardless of the real endpoint below.
+    url: "${QDRANT_URL}"
+    api_key: "secret://QDRANT_API_KEY"
 
 reranker:
   type: cross-encoder

@@ -9,6 +9,19 @@ crash between the two writes `ingest_chunks()` performs, or a store restored
 from an out-of-sync backup. `IndexReconciler` treats the `LifecycleLedger`'s
 `chunk_ids` as ground truth for what *should* be indexed, and compares it
 against what each store actually reports having.
+
+**Scope limit (Codex review, Lot 5, MED-001): id-presence only, not content
+consistency.** `check()` compares *which ids exist* in each store against the
+ledger's `chunk_ids` — a chunk id missing entirely from one side is caught
+(`missing_in_vector`/`missing_in_lexical`), but no payload hash or version
+number is ever compared. A chunk id present in *both* the dense and lexical
+store, each holding a genuinely different version of that chunk's content
+(e.g. a stable-id re-ingestion where the dense write succeeded with new
+content but the paired lexical write failed, leaving stale old content under
+the same id — see `RAGEngine.ingest_chunks()`'s own comment on this exact
+case), reports as clean. Detecting that class of divergence would need a
+content hash or version field carried in both stores' payloads and compared
+here — not implemented.
 """
 from __future__ import annotations
 

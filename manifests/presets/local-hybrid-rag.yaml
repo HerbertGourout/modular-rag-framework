@@ -30,6 +30,11 @@ retriever:
     bm25_weight: 0.3
     k: 20
     reranker_k: 5
+    # lexical omitted -> defaults to "bm25-memory" (Lot 5, persistent sparse retrieval):
+    # in-memory, single-process, does not survive a restart. Explicitly the
+    # development choice for this local preset — a durable/multi-instance
+    # deployment must set lexical: sparse-qdrant instead (see
+    # manifests/presets/secure-enterprise-rag.yaml).
 
 reranker:
   type: cross-encoder

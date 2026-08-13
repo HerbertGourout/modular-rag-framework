@@ -109,6 +109,29 @@ def test_tenant_id_round_trips_through_index_and_retrieve(store):
 
 
 @pytest.mark.integration
+def test_index_does_not_let_metadata_override_the_real_tenant_id(store):
+    """Codex review (Lot 5, HIGH-001): pre-existing bug in this store, found
+    while writing the equivalent fix for the new QdrantSparseStore —
+    `**chunk.metadata` was spread after the structured payload fields, so a
+    caller-supplied metadata["tenant_id"] silently overrode the real,
+    already-validated chunk.tenant_id."""
+    chunk = Chunk(
+        id=new_id(),
+        doc_id="doc-1",
+        content="spoofed tenant",
+        tenant_id="tenant-a",
+        metadata={"tenant_id": "tenant-b"},
+    )
+    chunk.embedding = [1.0, 0.0, 0.0, 0.0]
+    store.index([chunk])
+
+    results = store.retrieve_by_vector([1.0, 0.0, 0.0, 0.0], k=1)
+
+    assert results[0].chunk.tenant_id == "tenant-a"
+    assert store.retrieve_by_vector([1.0, 0.0, 0.0, 0.0], k=1, tenant_id="tenant-b") == []
+
+
+@pytest.mark.integration
 def test_retrieve_by_vector_with_tenant_id_excludes_other_tenants(store):
     """Lot 12b: query-time filtering follow-up to Lot 11b's tenant isolation
     — evaluated and implemented, not just left as an open question."""
