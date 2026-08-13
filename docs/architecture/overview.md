@@ -163,22 +163,33 @@ and **limits/constraints** (what it deliberately does not do today).
   `Retriever`, `Reranker`.
 - **Dependencies.** `adapters/` (owns the only permitted imports of `qdrant-client`, lazily) +
   `retrieval/` (pure fusion/orchestration logic, no external library imports of its own).
-- **Lifecycle.** This is the framework's **only plane with genuinely asymmetric persistence**,
-  and it is important enough to understand precisely: `QdrantStore` is backed by a real,
-  persistent server — data survives process restarts. `BM25Retriever` is an **in-memory Python
-  object** — its index is rebuilt from nothing every time a new process starts, and is lost when
-  the process holding it exits. `HybridRetriever` silently degrades to vector-only results when
-  its BM25 half has no data (see `HybridRetriever.retrieve()`'s `if not bm25_hits:` branch) —
-  this is why a fresh `mrag ask` CLI invocation after a separate `mrag ingest` process gets
-  vector-only results rather than an error: the degradation is deliberate and documented, not a
-  bug, but it is a real, user-visible consequence of this plane's storage model that a maintainer
-  must understand before "fixing" it by, say, making `HybridRetriever` raise instead of degrade.
+- **Lifecycle.** The lexical/BM25 leg's persistence is now selectable, not fixed — `HybridRetriever`'s
+  `retriever.config.lexical` manifest key picks between two backends:
+  `"bm25-memory"` (the default — `BM25Retriever`, an **in-memory Python object** whose index is
+  rebuilt from nothing every time a new process starts, lost when the process exits — the local
+  development preset's choice) and `"sparse-qdrant"` (`PersistentSparseRetriever`, backed by a
+  dedicated Qdrant sparse-vector collection via `adapters/vectorstores/qdrant_sparse_store.py`'s
+  `QdrantSparseStore` — a real, persistent server, same durability property as `QdrantStore`'s
+  dense collection; the enterprise/secure preset's choice). `HybridRetriever` silently degrades to
+  vector-only results when its lexical leg returns nothing (see `HybridRetriever.retrieve()`'s
+  `if not lexical_hits:` branch) and now also records *why* via `last_degraded_sources` (a genuine
+  backend failure vs. a legitimate empty result) — this is why a fresh `mrag ask` CLI invocation
+  after a separate `mrag ingest` process, on the `bm25-memory` default, gets vector-only results
+  rather than an error: the degradation is deliberate and documented, not a bug. A manifest that
+  needs the lexical leg to survive process boundaries should set
+  `lexical: sparse-qdrant` instead of working around the in-memory default.
 - **Extension points.** A new vector store implements `VectorIndexer` (see
   [ADR-0009](../adr/0009-vector-indexer-dimension-reconciliation.md) for the exact contract a
   dimension-aware store must satisfy). A new reranking strategy implements `Reranker`.
-- **Limits.** No built-in distributed/shared BM25 backend — a production deployment that needs
-  hybrid retrieval to survive across multiple worker processes must supply its own shared lexical
-  backend; this is a known, tracked gap (`docs/refactoring-plan.md` §2), not a hidden one.
+- **Limits.** `bm25-memory` (still the default, for zero-infrastructure local development) does not
+  survive process restarts or share state across workers — that limitation is inherent to it, not
+  a missing feature. A deployment that needs the lexical leg to survive those should select
+  `lexical: sparse-qdrant` (`manifests/presets/secure-enterprise-rag.yaml` does this) rather than
+  supplying its own external backend, which is no longer the only option. `sparse-qdrant` itself
+  requires Qdrant client and server **1.10+** (`Modifier.IDF`/`query_points()` are not present in
+  1.9). Not yet proven by this repo's own tests: persistence across an actual Qdrant server
+  restart and consistency across a real multi-node replica set (the existing tests use multiple
+  client connections against one single-node server, not a real restart/cluster).
 
 ### Reasoning plane
 

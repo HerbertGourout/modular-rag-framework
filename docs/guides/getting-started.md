@@ -74,10 +74,13 @@ mrag ask "What are the main findings in the Q3 report?" \
          --manifest manifests/presets/local-hybrid-rag.yaml
 ```
 
-Because this is a new process, its BM25 index starts empty and `HybridRetriever` falls back to
-the persistent Qdrant/vector side. This is supported, but it is not a full hybrid query. Use the
-single-process example above for hybrid behavior, or replace BM25 with a shared lexical backend
-before deploying multiple workers.
+Because this is a new process and `local-hybrid-rag.yaml` uses the default `lexical: bm25-memory`
+backend, its BM25 index starts empty and `HybridRetriever` falls back to the persistent
+Qdrant/vector side. This is supported, but it is not a full hybrid query. Use the single-process
+example above for hybrid behavior, or select `lexical: sparse-qdrant` in the manifest before
+deploying multiple workers — a built-in persistent lexical backend, not something you need to
+supply yourself (see `manifests/presets/secure-enterprise-rag.yaml`, requires Qdrant client/server
+1.10+).
 
 Typical output:
 

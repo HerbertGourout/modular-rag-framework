@@ -69,13 +69,19 @@ selected external engine instead.
 ## Running Qdrant locally (V1)
 
 Qdrant is the default vector store for V1 — it holds the dense embeddings that power the
-"vector" half of hybrid retrieval (the BM25 half is an in-memory index that needs no
-service). Unlike the framework's Python code, Qdrant is an external service that must be
-running before you ingest or query anything; forgetting this step is the most common reason
-`mrag ingest` fails on a first run. Start it with Docker:
+"vector" half of hybrid retrieval. The lexical half's service requirement depends on which
+backend the manifest's `retriever.config.lexical` key selects: `"bm25-memory"` (the local preset's
+default) is an in-memory index that needs no service; `"sparse-qdrant"` (the enterprise/secure
+preset's choice — see `manifests/presets/secure-enterprise-rag.yaml`) is a second, dedicated Qdrant
+collection on the *same* Qdrant server, requiring client and server version **1.10+**
+(`Modifier.IDF`/`query_points()` are not present in Qdrant client 1.9). Unlike the framework's
+Python code, Qdrant is an external service that must be running before you ingest or query
+anything; forgetting this step is the most common reason `mrag ingest` fails on a first run.
+Start it with Docker (pin a version instead of `latest` in any deployment that needs
+`sparse-qdrant`'s IDF support — `latest` is fine for `bm25-memory`-only local development):
 
 ```bash
-docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant
+docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant:v1.10.0
 ```
 
 Or add it to a `docker-compose.yml`:

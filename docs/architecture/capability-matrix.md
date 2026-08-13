@@ -32,7 +32,7 @@ Built-in manifest factories, current as of this update:
 | `chunker` | `fixed`, `adaptive` |
 | `embedder` | `sentence-transformers`, `openai-embeddings`, `deterministic` |
 | `indexer` | `qdrant` |
-| `retriever` | `vector`, `hybrid` |
+| `retriever` | `vector`, `hybrid`, `sparse-qdrant` |
 | `reranker` | `cross-encoder` |
 | `generator` | `openai`, `anthropic`, `deterministic` |
 | `guard` | `basic` |

@@ -22,8 +22,9 @@ these for real, treat it as the actual verification exercise, and record what ha
 |---|---|---|---|
 | Lifecycle ledger | Document identity, content hash, chunk ids, status (ingested/tombstoned) — **never chunk content** | `ingestion/lifecycle/backup.py`'s `backup_ledger()`/`restore_ledger()` (portable JSON, any `LifecycleLedger` implementation) **or** Postgres-native `pg_dump`/`pg_restore` on the `document_lifecycle` table, if using `PostgresLifecycleLedger` | This framework (JSON path) / PostgreSQL (native path) |
 | Audit trail | Compliance evidence (`AuditEvent`s) — append-only | Postgres-native `pg_dump`/`pg_restore` on the `audit_events` table, if using `PostgresAuditSink` | PostgreSQL |
-| Vector index | Chunk embeddings + payload (including `tenant_id`, Lot 12b) | Qdrant-native snapshot API | Qdrant |
-| Lexical index (BM25) | In-memory only, rebuilt from ingestion — **not backed up** | Re-`ingest()` from source, or `rebuild_document()` | This framework |
+| Vector index (dense) | Chunk embeddings + payload (including `tenant_id`, Lot 12b) | Qdrant-native snapshot API, against `indexer.config.collection` | Qdrant |
+| Lexical index — `bm25-memory` (default, e.g. `local-hybrid-rag.yaml`) | In-memory only, rebuilt from ingestion — **not backed up** | Re-`ingest()` from source, or `rebuild_document()` | This framework |
+| Lexical index — `sparse-qdrant` (durable manifests, e.g. `secure-enterprise-rag.yaml`) | Sparse term-frequency vectors + payload (including `tenant_id`), in a **second, dedicated Qdrant collection** (`retriever.config.sparse_collection`, separate from the dense `indexer.config.collection` — see `adapters/vectorstores/qdrant_sparse_store.py`'s module docstring for why they're kept apart) | Qdrant-native snapshot API, against that second collection — same mechanism as the vector index, different collection name | Qdrant |
 | Source documents | The actual content everything else derives from | Whatever your own document store/object storage already does — out of this framework's scope | You |
 
 The one fact every procedure below depends on: **losing the ledger or the vector index is
@@ -128,6 +129,46 @@ After a vector-index restore, run `IndexReconciler.check()` (Lot 12b,
 detect drift introduced by the snapshot's point-in-time gap (documents ingested after the
 snapshot but before the incident), then `rebuild_document()` (Lot 12c) for anything the
 reconciler flags as `unresolved_missing`.
+
+---
+
+## Sparse lexical index (Qdrant, `sparse-qdrant` manifests only)
+
+Only applies to a manifest whose `retriever.config.lexical` is `sparse-qdrant`
+(`secure-enterprise-rag.yaml`, not the `bm25-memory`-default `local-hybrid-rag.yaml`). Same
+mechanism as the vector index above — a **separate** Qdrant collection, named by
+`retriever.config.sparse_collection` (`enterprise_docs_sparse` for the shipped enterprise
+preset), not `indexer.config.collection`:
+
+```bash
+# Create a snapshot
+curl -X POST "http://localhost:6333/collections/enterprise_docs_sparse/snapshots"
+
+# List snapshots
+curl "http://localhost:6333/collections/enterprise_docs_sparse/snapshots"
+
+# Download a snapshot (SNAPSHOT_NAME from the list above)
+curl -o enterprise_docs_sparse.snapshot \
+     "http://localhost:6333/collections/enterprise_docs_sparse/snapshots/SNAPSHOT_NAME"
+
+# Restore into a (new or the same) collection
+curl -X PUT "http://localhost:6333/collections/enterprise_docs_sparse/snapshots/upload" \
+     -H "Content-Type: multipart/form-data" \
+     -F "snapshot=@enterprise_docs_sparse.snapshot"
+```
+
+**Consistency with the dense collection and the ledger — read before relying on this**: the two
+Qdrant collections are independent stores with no shared transaction, so a snapshot of one taken
+at a different instant than the other (or than the ledger) can restore a state where a chunk id
+exists on one side with different content than the other — `IndexReconciler.check()` cannot
+detect this specific case (see its own docstring: it only compares *which ids are present*
+against the ledger's `chunk_ids`, never content or a version/hash, so two present-but-diverged
+copies of the same id look clean to it). Take both collections' snapshots as close together in
+time as practical, and treat any suspected content-level drift as a case for
+`rebuild_document()` (which re-indexes both sides from source, overwriting whatever was there)
+rather than trusting the reconciler to flag it. After restoring **either** collection, still run
+`IndexReconciler.check()` for the id-presence class of drift it *does* catch (orphaned/missing
+ids from the snapshot's point-in-time gap), then `rebuild_document()` for anything flagged.
 
 ---
 

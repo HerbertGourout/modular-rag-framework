@@ -151,7 +151,7 @@ A `RetrievedChunk` wraps a `Chunk` with retrieval metadata: how it was found, wh
 | `chunk` | `Chunk` | required | The chunk that was retrieved |
 | `score` | `float` | required | Relevance score (0.0–1.0 after normalisation, or RRF score) |
 | `rank` | `int` | required | 1-based rank after fusion and/or reranking |
-| `retrieval_method` | `RetrievalMethod` | `HYBRID` | How this chunk was found: `vector`, `bm25`, or `hybrid` — `graph` and `multimodal` were removed from this enum (Étape 8 cleanup, 2026-08-07): both described delegated capabilities (ADR-0005 §5.2) with zero producing code and zero consumers, so they were dropped rather than kept as unreachable enum values. Restorable via git history if a native graph/multimodal retriever is ever built. |
+| `retrieval_method` | `RetrievalMethod` | `HYBRID` | How this chunk was found: `vector`, `bm25`, `sparse` (persistent Qdrant-backed lexical retrieval, `PersistentSparseRetriever` — added alongside `bm25` because it has a real producer and a real consumer, unlike the two removed below), or `hybrid` — `graph` and `multimodal` were removed from this enum (Étape 8 cleanup, 2026-08-07): both described delegated capabilities (ADR-0005 §5.2) with zero producing code and zero consumers, so they were dropped rather than kept as unreachable enum values. Restorable via git history if a native graph/multimodal retriever is ever built. |
 
 **Invariants**
 - `frozen=True` — scores and ranks must not be changed after retrieval.
@@ -433,12 +433,12 @@ flowchart TD
     DocE -->|"Chunker.chunk(doc)"| Chunks["list[Chunk]\n(embedding=None)"]
     Chunks -->|"TenantPolicy.enforce_ingest(chunk.tenant_id)\nper chunk, fail-closed, only if tenant_policy wired"| TenantGate{"OK?"}
     TenantGate -->|"Embedder.embed([chunk.content])\nONE CHUNK AT A TIME — not a single\nbatched call for the whole document,\nsee overview.md §10"| ChunksV["list[Chunk]\n(embedding filled in-place)"]
-    ChunksV -->|"Indexer.index(chunks)"| Store[("Qdrant + BM25 index")]
+    ChunksV -->|"Indexer.index(chunks)"| Store[("Qdrant dense +\nlexical (BM25 in-memory, or a\nsecond Qdrant collection\nvia sparse-qdrant)")]
 
     subgraph QT["Query time"]
         Query["Query (frozen)"] -->|"TenantPolicy.enforce_query\n(fail-closed, only if tenant_policy wired)"| TQ{"OK?"}
         TQ -->|"SecurityGuard.check_query"| Guard1{GuardResult}
-        Guard1 -->|allowed| Retrieve["Retriever.retrieve(query, k=20)\nvector + BM25 fused via RRF"]
+        Guard1 -->|allowed| Retrieve["Retriever.retrieve(query, k=20)\nvector + lexical fused via RRF"]
         Store --> Retrieve
         Retrieve -->|"TenantPolicy.filter_chunks\n(only if tenant_policy wired)"| TF["list[RetrievedChunk]\n(tenant-scoped)"]
         TF -->|"list[RetrievedChunk]"| Rerank["Reranker.rerank(query, chunks, k=5)"]
