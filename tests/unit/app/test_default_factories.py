@@ -13,6 +13,7 @@ import pytest
 
 from modular_rag.app.default_factories import (
     _build_hybrid_retriever,
+    _build_postgres_audit_sink,
     _build_sparse_qdrant_retriever,
     create_default_registry,
 )
@@ -212,3 +213,39 @@ def test_standalone_sparse_qdrant_retriever_survives_registry_wire_alongside_a_q
     assert store is not container.indexer  # not clobbered by post-wiring injection
     assert store._collection == "sparse_docs"
     assert hasattr(store, "retrieve_by_text")
+
+
+# ---------------------------------------------------------------------------
+# ADR-0011 (PostgreSQL migrations, connection pooling, and audit retention).
+# Codex review, remaining-risks item (post-implementation).
+# ---------------------------------------------------------------------------
+
+
+def test_postgres_audit_sink_factory_never_forwards_allow_purge_from_manifest_config():
+    """ADR-0011 claims "the manifest-wired instance used by the live
+    application never sets allow_purge=True" — that was previously true
+    only by accident (no shipped manifest happens to set it), not because
+    the wiring path structurally prevented it: `lambda cfg:
+    PostgresAuditSink(**cfg.config)` would forward `allow_purge` from any
+    manifest that set it. This factory must strip it unconditionally."""
+    sink = _build_postgres_audit_sink(
+        ComponentConfig(
+            type="postgres",
+            config={"dsn": "postgresql://unused/unused", "allow_purge": True},
+        )
+    )
+
+    assert sink._allow_purge is False
+
+
+def test_postgres_audit_sink_factory_still_forwards_every_other_config_key():
+    sink = _build_postgres_audit_sink(
+        ComponentConfig(
+            type="postgres",
+            config={"dsn": "postgresql://unused/unused", "min_size": 2, "max_size": 5},
+        )
+    )
+
+    assert sink._dsn == "postgresql://unused/unused"
+    assert sink._min_size == 2
+    assert sink._max_size == 5

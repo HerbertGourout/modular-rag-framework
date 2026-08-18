@@ -1,0 +1,17 @@
+-- ADR-0011 (PostgreSQL migrations, pooling, and retention). New, not part of
+-- the original inline `_DDL`: a plain index on "timestamp" itself, useful
+-- for time-range queries against this column directly (e.g. an operator's
+-- `WHERE "timestamp" BETWEEN ... AND ...` audit lookup).
+--
+-- Codex review MEDIUM-003 (post-implementation): this migration's comment
+-- previously claimed this index also covers the retention predicate
+-- (`"timestamp" + make_interval(days => retention_days) < now`) — it does
+-- not. That expression's value differs per row (retention_days varies row
+-- to row), so PostgreSQL cannot use a static index on the bare "timestamp"
+-- column as a sargable bound for it; `count_expired()`/`purge_expired()`
+-- were still doing a full table scan despite this index existing. Corrected
+-- here without changing the SQL itself (already-shipped migrations are not
+-- edited in place — see the "no checksum verification yet" limitation in
+-- docs/adr/0011-postgresql-migrations-pooling-and-retention.md); the actual
+-- fix is 0004's generated `expires_at` column and its own real index.
+CREATE INDEX IF NOT EXISTS idx_audit_events_timestamp ON audit_events ("timestamp");

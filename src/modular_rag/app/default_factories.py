@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from modular_rag.orchestration.registry import ComponentRegistry
 
 if TYPE_CHECKING:
+    from modular_rag.adapters.audit.postgres_sink import PostgresAuditSink
     from modular_rag.contracts.manifests import ComponentConfig
     from modular_rag.retrieval.retrievers.hybrid import HybridRetriever
     from modular_rag.retrieval.retrievers.sparse import PersistentSparseRetriever
@@ -85,8 +86,30 @@ def _build_sparse_qdrant_retriever(cfg: ComponentConfig) -> PersistentSparseRetr
     return PersistentSparseRetriever(store=QdrantSparseStore(**cfg.config))
 
 
-def register_defaults(reg: ComponentRegistry) -> None:
+def _build_postgres_audit_sink(cfg: ComponentConfig) -> PostgresAuditSink:
+    """Codex review, remaining-risks item (post-implementation, ADR-0011):
+    a plain `lambda cfg: PostgresAuditSink(**cfg.config)` would forward
+    *any* key a manifest's `audit_sink.config` block happened to contain —
+    including `allow_purge`, contradicting ADR-0011's own claim that "the
+    manifest-wired instance used by the live application never sets
+    `allow_purge=True`." That claim was true only because no shipped
+    manifest happens to set it today, not because the wiring path
+    structurally prevented it. `allow_purge` is popped unconditionally
+    here, before construction, so a manifest can never grant purge rights
+    to the request-serving instance regardless of what its `config:` block
+    contains — `purge_expired()` stays reachable only through a
+    CLI-constructed instance (`mrag audit purge --dsn ...`, never
+    `--manifest`), the property this ADR's security design actually
+    depends on.
+    """
     from modular_rag.adapters.audit.postgres_sink import PostgresAuditSink
+
+    config = dict(cfg.config)
+    config.pop("allow_purge", None)
+    return PostgresAuditSink(**config)
+
+
+def register_defaults(reg: ComponentRegistry) -> None:
     from modular_rag.adapters.embeddings.deterministic_embedder import DeterministicEmbedder
     from modular_rag.adapters.embeddings.hf_embedder import HuggingFaceEmbedder
     from modular_rag.adapters.embeddings.openai_embedder import OpenAIEmbedder
@@ -134,7 +157,7 @@ def register_defaults(reg: ComponentRegistry) -> None:
     reg.register("redactor", "patterns", lambda cfg: PatternRedactor())
     reg.register("review_queue", "human-review", lambda cfg: HumanReviewGate(**cfg.config))
     reg.register("audit_sink", "in-memory", lambda cfg: InMemoryAuditSink())
-    reg.register("audit_sink", "postgres", lambda cfg: PostgresAuditSink(**cfg.config))
+    reg.register("audit_sink", "postgres", _build_postgres_audit_sink)
     reg.register("telemetry", "structlog", lambda cfg: StructlogTelemetry())
     reg.register("telemetry", "null", lambda cfg: NullTelemetry())
     reg.register("lifecycle_ledger", "in-memory", lambda cfg: InMemoryLifecycleLedger())

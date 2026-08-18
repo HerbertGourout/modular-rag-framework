@@ -259,9 +259,16 @@ See [ROADMAP.md](ROADMAP.md) for complete timeline and success criteria per vers
 
 **V1.2 — Compliance Audit Trail** 🟡 (partially built)
 - Implemented: structured `AuditEvent`/`AuditSink`, in-memory and append-only PostgreSQL sinks,
-  query/run audit emission, and pattern redaction.
-- Not built: end-to-end data-lineage tracking, formatted GDPR/CCPA/HIPAA report generation,
-  retention enforcement, or proof that every possible log/export is free of unredacted PII.
+  query/run audit emission, pattern redaction, and — since
+  [ADR-0011](docs/adr/0011-postgresql-migrations-pooling-and-retention.md) — enforceable retention
+  (`PostgresAuditSink.purge_expired()`/`count_expired()`, `mrag audit purge`/`count-expired`,
+  gated behind a fail-closed `allow_purge` flag) plus DB-permission-level append-only guidance
+  (`docs/guides/postgres-permissions.md`).
+- Not built: end-to-end data-lineage tracking, formatted GDPR/CCPA/HIPAA report generation, proof
+  that every possible log/export is free of unredacted PII, per-tenant retention (`retention_days`
+  is never set to anything but its `365` default anywhere in this codebase today), or a scheduled/
+  in-process trigger for the purge CLI (an operator or external cron must invoke it — V1 has no
+  scheduler component).
 
 ---
 

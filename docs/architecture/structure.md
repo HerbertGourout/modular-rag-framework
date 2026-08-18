@@ -72,7 +72,7 @@ Central project configuration. Replaces `setup.py` + `setup.cfg`.
 | `v4` | `pip install -e ".[v4]"` | opentelemetry-sdk/api/exporter-otlp (not yet wired into any code — V4 not reached) |
 | `v5` | `pip install -e ".[v5]"` | pymupdf, pillow, pytesseract (not yet wired into any code — V5 not reached) |
 | `langgraph` | `pip install -e ".[langgraph]"` | `langgraph` itself — the external `DocumentEngine` adapter (`adapters/llms/langgraph_engine.py`, ADR-0006, Lot 15). The default native adapter needs none of this; only manifests with `engine.adapter: langgraph` do |
-| `postgres` | `pip install -e ".[postgres]"` | `psycopg[binary]` — durable audit sink and lifecycle ledger implementations (`adapters/audit/postgres_sink.py`, `adapters/lifecycle/postgres_ledger.py`), selected by `secure-enterprise-rag.yaml` |
+| `postgres` | `pip install -e ".[postgres]"` | `psycopg[binary,pool]` (ADR-0011 — the `pool` extra pulls in the separate `psycopg-pool` package) — durable audit sink and lifecycle ledger implementations (`adapters/audit/postgres_sink.py`, `adapters/lifecycle/postgres_ledger.py`), plus the shared migration runner (`adapters/postgres/migrations.py`), selected by `secure-enterprise-rag.yaml` |
 | `auth` | `pip install -e ".[auth]"` | `pyjwt[crypto]` — OIDC/JWKS verification for `adapters/auth/keycloak_verifier.py`, used by authenticated API deployments |
 | `supply-chain` | `pip install -e ".[supply-chain]"` | pip-audit, pip-licenses, cyclonedx-bom — CI supply-chain tooling (`scripts/check_licenses.py`, Lot 16b), not needed to run the framework itself |
 | `dev` | `pip install -e ".[dev]"` | pytest, pytest-asyncio, pytest-cov, mypy, ruff, httpx, respx, build |
@@ -379,16 +379,35 @@ placeholder.
 
 #### `adapters/audit/`
 
-**`postgres_sink.py` → `PostgresAuditSink`**: implements `AuditSink`. Lazy import of `psycopg`.
-Durable, append-only audit-event storage — the production counterpart to
+**`postgres_sink.py` → `PostgresAuditSink`**: implements `AuditSink`. Lazy import of `psycopg`/
+`psycopg_pool`. Durable, append-only audit-event storage — the production counterpart to
 `InMemoryAuditSink` (`security/audit/store.py`, see below), selected by
-`secure-enterprise-rag.yaml`.
+`secure-enterprise-rag.yaml`. Since ADR-0011: connection pooling (`psycopg_pool.ConnectionPool`,
+replacing a single cached connection), `purge_expired()`/`count_expired()` for
+`AuditEvent.retention_days` enforcement (fail-closed behind an `allow_purge` constructor flag —
+see `docs/guides/postgres-permissions.md` for the DB-role separation this pairs with), and an
+opt-in `auto_migrate` flag routing through `adapters/postgres/migrations.py` instead of the
+inline schema-creation this adapter used to run unconditionally on every connect.
 
 #### `adapters/lifecycle/`
 
 **`postgres_ledger.py` → the Postgres-backed `LifecycleLedger`**: implements `LifecycleLedger`.
 Durable counterpart to `ingestion/lifecycle/in_memory_ledger.py`'s `InMemoryLifecycleLedger`,
-tracking document re-ingestion idempotency (Lot 12a) across process restarts.
+tracking document re-ingestion idempotency (Lot 12a) across process restarts. Since ADR-0011:
+the same connection-pooling and `auto_migrate` changes as `postgres_sink.py` above.
+
+#### `adapters/postgres/`
+
+**`migrations.py` → `MigrationRunner`** (ADR-0011): a shared, non-adapter infrastructure helper
+(no Protocol — same "operates on already-Protocol'd things" reasoning as
+`orchestration/reconciliation.py`'s `IndexReconciler`) both Postgres adapters above import for
+schema management. `.migrate()`/`.rollback()`/`.applied_versions()` against a `schema_migrations`
+tracking table it creates and owns; a `pg_advisory_xact_lock` on a dedicated, non-autocommit
+connection guards concurrent callers. The paired `.up.sql`/`.down.sql` migration files live in
+`sql/` inside this same subpackage (not a repo-root `migrations/` directory — that would not ship
+in the built wheel), resolved via `importlib.resources` so this works identically from a dev
+checkout and an installed package. Exposed via `mrag db migrate`/`rollback`/`status`
+(`--dsn`, never `--manifest` — see `docs/guides/postgres-permissions.md`'s `migration_role`).
 
 #### `adapters/graphstores/`, `adapters/search/`
 
@@ -788,7 +807,26 @@ Commands:
 - `mrag ask "<question>" --manifest <yaml> [--tenant-id <id>]`: loads the pipeline, asks the
   question, prints the answer + citations with scores. Same fail-closed identity requirement, on
   the query side.
+- `mrag validate <manifest>`: schema + capability checks only, no wiring/instantiation (Lot 9).
+- `mrag manifest-schema`: prints `PipelineManifest`'s JSON Schema.
+- `mrag reconcile --manifest <yaml> [--mode check|repair]` (ADR-0011): wraps
+  `orchestration.reconciliation.IndexReconciler` — `check` reports ledger-vs-store divergence,
+  `repair` additionally deletes orphaned ids. Uses `--manifest` like the commands above (real
+  request-path components, not a direct DB connection).
+- `mrag db migrate|rollback|status --dsn <dsn> [--target <version>] [--steps <n>]` (ADR-0011):
+  wraps `adapters.postgres.migrations.MigrationRunner`. `--dsn`, never `--manifest` — needs a
+  schema-owning (`CREATE`-capable) role the application's own runtime role should never hold
+  (`docs/guides/postgres-permissions.md`).
+- `mrag audit purge|count-expired --dsn <dsn>` (ADR-0011): wraps
+  `PostgresAuditSink.purge_expired()`/`count_expired()`. `--dsn`, never `--manifest` — `purge`
+  needs the separate `retention_role` (`DELETE` on `audit_events`), which the manifest's own
+  `audit_sink:` DSN should never grant.
 - `mrag version`: prints `__version__`.
+
+`reconcile`, `db`, and `audit` route through `app/postgres_admin.py`/`app/application.py`'s
+public facades (`app/public.py`), never importing `adapters/` directly — `scripts/
+check_layering.py --strict` enforces that `cli/`/`api/` may only import `app/` or their own
+interface package.
 
 The CLI has no `TokenVerifier` concept — `--tenant-id` is an operator-supplied flag trusted at
 face value, the same local-trust model as any other CLI argument, not a verified identity (see
@@ -859,8 +897,11 @@ isolation. `VectorRetriever` and `HybridRetriever` remain excluded from contract
 require a live Qdrant — those are covered under `tests/integration/` instead.
 
 **`tests/integration/`** is not empty: `test_vector_retriever.py`, `test_qdrant_store.py`,
-`test_postgres_audit_sink.py`, and `test_postgres_lifecycle_ledger.py` all require real backing
-services (Qdrant, and for the Postgres-backed pair, PostgreSQL).
+`test_postgres_audit_sink.py`, `test_postgres_lifecycle_ledger.py`, and (ADR-0011)
+`test_postgres_migrations.py` all require real backing services (Qdrant, and for the
+Postgres-backed ones, PostgreSQL) — none run in CI today (no Postgres/Qdrant service container is
+configured in `.github/workflows/ci.yml`), written and reviewed but not executed in this
+sandboxed environment either.
 
 **`tests/e2e/`** is not empty either: `test_simple_qa_pipeline.py` (needs a real LLM key) and
 `test_secure_preset_e2e.py` (13 tests over the secure, tenant-isolated preset — needs Qdrant and

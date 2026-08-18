@@ -11,6 +11,7 @@ from modular_rag.contracts.audit import AuditEvent, AuditEventType
 from modular_rag.contracts.chunking import Chunker
 from modular_rag.contracts.erasure import ErasureProof
 from modular_rag.contracts.lifecycle import DocumentStatus
+from modular_rag.contracts.reconciliation import ReconciliationReport, RepairResult
 from modular_rag.contracts.retrieval import Retriever
 from modular_rag.contracts.review import ReviewItem
 from modular_rag.core.document_identity import content_hash, document_key
@@ -22,6 +23,7 @@ from modular_rag.core.models.query import Query
 from modular_rag.core.models.retrieved import RetrievedChunk
 from modular_rag.core.models.trace import Trace, TraceStep
 from modular_rag.orchestration.container import Container
+from modular_rag.orchestration.reconciliation import IndexReconciler
 from modular_rag.orchestration.state_machine import PipelineState, PipelineStateMachine
 
 log = structlog.get_logger(__name__)
@@ -62,6 +64,20 @@ class RAGEngine:
         actual probing and criticality logic — this is a one-line
         delegation, same pattern as `close()` above."""
         return self._c.check_readiness()
+
+    def check_index_reconciliation(self) -> ReconciliationReport:
+        """ADR-0011 (PostgreSQL migrations, connection pooling, and audit
+        retention) — exposes `orchestration.reconciliation.IndexReconciler`
+        to the CLI (`mrag reconcile --mode check`) without letting it reach
+        into the private `_c` container directly, same "public accessor"
+        rule `manifest_id`/`check_readiness()` above already follow (Lot 8)."""
+        return IndexReconciler(self._c).check()
+
+    def repair_index_reconciliation(self, report: ReconciliationReport) -> RepairResult:
+        """See `check_index_reconciliation()` — the `--mode repair` half of
+        the same CLI command, taking the report `check_index_reconciliation()`
+        already produced rather than re-running the check."""
+        return IndexReconciler(self._c).repair(report)
 
     @property
     def chunker(self) -> Chunker:

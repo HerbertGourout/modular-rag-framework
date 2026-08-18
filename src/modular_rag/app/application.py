@@ -13,6 +13,7 @@ from modular_rag.orchestration.engine import RAGEngine
 if TYPE_CHECKING:
     from modular_rag.contracts.chunking import Chunker
     from modular_rag.contracts.engine import DocumentEngine
+    from modular_rag.contracts.reconciliation import ReconciliationReport, RepairResult
     from modular_rag.core.models.chunk import Chunk
     from modular_rag.core.models.health import ReadinessReport
     from modular_rag.core.models.retrieved import RetrievedChunk
@@ -105,3 +106,12 @@ class ApplicationService:
         external dependencies (Qdrant, PostgreSQL), not about which engine
         orchestrates a query."""
         return self._native.check_readiness()
+
+    def check_index_reconciliation(self) -> ReconciliationReport:
+        """ADR-0011 — one-line delegation, same pattern as `check_readiness()`
+        above."""
+        return self._native.check_index_reconciliation()
+
+    def repair_index_reconciliation(self, report: ReconciliationReport) -> RepairResult:
+        """See `check_index_reconciliation()`."""
+        return self._native.repair_index_reconciliation(report)
