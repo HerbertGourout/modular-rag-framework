@@ -117,3 +117,12 @@ def test_aembed_matches_embed():
 
 def test_name_is_stable_identifier():
     assert DeterministicEmbedder().name() == "deterministic"
+
+
+def test_known_dimensions_matches_dimensions():
+    """Codex review HIGH-002 (Lot 6, fifth pass): `known_dimensions()` is
+    the cheap-only variant of `.dimensions` a readiness probe calls —
+    always free here already (no model, no network)."""
+    embedder = DeterministicEmbedder(dimensions=32)
+
+    assert embedder.known_dimensions() == embedder.dimensions == 32

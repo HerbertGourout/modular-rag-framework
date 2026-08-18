@@ -36,6 +36,7 @@ Base URL: `http://localhost:8000`
 | `token_verifier` | `None` | A `contracts.identity.TokenVerifier` (e.g. `adapters.auth.keycloak_verifier.KeycloakTokenVerifier`, Lot 11b). When set, `/answer` and `/retrieve` require a valid `Authorization: Bearer <token>` header. `None` leaves every route open **only if the loaded manifest has no `governance.tenant_policy` wired** — dev/local use, matching every other optional-component precedent in this codebase (guard, redactor, tenant_policy). **A manifest that wires a `tenant_policy` makes this parameter mandatory: `create_app()` raises `ConfigurationError` at startup instead of leaving the API unauthenticated (Lot 1, tenant fail-closed)** — the service refuses to start rather than silently exposing tenant-isolated data. |
 | `max_body_bytes` | `1_000_000` (1 MB) | Requests with a `Content-Length` over this are rejected `413` before the body is read. |
 | `rate_limit_per_minute` | `60` | Per-client (by `X-Forwarded-For` or socket address) fixed-window request limit; over it returns `429` with a `Retry-After` header. In-memory, single-process — not shared across horizontally-scaled replicas; a Redis-backed limiter is the production upgrade path if this API is ever deployed with more than one worker. |
+| `max_concurrent_requests` | `30` (Lot 6) | Caps requests being processed *at the same instant* via a `threading.Semaphore`; over it returns `503` immediately (no queuing). Kept below anyio's own 40-token thread limiter for sync (`def`) routes — see `api/__init__.py`'s module comment — so this limit is the one that actually binds. Same in-memory, single-process scoping as `rate_limit_per_minute`. |
 
 ```python
 from modular_rag.api import create_app
@@ -71,20 +72,59 @@ orchestrator's own liveness probe must never trip either.
 
 ### `GET /ready`
 
-Readiness probe (Lot 16a). Today this reports the same thing `/health` does — confirmation that
-`create_app()` completed wiring successfully. It does **not** probe live connectivity to the
-vector store or LLM provider; that would need a per-adapter health-check contract this lot did
-not add. Recorded honestly here rather than implied by the route name. Also exempt from
-body-size and rate-limit middleware, for the same reason as `/health`.
+Readiness probe (Lot 6, "readiness and resilience" — superseding the Lot 16a stub that only
+confirmed wiring succeeded). Actually probes every registered component that implements
+`contracts.health.HealthCheckable` (`QdrantStore`, `QdrantSparseStore`, `PostgresLifecycleLedger`,
+`PostgresAuditSink`, the wired retriever's lexical leg, and the configured `generator`) and
+aggregates the result. Exempt from authentication, body-size, rate-limit, and concurrency-limit
+middleware — an orchestrator's own readiness probe must never be blocked by any of them.
+
+**Status values** (`core.enums.ReadinessState`):
+
+| `status` | HTTP code | Meaning |
+|---|---|---|
+| `healthy` | 200 | Every probed dependency is reachable. |
+| `degraded` | 200 | At least one non-critical dependency is unhealthy, but the pipeline can still serve — e.g. the sparse leg of a hybrid retriever is down but the dense leg still works, or vice versa. Still 200 so the orchestrator keeps routing traffic. |
+| `unready` | **503** | A critical dependency is unhealthy: `audit_sink` (when wired — every `/answer` call fails without it, see `RAGEngine._audit()`), `generator` (always — no fallback exists for a failed `generate()` call either), or **both** the dense (`indexer`) and lexical (`retriever`) retrieval legs simultaneously (no usable retrieval capacity left — the `secure-enterprise-rag` preset's dense and sparse legs share one Qdrant server, so a Qdrant outage takes down both at once). |
+
+**Generator probing**: `OpenAIGenerator`/`AnthropicGenerator.check_health()` make a real,
+authenticated, non-generative call against the *specific configured model* —
+`client.models.retrieve(self.model)`, no completion/token cost — so a revoked, malformed,
+expired, or over-quota key, or a misspelled/retired/inaccessible model, is caught the same way a
+real `/answer` call would catch it. The call goes through a per-probe view of the client
+(`client.with_options(timeout=5.0, max_retries=0)`), never the shared production client — the
+probe is a single short attempt, not the 30s timeout and SDK-default 2 retries a real generation
+call uses. Cached for 30s (per generator instance, lock-guarded so a cache-miss under concurrent
+`/ready` calls triggers only one real provider request) so the unauthenticated, rate-limit-exempt
+`/ready` route can't be used to hammer the provider's own API. Residual limitation: this validates
+retrieving the model's metadata, not the specific chat/completion endpoint a real request uses —
+narrower than a full end-to-end check, but well beyond a bare credential-presence check. See
+[ADR-0010](../adr/0010-health-checkable-and-readiness-semantics.md) for the full rationale.
 
 **Response**
 
 ```json
 {
-  "status": "ready",
-  "pipeline": "local-hybrid-rag"
+  "status": "degraded",
+  "pipeline": "local-hybrid-rag",
+  "dependencies": [
+    {
+      "name": "qdrant",
+      "healthy": false,
+      "detail": "unreachable (a1b2c3d4)",
+      "latency_ms": 5002.3,
+      "role": "indexer"
+    }
+  ]
 }
 ```
+
+`dependencies[].detail` is intentionally **not** the raw exception message — `/ready` is
+unauthenticated, so a raw message (which can embed hostnames, database/collection names, or a
+third-party SDK's own error text) would leak on an anonymous request. It's one of a small set of
+stable codes (`timeout`, `unreachable`, `circuit open`, `busy`) plus a short correlation id; the
+full exception is logged server-side (structured, `dependency_check_failed`) keyed by that same
+id for an operator to join the two.
 
 ---
 

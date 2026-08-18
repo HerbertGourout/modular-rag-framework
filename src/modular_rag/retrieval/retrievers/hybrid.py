@@ -6,6 +6,7 @@ import structlog
 
 from modular_rag.core.enums import RetrievalMethod
 from modular_rag.core.models.chunk import Chunk
+from modular_rag.core.models.health import DependencyHealth
 from modular_rag.core.models.query import Query
 from modular_rag.core.models.retrieved import RetrievedChunk
 from modular_rag.retrieval.fusion.rrf import reciprocal_rank_fusion
@@ -99,6 +100,21 @@ class HybridRetriever:
         close = getattr(self._lexical, "close", None)
         if close is not None:
             close()
+
+    def check_health(self) -> list[DependencyHealth]:
+        """Implements `contracts.health.HealthCheckable` (Lot 6 — readiness
+        and resilience). Delegates *only* to the lexical leg, not the
+        vector leg (observability-expert finding: `self._vector`'s
+        underlying `QdrantStore` is the exact same object already reachable
+        and checked directly via `Container.indexer` — delegating here too
+        would report it twice under two different role names). Duck-typed,
+        matching `close()` above: `BM25Retriever` has no `check_health()`
+        (nothing external to check), so a manifest on the `bm25-memory`
+        default correctly reports nothing for this leg."""
+        check_health = getattr(self._lexical, "check_health", None)
+        if check_health is None:
+            return []
+        return check_health()  # type: ignore[no-any-return]
 
     def index(self, chunks: list[Chunk]) -> int:
         """Feed the active lexical backend (Lot 5). Closes the gap that

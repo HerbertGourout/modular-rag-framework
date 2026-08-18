@@ -64,6 +64,20 @@ class HuggingFaceEmbedder:
         model = self._get_model()
         return int(model.get_sentence_embedding_dimension())
 
+    def known_dimensions(self) -> int | None:
+        """Codex review HIGH-002 (Lot 6, fifth pass): a cheap-only variant
+        of `.dimensions` that never calls `_get_model()` — returns `None`
+        rather than downloading/loading a model for a name outside
+        `_DIMENSIONS`'s static table. `QdrantStore.check_health()` duck-types
+        this (`getattr(embedder, "known_dimensions", None)`) so a readiness
+        probe can never reach the loading branch `.dimensions` itself still
+        has for real `generate()`/`embed()` use — a probe against a custom,
+        unrecognized model name previously had no timeout, no lock against
+        concurrent probes each starting their own redundant download, and
+        could block pod startup entirely on a slow/unavailable model
+        registry even though Qdrant itself was healthy."""
+        return self._DIMENSIONS.get(self._model_name)
+
     def name(self) -> str:
         return f"hf-{self._model_name.split('/')[-1]}"
 

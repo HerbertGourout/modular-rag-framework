@@ -1,15 +1,19 @@
-"""Request-size and rate-limit middleware (Lot 16a, docs/refactoring-plan.md
--- "rate and request-size limits"). Both are genuine, tested, in-process
-implementations, not stubs -- scoped honestly to a single-process
-deployment: state is an in-memory dict per middleware instance, so it
-resets on restart and is not shared across horizontally-scaled replicas.
-A shared-store (Redis) backend is the production upgrade path if this API
-is ever deployed with more than one worker process; recorded here rather
-than silently implied by the class names.
+"""Request-size, rate-limit, and concurrency-limit middleware (Lot 16a,
+docs/refactoring-plan.md -- "rate and request-size limits"; concurrency
+limiting added Lot 6, "readiness and resilience"). All three are genuine,
+tested, in-process implementations, not stubs -- scoped honestly to a
+single-process deployment: state is an in-memory dict/semaphore per
+middleware instance, so it resets on restart and is not shared across
+horizontally-scaled replicas. A shared-store (Redis) backend is the
+production upgrade path if this API is ever deployed with more than one
+worker process; recorded here rather than silently implied by the class
+names.
 
-`/health` and `/ready` are excluded from both -- an orchestrator's own
-liveness/readiness probes must never be the thing that trips a rate limit
-or gets rejected for a header it doesn't control.
+`/health` and `/ready` are excluded from all three -- an orchestrator's own
+liveness/readiness probes must never be the thing that trips a rate limit,
+gets rejected for a header it doesn't control, or is denied a concurrency
+slot under load (Lot 6 -- `/ready` is exactly the signal an orchestrator
+needs *most* when the process is under heavy concurrent load).
 """
 from __future__ import annotations
 
@@ -91,3 +95,45 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 )
             window.append(now)
         return await call_next(request)
+
+
+class ConcurrencyLimitMiddleware(BaseHTTPMiddleware):
+    """Cap the number of requests being processed *at the same instant*
+    (Lot 6, "readiness and resilience" -- "ajouter limites de
+    concurrence"). A different axis from `RateLimitMiddleware`'s
+    per-client requests-per-minute window: that limits *rate over time*
+    per caller, this limits *simultaneous* load on the process as a whole
+    (and whatever external dependency a request touches), protecting
+    against thread-pool exhaustion or overwhelming an already-degraded
+    Qdrant/PostgreSQL under a burst of concurrent traffic.
+
+    `threading.Semaphore`, matching this file's existing sync-primitive-in-
+    async-middleware convention (`RateLimitMiddleware`'s `threading.Lock`)
+    rather than `asyncio.Semaphore` -- the critical section is the acquire/
+    release bracketing the request, not held across the wrapped call
+    itself, so there is no event-loop-blocking concern beyond what
+    `RateLimitMiddleware` already accepts. Rejects with 503 (not 429 --
+    this is capacity, not a per-caller rate decision) when saturated,
+    rather than queuing: a queued request under sustained overload just
+    becomes a slower failure later, not a successful one.
+    """
+
+    def __init__(self, app: ASGIApp, max_concurrent: int) -> None:
+        super().__init__(app)
+        self._semaphore = threading.Semaphore(max_concurrent)
+
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        if request.url.path in _EXCLUDED_PATHS:
+            return await call_next(request)
+
+        if not self._semaphore.acquire(blocking=False):
+            return JSONResponse(
+                status_code=503,
+                content={"detail": "Server is at capacity — try again shortly."},
+            )
+        try:
+            return await call_next(request)
+        finally:
+            self._semaphore.release()

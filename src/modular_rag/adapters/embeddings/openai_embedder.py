@@ -42,6 +42,14 @@ class OpenAIEmbedder:
     def dimensions(self) -> int:
         return self._DIMENSIONS.get(self._model, 1536)
 
+    def known_dimensions(self) -> int | None:
+        """Codex review HIGH-002 (Lot 6, fifth pass): see
+        `HuggingFaceEmbedder.known_dimensions()` for the full rationale —
+        always cheap here already (a static dict lookup, no network call
+        either way), but implemented for the same duck-typed contract
+        `QdrantStore.check_health()` relies on."""
+        return self.dimensions
+
     def name(self) -> str:
         return f"openai-{self._model}"
 

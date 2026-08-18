@@ -186,3 +186,24 @@ def test_retrieve_by_vector_without_tenant_id_returns_all_tenants(store):
     ids = {r.chunk.id for r in results}
     assert acme.id in ids
     assert other.id in ids
+
+
+@pytest.mark.integration
+def test_check_health_reports_healthy_against_a_real_qdrant(store):
+    """Lot 6 (readiness and resilience)."""
+    results = store.check_health()
+
+    assert len(results) == 1
+    assert results[0].name == "qdrant"
+    assert results[0].healthy is True
+    assert results[0].latency_ms >= 0
+
+
+@pytest.mark.integration
+def test_check_health_reports_unhealthy_against_an_unreachable_qdrant():
+    unreachable = QdrantStore(url="http://localhost:1", timeout=1.0)
+
+    results = unreachable.check_health()
+
+    assert results[0].healthy is False
+    assert results[0].detail is not None

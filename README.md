@@ -580,7 +580,7 @@ Four routes exist today:
 | Route | Method | Auth | Purpose |
 |---|---|---|---|
 | `/health` | GET | Never required | Liveness probe — process is up and the pipeline finished wiring. |
-| `/ready` | GET | Never required | Readiness probe — today, identical evidence to `/health` (does **not** yet probe live Qdrant/LLM connectivity; documented honestly rather than implied by the route name). |
+| `/ready` | GET | Never required | Readiness probe (Lot 6) — probes every wired component that implements `HealthCheckable` (Qdrant, PostgreSQL, and the configured LLM generator via a real, cached, non-generative authenticated call) and returns `healthy`/`degraded` (HTTP 200) or `unready` (HTTP 503); see [docs/api/rest.md](docs/api/rest.md#get-ready) for the full status/criticality contract. |
 | `/answer` | POST | Required only if `create_app(token_verifier=...)` was given a verifier (mandatory when the manifest wires `governance.tenant_policy`) | `{"question": "..."}` → `{"text": ..., "citations": [...], "trace_id": ...}` |
 | `/retrieve` | GET | Same as `/answer` | `?q=...&k=10` → raw retrieved chunks with scores, no generation |
 

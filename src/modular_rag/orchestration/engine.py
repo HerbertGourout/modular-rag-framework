@@ -17,6 +17,7 @@ from modular_rag.core.document_identity import content_hash, document_key
 from modular_rag.core.errors import ConfigurationError, SecurityError
 from modular_rag.core.models.answer import Answer
 from modular_rag.core.models.document import Document
+from modular_rag.core.models.health import ReadinessReport
 from modular_rag.core.models.query import Query
 from modular_rag.core.models.retrieved import RetrievedChunk
 from modular_rag.core.models.trace import Trace, TraceStep
@@ -54,6 +55,13 @@ class RAGEngine:
     def close(self) -> None:
         """Release resources owned by the wired container."""
         self._c.close()
+
+    def check_readiness(self) -> ReadinessReport:
+        """Lot 6 (readiness and resilience). See
+        `orchestration.container.Container.check_readiness()` for the
+        actual probing and criticality logic — this is a one-line
+        delegation, same pattern as `close()` above."""
+        return self._c.check_readiness()
 
     @property
     def chunker(self) -> Chunker:

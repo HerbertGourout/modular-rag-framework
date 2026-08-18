@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from modular_rag.contracts.chunking import Chunker
     from modular_rag.contracts.engine import DocumentEngine
     from modular_rag.core.models.chunk import Chunk
+    from modular_rag.core.models.health import ReadinessReport
     from modular_rag.core.models.retrieved import RetrievedChunk
 
 
@@ -94,3 +95,13 @@ class ApplicationService:
     def close(self) -> None:
         """Release every resource owned by the wired application."""
         self._native.close()
+
+    def check_readiness(self) -> ReadinessReport:
+        """Lot 6 (readiness and resilience) — one-line delegation, same
+        pattern as `close()` above. Always goes through `self._native`
+        (the native `RAGEngine`/`Container`) regardless of which
+        `DocumentEngine` is selected for `answer()`: both adapters wrap the
+        identical wired `Container`, and readiness is about the underlying
+        external dependencies (Qdrant, PostgreSQL), not about which engine
+        orchestrates a query."""
+        return self._native.check_readiness()

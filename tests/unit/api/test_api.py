@@ -18,15 +18,20 @@ docs/refactoring/lot-16a-api-cli-hardening.md.
 """
 from __future__ import annotations
 
+import threading
+from concurrent.futures import ThreadPoolExecutor
+
 import pytest
 from fastapi.testclient import TestClient
 
 import modular_rag.api as api_module
 from modular_rag.contracts.identity import TenantContext
+from modular_rag.core.enums import ReadinessState
 from modular_rag.core.errors import AuthenticationError, ConfigurationError
 from modular_rag.core.ids import new_id
 from modular_rag.core.models.answer import Answer
 from modular_rag.core.models.chunk import Chunk
+from modular_rag.core.models.health import DependencyHealth, ReadinessReport
 from modular_rag.core.models.retrieved import RetrievedChunk
 
 
@@ -53,12 +58,19 @@ class _FakeTokenVerifier:
 
 class _FakePipeline:
     def __init__(
-        self, *, answer_error: Exception | None = None, requires_identity: bool = False
+        self,
+        *,
+        answer_error: Exception | None = None,
+        requires_identity: bool = False,
+        readiness_report: ReadinessReport | None = None,
     ) -> None:
         self.manifest_id = "fake-pipeline"
         self.closed = False
         self.requires_identity = requires_identity
         self._answer_error = answer_error
+        self._readiness_report = readiness_report or ReadinessReport(
+            status=ReadinessState.HEALTHY, dependencies=[]
+        )
         self.last_answer_tenant_id: str | None = "unset"
         self.last_answer_user_id: str | None = "unset"
         self.last_answer_roles: frozenset[str] = frozenset()
@@ -66,6 +78,9 @@ class _FakePipeline:
 
     def close(self) -> None:
         self.closed = True
+
+    def check_readiness(self) -> ReadinessReport:
+        return self._readiness_report
 
     def answer(
         self,
@@ -108,13 +123,65 @@ def test_health_reads_pipeline_id_via_public_property(
     assert response.json() == {"status": "ok", "pipeline": "fake-pipeline"}
 
 
-def test_ready_reports_the_wired_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
-    client = _client(_FakePipeline(), monkeypatch)
+def test_ready_reports_healthy_with_200_when_every_dependency_is_reachable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Lot 6 (readiness and resilience): `/ready` now actually reflects
+    `pipeline.check_readiness()` instead of only confirming wiring
+    succeeded (the Lot 16a stub this replaces)."""
+    report = ReadinessReport(
+        status=ReadinessState.HEALTHY,
+        dependencies=[DependencyHealth(name="qdrant", healthy=True, latency_ms=1.5)],
+    )
+    client = _client(_FakePipeline(readiness_report=report), monkeypatch)
 
     response = client.get("/ready")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ready", "pipeline": "fake-pipeline"}
+    body = response.json()
+    assert body["status"] == "healthy"
+    assert body["pipeline"] == "fake-pipeline"
+    assert body["dependencies"] == [
+        {"name": "qdrant", "healthy": True, "detail": None, "latency_ms": 1.5, "role": None}
+    ]
+
+
+def test_ready_returns_503_when_a_critical_dependency_is_unready(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    report = ReadinessReport(
+        status=ReadinessState.UNREADY,
+        dependencies=[
+            DependencyHealth(name="qdrant", healthy=False, detail="connection refused")
+        ],
+    )
+    client = _client(_FakePipeline(readiness_report=report), monkeypatch)
+
+    response = client.get("/ready")
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["status"] == "unready"
+    assert body["dependencies"][0]["healthy"] is False
+
+
+def test_ready_returns_200_when_only_degraded_so_the_pod_stays_in_rotation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A non-critical dependency failing must not pull the pod out of
+    rotation — only `unready` gets a non-200 status."""
+    report = ReadinessReport(
+        status=ReadinessState.DEGRADED,
+        dependencies=[
+            DependencyHealth(name="postgres", healthy=False, detail="timeout")
+        ],
+    )
+    client = _client(_FakePipeline(readiness_report=report), monkeypatch)
+
+    response = client.get("/ready")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "degraded"
 
 
 def test_api_lifespan_closes_pipeline_resources(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -348,6 +415,129 @@ def test_health_is_exempt_from_the_rate_limit(monkeypatch: pytest.MonkeyPatch) -
 
     for _ in range(5):
         assert client.get("/health").status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Lot 6 (readiness and resilience) — ConcurrencyLimitMiddleware.
+# Event-synchronized (not sleep-based) so the test is deterministic: the
+# main thread waits on `entered` (set once the background request is
+# actually inside the semaphore-guarded region) instead of guessing a sleep
+# duration long enough for a race that could still flake under load.
+# ---------------------------------------------------------------------------
+
+
+def test_requests_over_the_concurrency_limit_get_503(monkeypatch: pytest.MonkeyPatch) -> None:
+    entered = threading.Event()
+    release = threading.Event()
+
+    class _BlockingPipeline(_FakePipeline):
+        def answer(self, question, tenant_id=None, user_id=None, roles=frozenset()):  # type: ignore[no-untyped-def]
+            entered.set()
+            assert release.wait(timeout=5), "test deadlocked waiting for release"
+            return super().answer(question, tenant_id, user_id, roles)
+
+    client = _client(_BlockingPipeline(), monkeypatch, max_concurrent_requests=1)
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        first = pool.submit(client.post, "/answer", json={"question": "q1"})
+        assert entered.wait(timeout=5), "first request never reached the blocking point"
+
+        second_response = client.post("/answer", json={"question": "q2"})
+
+        release.set()
+        first_response = first.result(timeout=5)
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 503
+
+
+def test_health_is_exempt_from_the_concurrency_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A sequential loop never saturates a `threading.Semaphore` released in
+    `finally` — this test previously issued five requests one at a time and
+    would pass identically even if `/health` were removed from
+    `_EXCLUDED_PATHS` (test-specialist review, Lot 6). Saturates the
+    semaphore first (one `/answer` call held open via the entered/release
+    harness, `max_concurrent_requests=1`), then proves `/health` still gets
+    through while it's held."""
+    entered = threading.Event()
+    release = threading.Event()
+
+    class _BlockingPipeline(_FakePipeline):
+        def answer(self, question, tenant_id=None, user_id=None, roles=frozenset()):  # type: ignore[no-untyped-def]
+            entered.set()
+            assert release.wait(timeout=5), "test deadlocked waiting for release"
+            return super().answer(question, tenant_id, user_id, roles)
+
+    client = _client(_BlockingPipeline(), monkeypatch, max_concurrent_requests=1)
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        holder = pool.submit(client.post, "/answer", json={"question": "q1"})
+        assert entered.wait(timeout=5), "holder request never reached the blocking point"
+
+        health_response = client.get("/health")
+
+        release.set()
+        holder.result(timeout=5)
+
+    assert health_response.status_code == 200
+
+
+def test_ready_is_exempt_from_the_concurrency_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """See `test_health_is_exempt_from_the_concurrency_limit`'s docstring —
+    identical reasoning, `/ready` instead of `/health`."""
+    entered = threading.Event()
+    release = threading.Event()
+
+    class _BlockingPipeline(_FakePipeline):
+        def answer(self, question, tenant_id=None, user_id=None, roles=frozenset()):  # type: ignore[no-untyped-def]
+            entered.set()
+            assert release.wait(timeout=5), "test deadlocked waiting for release"
+            return super().answer(question, tenant_id, user_id, roles)
+
+    client = _client(_BlockingPipeline(), monkeypatch, max_concurrent_requests=1)
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        holder = pool.submit(client.post, "/answer", json={"question": "q1"})
+        assert entered.wait(timeout=5), "holder request never reached the blocking point"
+
+        ready_response = client.get("/ready")
+
+        release.set()
+        holder.result(timeout=5)
+
+    assert ready_response.status_code == 200
+
+
+def test_requests_within_the_concurrency_limit_all_succeed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Genuinely concurrent, not sequential — a sequential loop never
+    saturates a semaphore, so it cannot prove the limit actually admits N
+    simultaneous callers rather than merely not rejecting requests that
+    never overlapped (test-specialist review, Lot 6). Every one of the 5
+    requests blocks until all 5 have acquired a slot, proving true
+    concurrency up to the configured limit."""
+    entered_count = threading.Semaphore(0)
+    release = threading.Event()
+
+    class _BarrierPipeline(_FakePipeline):
+        def answer(self, question, tenant_id=None, user_id=None, roles=frozenset()):  # type: ignore[no-untyped-def]
+            entered_count.release()
+            assert release.wait(timeout=5), "test deadlocked waiting for release"
+            return super().answer(question, tenant_id, user_id, roles)
+
+    client = _client(_BarrierPipeline(), monkeypatch, max_concurrent_requests=5)
+
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        futures = [
+            pool.submit(client.post, "/answer", json={"question": f"q{i}"}) for i in range(5)
+        ]
+        for _ in range(5):
+            assert entered_count.acquire(timeout=5), "not all 5 requests became concurrent"
+        release.set()
+        responses = [f.result(timeout=5) for f in futures]
+
+    assert all(r.status_code == 200 for r in responses)
 
 
 def test_retrieve_requires_a_bearer_token_when_a_verifier_is_configured(

@@ -355,13 +355,14 @@ src/modular_rag/
 
 **What it does**: Markdown files Claude Code automatically loads into context, either always (no `paths:` frontmatter) or only when a file matching `paths:` is opened.
 
-**6 path-scoped rules** (loaded automatically when their `paths:` glob is touched):
+**7 path-scoped rules** (loaded automatically when their `paths:` glob is touched):
 1. [orchestration.md](../../.claude/rules/orchestration.md) — `src/modular_rag/orchestration/**/*.py`
 2. [adapters.md](../../.claude/rules/adapters.md) — `src/modular_rag/adapters/**/*.py`
 3. [agents.md](../../.claude/rules/agents.md) — `src/modular_rag/agents/**/*.py` (rewritten 2026-08-06 to describe the current `DocumentEngine` adapter-integration scope, per ADR-0005 §5.2; `agentic_workflows.md`, its ~90%-old-vision former companion rule for the same path, was deleted rather than kept as historical reference)
 4. [contracts.md](../../.claude/rules/contracts.md) — `src/modular_rag/contracts/**/*.py`
 5. [security.md](../../.claude/rules/security.md) — `src/modular_rag/security/**/*.py`
 6. [tests.md](../../.claude/rules/tests.md) — `tests/**/*.py`
+7. [health-checks.md](../../.claude/rules/health-checks.md) — `contracts/health.py`, `core/models/health.py`, `core/resilience.py`, `orchestration/container.py`, `adapters/**/*.py`, `generation/synthesizers/*.py`, `retrieval/retrievers/*.py` (added 2026-08-18 after Lot 6's "readiness and resilience" work took five Codex review rounds to land — codifies the `check_health()` invariants discovered reactively across those rounds so the next `HealthCheckable` implementer gets them right on the first pass)
 
 **1 always-on rule** (no `paths:` frontmatter → loaded every session, like CLAUDE.md):
 - [security-layers.md](../../.claude/rules/security-layers.md) — 7-layer defense system

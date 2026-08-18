@@ -17,6 +17,7 @@ import pytest
 from modular_rag.core.enums import RetrievalMethod
 from modular_rag.core.ids import new_id
 from modular_rag.core.models.chunk import Chunk
+from modular_rag.core.models.health import DependencyHealth
 from modular_rag.core.models.query import Query
 from modular_rag.core.models.retrieved import RetrievedChunk
 from modular_rag.retrieval.retrievers.bm25 import BM25Retriever
@@ -62,6 +63,9 @@ class _RecordingLexical:
 
     def close(self) -> None:
         self.closed = True
+
+    def check_health(self) -> list[DependencyHealth]:
+        return [DependencyHealth(name="bm25", healthy=True)]
 
     def clear(self) -> None:
         self.cleared = True
@@ -297,6 +301,45 @@ def test_close_is_a_no_op_when_the_lexical_backend_has_no_close():
     """BM25Retriever (the default lexical backend) owns no external
     resource and has no close() — getattr() must not raise."""
     HybridRetriever().close()  # must not raise
+
+
+def test_check_health_delegates_to_the_lexical_backend_only():
+    """observability-expert finding (Lot 6): must NOT also delegate to
+    `self._vector` — its underlying store is the exact same object already
+    reachable and checked via `Container.indexer` directly; delegating here
+    too would report it twice under two different role names.
+
+    `VectorRetriever` itself has no `check_health()`, so the original
+    version of this test passed even against a hypothetical implementation
+    that looped over *both* `self._vector` and `self._lexical` — there was
+    nothing on the vector side to accidentally pick up (test-specialist
+    review, Lot 6). Substituting a fake vector leg with its own
+    distinguishable `check_health()` closes that gap: if the
+    implementation ever changes to also delegate to `self._vector`, this
+    test now actually fails."""
+    retriever = HybridRetriever()
+    lexical = _RecordingLexical()
+    retriever._lexical = lexical
+    retriever._vector = _FakeVectorWithHealth()
+
+    results = retriever.check_health()
+
+    assert results == [DependencyHealth(name="bm25", healthy=True)]
+
+
+class _FakeVectorWithHealth:
+    """Exposes its own `check_health()` purely to prove
+    `HybridRetriever.check_health()` never reaches the vector leg — see
+    `test_check_health_delegates_to_the_lexical_backend_only`."""
+
+    def check_health(self) -> list[DependencyHealth]:
+        return [DependencyHealth(name="should-not-appear", healthy=True)]
+
+
+def test_check_health_is_empty_when_the_lexical_backend_has_no_check_health():
+    """The default `BM25Retriever` has no `check_health()` (nothing
+    external to check) — getattr() must not raise."""
+    assert HybridRetriever().check_health() == []
 
 
 # ---------------------------------------------------------------------------

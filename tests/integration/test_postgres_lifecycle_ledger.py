@@ -141,3 +141,25 @@ def test_close_releases_the_connection_and_is_idempotent(ledger):
 def test_close_on_a_ledger_that_never_connected_is_a_safe_no_op():
     unused_ledger = PostgresLifecycleLedger(dsn=DSN)
     unused_ledger.close()  # no _get_connection() call ever made — must not raise
+
+
+@pytest.mark.integration
+def test_check_health_reports_healthy_against_a_real_postgres(ledger):
+    """Lot 6 (readiness and resilience)."""
+    results = ledger.check_health()
+
+    assert len(results) == 1
+    assert results[0].name == "postgres"
+    assert results[0].healthy is True
+
+
+@pytest.mark.integration
+def test_check_health_reports_unhealthy_against_an_unreachable_postgres():
+    unreachable = PostgresLifecycleLedger(
+        dsn="postgresql://postgres:postgres@localhost:1/postgres", timeout=1.0
+    )
+
+    results = unreachable.check_health()
+
+    assert results[0].healthy is False
+    assert results[0].detail is not None

@@ -189,3 +189,168 @@ def test_close_releases_the_client_if_one_was_opened():
 
 def test_close_is_a_no_op_when_no_client_was_ever_opened():
     OpenAIGenerator().close()  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# Codex review HIGH-001/HIGH-002/HIGH-003/HIGH-004 (Lot 6) — check_health().
+# No generator originally implemented HealthCheckable at all (second pass);
+# the third pass replaced a client-construction-only check with a real,
+# authenticated, non-generative call, since a credential-presence check
+# reported healthy for a deliberately invalid key (verified live). The
+# fourth pass fixed two remaining gaps: the probe call used
+# `client.models.list()` and discarded the result, so a valid key for *any*
+# model reported healthy even if `self.model` itself was misspelled or
+# inaccessible (HIGH-004) — switched to `client.models.retrieve(self.model)`;
+# and the probe went through the shared client unmodified, inheriting the
+# 30s production timeout and the SDK's default `max_retries=2` (HIGH-002) —
+# switched to `client.with_options(timeout=..., max_retries=0)`, and
+# `self._health_lock` is now acquired with a bound too.
+# ---------------------------------------------------------------------------
+
+
+class _FakeModels:
+    def __init__(self, should_fail: bool = False) -> None:
+        self._should_fail = should_fail
+        self.retrieve_calls: list[str] = []
+
+    def retrieve(self, model: str) -> SimpleNamespace:
+        self.retrieve_calls.append(model)
+        if self._should_fail:
+            raise RuntimeError("Incorrect API key provided")
+        return SimpleNamespace(id=model)
+
+
+class _FakeHealthClient:
+    """`with_options()` returns `self` (not a fresh object) so a test can
+    still observe `.models.retrieve_calls` through the same reference the
+    generator holds, while also recording the options each call passed —
+    proving HIGH-002's timeout/retry override actually reaches the SDK
+    call site."""
+
+    def __init__(self, should_fail: bool = False) -> None:
+        self.models = _FakeModels(should_fail=should_fail)
+        self.with_options_calls: list[dict] = []
+
+    def with_options(self, **kwargs) -> _FakeHealthClient:
+        self.with_options_calls.append(kwargs)
+        return self
+
+
+def _fake_health_client(should_fail: bool = False) -> _FakeHealthClient:
+    return _FakeHealthClient(should_fail=should_fail)
+
+
+def test_check_health_is_healthy_when_the_provider_call_succeeds():
+    generator = OpenAIGenerator()
+    generator._client = _fake_health_client()
+
+    results = generator.check_health()
+
+    assert results[0].name == "openai"
+    assert results[0].healthy is True
+
+
+def test_check_health_is_unhealthy_when_the_provider_call_fails():
+    """Codex review HIGH-003 (Lot 6, third pass): a client-construction-only
+    check cannot catch a revoked/malformed/expired/over-quota key — a real
+    call must actually be attempted and its failure surfaced."""
+    generator = OpenAIGenerator()
+    generator._client = _fake_health_client(should_fail=True)
+
+    results = generator.check_health()
+
+    assert results[0].healthy is False
+
+
+def test_check_health_validates_the_specific_configured_model():
+    """Codex review HIGH-004 (Lot 6, fourth pass): `models.list()`'s result
+    was previously discarded — a valid key for *any* model reported healthy
+    even if `self.model` itself was misspelled, retired, or inaccessible.
+    `models.retrieve()` must be called with exactly the configured model."""
+    generator = OpenAIGenerator(model="gpt-4o-custom")
+    fake = _fake_health_client()
+    generator._client = fake
+
+    generator.check_health()
+
+    assert fake.models.retrieve_calls == ["gpt-4o-custom"]
+
+
+def test_check_health_uses_a_short_bounded_probe_timeout_with_no_retries():
+    """Codex review HIGH-002 (Lot 6, fourth pass): the probe previously
+    inherited `self.timeout` (30s, sized for a real generation call) and
+    the SDK's own default `max_retries=2` (verified live) — a network
+    partition could hold a probe for minutes across retries, directly
+    contradicting ADR-0010's "single, short, bounded attempt" rule."""
+    import modular_rag.generation.synthesizers.openai_gen as module
+
+    generator = OpenAIGenerator(timeout=30.0)
+    fake = _fake_health_client()
+    generator._client = fake
+
+    generator.check_health()
+
+    assert fake.with_options_calls == [
+        {"timeout": module._HEALTH_CHECK_TIMEOUT, "max_retries": 0}
+    ]
+    assert module._HEALTH_CHECK_TIMEOUT < generator.timeout
+
+
+def test_check_health_reports_busy_when_the_lock_cannot_be_acquired(monkeypatch):
+    """Codex review HIGH-002 (Lot 6, fourth pass): `self._health_lock` was
+    previously acquired unboundedly (`with self._health_lock:`) — a probe
+    stuck despite the timeout/retry fix (e.g. DNS resolution hanging
+    outside httpx's own coverage) must not also block every other
+    concurrent `/ready` call behind the same lock indefinitely."""
+    generator = OpenAIGenerator()
+    generator._health_lock.acquire()  # simulate a real probe already in flight
+    import modular_rag.generation.synthesizers.openai_gen as module
+
+    monkeypatch.setattr(module, "_HEALTH_LOCK_ACQUIRE_TIMEOUT", 0.05)
+
+    results = generator.check_health()
+
+    assert results[0].healthy is False
+    assert results[0].detail == "busy"
+
+
+def test_check_health_caches_a_healthy_result_so_repeated_calls_dont_reach_the_provider():
+    """`/ready` is unauthenticated and exempt from rate limiting — nothing
+    else bounds how often the real provider call could be made."""
+    generator = OpenAIGenerator()
+    fake = _fake_health_client()
+    generator._client = fake
+
+    generator.check_health()
+    generator.check_health()
+
+    assert len(fake.models.retrieve_calls) == 1
+
+
+def test_check_health_refreshes_once_the_cache_ttl_has_elapsed(monkeypatch):
+    import modular_rag.generation.synthesizers.openai_gen as module
+
+    clock = {"now": 0.0}
+    monkeypatch.setattr(module.time, "monotonic", lambda: clock["now"])
+    generator = OpenAIGenerator()
+    fake = _fake_health_client()
+    generator._client = fake
+
+    generator.check_health()
+    clock["now"] += module._HEALTH_CHECK_CACHE_SECONDS + 1
+    generator.check_health()
+
+    assert len(fake.models.retrieve_calls) == 2
+
+
+def test_check_health_is_unhealthy_with_no_credential_configured(monkeypatch):
+    """The real `openai.OpenAI(...)` constructor raises immediately, locally
+    (verified live, no network call) when no credential is found anywhere —
+    neither the explicit `api_key` nor the `OPENAI_API_KEY` environment
+    variable."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    generator = OpenAIGenerator(api_key="")
+
+    results = generator.check_health()
+
+    assert results[0].healthy is False

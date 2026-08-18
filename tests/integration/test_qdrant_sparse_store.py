@@ -241,3 +241,23 @@ def test_two_independent_instances_return_the_same_correct_result_for_the_same_q
         assert ids_a[0] == relevant.id  # discriminating: not just self-consistent
     finally:
         writer.clear()
+
+
+@pytest.mark.integration
+def test_check_health_reports_healthy_against_a_real_qdrant(store):
+    """Lot 6 (readiness and resilience)."""
+    results = store.check_health()
+
+    assert len(results) == 1
+    assert results[0].name == "sparse-qdrant"
+    assert results[0].healthy is True
+
+
+@pytest.mark.integration
+def test_check_health_reports_unhealthy_against_an_unreachable_qdrant():
+    unreachable = QdrantSparseStore(url="http://localhost:1", timeout=1.0)
+
+    results = unreachable.check_health()
+
+    assert results[0].healthy is False
+    assert results[0].detail is not None
