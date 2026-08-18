@@ -69,7 +69,13 @@ class AuditEvent(BaseModel):
     actor: str | None = None
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     payload: dict[str, Any] = Field(default_factory=dict)
-    retention_days: int = 365
+    # ADR-0011 (PostgreSQL migrations, pooling, and retention): `retention_days` was
+    # stored but never validated or enforced before this — a zero or negative value
+    # would make `PostgresAuditSink.purge_expired()` treat the row as already/always
+    # expired. Rejected at construction rather than only guarded defensively in the
+    # purge query, so a caller gets an immediate, clear error instead of silently
+    # scheduling a compliance record for immediate deletion.
+    retention_days: int = Field(default=365, ge=1)
 
     @field_validator("payload")
     @classmethod

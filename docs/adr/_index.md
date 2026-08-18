@@ -163,6 +163,30 @@ readiness beyond what any single role's exception-based criticality would catch 
 
 ---
 
+### [ADR-0011: PostgreSQL Migrations, Connection Pooling, and Audit Retention](0011-postgresql-migrations-pooling-and-retention.md)
+
+**Status:** Accepted
+**Date:** 2026-08-18
+
+Retires the inline, unversioned `CREATE TABLE IF NOT EXISTS` DDL both PostgreSQL adapters ran on
+every connection, replacing it with a versioned SQL migration runner (`adapters/postgres/
+migrations.py`, one `schema_migrations` table, paired `.up`/`.down` files, an `auto_migrate`
+opt-in flag). Replaces each adapter's single cached connection + per-query lock with a
+`psycopg_pool.ConnectionPool`, keeping the existing circuit-breaker/retry classification for
+mid-query failures. Enforces `AuditEvent.retention_days` for the first time via a batched,
+fail-closed-gated `PostgresAuditSink.purge_expired()`, backed by a documented DB-permission
+separation (`docs/guides/postgres-permissions.md`) between the application's own INSERT/SELECT-
+only role and a separate retention-job role. Exposes `IndexReconciler` and the new migration/
+retention operations via new `mrag reconcile`/`mrag db`/`mrag audit` CLI commands.
+
+**Key insight:** three specialist review passes (architecture, security, test) ran *before* any
+code was written and materially changed the design — most notably, that an advisory lock taken on
+an autocommit connection is a silent no-op (the migration runner needed its own non-autocommit
+connection), and that DB-role separation alone is not sufficient without a Python-level
+fail-closed gate on the one path that can delete audit history.
+
+---
+
 ## Decision Making Process
 
 1. **Identification**: Problem identified in sprint planning, client feedback, or architecture review.
@@ -215,8 +239,9 @@ readiness beyond what any single role's exception-based criticality would catch 
 - **ADR-0008**: Offline evaluation and honest engine activation. Accepted.
 - **ADR-0009**: `VectorIndexer` sub-protocol and dimension reconciliation. Accepted.
 - **ADR-0010**: `HealthCheckable` port and readiness semantics. Accepted.
+- **ADR-0011**: PostgreSQL migrations, connection pooling, and audit retention. Accepted.
 
-All ten ADRs are Accepted as of this writing — none are in Proposed status. Future ADRs will be
+All eleven ADRs are Accepted as of this writing — none are in Proposed status. Future ADRs will be
 added as new major decisions arise; per this project's own rule
 ([CLAUDE.md §07](../../CLAUDE.md#07--security-rules)), any new top-level module, layer boundary,
 or contract modification requires one.

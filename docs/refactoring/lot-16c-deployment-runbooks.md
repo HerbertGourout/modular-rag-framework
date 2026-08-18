@@ -99,6 +99,11 @@ were verified against each system's real documented behavior, not invented).
   `docs/refactoring-plan.md` §10 previously bundled this into "Lot 16c" implicitly; this lot did
   not build it (backup/restore/rollback and overload tooling only). Corrected in the tracker
   rather than silently left conflated.
+  **Addendum (2026-08-18):** subsequently built via
+  [ADR-0011](../adr/0011-postgresql-migrations-pooling-and-retention.md) — a separate track, not a
+  return to this lot — see `docs/guides/postgres-permissions.md` and
+  `PostgresAuditSink.purge_expired()`. Residency/legal/WORM immutability remain open; this
+  addendum does not retroactively claim this lot addressed those.
 - Target deployment platform/topology (cloud provider, Kubernetes vs. plain Docker, specific
   autoscaling policy) was never decided in this programme (`docs/refactoring-plan.md` §10 lists
   it as an open question "Before Lot 16c," never actually resolved). This lot built a

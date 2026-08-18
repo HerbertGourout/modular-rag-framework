@@ -31,6 +31,9 @@ class _FakePipeline:
         answer_error: Exception | None = None,
         ingest_error: Exception | None = None,
         requires_identity: bool = False,
+        reconciliation_report: object = None,
+        reconciliation_error: Exception | None = None,
+        repair_result: object = None,
     ) -> None:
         self.manifest_id = "fake-pipeline"
         self.chunker = object()
@@ -40,6 +43,10 @@ class _FakePipeline:
         self._ingest_error = ingest_error
         self.last_tenant_id: str | None = "unset"
         self.closed = False
+        self._reconciliation_report = reconciliation_report
+        self._reconciliation_error = reconciliation_error
+        self._repair_result = repair_result
+        self.repair_called_with: object = None
 
     def close(self) -> None:
         self.closed = True
@@ -58,6 +65,17 @@ class _FakePipeline:
         if self._answer_error is not None:
             raise self._answer_error
         return Answer(query_id=new_id(), text=f"answer to: {question}")
+
+    def check_index_reconciliation(self):
+        # ADR-0011 (PostgreSQL migrations, connection pooling, and audit
+        # retention) — `mrag reconcile`'s fake pipeline.
+        if self._reconciliation_error is not None:
+            raise self._reconciliation_error
+        return self._reconciliation_report
+
+    def repair_index_reconciliation(self, report: object):
+        self.repair_called_with = report
+        return self._repair_result
 
 
 def test_version_command_prints_the_package_version() -> None:
@@ -358,3 +376,257 @@ def test_ingest_command_on_a_directory_uses_ingest_directory(
 
     assert result.exit_code == 0
     assert "Indexed 2 chunks" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# ADR-0011 (PostgreSQL migrations, connection pooling, and audit retention):
+# `mrag reconcile`, `mrag db migrate/rollback/status`, `mrag audit
+# purge/count-expired`.
+# ---------------------------------------------------------------------------
+
+
+def test_reconcile_check_mode_reports_a_clean_result(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from modular_rag.contracts.reconciliation import ReconciliationReport
+
+    manifest = tmp_path / "m.yaml"
+    manifest.write_text("id: x\n", encoding="utf-8")
+    fake_pipeline = _FakePipeline(
+        reconciliation_report=ReconciliationReport(documents_checked=3)
+    )
+    monkeypatch.setattr(cli_module, "load_pipeline", lambda path: fake_pipeline)
+
+    result = runner.invoke(app, ["reconcile", "--manifest", str(manifest)])
+
+    assert result.exit_code == 0
+    assert "Checked 3 active documents" in result.stdout
+    assert "No divergence found." in result.stdout
+    assert fake_pipeline.repair_called_with is None  # default mode is "check", not "repair"
+    assert fake_pipeline.closed is True
+
+
+def test_reconcile_check_mode_lists_divergences_and_orphans(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from modular_rag.contracts.reconciliation import DocumentDivergence, ReconciliationReport
+
+    manifest = tmp_path / "m.yaml"
+    manifest.write_text("id: x\n", encoding="utf-8")
+    report = ReconciliationReport(
+        documents_checked=2,
+        divergences=[DocumentDivergence(document_key="doc-1", missing_in_vector=["c1"])],
+        orphaned_in_vector=["orphan-1"],
+    )
+    fake_pipeline = _FakePipeline(reconciliation_report=report)
+    monkeypatch.setattr(cli_module, "load_pipeline", lambda path: fake_pipeline)
+
+    result = runner.invoke(app, ["reconcile", "--manifest", str(manifest)])
+
+    assert result.exit_code == 0
+    assert "doc-1" in result.stdout
+    assert "orphan-1" in result.stdout
+
+
+def test_reconcile_repair_mode_calls_repair_after_check(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from modular_rag.contracts.reconciliation import (
+        ReconciliationReport,
+        RepairResult,
+    )
+
+    manifest = tmp_path / "m.yaml"
+    manifest.write_text("id: x\n", encoding="utf-8")
+    report = ReconciliationReport(documents_checked=1, orphaned_in_vector=["orphan-1"])
+    repair_result = RepairResult(removed_orphans_in_vector=["orphan-1"])
+    fake_pipeline = _FakePipeline(reconciliation_report=report, repair_result=repair_result)
+    monkeypatch.setattr(cli_module, "load_pipeline", lambda path: fake_pipeline)
+
+    result = runner.invoke(
+        app, ["reconcile", "--manifest", str(manifest), "--mode", "repair"]
+    )
+
+    assert result.exit_code == 0
+    assert fake_pipeline.repair_called_with is report  # repair() got check()'s own report
+    assert "Repaired: removed 1 orphaned vector id" in result.stdout
+
+
+def test_reconcile_rejects_an_invalid_mode(tmp_path: Path) -> None:
+    manifest = tmp_path / "m.yaml"
+    manifest.write_text("id: x\n", encoding="utf-8")
+
+    result = runner.invoke(
+        app, ["reconcile", "--manifest", str(manifest), "--mode", "delete-everything"]
+    )
+
+    assert result.exit_code == 2
+
+
+def test_db_migrate_reports_applied_versions(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _FakeRunner:
+        def __init__(self, dsn: str) -> None:
+            self.dsn = dsn
+
+        def migrate(self, target: str | None = None) -> list[str]:
+            return ["0001", "0002"]
+
+    monkeypatch.setattr(
+        "modular_rag.adapters.postgres.migrations.MigrationRunner", _FakeRunner
+    )
+
+    result = runner.invoke(app, ["db", "migrate", "--dsn", "postgresql://migration-role/db"])
+
+    assert result.exit_code == 0
+    assert "Applied 2 migration(s): 0001, 0002" in result.stdout
+
+
+def test_db_migrate_reports_already_up_to_date(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _FakeRunner:
+        def __init__(self, dsn: str) -> None:
+            pass
+
+        def migrate(self, target: str | None = None) -> list[str]:
+            return []
+
+    monkeypatch.setattr(
+        "modular_rag.adapters.postgres.migrations.MigrationRunner", _FakeRunner
+    )
+
+    result = runner.invoke(app, ["db", "migrate", "--dsn", "postgresql://migration-role/db"])
+
+    assert result.exit_code == 0
+    assert "Already up to date" in result.stdout
+
+
+def test_db_migrate_requires_dsn_not_manifest() -> None:
+    """ADR-0011 (security-specialist finding, pre-implementation): `db
+    migrate` needs a schema-owning role — `--manifest` must not be an
+    accepted alias for it."""
+    result = runner.invoke(
+        app, ["db", "migrate", "--manifest", "manifests/presets/local-hybrid-rag.yaml"]
+    )
+
+    assert result.exit_code == 2
+
+
+def test_db_rollback_reports_rolled_back_versions(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _FakeRunner:
+        def __init__(self, dsn: str) -> None:
+            pass
+
+        def rollback(self, steps: int = 1) -> list[str]:
+            assert steps == 2
+            return ["0003", "0002"]
+
+    monkeypatch.setattr(
+        "modular_rag.adapters.postgres.migrations.MigrationRunner", _FakeRunner
+    )
+
+    result = runner.invoke(
+        app, ["db", "rollback", "--dsn", "postgresql://migration-role/db", "--steps", "2"]
+    )
+
+    assert result.exit_code == 0
+    assert "Rolled back 2 migration(s): 0003, 0002" in result.stdout
+
+
+def test_db_status_lists_applied_versions(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _FakeRunner:
+        def __init__(self, dsn: str) -> None:
+            pass
+
+        def applied_versions(self) -> list[str]:
+            return ["0001", "0002", "0003"]
+
+    monkeypatch.setattr(
+        "modular_rag.adapters.postgres.migrations.MigrationRunner", _FakeRunner
+    )
+
+    result = runner.invoke(app, ["db", "status", "--dsn", "postgresql://any-role/db"])
+
+    assert result.exit_code == 0
+    assert "0001, 0002, 0003" in result.stdout
+
+
+def test_audit_purge_constructs_the_sink_with_allow_purge_true(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict = {}
+
+    class _FakeSink:
+        def __init__(self, *, dsn: str, allow_purge: bool = False) -> None:
+            captured["dsn"] = dsn
+            captured["allow_purge"] = allow_purge
+
+        def purge_expired(self) -> int:
+            return 7
+
+        def close(self) -> None:
+            captured["closed"] = True
+
+    monkeypatch.setattr("modular_rag.adapters.audit.postgres_sink.PostgresAuditSink", _FakeSink)
+
+    result = runner.invoke(app, ["audit", "purge", "--dsn", "postgresql://retention-role/db"])
+
+    assert result.exit_code == 0
+    assert "Purged 7 expired audit event(s)." in result.stdout
+    assert captured["allow_purge"] is True
+    assert captured["dsn"] == "postgresql://retention-role/db"
+    assert captured["closed"] is True
+
+
+def test_audit_purge_requires_dsn_not_manifest() -> None:
+    """ADR-0011 (security-specialist's second blocker finding,
+    pre-implementation): building the purge sink from `--manifest` would
+    silently reuse the live application's own INSERT/SELECT-only DSN — the
+    fix is structural, not a policy note: `--manifest` must not be an
+    accepted alias for `audit purge`'s `--dsn`."""
+    result = runner.invoke(
+        app, ["audit", "purge", "--manifest", "manifests/presets/secure-enterprise-rag.yaml"]
+    )
+
+    assert result.exit_code == 2
+    assert "No such option" in result.output
+
+
+def test_audit_purge_surfaces_the_fail_closed_guard_as_a_clean_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from modular_rag.core.errors import SecurityError
+
+    class _FakeSink:
+        def __init__(self, *, dsn: str, allow_purge: bool = False) -> None:
+            pass
+
+        def purge_expired(self) -> int:
+            raise SecurityError("refused: allow_purge=False")
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr("modular_rag.adapters.audit.postgres_sink.PostgresAuditSink", _FakeSink)
+
+    result = runner.invoke(app, ["audit", "purge", "--dsn", "postgresql://app-role/db"])
+
+    assert result.exit_code == 3
+    assert "refused" in result.output
+
+
+def test_audit_count_expired_reports_the_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _FakeSink:
+        def __init__(self, *, dsn: str) -> None:
+            pass
+
+        def count_expired(self) -> int:
+            return 42
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr("modular_rag.adapters.audit.postgres_sink.PostgresAuditSink", _FakeSink)
+
+    result = runner.invoke(app, ["audit", "count-expired", "--dsn", "postgresql://any-role/db"])
+
+    assert result.exit_code == 0
+    assert "42 audit event(s) past retention." in result.stdout

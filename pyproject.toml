@@ -90,8 +90,12 @@ langgraph = [
     "langgraph>=1.2",
 ]
 # Durable audit/lifecycle implementations selected by secure-enterprise-rag.yaml.
+# ADR-0011 (PostgreSQL migrations, pooling, and retention): "pool" pulls in the
+# separate `psycopg-pool` PyPI package (psycopg_pool.ConnectionPool) — verified
+# against psycopg's own docs (pip install "psycopg[pool]") before adding, not
+# guessed.
 postgres = [
-    "psycopg[binary]>=3.1",
+    "psycopg[binary,pool]>=3.1",
 ]
 # OIDC/JWKS verification for authenticated API deployments.
 auth = [

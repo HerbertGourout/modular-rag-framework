@@ -30,7 +30,10 @@ class GenerationError(ModularRAGError):
 
 
 class SecurityError(ModularRAGError):
-    """Raised when a security guard blocks a query or answer."""
+    """Raised when a security guard blocks a query or answer, or when a
+    security-sensitive administrative operation is refused by a fail-closed
+    authorization check (e.g. `adapters.audit.postgres_sink.PostgresAuditSink
+    .purge_expired()` requiring `allow_purge=True` at construction — ADR-0011)."""
 
 
 class PolicyViolationError(SecurityError):

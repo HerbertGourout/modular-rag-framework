@@ -9,15 +9,32 @@ from modular_rag.app.public import (
     ModularRAGError,
     PipelineManifest,
     SecurityError,
+    count_expired_audit_events,
     create_default_registry,
     ingest_directory,
     ingest_path,
+    migration_status,
+    purge_expired_audit_events,
     resolve_manifest,
+    rollback_migrations,
+    run_migrations,
     validate_capabilities,
 )
 from modular_rag.app.public import load_application as load_pipeline
 
 app = typer.Typer(name="mrag", help="Modular RAG Framework CLI")
+# ADR-0011 (PostgreSQL migrations, connection pooling, and audit retention):
+# first Typer sub-apps in this CLI. `db` (migrate/rollback/status) and
+# `audit` (purge/count-expired) both take an explicit `--dsn`, never
+# `--manifest` — a deliberate structural choice (see each command's own
+# docstring), not an oversight: `db` needs a schema-owning (`CREATE`-capable)
+# role and `audit purge` needs a DELETE-capable one, neither of which the
+# manifest's own `audit_sink:`/`lifecycle_ledger:` block should ever grant
+# the application's normal runtime role (docs/guides/postgres-permissions.md).
+db_app = typer.Typer(name="db", help="PostgreSQL schema migration commands (ADR-0011)")
+audit_app = typer.Typer(name="audit", help="PostgreSQL audit-retention commands (ADR-0011)")
+app.add_typer(db_app, name="db")
+app.add_typer(audit_app, name="audit")
 
 # Typed exit codes (Lot 16a, docs/refactoring-plan.md — "CLI exit codes").
 # Previously every failure mode (a typo'd manifest path, a security-guard
@@ -159,3 +176,161 @@ def version() -> None:
     """Print the framework version."""
     from modular_rag import __version__
     typer.echo(f"modular-rag {__version__}")
+
+
+@app.command()
+def reconcile(
+    manifest: Path = typer.Option(..., "--manifest", "-m", help="Pipeline manifest YAML"),  # noqa: B008
+    mode: str = typer.Option(
+        "check", "--mode", help='"check" (report only) or "repair" (also delete orphaned ids)'
+    ),
+) -> None:
+    """Detect (and optionally repair) divergence between the lifecycle
+    ledger and the vector/lexical stores (ADR-0011, wrapping
+    `orchestration.reconciliation.IndexReconciler`). Uses `--manifest`, not
+    `--dsn`, unlike `db`/`audit` below — reconciliation reads and writes
+    through the already-wired `Indexer`/`Retriever`/`lifecycle_ledger`
+    components exactly as real traffic does, not a direct database
+    connection, so there is no separate-credential concern to structurally
+    prevent here."""
+    if mode not in ("check", "repair"):
+        typer.echo(f"ERROR: --mode must be 'check' or 'repair', got {mode!r}", err=True)
+        raise typer.Exit(code=EXIT_CONFIGURATION_ERROR)
+    pipeline = None
+    try:
+        pipeline = load_pipeline(manifest)
+        report = pipeline.check_index_reconciliation()
+        typer.echo(
+            f"Checked {report.documents_checked} active documents at "
+            f"{report.checked_at.isoformat()}."
+        )
+        if report.is_clean:
+            typer.echo("No divergence found.")
+        else:
+            for divergence in report.divergences:
+                typer.echo(
+                    f"  document {divergence.document_key!r}: "
+                    f"missing_in_vector={divergence.missing_in_vector}, "
+                    f"missing_in_lexical={divergence.missing_in_lexical}"
+                )
+            if report.orphaned_in_vector:
+                typer.echo(f"  orphaned_in_vector: {report.orphaned_in_vector}")
+            if report.orphaned_in_lexical:
+                typer.echo(f"  orphaned_in_lexical: {report.orphaned_in_lexical}")
+        if mode == "repair":
+            result = pipeline.repair_index_reconciliation(report)
+            typer.echo(
+                f"Repaired: removed {len(result.removed_orphans_in_vector)} orphaned vector id(s), "
+                f"{len(result.removed_orphans_in_lexical)} orphaned lexical id(s). "
+                f"{len(result.unresolved_missing)} document(s) still have missing chunks "
+                "(use `mrag ingest`/rebuild-from-source to resolve — orphan cleanup cannot "
+                "regenerate content that was never captured here)."
+            )
+    except Exception as exc:
+        typer.echo(f"ERROR: {exc}", err=True)
+        raise typer.Exit(code=_exit_code_for(exc)) from exc
+    finally:
+        _close_application(pipeline)
+
+
+@db_app.command(name="migrate")
+def db_migrate(
+    dsn: str = typer.Option(
+        ..., "--dsn", help="PostgreSQL DSN (migration-owning role, not the app's runtime DSN)"
+    ),
+    target: str | None = typer.Option(
+        None,
+        "--target",
+        help="Migrate up to and including this version only (default: all pending)",
+    ),
+) -> None:
+    """Apply pending schema migrations (ADR-0011). Requires a role with
+    schema `CREATE` privilege — see docs/guides/postgres-permissions.md's
+    `migration_role`. Deliberately `--dsn`, not `--manifest`: the
+    application's own runtime role should never hold `CREATE`."""
+    try:
+        applied = run_migrations(dsn, target=target)
+    except Exception as exc:
+        typer.echo(f"ERROR: {exc}", err=True)
+        raise typer.Exit(code=_exit_code_for(exc)) from exc
+    if applied:
+        typer.echo(f"Applied {len(applied)} migration(s): {', '.join(applied)}")
+    else:
+        typer.echo("Already up to date — no pending migrations.")
+
+
+@db_app.command(name="rollback")
+def db_rollback(
+    dsn: str = typer.Option(..., "--dsn", help="PostgreSQL DSN (migration-owning role)"),
+    steps: int = typer.Option(
+        1, "--steps", help="Number of most-recently-applied migrations to roll back"
+    ),
+) -> None:
+    """Roll back the most recently applied migration(s) (ADR-0011) — schema
+    reversibility via each migration's paired `.down.sql`, not a
+    data-preserving downgrade. Back up first (docs/guides/backup-restore.md)."""
+    try:
+        rolled_back = rollback_migrations(dsn, steps=steps)
+    except Exception as exc:
+        typer.echo(f"ERROR: {exc}", err=True)
+        raise typer.Exit(code=_exit_code_for(exc)) from exc
+    if rolled_back:
+        typer.echo(f"Rolled back {len(rolled_back)} migration(s): {', '.join(rolled_back)}")
+    else:
+        typer.echo("Nothing to roll back — schema_migrations is empty.")
+
+
+@db_app.command(name="status")
+def db_status(
+    dsn: str = typer.Option(..., "--dsn", help="PostgreSQL DSN"),
+) -> None:
+    """List applied migration versions (ADR-0011)."""
+    try:
+        versions = migration_status(dsn)
+    except Exception as exc:
+        typer.echo(f"ERROR: {exc}", err=True)
+        raise typer.Exit(code=_exit_code_for(exc)) from exc
+    if versions:
+        typer.echo(f"Applied migrations: {', '.join(versions)}")
+    else:
+        typer.echo("No migrations applied yet.")
+
+
+@audit_app.command(name="count-expired")
+def audit_count_expired(
+    dsn: str = typer.Option(..., "--dsn", help="PostgreSQL DSN"),
+) -> None:
+    """Report how many audit_events rows are past their retention_days
+    window, without deleting anything (ADR-0011). Safe to run under the
+    application's own INSERT/SELECT-only role — see
+    docs/guides/postgres-permissions.md."""
+    try:
+        count = count_expired_audit_events(dsn)
+    except Exception as exc:
+        typer.echo(f"ERROR: {exc}", err=True)
+        raise typer.Exit(code=_exit_code_for(exc)) from exc
+    typer.echo(f"{count} audit event(s) past retention.")
+
+
+@audit_app.command(name="purge")
+def audit_purge(
+    dsn: str = typer.Option(
+        ...,
+        "--dsn",
+        help="PostgreSQL DSN — the retention-job role (docs/guides/postgres-permissions.md), "
+        "never the application's own runtime DSN",
+    ),
+) -> None:
+    """Permanently delete every audit_events row past its retention_days
+    window (ADR-0011). Deliberately `--dsn`, never `--manifest`: building
+    this sink from a manifest's `audit_sink:` block would silently reuse
+    the live application's own DSN, which should never have DELETE
+    privilege (docs/guides/postgres-permissions.md). Irreversible — this is
+    real audit-trail deletion, not a dry run; use `audit count-expired`
+    first to preview."""
+    try:
+        deleted = purge_expired_audit_events(dsn)
+    except Exception as exc:
+        typer.echo(f"ERROR: {exc}", err=True)
+        raise typer.Exit(code=_exit_code_for(exc)) from exc
+    typer.echo(f"Purged {deleted} expired audit event(s).")

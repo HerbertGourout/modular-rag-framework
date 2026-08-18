@@ -210,29 +210,31 @@ def _pg_connection():
 
 
 def _clean_audit_rows() -> None:
-    # Codex review, HIGH-002: against a genuinely fresh PostgreSQL (as this
-    # module's own docstring instructs starting), the audit_events table
-    # doesn't exist yet — it's created lazily, only by
-    # PostgresAuditSink._get_connection()'s own DDL, on that sink's first
-    # real use. A raw DELETE before anything has ever used the sink raises
-    # UndefinedTable. Constructing a real sink and calling its
-    # _get_connection() here runs that DDL unconditionally first, matching
-    # tests/integration/test_postgres_audit_sink.py's own fixture
-    # convention — makes this helper safe to call before any ingest/answer
-    # has ever run, not just after.
-    # One explicitly-closed sink/connection for both the DDL side effect and the
+    # ADR-0011 (PostgreSQL migrations, connection pooling, and audit
+    # retention): `PostgresAuditSink` no longer creates its schema
+    # implicitly on connect — `auto_migrate=True` (documented as
+    # local/dev-only convenience, never for production; see
+    # docs/guides/postgres-permissions.md) runs the same migration files
+    # `mrag db migrate` uses, so this helper stays safe to call before any
+    # ingest/answer has ever run against a genuinely fresh PostgreSQL, same
+    # as the retired implicit-DDL-on-first-connect behavior it replaces —
+    # without a second, parallel schema mechanism. `_get_connection()`
+    # (the method this used to call) no longer exists — `PostgresAuditSink`
+    # exposes a `psycopg_pool.ConnectionPool` via `_get_pool()` now, not a
+    # single cached connection.
+    # One explicitly-closed sink/pool for both the migration side effect and the
     # DELETE, instead of a temporary sink whose connection was silently abandoned
     # (no close() existed to call) plus a second, separate _pg_connection() for the
     # delete itself (Codex review, MED-003 — PostgresAuditSink now has a real close()).
     from modular_rag.adapters.audit.postgres_sink import PostgresAuditSink
 
-    sink = PostgresAuditSink(dsn=POSTGRES_DSN)
+    sink = PostgresAuditSink(dsn=POSTGRES_DSN, auto_migrate=True)
     try:
-        conn = sink._get_connection()
-        conn.execute(
-            "DELETE FROM audit_events WHERE tenant_id IN (%s, %s, 'unknown')",
-            (TENANT_A, TENANT_B),
-        )
+        with sink._get_pool().connection() as conn:
+            conn.execute(
+                "DELETE FROM audit_events WHERE tenant_id IN (%s, %s, 'unknown')",
+                (TENANT_A, TENANT_B),
+            )
     finally:
         sink.close()
 
