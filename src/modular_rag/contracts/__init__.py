@@ -21,6 +21,7 @@ from modular_rag.contracts.engine import (
 from modular_rag.contracts.erasure import ErasureProof
 from modular_rag.contracts.evaluation import AnswerEngine, Evaluator
 from modular_rag.contracts.generation import Generator
+from modular_rag.contracts.health import HealthCheckable
 from modular_rag.contracts.identity import TenantContext, TokenVerifier
 from modular_rag.contracts.indexing import Indexer, VectorIndexer
 from modular_rag.contracts.lifecycle import DocumentRecord, DocumentStatus, LifecycleLedger
@@ -64,6 +65,7 @@ __all__ = [
     "AnswerEngine",
     "Evaluator",
     "Generator",
+    "HealthCheckable",
     "TenantContext", "TokenVerifier",
     "Indexer", "VectorIndexer",
     "DocumentRecord", "DocumentStatus", "LifecycleLedger",

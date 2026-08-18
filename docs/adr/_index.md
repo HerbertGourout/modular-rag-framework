@@ -143,6 +143,26 @@ opt-in via a narrow sub-protocol, not a field added to `Indexer` itself.
 
 ---
 
+### [ADR-0010: HealthCheckable Port and Readiness Semantics](0010-health-checkable-and-readiness-semantics.md)
+
+**Status:** Accepted
+**Date:** 2026-08-17
+
+Documents the `HealthCheckable` port, `DependencyHealth`/`ReadinessReport` models, the
+three-state (`healthy`/`degraded`/`unready`) readiness contract, the role-based-plus-capability
+criticality rules driving `UNREADY`, probe budget/side-effect constraints (no retries, no writes,
+bounded timeouts, no LLM calls), the exception-detail non-leak requirement on the unauthenticated
+`/ready` route, and compatibility rules for a future implementation. Ratifies a design already
+shipped rather than gating it behind a future decision — written in response to a Codex review
+finding that the new public port had no recorded ADR.
+
+**Key insight:** criticality is decided by reading the actual current exception-handling code
+path (does this failure crash `/answer` today?), never by an a-priori guess at a component's
+importance — and a capability-level rule (no retrieval leg confirmed usable) can escalate
+readiness beyond what any single role's exception-based criticality would catch alone.
+
+---
+
 ## Decision Making Process
 
 1. **Identification**: Problem identified in sprint planning, client feedback, or architecture review.
@@ -194,8 +214,9 @@ opt-in via a narrow sub-protocol, not a field added to `Indexer` itself.
 - **ADR-0007**: Layer boundaries and control-plane activation. Accepted.
 - **ADR-0008**: Offline evaluation and honest engine activation. Accepted.
 - **ADR-0009**: `VectorIndexer` sub-protocol and dimension reconciliation. Accepted.
+- **ADR-0010**: `HealthCheckable` port and readiness semantics. Accepted.
 
-All nine ADRs are Accepted as of this writing — none are in Proposed status. Future ADRs will be
+All ten ADRs are Accepted as of this writing — none are in Proposed status. Future ADRs will be
 added as new major decisions arise; per this project's own rule
 ([CLAUDE.md §07](../../CLAUDE.md#07--security-rules)), any new top-level module, layer boundary,
 or contract modification requires one.

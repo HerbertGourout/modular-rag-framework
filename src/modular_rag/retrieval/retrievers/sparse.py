@@ -35,6 +35,7 @@ from typing import Protocol
 
 from modular_rag.core.errors import RetrievalError
 from modular_rag.core.models.chunk import Chunk
+from modular_rag.core.models.health import DependencyHealth
 from modular_rag.core.models.query import Query
 from modular_rag.core.models.retrieved import RetrievedChunk
 
@@ -53,6 +54,8 @@ class _SparseStore(Protocol):
     ) -> list[RetrievedChunk]: ...
 
     def close(self) -> None: ...
+
+    def check_health(self) -> list[DependencyHealth]: ...
 
 
 class PersistentSparseRetriever:
@@ -102,3 +105,14 @@ class PersistentSparseRetriever:
         own idempotent behavior."""
         if self._sparse_store is not None:
             self._sparse_store.close()
+
+    def check_health(self) -> list[DependencyHealth]:
+        """Implements `contracts.health.HealthCheckable` (Lot 6 — readiness
+        and resilience). Delegates to the injected store; `[]` (nothing to
+        report) when unwired — matching `close()`'s "no-op when unwired"
+        precedent above rather than fabricating a health verdict for a
+        wiring state that would already fail loudly (`RetrievalError`) on
+        any real `retrieve()`/`index()` call."""
+        if self._sparse_store is None:
+            return []
+        return self._sparse_store.check_health()

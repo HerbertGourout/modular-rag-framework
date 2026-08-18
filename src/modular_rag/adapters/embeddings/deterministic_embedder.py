@@ -64,6 +64,14 @@ class DeterministicEmbedder:
     def dimensions(self) -> int:
         return self._dimensions
 
+    def known_dimensions(self) -> int | None:
+        """Codex review HIGH-002 (Lot 6, fifth pass): see
+        `HuggingFaceEmbedder.known_dimensions()` for the full rationale —
+        always cheap here already (no model, no network), but implemented
+        for the same duck-typed contract `QdrantStore.check_health()`
+        relies on."""
+        return self._dimensions
+
     def _embed_one(self, text: str) -> list[float]:
         vector = [0.0] * self._dimensions
         for token in _TOKEN_PATTERN.findall(text.lower()):

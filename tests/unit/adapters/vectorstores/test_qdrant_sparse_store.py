@@ -9,6 +9,9 @@ matching the existing VectorRetriever/HybridRetriever/QdrantStore exclusion in
 """
 from __future__ import annotations
 
+import time
+from concurrent.futures import ThreadPoolExecutor
+
 import pytest
 
 from modular_rag.adapters.vectorstores.qdrant_sparse_store import QdrantSparseStore
@@ -16,6 +19,7 @@ from modular_rag.contracts.indexing import Indexer
 from modular_rag.core.errors import ConfigurationError
 from modular_rag.core.ids import new_id
 from modular_rag.core.models.chunk import Chunk
+from modular_rag.core.resilience import CircuitBreaker
 from modular_rag.core.sparse_vectorizer import hash_term
 
 
@@ -90,6 +94,320 @@ def test_close_releases_the_client_if_one_was_opened(monkeypatch):
 
 def test_close_is_a_no_op_when_no_client_was_ever_opened():
     QdrantSparseStore().close()  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# Lot 6 (readiness and resilience): check_health() + the lazy-init lock.
+# Mirrors tests/unit/adapters/vectorstores/test_qdrant_store.py's identical
+# additions.
+# ---------------------------------------------------------------------------
+
+
+class _FakeHealthCollectionDescription:
+    """`_FakeHealth`-prefixed, not `_FakeCollectionDescription`, to avoid
+    colliding with the differently-shaped class of the same short name
+    defined later in this file (for the `_ensure_collection()` tests) —
+    Python silently lets the later module-level definition shadow the
+    earlier one, which previously made these fakes return the wrong data
+    without any import-time error (caught only by an assertion actually
+    failing)."""
+
+    def __init__(self, name):
+        self.name = name
+
+
+class _FakeHealthCollectionsResponse:
+    def __init__(self, names):
+        self.collections = [_FakeHealthCollectionDescription(n) for n in names]
+
+
+class _FakeHealthSparseVectorParams:
+    def __init__(self, modifier):
+        self.modifier = modifier
+
+
+class _FakeHealthCollectionInfo:
+    """Matches the `.config.params.sparse_vectors` path `check_health()`
+    and `_ensure_collection()` both read — see Codex review HIGH-001 (Lot
+    6, second pass)."""
+
+    def __init__(self, sparse_config):
+        self.config = type(
+            "Config", (), {"params": type("Params", (), {"sparse_vectors": sparse_config})()}
+        )()
+
+
+def _idf_sparse_config():
+    from qdrant_client.http.models import Modifier
+
+    return {"sparse": _FakeHealthSparseVectorParams(Modifier.IDF)}
+
+
+class _FakeHealthyClient:
+    """Reports the default `QdrantSparseStore()`'s collection
+    (`"mrag_sparse_default"`) as existing with a correctly IDF-weighted
+    sparse field — a plain `get_collections()`-only fake used to make this
+    pass regardless of collection/field config, which is exactly the
+    false-positive Codex review HIGH-001 (second pass) flagged."""
+
+    def get_collections(self):
+        return _FakeHealthCollectionsResponse(["mrag_sparse_default"])
+
+    def get_collection(self, name):
+        return _FakeHealthCollectionInfo(_idf_sparse_config())
+
+    def close(self):
+        pass
+
+
+class _FakeUnhealthyClient:
+    def get_collections(self):
+        raise RuntimeError("connection refused")
+
+    def close(self):
+        pass
+
+
+def test_check_health_returns_healthy_on_a_successful_get_collections_warm(monkeypatch):
+    """Warm path: a client is already cached."""
+    store = QdrantSparseStore()
+    store._client = _FakeHealthyClient()
+
+    results = store.check_health()
+
+    assert len(results) == 1
+    assert results[0].name == "sparse-qdrant"
+    assert results[0].healthy is True
+
+
+def test_check_health_reports_unhealthy_when_the_collection_does_not_exist():
+    """Codex review HIGH-001 (Lot 6, second pass): see QdrantStore's
+    identical test for the full rationale."""
+
+    class _EmptyClient:
+        def get_collections(self):
+            return _FakeHealthCollectionsResponse([])
+
+    store = QdrantSparseStore()
+    store._client = _EmptyClient()
+
+    results = store.check_health()
+
+    assert results[0].healthy is False
+    assert "does not exist" in results[0].detail
+
+
+def test_check_health_reports_unhealthy_when_the_sparse_field_is_missing():
+    """A collection created without the expected sparse field name
+    previously reported healthy — the real check ran once, lazily, inside
+    `_ensure_collection()`."""
+
+    class _NoSparseFieldClient:
+        def get_collections(self):
+            return _FakeHealthCollectionsResponse(["mrag_sparse_default"])
+
+        def get_collection(self, name):
+            return _FakeHealthCollectionInfo({})  # no "sparse" key at all
+
+    store = QdrantSparseStore()
+    store._client = _NoSparseFieldClient()
+
+    results = store.check_health()
+
+    assert results[0].healthy is False
+    assert "no sparse vector field" in results[0].detail
+
+
+def test_check_health_reports_unhealthy_when_the_modifier_is_not_idf():
+    """A sparse field present but created with the default modifier
+    (`Modifier.NONE`, not IDF) silently returns TF-only scores — see
+    `_ensure_collection()`'s own MED-001 (Lot 5) history for why this
+    matters."""
+    from qdrant_client.http.models import Modifier
+
+    class _WrongModifierClient:
+        def get_collections(self):
+            return _FakeHealthCollectionsResponse(["mrag_sparse_default"])
+
+        def get_collection(self, name):
+            return _FakeHealthCollectionInfo(
+                {"sparse": _FakeHealthSparseVectorParams(Modifier.NONE)}
+            )
+
+    store = QdrantSparseStore()
+    store._client = _WrongModifierClient()
+
+    results = store.check_health()
+
+    assert results[0].healthy is False
+    assert "not IDF" in results[0].detail
+
+
+def test_check_health_returns_unhealthy_with_a_classified_detail_warm(monkeypatch):
+    """Codex review MED-002 (Lot 6): see QdrantStore's identical test."""
+    store = QdrantSparseStore()
+    store._client = _FakeUnhealthyClient()
+
+    results = store.check_health()
+
+    assert results[0].healthy is False
+    assert "connection refused" not in results[0].detail
+    assert results[0].detail.startswith("unreachable (")
+
+
+def test_check_health_returns_healthy_on_a_successful_get_collections_cold(monkeypatch):
+    """Cold path (no client ever cached): probes with a bare, throwaway
+    client instead of `_get_client()` (orchestration-specialist review, Lot
+    6) — see `QdrantStore`'s identical test for the full rationale."""
+    import qdrant_client as qdrant_client_module
+
+    monkeypatch.setattr(qdrant_client_module, "QdrantClient", lambda **kw: _FakeHealthyClient())
+    store = QdrantSparseStore()
+
+    results = store.check_health()
+
+    assert results[0].healthy is True
+    assert store._client is None
+
+
+def test_check_health_returns_unhealthy_with_a_classified_detail_cold(monkeypatch):
+    """Codex review MED-002 (Lot 6): see QdrantStore's identical test."""
+    import qdrant_client as qdrant_client_module
+
+    monkeypatch.setattr(qdrant_client_module, "QdrantClient", lambda **kw: _FakeUnhealthyClient())
+    store = QdrantSparseStore()
+
+    results = store.check_health()
+
+    assert results[0].healthy is False
+    assert "connection refused" not in results[0].detail
+    assert results[0].detail.startswith("unreachable (")
+    assert store._client is None
+
+
+class _TrackingCloseClient:
+    """See `test_qdrant_store.py`'s identical fake for the full rationale
+    (Codex review MEDIUM-002, Lot 6, fourth pass)."""
+
+    def __init__(self, inner) -> None:
+        self._inner = inner
+        self.closed = False
+
+    def get_collections(self):
+        return self._inner.get_collections()
+
+    def get_collection(self, name):
+        return self._inner.get_collection(name)
+
+    def close(self):
+        self.closed = True
+
+
+def test_check_health_closes_the_cold_client_on_a_healthy_verdict(monkeypatch):
+    import qdrant_client as qdrant_client_module
+
+    tracker = _TrackingCloseClient(_FakeHealthyClient())
+    monkeypatch.setattr(qdrant_client_module, "QdrantClient", lambda **kw: tracker)
+    store = QdrantSparseStore()
+
+    results = store.check_health()
+
+    assert results[0].healthy is True
+    assert tracker.closed is True
+
+
+def test_check_health_closes_the_cold_client_on_an_unhealthy_verdict(monkeypatch):
+    import qdrant_client as qdrant_client_module
+
+    class _MissingCollectionInner:
+        def get_collections(self):
+            return _FakeHealthCollectionsResponse([])
+
+    tracker = _TrackingCloseClient(_MissingCollectionInner())
+    monkeypatch.setattr(qdrant_client_module, "QdrantClient", lambda **kw: tracker)
+    store = QdrantSparseStore()
+
+    results = store.check_health()
+
+    assert results[0].healthy is False
+    assert tracker.closed is True
+
+
+def test_check_health_closes_the_cold_client_when_the_probe_raises(monkeypatch):
+    import qdrant_client as qdrant_client_module
+
+    tracker = _TrackingCloseClient(_FakeUnhealthyClient())
+    monkeypatch.setattr(qdrant_client_module, "QdrantClient", lambda **kw: tracker)
+    store = QdrantSparseStore()
+
+    results = store.check_health()
+
+    assert results[0].healthy is False
+    assert tracker.closed is True
+
+
+def test_check_health_does_not_close_the_warm_shared_client():
+    store = QdrantSparseStore()
+    tracker = _TrackingCloseClient(_FakeHealthyClient())
+    store._client = tracker
+
+    results = store.check_health()
+
+    assert results[0].healthy is True
+    assert tracker.closed is False
+
+
+def test_check_health_skips_the_network_call_when_the_circuit_is_open(monkeypatch):
+    breaker = CircuitBreaker(failure_threshold=1)
+    with pytest.raises(RuntimeError):
+        breaker.call(lambda: (_ for _ in ()).throw(RuntimeError("boom")))
+    store = QdrantSparseStore(circuit_breaker=breaker)
+
+    def _must_not_be_called():
+        raise AssertionError("check_health() must not call _get_client() while circuit is open")
+
+    monkeypatch.setattr(store, "_get_client", _must_not_be_called)
+
+    results = store.check_health()
+
+    assert results[0].healthy is False
+    assert results[0].detail == "circuit open"
+
+
+def test_get_client_constructs_exactly_one_client_under_concurrent_calls(monkeypatch):
+    import qdrant_client as qdrant_client_module
+
+    construct_count = {"n": 0}
+
+    class _SlowFakeClient:
+        def __init__(self, **kwargs):
+            construct_count["n"] += 1
+            time.sleep(0.01)
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(qdrant_client_module, "QdrantClient", _SlowFakeClient)
+    store = QdrantSparseStore()
+    monkeypatch.setattr(store, "_ensure_collection", lambda: None)
+
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        list(pool.map(lambda _: store._get_client(), range(10)))
+
+    assert construct_count["n"] == 1
+
+
+def test_get_client_retries_against_a_real_unreachable_host_then_raises():
+    """See `QdrantStore`'s identical test for the full rationale
+    (test-specialist review, Lot 6) — the retry+circuit-breaker wrapping
+    inside `_get_client()` had zero coverage through an adapter before
+    this."""
+    store = QdrantSparseStore(url="http://localhost:1", timeout=1.0)
+
+    with pytest.raises(Exception):  # noqa: B017 - the real qdrant-client exception type
+        store._get_client()
+
+    assert store._client is None
 
 
 def test_get_client_does_not_publish_a_client_when_ensure_collection_fails(monkeypatch):

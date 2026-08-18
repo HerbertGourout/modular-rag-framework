@@ -5,6 +5,7 @@ from modular_rag.app.config_resolution import resolve_manifest, validate_capabil
 from modular_rag.app.default_factories import create_default_registry
 from modular_rag.contracts.identity import TenantContext, TokenVerifier
 from modular_rag.contracts.manifests import PipelineManifest
+from modular_rag.core.enums import ReadinessState
 from modular_rag.core.errors import (
     AuthenticationError,
     ConfigurationError,
@@ -18,6 +19,7 @@ __all__ = [
     "ConfigurationError",
     "ModularRAGError",
     "PipelineManifest",
+    "ReadinessState",
     "SecurityError",
     "TenantContext",
     "TokenVerifier",

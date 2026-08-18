@@ -46,7 +46,17 @@ v1 = [
     "langchain-text-splitters>=0.2",
     "sentence-transformers>=3.0",
     "openai>=1.30",
-    "anthropic>=0.28",
+    # Codex review (Lot 6, fourth pass, HIGH-001): raised from >=0.28 —
+    # AnthropicGenerator.check_health() calls `client.models.retrieve()`,
+    # which needs the SDK's `models` resource. Verified live against the
+    # official anthropic-sdk-python tags: absent through v0.50.0, present
+    # from v0.51.0 onward (`def models(self)` first appears in
+    # src/anthropic/_client.py at that tag). >=0.28 would let
+    # `pip install -e ".[v1]"` resolve a version where /ready deterministically
+    # 503s with AttributeError, even though `generate()` itself works fine
+    # on every one of those older versions (messages.create() predates
+    # models.retrieve() by a wide margin).
+    "anthropic>=0.51",
     # Codex review (Lot 5, HIGH-002): raised from >=1.9 — QdrantSparseStore
     # (adapters/vectorstores/qdrant_sparse_store.py) uses `Modifier.IDF` and
     # `QdrantClient.query_points()`, neither present in the officially

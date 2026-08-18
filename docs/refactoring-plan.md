@@ -17,7 +17,11 @@
 >   failure-masking, versioned `Metrics`/`GoldenSet` schemas, report-only/blocking `QualityGate`.
 > - **Lot 14 COMPLETE** (2026-08-05): timeouts on all four external-SDK adapters (tested against
 >   the real installed SDKs); `core/resilience.py` (`retry_with_backoff`, `CircuitBreaker`, not
->   auto-wired — policy is a per-adapter caller decision); `Container.close()` graceful shutdown;
+>   yet auto-wired at this point — policy was a per-adapter caller decision; **superseded by a
+>   later readiness/resilience pass** that wired both into `QdrantStore`, `QdrantSparseStore`,
+>   `PostgresAuditSink`, and `PostgresLifecycleLedger`'s connection-establishment *and* runtime
+>   operations, plus a real `GET /ready` — see [docs/api/rest.md](api/rest.md#get-ready) for the
+>   current contract); `Container.close()` graceful shutdown;
 >   `threading.Lock` on the four in-memory reference stores' genuine read-then-write races
 >   (proven with real-thread concurrency tests). Sync/async semantics and cancellation status
 >   documented honestly as still-open rather than silently retrofit. mypy baseline steady at 34.

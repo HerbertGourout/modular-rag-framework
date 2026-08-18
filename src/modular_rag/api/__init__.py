@@ -3,16 +3,21 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
 from modular_rag import __version__
 from modular_rag.api.errors import to_http_exception
-from modular_rag.api.middleware import MaxBodySizeMiddleware, RateLimitMiddleware
+from modular_rag.api.middleware import (
+    ConcurrencyLimitMiddleware,
+    MaxBodySizeMiddleware,
+    RateLimitMiddleware,
+)
 from modular_rag.app.public import (
     AuthenticationError,
     ConfigurationError,
+    ReadinessState,
     TenantContext,
     TokenVerifier,
 )
@@ -22,6 +27,15 @@ from modular_rag.app.public import (
 
 _DEFAULT_MAX_BODY_BYTES = 1_000_000  # 1 MB
 _DEFAULT_RATE_LIMIT_PER_MINUTE = 60
+# All routes here are `def`, not `async def`, so Starlette runs them via
+# `anyio.to_thread.run_sync`, whose default capacity limiter caps concurrent
+# threads at 40 — a `max_concurrent` above that would never actually be the
+# binding constraint (orchestration-specialist review, Lot 6): requests
+# beyond the 40th would queue inside anyio instead of getting the intended
+# fast 503 here. Kept safely below that ceiling rather than reconfiguring
+# anyio's global thread limiter, which is a bigger, riskier change than this
+# Lot's "add concurrency limits" scope calls for.
+_DEFAULT_MAX_CONCURRENT_REQUESTS = 30
 
 
 class QuestionRequest(BaseModel):
@@ -40,6 +54,7 @@ def create_app(
     token_verifier: TokenVerifier | None = None,
     max_body_bytes: int = _DEFAULT_MAX_BODY_BYTES,
     rate_limit_per_minute: int = _DEFAULT_RATE_LIMIT_PER_MINUTE,
+    max_concurrent_requests: int = _DEFAULT_MAX_CONCURRENT_REQUESTS,
 ) -> FastAPI:
     """Factory: load a pipeline from a manifest and expose it as a FastAPI app.
 
@@ -121,6 +136,7 @@ def create_app(
     )
     api.add_middleware(RateLimitMiddleware, requests_per_minute=rate_limit_per_minute)
     api.add_middleware(MaxBodySizeMiddleware, max_bytes=max_body_bytes)
+    api.add_middleware(ConcurrencyLimitMiddleware, max_concurrent=max_concurrent_requests)
 
     _bearer = HTTPBearer(auto_error=False)
 
@@ -143,13 +159,29 @@ def create_app(
         return {"status": "ok", "pipeline": pipeline.manifest_id}
 
     @api.get("/ready")
-    def ready() -> dict[str, str]:
-        """Readiness (Lot 16a). Today this confirms `create_app()` finished
-        wiring successfully — the same evidence `/health` gives. It does
-        *not* probe live connectivity to the vector store or LLM provider;
-        that needs a per-adapter health-check contract this lot doesn't add.
-        Recorded honestly rather than implied by the route name."""
-        return {"status": "ready", "pipeline": pipeline.manifest_id}
+    def ready(response: Response) -> dict[str, object]:
+        """Readiness (Lot 16a stub replaced by Lot 6 — readiness and
+        resilience): actually probes the wired pipeline's external
+        dependencies (Qdrant, PostgreSQL when a manifest configures them)
+        via `pipeline.check_readiness()`, instead of only confirming
+        `create_app()` finished wiring (that's still all `/health` above
+        checks — pure liveness). Never touches the LLM/generator — see
+        `orchestration.container.Container.check_readiness()`'s own
+        docstring for exactly which registered roles are probed and which
+        are treated as critical.
+
+        HTTP 503 only for `unready` — `degraded` still returns 200 so an
+        orchestrator keeps the pod in rotation, just visibly flagged, per
+        `core.enums.ReadinessState`'s own docstring on the distinction.
+        """
+        report = pipeline.check_readiness()
+        if report.status == ReadinessState.UNREADY:
+            response.status_code = 503
+        return {
+            "status": report.status.value,
+            "pipeline": pipeline.manifest_id,
+            "dependencies": [d.model_dump() for d in report.dependencies],
+        }
 
     @api.post("/answer", response_model=AnswerResponse)
     def answer(

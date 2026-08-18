@@ -10,6 +10,7 @@ import pytest
 from modular_rag.core.errors import RetrievalError
 from modular_rag.core.ids import new_id
 from modular_rag.core.models.chunk import Chunk
+from modular_rag.core.models.health import DependencyHealth
 from modular_rag.core.models.query import Query
 from modular_rag.retrieval.retrievers.sparse import PersistentSparseRetriever
 
@@ -21,6 +22,10 @@ class _RecordingStore:
         self.deleted: list[str] = []
         self.cleared = False
         self.closed = False
+        self.health: list[DependencyHealth] = [DependencyHealth(name="sparse-qdrant", healthy=True)]
+
+    def check_health(self) -> list[DependencyHealth]:
+        return self.health
 
     def retrieve_by_text(self, query_text: str, k: int = 10, tenant_id: str | None = None):  # type: ignore[no-untyped-def]
         self.last_search_call = {"query_text": query_text, "k": k, "tenant_id": tenant_id}
@@ -143,3 +148,21 @@ def test_close_delegates_to_the_store():
 
 def test_close_is_a_no_op_when_no_store_was_ever_injected():
     PersistentSparseRetriever().close()  # must not raise
+
+
+def test_check_health_delegates_to_the_store():
+    store = _RecordingStore()
+    store.health = [DependencyHealth(name="sparse-qdrant", healthy=False, detail="down")]
+    retriever = PersistentSparseRetriever()
+    retriever._sparse_store = store
+
+    results = retriever.check_health()
+
+    assert results == store.health
+
+
+def test_check_health_is_empty_when_no_store_was_ever_injected():
+    """Matches close()'s "no-op when unwired" precedent above — not a
+    fabricated health verdict for a wiring state that would already fail
+    loudly (RetrievalError) on any real retrieve()/index() call."""
+    assert PersistentSparseRetriever().check_health() == []

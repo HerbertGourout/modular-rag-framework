@@ -803,17 +803,22 @@ max_body_bytes=…) → FastAPI`
 
 Factory pattern. Routes:
 - `GET /health` → liveness; never requires auth.
-- `GET /ready` → readiness (Lot 16a) — today confirms `create_app()` finished wiring
-  successfully, the same evidence `/health` gives; does not yet probe live connectivity to the
-  vector store or LLM provider.
+- `GET /ready` → readiness (Lot 6, superseding the Lot 16a stub) — probes every wired component
+  implementing `contracts.health.HealthCheckable` (Qdrant, PostgreSQL, and the configured LLM
+  generator via a real, cached, non-generative authenticated call) and returns
+  `healthy`/`degraded` (200) or `unready` (503); see [docs/api/rest.md](../api/rest.md#get-ready)
+  for the full status/criticality contract.
 - `POST /answer` (body: `QuestionRequest{question, k}`) → `AnswerResponse{text, citations,
   trace_id}`.
 - `GET /retrieve?q=<question>&k=<n>` → `[{chunk_id, score, content}]`.
 
 `create_app()` refuses to start if a manifest wires `governance.tenant_policy` but no
-`token_verifier` was passed — see [threat-model.md](threat-model.md)'s Boundary 1. Two middleware
-classes (`api/middleware.py`, Lot 16a) wrap every request: `RateLimitMiddleware` (429 +
-`Retry-After` header, a flat process-wide ceiling) and `MaxBodySizeMiddleware` (413). Internal
+`token_verifier` was passed — see [threat-model.md](threat-model.md)'s Boundary 1. Three
+middleware classes (`api/middleware.py`) wrap every request: `RateLimitMiddleware` (Lot 16a, 429 +
+`Retry-After` header, a flat process-wide ceiling), `MaxBodySizeMiddleware` (Lot 16a, 413), and
+`ConcurrencyLimitMiddleware` (Lot 6, 503 when more than `max_concurrent_requests` requests are
+in flight at once — a different axis from the rate limit: simultaneous load, not requests over
+time). `/health` and `/ready` are exempt from all three. Internal
 exceptions are mapped through `api/errors.py`'s `to_http_exception()` — a typed exception→HTTP
 mapping, not the raw `str(exc)` a previous version of this document (accurately, at the time)
 described as leaking into the response body. `/answer` and `/retrieve` both accept an optional

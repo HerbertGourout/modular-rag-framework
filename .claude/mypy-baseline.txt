@@ -10,4 +10,21 @@
 # Ratcheted 34 -> 31 in Lot 16a (2026-08-05): typed the pre-existing bare `dict`
 # return annotations in api/__init__.py (health/ready/retrieve, AnswerResponse.citations)
 # while adding the new /ready endpoint; see docs/refactoring/lot-16a-api-cli-hardening.md.
-31
+# Ratcheted 31 -> 21 in Lot 6 "readiness and resilience" (2026-08-14): typed
+# QdrantStore._get_client()'s return value (previously untyped/implicit Any,
+# matching QdrantSparseStore's own ADR-0009/Lot-5 fix) while adding
+# check_health() — this incidentally resolved ~10 pre-existing, previously
+# mypy-invisible errors in that file (untyped-function call sites, "None has
+# no attribute" on the lazily-initialized client) and surfaced two genuine,
+# previously-hidden issues: a `hasattr()`-narrowing gap mypy can't follow
+# (still present, harmless, explicitly commented `type: ignore`), and —
+# far more importantly — a confirmed-live, pre-existing bug where
+# `QdrantStore.retrieve_by_vector()` called `client.search()`, a method
+# that does not exist on the actually-pinned `qdrant-client==1.18.0`.
+# Stayed at 21 (2026-08-17, Codex review response, HIGH-001): that second
+# issue was fixed for real this pass — migrated to `query_points()`
+# (matching `QdrantSparseStore.retrieve_by_text()`'s existing call shape)
+# instead of carrying the `type: ignore[attr-defined]` forward. Net zero
+# change to the count since the fix removes exactly the one suppressed
+# error it used to need.
+21

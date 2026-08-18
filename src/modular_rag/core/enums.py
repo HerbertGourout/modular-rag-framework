@@ -52,6 +52,30 @@ class DataClassification(StrEnum):
     RESTRICTED = "restricted"
 
 
+class ReadinessState(StrEnum):
+    """Pipeline-level readiness (Lot 6 — readiness and resilience), reported
+    by `orchestration.container.Container.check_readiness()` / exposed via
+    `GET /ready`. Distinct from `CircuitState` (`core/resilience.py`), which
+    is per-dependency and per-adapter-instance, not an aggregate pipeline
+    verdict.
+
+    HEALTHY: every checked dependency reachable.
+    DEGRADED: a non-critical dependency is unreachable (e.g. an optional
+      `lifecycle_ledger`, or `HybridRetriever`'s lexical leg — it already
+      falls back to vector-only on its own) — still serving traffic.
+    UNREADY: a critical dependency is unreachable (e.g. the required
+      `indexer`, or a wired `audit_sink` — `RAGEngine._audit()` has no
+      try/except around `record()`, so a down audit sink already fails
+      every `/answer` call today; DEGRADED would misreport that as
+      "still serving traffic"). `/ready` returns HTTP 503 only for this
+      state — orchestrators should pull the pod out of rotation.
+    """
+
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"
+    UNREADY = "unready"
+
+
 class PIICategory(StrEnum):
     """Canonical PII/secret categories referenced by the data-classification policy
     (Lot 11a). Mirrors the label strings already used by
