@@ -1,0 +1,184 @@
+# Local Docker Compose environment — "Lot 8: Compose et configuration
+# locale" (an external plan's own numbering; not this repo's own
+# docs/refactoring-plan.md Lot sequence, which is unrelated and already
+# used up to Lot 18 for different, completed work).
+#
+# Brings up the full local stack this framework needs to demonstrate real
+# capability, not just liveness: the API (built from the repo-root
+# Dockerfile), Qdrant (vector storage), and PostgreSQL (durable audit
+# trail, via docker/local-hybrid-rag.yaml's `governance.audit_sink`).
+# Keycloak (authenticated deployments) is a separate, opt-in `auth`
+# profile — see the `keycloak` service below and
+# docs/guides/deployment.md#authenticated-container-deployment.
+#
+# Quick start:
+#   cp .env.example .env        # then set OPENAI_API_KEY for a fully
+#                                # healthy /ready — see .env.example
+#   docker compose up --build   # --build the first time / after editing
+#                                # docker/local-hybrid-rag.yaml (baked
+#                                # into the image, not bind-mounted)
+#   curl http://localhost:8000/health
+#   curl http://localhost:8000/ready
+#   docker compose exec api mrag ingest examples/simple_qa/docs \
+#       --manifest docker/local-hybrid-rag.yaml
+#   docker compose exec api mrag ask "What is RAG?" \
+#       --manifest docker/local-hybrid-rag.yaml
+#   docker compose down           # stop, keep volumes (data persists)
+#   docker compose down -v        # stop and wipe all local data
+#
+# See scripts/smoke_test_compose.py for an automated version of the above.
+#
+# No `version:` key — obsolete in the Compose Specification this file
+# targets; every `docker compose` release in active support ignores it.
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    ports:
+      - "6333:6333" # REST
+      - "6334:6334" # gRPC
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    networks:
+      - mrag_network
+    # No healthcheck: the official qdrant/qdrant image deliberately ships
+    # without curl/wget (removed for image-size/security reasons — see
+    # https://github.com/qdrant/qdrant/issues/3491, an open, unresolved
+    # request for a built-in healthcheck command) and has no other
+    # in-image tool to probe its own real HTTP `/healthz`/`/readyz`
+    # endpoints with. `depends_on` below is therefore start-order only
+    # (`condition: service_started`, the default) — a wrong, guessed
+    # healthcheck command would hang `docker compose up` forever waiting
+    # on a check that can never succeed, which is worse than none. The
+    # `api` service's own `/ready` endpoint (backed by
+    # `QdrantStore.check_health()`) is the real source of truth for
+    # whether Qdrant is actually usable, polled by
+    # `scripts/smoke_test_compose.py` after startup instead.
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - mrag_network
+    healthcheck:
+      # pg_isready ships in the official postgres image — unlike Qdrant's,
+      # this one is safe to gate startup ordering on.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # One-shot schema migration (ADR-0011) — runs `mrag db migrate` once and
+  # exits; `api` waits for it to *succeed*, not merely start, before
+  # booting. Deliberately not `auto_migrate: true` on the manifest itself:
+  # `PostgresAuditSink.check_health()` always uses its own separate,
+  # dedicated connection (ADR-0010), never the pool `auto_migrate` would
+  # lazily migrate through on the *first real write* — so an
+  # `auto_migrate` flag alone would leave `/ready` reporting "schema not
+  # migrated" indefinitely until some other code path happened to write
+  # first. A real, observable, ordered migration step avoids that
+  # chicken-and-egg gap entirely.
+  migrate:
+    build: .
+    command:
+      [
+        "mrag",
+        "db",
+        "migrate",
+        "--dsn",
+        "postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-postgres}",
+      ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - mrag_network
+    restart: "no" # one-shot — must not restart-loop on transient failure
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      MRAG_MANIFEST_PATH: docker/local-hybrid-rag.yaml
+      # Real OpenAI SDK env var (not MRAG_-prefixed) — the generator's
+      # `config:` block in docker/local-hybrid-rag.yaml omits `api_key`
+      # on purpose, so the SDK falls back to this. Empty by default: the
+      # container still starts and /health is 200 with zero
+      # configuration; /ready correctly reports the `generator` role
+      # unready until a real key is set (ADR-0010 — this is the intended
+      # behavior the readiness work exists to provide, not a bug to route
+      # around).
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # Constructed from the same POSTGRES_* values the `postgres`
+      # service itself uses (not set independently) — one source of
+      # truth, no way for this DSN to drift from the container's real
+      # credentials.
+      AUDIT_DATABASE_URL: "postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-postgres}"
+      # Empty-string defaults are a safe no-op for docker/server.py's own
+      # `bool(_OIDC_ISSUER) != bool(_OIDC_AUDIENCE)` check (both empty
+      # behaves identically to both unset) — set both in .env, and bring
+      # up the `auth` profile below, to actually enable Keycloak
+      # verification.
+      MRAG_OIDC_ISSUER_URL: ${MRAG_OIDC_ISSUER_URL:-}
+      MRAG_OIDC_AUDIENCE: ${MRAG_OIDC_AUDIENCE:-}
+    depends_on:
+      qdrant:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      # Persists downloaded sentence-transformers/cross-encoder model
+      # weights across container recreates — without this, `docker
+      # compose up` after any rebuild re-downloads both models from
+      # scratch (image runs as the non-root `mrag` user, uid 1000, home
+      # /home/mrag — see the Dockerfile's `useradd --create-home`).
+      - hf_cache:/home/mrag/.cache/huggingface
+    networks:
+      - mrag_network
+
+  # Optional, opt-in: `docker compose --profile auth up`. Brings up a
+  # Keycloak instance for testing authenticated deployments
+  # (docker/server.py already supports MRAG_OIDC_ISSUER_URL/AUDIENCE —
+  # see docs/guides/deployment.md#authenticated-container-deployment).
+  # Deliberately NOT automated beyond bringing the container up: a realm
+  # (client registration, tenant_id/sub claim mappers) needs a one-time
+  # setup pass through Keycloak's own admin console
+  # (http://localhost:8080 once started, KEYCLOAK_ADMIN/
+  # KEYCLOAK_ADMIN_PASSWORD below) — a mounted realm-import JSON was
+  # considered and rejected: getting a realm-import file subtly wrong
+  # with no way to verify it against a live Keycloak instance in this
+  # development environment would be worse than a clearly documented
+  # manual step. `start-dev` mode is for local testing only — never use
+  # it against a real deployment.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: ["start-dev"]
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+    ports:
+      - "8080:8080"
+    networks:
+      - mrag_network
+    profiles:
+      - auth
+
+networks:
+  mrag_network:
+    driver: bridge
+
+volumes:
+  qdrant_storage:
+  postgres_data:
+  hf_cache:

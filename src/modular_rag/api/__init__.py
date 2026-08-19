@@ -162,13 +162,19 @@ def create_app(
     def ready(response: Response) -> dict[str, object]:
         """Readiness (Lot 16a stub replaced by Lot 6 — readiness and
         resilience): actually probes the wired pipeline's external
-        dependencies (Qdrant, PostgreSQL when a manifest configures them)
-        via `pipeline.check_readiness()`, instead of only confirming
-        `create_app()` finished wiring (that's still all `/health` above
-        checks — pure liveness). Never touches the LLM/generator — see
+        dependencies (Qdrant, PostgreSQL when a manifest configures them,
+        and — since Codex review HIGH-001, ADR-0010's fourth pass — the
+        configured LLM generator too, via a real, cached, credential-
+        validating call) via `pipeline.check_readiness()`, instead of only
+        confirming `create_app()` finished wiring (that's still all
+        `/health` above checks — pure liveness). See
         `orchestration.container.Container.check_readiness()`'s own
         docstring for exactly which registered roles are probed and which
-        are treated as critical.
+        are treated as critical (`generator` always is — see
+        `_CRITICAL_ROLES`) — a manifest requiring a real LLM credential
+        will report `unready` until one is actually configured, which is
+        the intended, honest behavior this endpoint exists to provide, not
+        a defect.
 
         HTTP 503 only for `unready` — `degraded` still returns 200 so an
         orchestrator keeps the pod in rotation, just visibly flagged, per
