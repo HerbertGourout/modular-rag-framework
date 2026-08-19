@@ -1,7 +1,21 @@
-# Container-network variant of the local runnable preset.
+# Container-network variant of the local runnable preset. "Lot 8 —
+# Compose et configuration locale" (an external plan's own numbering, not
+# this repo's own docs/refactoring-plan.md Lot sequence — do not conflate
+# the two): extends this file with a Postgres-backed audit_sink so
+# compose.yaml's `postgres` service is genuinely exercised, not left idle.
+#
+# Deliberately NOT `auto_migrate: true` here: `PostgresAuditSink.check_health()`
+# always uses its own separate, dedicated connection (ADR-0010), never the
+# pool `auto_migrate` lazily migrates through on first `record()` — so
+# `auto_migrate` alone would leave `/ready` reporting "schema not migrated"
+# indefinitely until some real audit write happened to occur first. Schema
+# setup is instead a real, observable one-shot step: compose.yaml's
+# `migrate` service runs `mrag db migrate` before `api` ever starts,
+# matching ADR-0011's own production posture rather than inventing a
+# separate local-only schema-creation mechanism.
 version: "1.0"
 id: docker-local-hybrid-rag
-description: "Local Docker Compose pipeline using the qdrant service hostname."
+description: "Local Docker Compose pipeline using the qdrant/postgres service hostnames."
 tenant: default
 environment: dev
 
@@ -41,3 +55,9 @@ generator:
     model: "gpt-4o-mini"
     temperature: 0.1
     max_tokens: 2048
+
+governance:
+  audit_sink:
+    type: postgres
+    config:
+      dsn: "secret://AUDIT_DATABASE_URL"

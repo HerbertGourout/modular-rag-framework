@@ -69,37 +69,28 @@ in Étape 8 of the ADR-0007 stabilization pass. Qdrant's `url`/`api_key` have no
 fallback the way OpenAI's does, so they must be set explicitly in the manifest's
 `indexer.config` (or resolved via `resolve_manifest()`, Lot 9, if your entrypoint uses it).
 
-### docker-compose.yml
+### `compose.yaml`
 
-```yaml
-services:
-  mrag-api:
-    build: .
-    ports:
-      - "8000:8000"
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - MRAG_MANIFEST_PATH=docker/local-hybrid-rag.yaml
-    depends_on:
-      - qdrant
-
-  qdrant:
-    image: qdrant/qdrant
-    ports:
-      - "6333:6333"
-    volumes:
-      - qdrant_data:/qdrant/storage
-
-volumes:
-  qdrant_data:
-```
+The real Compose file lives at the repo root — [`compose.yaml`](../../compose.yaml) — not
+duplicated here as a separate illustrative snippet (a previous version of this section carried
+its own inline copy, which drifted out of sync with the real file; see that file's own header
+comment for the full quick-start commands, and `scripts/smoke_test_compose.py` for an automated
+version of them). It brings up four services: `api` (this repo's own image), `qdrant`, `postgres`
+(ADR-0011 — durable audit trail), and a one-shot `migrate` service that runs `mrag db migrate`
+before `api` starts (deliberately not `auto_migrate: true` on the manifest itself — see
+`compose.yaml`'s own comment for why that alone wouldn't satisfy `/ready`). Keycloak is a
+separate, opt-in `auth` profile (`docker compose --profile auth up`) — see "Authenticated
+container deployment" below.
 
 `docker/local-hybrid-rag.yaml` is the container-network variant of the local preset: its Qdrant
-URL is `http://qdrant:6333`, matching the Compose service name. The ordinary local preset keeps
-`localhost:6333` for host-based development; do not interchange the two environments.
+URL is `http://qdrant:6333` and it wires a `governance.audit_sink: type: postgres`, matching the
+Compose service names. The ordinary local preset (`manifests/presets/local-hybrid-rag.yaml`) keeps
+`localhost:6333` and no Postgres for host-based development; do not interchange the two
+environments.
 
 ```bash
-docker-compose up -d
+cp .env.example .env   # then set OPENAI_API_KEY for a fully healthy /ready
+docker compose up --build
 ```
 
 For rollback (previous image tag, previous manifest revision, or reverting
@@ -138,9 +129,19 @@ curl http://localhost:8000/health
 # {"status": "ok", "pipeline": "local-hybrid-rag"}
 
 curl http://localhost:8000/ready
-# {"status": "ready", "pipeline": "local-hybrid-rag"}
-# /ready (Lot 16a) reports the same wiring-succeeded evidence /health does today --
-# it does not probe live Qdrant/LLM connectivity. See docs/api/rest.md.
+# {"status": "healthy", "pipeline": "local-hybrid-rag", "dependencies": [
+#   {"name": "qdrant", "healthy": true, "detail": null, "latency_ms": 12.3, "role": "indexer"},
+#   {"name": "openai", "healthy": true, "detail": null, "latency_ms": 340.1, "role": "generator"},
+#   {"name": "postgres", "healthy": true, "detail": null, "latency_ms": 8.7, "role": "audit_sink"}
+# ]}
+# /ready (Lot 6 -- readiness and resilience, ADR-0010) actually probes every wired
+# dependency -- Qdrant, PostgreSQL when a manifest configures one, and the LLM
+# generator via a real, cached, credential-validating call -- not merely that
+# create_app() finished wiring. "status" is one of core.enums.ReadinessState's real
+# values (healthy/degraded/unready), never the literal string "ready". HTTP 503 only
+# for "unready". Without a real OPENAI_API_KEY, expect the "generator" entry (and
+# therefore the whole aggregate status) unready -- that is correct, honest behavior,
+# not a bug. See docs/api/rest.md and docs/adr/0010-health-checkable-and-readiness-semantics.md.
 ```
 
 ## Scaling
@@ -168,7 +169,17 @@ switch handles it:
 
 ## Authenticated container deployment
 
-The shipped `docker/server.py` enables Keycloak verification when both variables below are set;
+For **local testing only**, `compose.yaml`'s opt-in `auth` profile
+(`docker compose --profile auth up`) brings up a local Keycloak instance
+(`start-dev` mode) on `http://localhost:8080` — bringing the container up is automated, but
+realm/client setup (registering a client, mapping `tenant_id`/`sub` claims) is a one-time manual
+pass through Keycloak's own admin console; a mounted realm-import file was deliberately not
+attempted (unverifiable without a live Keycloak instance in this development environment — see
+`compose.yaml`'s own comment). Set `MRAG_OIDC_ISSUER_URL`/`MRAG_OIDC_AUDIENCE` in `.env` once the
+realm exists, matching the values below, then restart the `api` service.
+
+For a real deployment against your organization's own Keycloak, the shipped `docker/server.py`
+enables Keycloak verification when both variables below are set;
 setting only one fails startup rather than silently exposing an unauthenticated API. Against
 `secure-enterprise-rag.yaml` specifically, setting *neither* now also fails startup (Lot 1,
 tenant fail-closed: `create_app()` refuses to run a tenant-isolated manifest without a
