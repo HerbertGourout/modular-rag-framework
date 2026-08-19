@@ -17,8 +17,16 @@ Python 3.12.10, all 6 steps green).
    this dependency declared anywhere — confirmed and fixed.
 3. **Dependency lock.** Added `requirements-lock.txt` via `uv pip compile pyproject.toml --extra
    v1 --extra dev` — 349 pinned lines. `pyproject.toml`'s open `>=` bounds remain the published
-   package's compatibility range; the lock is for reproducible dev/CI installs. Regenerate with:
-   `uv pip compile pyproject.toml --extra v1 --extra dev -o requirements-lock.txt`.
+   package's compatibility range; the lock is for reproducible dev/CI installs.
+   > **Superseded by Lot 9** (external plan; not this file's own Lot sequence): the `--extra v1
+   > --extra dev` command above only ever covered dev/CI installs, but the Dockerfile installs
+   > `[v1,langgraph,postgres,auth]` and never consumed this lock at all until Lot 9 wired it in.
+   > The regenerate command is now `uv pip compile pyproject.toml --python-platform linux
+   > --python-version 3.12 --extra v1 --extra dev --extra langgraph --extra postgres --extra auth
+   > -o requirements-lock.txt` — see
+   > [docs/guides/dependency-lock.md](../guides/dependency-lock.md) for the full, current,
+   > maintained procedure. This entry is left otherwise unedited as the historical record of what
+   > Lot 3 itself actually did.
 4. **mypy `python_version` bug found and fixed.** `[tool.mypy] python_version = "3.11"` crashed
    immediately (`exit 2`) against `numpy`'s bundled type stubs, which use a `type` statement
    only valid under Python 3.12+ parsing — this is a real bug uncovered by actually running the
