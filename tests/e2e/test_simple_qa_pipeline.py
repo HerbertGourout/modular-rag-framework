@@ -1,4 +1,10 @@
-"""End-to-end test for the simple_qa pipeline — requires Qdrant + MRAG_OPENAI_API_KEY."""
+"""End-to-end test for the simple_qa pipeline — requires Qdrant and a real LLM
+API key. `manifests/presets/local-hybrid-rag.yaml`'s `generator:` config omits
+`api_key`, so the OpenAI SDK falls back to its own standard `OPENAI_API_KEY`
+env var (not `MRAG_OPENAI_API_KEY` — that name is never read anywhere in this
+codebase; see CLAUDE.md's own troubleshooting notes). Kept out of the main CI
+pipeline (Batch 10, an external plan) since it needs a paid LLM secret — see
+.github/workflows/nightly.yml."""
 import pathlib
 
 import pytest

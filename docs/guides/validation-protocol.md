@@ -174,28 +174,59 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\check.ps1 all
 ./scripts/check.sh all      # Pre-release
 ```
 
-### CI/CD: `.github/workflows/ci.yml` — the real, current 7-job pipeline
+### CI/CD: `.github/workflows/ci.yml` — the real, current 10-job pipeline
 
-All 7 jobs below are wired into the real workflow today (not illustrative). Corrected here — an
-earlier version of this document only listed 3 of them and predated Lots 15-18.
+All 10 jobs below are wired into the real workflow today (not illustrative). Corrected here —
+Batch 10 (an external plan; not this file's own Lot sequence) added `test-integration`,
+`e2e-deterministic`, and `compose-smoke`; an earlier version of this document said `integration`/
+`e2e` were not wired into CI at all.
 
 | Job | What it runs | Needs |
 |---|---|---|
 | `lint` | ruff, compileall, layering audit, ratcheted mypy, runnable-manifest check | — |
 | `test-unit` | `pytest tests/unit/` — installs `.[v1,langgraph,dev]` (`langgraph` is required here, not optional: `tests/unit/adapters/llms/test_langgraph_engine.py` really calls the LangGraph adapter) | `lint`... no, runs independently |
 | `test-contract` | `pytest tests/contract/` | — |
+| `test-integration` | `pytest tests/integration/ -m integration` against real `qdrant`/`postgres` GitHub Actions `services:` containers | — |
+| `e2e-deterministic` | `pytest tests/e2e/test_secure_preset_e2e.py -m e2e` — the governance/tenant-isolation scenario, deterministic embedder/generator, no LLM key needed | — |
+| `compose-smoke` | `scripts/smoke_test_compose.py` — brings up the full `compose.yaml` stack (api+qdrant+postgres+migrate) and proves real ingestion + `/ready` per-dependency roles, not just `/health` | `lint`, `test-unit`, `test-contract` |
 | `coverage` | Both suites with `--cov`, uploads `coverage.xml` | `test-unit`, `test-contract` |
 | `build-and-smoke-test` | Builds a wheel, installs it into a fresh venv, runs `mrag version` | `lint`, `test-unit`, `test-contract` |
-| `supply-chain` | `pip-audit`, `scripts/check_licenses.py`, generates a CycloneDX SBOM | — |
-| `container-build` | Builds the `Dockerfile`, runs it, polls `/health` | `lint`, `test-unit`, `test-contract` |
+| `supply-chain` | `pip-audit`, `scripts/check_licenses.py`, generates a CycloneDX SBOM, from a dedicated venv containing only the shipped image closure | — |
+| `container-build` | Builds the `Dockerfile`, runs it, polls `/health`, scans the image with Grype | `lint`, `test-unit`, `test-contract` |
 
-`integration`/`e2e` are **not** wired into CI — both need a live Qdrant (and, for e2e, a real
-LLM key), which the CI runners don't provision. Run them locally instead (Tier 3/4 above).
+The LLM-backed e2e scenario (`tests/e2e/test_simple_qa_pipeline.py`) is deliberately **not** in
+this workflow — it needs a real, paid LLM key, and the main pipeline's own acceptance criterion
+(Batch 10) is that no PR needs one. It runs instead in
+[`.github/workflows/nightly.yml`](../../.github/workflows/nightly.yml) (`schedule:` +
+`workflow_dispatch:`), which hard-fails (not skips) if the `OPENAI_API_KEY` repository secret is
+unset.
+
+**⚠️ Acceptance criterion NOT yet met: "integration and E2E tests block PRs."** Adding jobs to a
+`pull_request`-triggered workflow makes them *run and report status* on every PR — it does not by
+itself make them *required* to merge (Codex review, Batch 10, HIGH-002). As of this writing that
+status list has not been configured, so a maintainer can currently merge a PR despite a red
+`test-integration`/`e2e-deterministic`/`compose-smoke`. This repo has no `gh` CLI available in the
+environment this batch was implemented in, so the step below was written but not executed — do
+not treat this criterion as satisfied until a repo admin has actually done it:
+
+1. GitHub → this repository → **Settings → Branches** (or **Rules → Rulesets** on repos using the
+   newer rulesets UI) → edit (or create) the protection rule for `main`.
+2. Enable **"Require status checks to pass before merging."**
+3. Add these exact job names from `.github/workflows/ci.yml` to the required list:
+   `test-integration`, `e2e-deterministic`, `compose-smoke` (also consider `lint`, `test-unit`,
+   `test-contract` if they are not already required — this document does not assume their
+   current state).
+4. Save, then open a throwaway PR that deliberately breaks one of the three jobs to confirm GitHub
+   actually blocks the merge button — configuring the setting and *verifying* it works are two
+   different steps; only the second one is real evidence this criterion holds.
 
 ### Alignment checklist
 - ✅ Local `quick` ↔ CI `lint` (same commands)
 - ✅ Local `full` ↔ CI `lint` + `test-unit` + `test-contract` (same commands)
-- ✅ Local `integration`/`e2e` ↔ not run in CI, run locally against real services
+- ✅ Local `integration` ↔ CI `test-integration` (same `pytest tests/integration/ -m integration`
+  command; CI provisions Qdrant/PostgreSQL via `services:`, local dev provisions them itself)
+- ✅ Local `e2e` (deterministic scenario only) ↔ CI `e2e-deterministic`; the LLM-backed scenario
+  runs only in `nightly.yml`, never in the local `check.sh e2e` ↔ CI parity claim above
 - ✅ Same pytest markers: `unit`, `contract`, `integration`, `e2e`
 
 ---
