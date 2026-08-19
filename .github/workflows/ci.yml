@@ -10,6 +10,15 @@ env:
   PYTHONDONTWRITEBYTECODE: "1"
   PYTHONUNBUFFERED: "1"
 
+# Batch 10 (external plan; not this repo's own docs/refactoring-plan.md Lot
+# sequence): integration/e2e jobs below are the expensive ones in this
+# workflow (real services, real network calls) -- cancel a superseded run's
+# copy of them rather than let two pushes to the same branch/PR run both to
+# completion.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -100,6 +109,191 @@ jobs:
           pip install -e .[v1,dev]
       - name: Run contract conformance tests
         run: pytest tests/contract/ -v --tb=short
+
+  test-integration:
+    # Batch 10: previously "integration/e2e are not wired into CI" (see
+    # docs/guides/validation-protocol.md's own prior claim, now corrected in
+    # the same change) -- both `services:` below run for the whole job, no
+    # separate teardown step needed (the runner is destroyed after the job).
+    #
+    # Both service images below are pinned by digest, not just a tag (Codex
+    # review MEDIUM-001): `qdrant/qdrant:v1.12.4` and `postgres:16` are
+    # mutable tags that can be republished, and `postgres`'s major-version
+    # tag in particular is documented to advance across minor releases --
+    # inconsistent with this repo's own Dockerfile digest-pinning precedent
+    # (Lot 9, an unrelated earlier external-plan task) otherwise. Digests
+    # resolved from Docker Hub's own v2 API on 2026-08-19, cross-checked
+    # with two independent fetches each returning the identical value; the
+    # same two digests are reused verbatim in every one of this repo's five
+    # service declarations (this job, e2e-deterministic below, and
+    # nightly.yml) so a commit never runs different binaries in different
+    # jobs. Refresh procedure: query
+    # `https://hub.docker.com/v2/repositories/<qdrant/qdrant|library/postgres>/tags/<tag>`
+    # for the current `digest` field (same method as
+    # docs/guides/dependency-lock.md's base-image refresh procedure) and
+    # update all five occurrences together.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      qdrant:
+        image: qdrant/qdrant:v1.12.4@sha256:241edb9d7778327516ef218f8c74e1bd61b5ea42cd4f193cb8d0896199705636
+        ports:
+          - 6333:6333
+        # No `options: --health-cmd` here -- the official image ships
+        # without curl/wget (qdrant/qdrant#3491, unresolved), so Docker
+        # itself has no in-image command to run as a healthcheck. The
+        # "Wait for Qdrant" step below polls from the runner instead, which
+        # can reach the mapped port over the network without needing
+        # anything installed inside the qdrant container itself.
+      postgres:
+        image: postgres:16@sha256:e17e86066e5ef83e0952a9347f5c792b7ece00972e2aa787a6986f471b3dd3d5
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e .[v1,postgres,dev]
+      - name: Wait for Qdrant to accept connections
+        # Postgres's own --health-cmd above already gates `services:` startup
+        # ordering; Qdrant has no equivalent (see the service definition's own
+        # comment), so this polls its real /readyz endpoint (Kubernetes-style
+        # readiness probe, added in Qdrant 1.5.0) from the runner directly.
+        # Fails loudly on timeout -- never continue-on-error past this.
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:6333/readyz; then
+              echo "Qdrant ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Qdrant did not become ready within the timeout"
+          exit 1
+      - name: Run integration tests (real Qdrant + PostgreSQL)
+        timeout-minutes: 10
+        run: pytest tests/integration/ -v -m integration --tb=long -ra
+      - name: Dump service container logs on failure
+        if: failure()
+        run: |
+          echo "--- Qdrant logs ---"
+          docker logs ${{ job.services.qdrant.id }} || true
+          echo "--- PostgreSQL logs ---"
+          docker logs ${{ job.services.postgres.id }} || true
+
+  e2e-deterministic:
+    # Batch 10: runs tests/e2e/test_secure_preset_e2e.py specifically (the
+    # file, not the `-m e2e` marker across the whole tests/e2e/ directory) --
+    # that marker also matches test_simple_qa_pipeline.py, which needs a real
+    # LLM key and belongs in .github/workflows/nightly.yml instead, per the
+    # "no LLM secrets required for the main pipeline" acceptance criterion.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      qdrant:
+        image: qdrant/qdrant:v1.12.4@sha256:241edb9d7778327516ef218f8c74e1bd61b5ea42cd4f193cb8d0896199705636
+        ports:
+          - 6333:6333
+        # No `options: --health-cmd` here -- same reason as test-integration's
+        # qdrant service above (the official image has no curl/wget to run
+        # one); the "Wait for Qdrant" step below is the real check.
+      postgres:
+        image: postgres:16@sha256:e17e86066e5ef83e0952a9347f5c792b7ece00972e2aa787a6986f471b3dd3d5
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e .[v1,postgres,dev]
+      - name: Wait for Qdrant to accept connections
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:6333/readyz; then
+              echo "Qdrant ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Qdrant did not become ready within the timeout"
+          exit 1
+      - name: Run the deterministic secure-preset e2e scenario
+        # test_secure_preset_e2e.py's own `_require_services` fixture SKIPS
+        # (not fails) every test in the module if either service looks
+        # unreachable to it -- a real defect here (a misconfigured DSN/URL,
+        # a service that started but isn't actually usable) could otherwise
+        # produce an all-skipped run that still exits 0. The Qdrant/Postgres
+        # waits above make that unlikely, but the explicit grep below is the
+        # actual guard against a silent, still-green false pass (Batch 10's
+        # own "no masked failures" requirement, applied to skips too, not
+        # only to continue-on-error).
+        timeout-minutes: 10
+        run: |
+          set -o pipefail
+          pytest tests/e2e/test_secure_preset_e2e.py -v -m e2e --tb=long -ra 2>&1 | tee pytest-e2e.log
+          if grep -q "SKIPPED" pytest-e2e.log; then
+            echo "::error::e2e tests were skipped -- Qdrant/PostgreSQL were not genuinely reachable despite the preflight wait"
+            exit 1
+          fi
+      - name: Dump service container logs on failure
+        if: failure()
+        run: |
+          echo "--- Qdrant logs ---"
+          docker logs ${{ job.services.qdrant.id }} || true
+          echo "--- PostgreSQL logs ---"
+          docker logs ${{ job.services.postgres.id }} || true
+
+  compose-smoke:
+    # Batch 10: "a container smoke test that goes beyond the /health
+    # endpoint." Deliberately not folded into container-build below (which
+    # stays a fast, single-container "does the image even boot" signal) --
+    # this job exercises the full api+qdrant+postgres+migrate compose.yaml
+    # stack via scripts/smoke_test_compose.py (written in an earlier,
+    # unrelated change but never executed anywhere until this job exists),
+    # proving /ready's per-dependency roles and a real `mrag ingest` actually
+    # work, not just that the process starts and answers /health. No LLM key
+    # is available in this job on purpose -- smoke_test_compose.py already
+    # skips its LLM-gated assertions (the `generator` role, `mrag ask`) when
+    # OPENAI_API_KEY is unset, so this job verifies only the non-LLM path,
+    # matching "no LLM secrets required for the main pipeline."
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [lint, test-unit, test-contract]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Install the smoke test script's own runtime dependency
+        run: pip install --upgrade pip httpx
+      - name: Run the Compose stack smoke test
+        timeout-minutes: 12
+        run: python scripts/smoke_test_compose.py
 
   coverage:
     runs-on: ubuntu-latest

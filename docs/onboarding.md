@@ -199,9 +199,12 @@ terms, blind to paraphrasing. Combining the two (RRF fusion, detailed in
 [docs/architecture/overview.md](architecture/overview.md), section 11) gives the best of
 both worlds without sacrificing either.
 
-**Status**: 🟡 implementation complete and covered by unit/contract tests; the current live
-LLM + Qdrant execution of `examples/simple_qa/` remains pending in `ROADMAP.md` and integration/E2E
-are not run in CI.
+**Status**: 🟡 implementation complete and covered by unit/contract tests, and — since Batch 10,
+an external plan not tracked in this repo's own Lot sequence — also by integration tests and the
+deterministic e2e scenario running in CI (`.github/workflows/ci.yml`'s `test-integration`/
+`e2e-deterministic` jobs); the current live LLM + Qdrant execution of `examples/simple_qa/`
+itself remains pending in `ROADMAP.md`, and that specific LLM-backed e2e scenario runs only in
+`.github/workflows/nightly.yml`, not on every PR.
 
 ### V2 — Agentic: questions that need several reasoning steps
 

@@ -137,6 +137,7 @@ Project-level skills live in `.claude/skills/` and are exposed as slash commands
 | `/test-unit` | Validate fast core behavior | `pytest tests/unit` |
 | `/test-contract` | Validate Protocol conformance | `pytest tests/contract` |
 | `/qa-v1` | Run the local V1 gate before an MR | Ruff + unit + contract + layering audit |
+| `/delivery-loop` | Implement, review with Codex, remediate once, and validate | Automated two-pass maximum; never pushes |
 | `/check-layering` | Audit hexagonal import boundaries | `python scripts/check_layering.py` |
 | `/run-simple-qa` | Smoke-test the example pipeline | `examples/simple_qa/main.py` ingest + ask |
 | `/quick-check`, `/full-check`, `/release` | Additional validation tiers | see `docs/guides/validation.md` |
@@ -149,13 +150,35 @@ When Claude Code is paired with Codex, Claude Code is the default builder and Co
 is the independent challenger. See `AGENTS.md`, `docs/guides/ai-engineering-workflow.md`,
 and `docs/guides/model-routing.md`.
 
+For normal delivery, prefer the single `/delivery-loop` skill: it performs the
+handoff, invokes Codex non-interactively, applies at most one correction batch,
+and runs final validation without pushing. The detailed manual steps below remain
+the fallback for troubleshooting.
+
+Before the first Codex review, Claude Code must leave a complete handoff in
+`.review/handoff.md` using `.review/handoff.example.md`. The handoff records an
+immutable Git base, acceptance criteria, design decisions, validations executed or
+unavailable, known limitations, accepted risks, and out-of-scope work. Prefer a
+local implementation checkpoint commit so the corrective diff can be isolated;
+the checkpoint may be squashed before push. `scripts/prepare_review.ps1` prepares
+the mechanical Git context, but Claude Code remains responsible for completing the
+semantic sections.
+
 When `.review/codex-review.md` has `Status: CHANGES_REQUIRED`, read the complete
 review and verify every finding against the repository before changing code. Do not
 apply recommendations blindly: fix valid `BLOCKER` and `HIGH` findings, evaluate
 `MEDIUM` findings against the current task scope, and defer `LOW` findings that
-would cause unrelated refactoring. Rerun the appropriate validation scope after
-fixes. Claude Code remains the default sole writer, and Codex approval never
-replaces deterministic validation.
+would cause unrelated refactoring. Record every finding in the handoff's resolution
+table as `FIXED`, `DEFERRED`, `ACCEPTED_RISK`, or `REJECTED`, with evidence. Apply
+all accepted corrections as one batch and rerun the appropriate validation scope.
+
+The Codex loop has at most two passes: pass 1 is the complete diff review; pass 2
+only verifies finding closure and regressions caused by the corrective diff. After
+pass 2, or as soon as Codex returns `READY_FOR_FINAL_VALIDATION`, stop requesting
+general reviews and proceed to deterministic validation plus human decision. A
+third pass requires an explicitly named, newly introduced critical risk and a
+human-approved narrow scope. Claude Code remains the default sole writer, and
+Codex approval never replaces deterministic validation.
 
 **→ Full command reference:** [docs/guides/validation.md](docs/guides/validation.md)
 **→ Validation strategies:** [.claude/settings.json (permissions)](.claude/settings.json)
@@ -244,8 +267,14 @@ See [ROADMAP.md](ROADMAP.md) for complete timeline and success criteria per vers
   [docs/guides/observability.md](docs/guides/observability.md))
 - ✅ ComponentRegistry + manifest wiring
 - ✅ Unit and contract tests
-- 🟡 Integration and e2e suites exist but are not run in CI; live Qdrant/PostgreSQL/LLM
-  validation remains an explicit release check
+- ✅ Integration tests (`tests/integration/`) and the deterministic e2e scenario
+  (`tests/e2e/test_secure_preset_e2e.py`) run in CI (`.github/workflows/ci.yml`'s
+  `test-integration`/`e2e-deterministic` jobs, added in Batch 10 — an external plan, not this
+  file's own Lot sequence) against real Qdrant/PostgreSQL service containers — no longer an
+  explicit release-only check. The LLM-backed e2e scenario
+  (`tests/e2e/test_simple_qa_pipeline.py`) still runs outside the main pipeline, in
+  `.github/workflows/nightly.yml` (scheduled + `workflow_dispatch`), since it needs a real paid
+  LLM key the main pipeline deliberately does not require.
 - 🟡 `examples/simple_qa/` is implemented but its current live LLM + Qdrant run remains
   unchecked in `ROADMAP.md`
 

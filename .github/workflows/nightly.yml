@@ -1,0 +1,72 @@
+# Nightly/manual LLM-backed e2e run (Batch 10 — an external plan; not this
+# repo's own docs/refactoring-plan.md Lot sequence). Split out of ci.yml so
+# the main pipeline never needs an LLM secret to pass a PR (see ci.yml's
+# `e2e-deterministic` job, which covers the governance/tenant-isolation
+# scenario without one) — this workflow exists specifically to also exercise
+# the real OpenAI-backed path (tests/e2e/test_simple_qa_pipeline.py), on a
+# schedule and on demand, not on every push/PR.
+name: Nightly LLM E2E
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # 06:00 UTC daily
+  workflow_dispatch: {}
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONUNBUFFERED: "1"
+
+concurrency:
+  group: nightly-llm-e2e
+  cancel-in-progress: false
+
+jobs:
+  e2e-llm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      qdrant:
+        image: qdrant/qdrant:v1.12.4@sha256:241edb9d7778327516ef218f8c74e1bd61b5ea42cd4f193cb8d0896199705636
+        ports:
+          - 6333:6333
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e .[v1,dev]
+      - name: Require a real LLM API key (hard-fail, not silently skip)
+        # This workflow's entire purpose is exercising the real LLM path --
+        # an unset key here is a misconfigured secret, not "nothing to do."
+        # Matches scripts/check.sh's own check_e2e() precedent: fail loudly
+        # rather than let an all-skipped run report success.
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -z "${OPENAI_API_KEY}" ]; then
+            echo "::error::OPENAI_API_KEY secret is not set for this repository -- this workflow exists specifically to exercise the real LLM path."
+            exit 1
+          fi
+      - name: Wait for Qdrant to accept connections
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:6333/readyz; then
+              echo "Qdrant ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Qdrant did not become ready within the timeout"
+          exit 1
+      - name: Run the LLM-backed simple_qa e2e scenario
+        timeout-minutes: 10
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: pytest tests/e2e/test_simple_qa_pipeline.py -v -m e2e --tb=long -ra
+      - name: Dump Qdrant logs on failure
+        if: failure()
+        run: docker logs ${{ job.services.qdrant.id }} || true
