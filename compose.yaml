@@ -21,6 +21,9 @@
 #   curl http://localhost:8000/ready
 #   docker compose exec api mrag ingest examples/simple_qa/docs \
 #       --manifest docker/local-hybrid-rag.yaml
+#       # (that path is a small read-only bind mount into the api service
+#       # below, not part of the runtime image itself -- see the api
+#       # service's own volumes: comment, Codex review HIGH-002)
 #   docker compose exec api mrag ask "What is RAG?" \
 #       --manifest docker/local-hybrid-rag.yaml
 #   docker compose down           # stop, keep volumes (data persists)
@@ -144,6 +147,17 @@ services:
       # scratch (image runs as the non-root `mrag` user, uid 1000, home
       # /home/mrag — see the Dockerfile's `useradd --create-home`).
       - hf_cache:/home/mrag/.cache/huggingface
+      # Read-only fixture for the quick-start/smoke-test ingestion command
+      # above (`mrag ingest examples/simple_qa/docs`). The runtime image
+      # itself deliberately does NOT contain examples/ — the Dockerfile
+      # copies only manifests/, docker/server.py, and
+      # docker/local-hybrid-rag.yaml, and .dockerignore excludes examples/
+      # outright, keeping the image minimal and immutable (Codex review
+      # HIGH-002: the command was previously documented and smoke-tested
+      # against a path that did not exist in the container). This mounts
+      # only the two small files that command needs, read-only — not the
+      # whole examples/ tree, and not writable.
+      - ./examples/simple_qa/docs:/app/examples/simple_qa/docs:ro
     networks:
       - mrag_network
 
