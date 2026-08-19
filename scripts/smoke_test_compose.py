@@ -8,13 +8,25 @@ with the one-shot `migrate` service run to completion first) and proves it
 actually *works*, not just that containers started:
 
 - `GET /health` returns 200 quickly, with zero `.env` configuration.
-- `GET /ready`'s per-dependency `indexer` (Qdrant) and `audit_sink`
-  (PostgreSQL) roles report healthy — proving the `migrate` service's
-  `mrag db migrate` actually ran before `api` started (ADR-0011), and that
-  Qdrant is reachable over the Compose network — with zero `.env`
-  configuration either (neither needs an LLM key).
+- `GET /ready`'s `audit_sink` (PostgreSQL) role reports healthy immediately
+  — proving the `migrate` service's `mrag db migrate` actually ran before
+  `api` started (ADR-0011) — with zero `.env` configuration (no LLM key
+  needed). The `indexer` (Qdrant) role is checked twice: present (but not
+  necessarily healthy — see the ingestion bullet below) before ingestion,
+  then required healthy afterward.
 - `mrag ingest` against the running stack succeeds (sentence-transformers +
-  Qdrant only, no LLM call).
+  Qdrant only, no LLM call) — run against a *fresh* Qdrant volume, whose
+  `documents` collection does not exist until this step creates it, so the
+  `indexer` readiness role is only required healthy *after* ingestion, not
+  before (Codex review HIGH-001: `QdrantStore.check_health()` correctly,
+  honestly reports a missing collection as unhealthy per ADR-0010 — that is
+  not a bug to route around by skipping the pre-ingest state entirely, and
+  requiring it healthy *before* ingestion had ever run made this script fail
+  deterministically on the exact clean-start scenario it exists to prove).
+  The ingestion fixture itself (`examples/simple_qa/docs`) is not part of
+  the runtime image (`.dockerignore` excludes `examples/`) — compose.yaml's
+  `api` service mounts it read-only for exactly this command (Codex review
+  HIGH-002).
 - The `generator` role, `/ready`'s aggregate status, and `mrag ask` are
   gated behind a real `OPENAI_API_KEY` actually being set: `/ready` can
   never report a fully "healthy" aggregate status without one (ADR-0010's
@@ -65,6 +77,41 @@ HEALTH_POLL_DEADLINE = 120.0
 # than that would just re-read the same cached generator-health result,
 # proving nothing new about whether a transient startup delay has passed.
 READY_RECHECK_DELAY = 31.0
+
+
+def _dotenv_value(key: str) -> str | None:
+    """Best-effort read of `key` from the repo-root `.env` file, mirroring
+    what Docker Compose itself resolves for `${VAR}` interpolation into the
+    `api` container's environment. `os.environ` alone does not see that
+    file -- only Compose's own subprocess reads it (Codex review
+    MEDIUM-002). Never logs the value itself."""
+    dotenv_path = REPO_ROOT / ".env"
+    if not dotenv_path.is_file():
+        return None
+    for line in dotenv_path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        name, _, value = stripped.partition("=")
+        if name.strip() != key:
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+            value = value[1:-1]
+        return value or None
+    return None
+
+
+def _openai_key_available() -> bool:
+    """True if OPENAI_API_KEY will actually reach the `api` container --
+    either already in this process's own environment, or resolvable from
+    the repo-root `.env` file the documented `cp .env.example .env` quick
+    start populates and that Compose itself reads for `${VAR}`
+    interpolation. Checking `os.environ` alone (the previous behavior)
+    could report "no key" for a stack that actually received one through
+    `.env`, silently skipping the generator/`mrag ask` assertions on a
+    fully-configured stack (Codex review MEDIUM-002)."""
+    return bool(os.environ.get("OPENAI_API_KEY") or _dotenv_value("OPENAI_API_KEY"))
 
 
 class SmokeTestError(Exception):
@@ -143,6 +190,19 @@ def _fetch_ready(url: str) -> dict:
 
 def _dependency(report: dict, role: str) -> dict | None:
     return next((d for d in report["dependencies"] if d.get("role") == role), None)
+
+
+def _require_dependency_present(report: dict, role: str) -> dict:
+    """Confirms /ready has an entry for `role`, without requiring it
+    healthy yet. Used for the `indexer` role before ingestion has run
+    (Codex review HIGH-001) -- a fresh Qdrant volume has no `documents`
+    collection until ingestion creates it, so an unhealthy indexer at this
+    point is expected, honest behavior, not a defect."""
+    dep = _dependency(report, role)
+    if dep is None:
+        raise SmokeTestError(f"/ready has no entry for role={role!r}: {report}")
+    print(f"/ready role={role}: present (healthy={dep.get('healthy')}, pre-ingest)")
+    return dep
 
 
 def _assert_dependency_healthy(report: dict, role: str) -> None:
@@ -225,7 +285,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    have_llm_key = bool(os.environ.get("OPENAI_API_KEY"))
+    have_llm_key = _openai_key_available()
     if args.require_llm and not have_llm_key:
         print("ERROR: --require-llm was passed but OPENAI_API_KEY is not set.", file=sys.stderr)
         return 2
@@ -243,22 +303,30 @@ def main() -> int:
         _wait_for_health(API_URL)
         _check_migrate_succeeded(compose)
 
-        report = _fetch_ready(API_URL)
-        _assert_dependency_healthy(report, "indexer")
-        _assert_dependency_healthy(report, "audit_sink")
+        pre_ingest_report = _fetch_ready(API_URL)
+        _assert_dependency_healthy(pre_ingest_report, "audit_sink")
+        # Not asserted healthy yet -- see _require_dependency_present's own
+        # docstring and HIGH-001 in the module docstring above.
+        _require_dependency_present(pre_ingest_report, "indexer")
 
         if run_llm_checks:
-            _assert_dependency_healthy(report, "generator")
-            final_report = _fetch_ready(API_URL)
-            if final_report.get("status") != "healthy":
-                raise SmokeTestError(
-                    "OPENAI_API_KEY is set but /ready's aggregate status is "
-                    f"{final_report.get('status')!r}, not 'healthy': {final_report}"
-                )
+            _assert_dependency_healthy(pre_ingest_report, "generator")
 
         _mrag_exec(compose, "ingest", "examples/simple_qa/docs", "--manifest", args.manifest)
 
+        # The `documents` collection now exists -- this is the real proof
+        # ingestion worked, not merely that the command exited 0.
+        post_ingest_report = _fetch_ready(API_URL)
+        _assert_dependency_healthy(post_ingest_report, "indexer")
+
         if run_llm_checks:
+            _assert_dependency_healthy(post_ingest_report, "generator")
+            if post_ingest_report.get("status") != "healthy":
+                raise SmokeTestError(
+                    "An OpenAI API key is available but /ready's aggregate status "
+                    f"is {post_ingest_report.get('status')!r}, not 'healthy': "
+                    f"{post_ingest_report}"
+                )
             _mrag_exec(compose, "ask", "What is RAG?", "--manifest", args.manifest)
 
     except SmokeTestError as exc:
