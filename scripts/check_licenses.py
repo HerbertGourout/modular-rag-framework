@@ -71,21 +71,33 @@ def _load_baseline() -> dict[str, str]:
     return baseline
 
 
-def _installed_packages() -> list[dict[str, str]]:
-    result = subprocess.run(
-        [sys.executable, "-m", "piplicenses", "--format=json"],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+def _installed_packages(python_executable: str | None = None) -> list[dict[str, str]]:
+    cmd = [sys.executable, "-m", "piplicenses", "--format=json"]
+    if python_executable:
+        # Lot 9 (Codex review MEDIUM-001, round 2): piplicenses's own
+        # --python flag searches distributions from a *different*
+        # interpreter's sys.path than the one running this script -- lets
+        # CI's supply-chain job scan a venv containing only the shipped
+        # image closure, instead of a tooling-contaminated combined
+        # environment (that also has pip-audit/cyclonedx-bom/etc. installed).
+        cmd += ["--python", python_executable]
+    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
     return json.loads(result.stdout)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Dependency licence gate.")
-    parser.parse_args()
+    parser.add_argument(
+        "--python",
+        dest="python_executable",
+        default=None,
+        help="Scan distributions visible to this Python executable instead of the "
+        "current one (piplicenses' own --python) -- for scanning a dedicated venv "
+        "that doesn't also contain this script's own tooling.",
+    )
+    args = parser.parse_args()
 
-    packages = _installed_packages()
+    packages = _installed_packages(args.python_executable)
     baseline = _load_baseline()
 
     violations: list[tuple[str, str, str]] = []

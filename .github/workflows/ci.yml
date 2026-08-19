@@ -32,6 +32,10 @@ jobs:
         run: python scripts/check_layering.py --strict
       - name: Documentation consistency
         run: python scripts/check_docs.py
+      - name: "Lot 9: Dockerfile extras match requirements-lock.txt"
+        run: python scripts/check_lock_sync.py
+      - name: "Lot 9: Dockerfile runs non-root with pre-owned cache dirs"
+        run: python scripts/check_dockerfile_permissions.py
       - name: Whitespace errors
         run: git diff --check
       - name: Type check with mypy (ratcheted against .claude/mypy-baseline.txt)
@@ -157,16 +161,33 @@ jobs:
         with:
           python-version: "3.12"
           cache: "pip"
-      - name: "Install dependencies: every optional extra plus supply-chain tooling"
+      - name: "Build a venv containing ONLY the shipped closure (Lot 9, round 2)"
+        # A previous version of this job installed the shipped extras and
+        # supply-chain tooling into the SAME environment -- constraining the
+        # shipped extras closed the "vulnerable pinned version passes by
+        # resolving a newer one" gap, but pip-licenses/the SBOM then still
+        # inventoried that combined, tooling-contaminated environment, not
+        # the image's own closure (Codex review MEDIUM-001, round 2). This
+        # dedicated venv has nothing in it except exactly what the Docker
+        # image itself installs, constrained the same way.
+        run: |
+          python -m venv shipped-venv
+          shipped-venv/bin/pip install --upgrade pip
+          shipped-venv/bin/pip install --no-cache-dir --no-require-hashes -c requirements-lock.txt -e ".[v1,langgraph,postgres,auth]"
+      - name: "Install supply-chain tooling (unconstrained; not part of the shipped image)"
         run: |
           pip install --upgrade pip
-          pip install -e .[all,supply-chain]
-      - name: "Vulnerability scan: pip-audit against the installed environment"
-        run: pip-audit --skip-editable
-      - name: "Licence gate: scripts/check_licenses.py, see .claude/license-baseline.txt"
-        run: python scripts/check_licenses.py
-      - name: "Generate SBOM: CycloneDX, from the installed environment"
-        run: python -m cyclonedx_py environment --output-format json -o sbom.json
+          pip install -e ".[supply-chain]"
+      - name: "Vulnerability scan: pip-audit against the lock file's own pins directly"
+        # -r audits requirements-lock.txt's exact pinned versions, not
+        # whatever pip-audit's own environment happens to resolve --
+        # correct regardless of which venv is active, and doesn't require
+        # the shipped-venv above to exist for this step specifically.
+        run: pip-audit -r requirements-lock.txt
+      - name: "Licence gate: scripts/check_licenses.py against the shipped-only venv"
+        run: python scripts/check_licenses.py --python shipped-venv/bin/python
+      - name: "Generate SBOM: CycloneDX, from the shipped-only venv"
+        run: python -m cyclonedx_py environment --output-format json -o sbom.json shipped-venv/bin/python
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@v4
         with:
@@ -177,6 +198,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [lint, test-unit, test-contract]
+    # security-events: write is required by github/codeql-action/upload-sarif
+    # below (Codex review MEDIUM-003) to publish findings to the repo's code
+    # scanning tab; contents: read matches actions/checkout's own default.
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@v4
       - name: Build the immutable runtime image (Dockerfile, Lot 16b)
@@ -191,3 +218,32 @@ jobs:
           curl -sf http://localhost:8000/health
           docker logs mrag-smoke
           docker stop mrag-smoke
+      - name: "Lot 9: vulnerability scan (Grype, via anchore/scan-action)"
+        # Pinned by full commit SHA, not a mutable tag (# v7.4.0, verified live
+        # against GitHub's API on 2026-08-19) -- deliberately not
+        # aquasecurity/trivy-action: that action suffered a real, documented
+        # supply-chain compromise in March 2026 (76 of its 77 release tags were
+        # force-pushed to malicious commits stealing CI/CD secrets;
+        # GHSA-69fq-xp46-6x23 / CVE-2026-33634), which is exactly the class of
+        # risk a supply-chain-hardening lot should not casually reintroduce by
+        # picking the more commonly-templated default without checking its own
+        # history first. See docs/guides/dependency-lock.md for the sources.
+        id: grype-scan
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
+        with:
+          image: "modular-rag:ci"
+          severity-cutoff: high
+          fail-build: true
+          output-format: sarif
+      - name: "Lot 9: publish the Grype SARIF report (non-blocking MEDIUM/LOW findings, retained)"
+        # Without this, the SARIF file the step above requests lives only at
+        # its temporary output path and is discarded with the runner --
+        # HIGH/CRITICAL still fail the job via fail-build above, but nothing
+        # below that severity was ever reviewable, trended, or triaged
+        # (Codex review MEDIUM-003). `if: always()` publishes it even when
+        # the scan step above already failed the job on a HIGH/CRITICAL
+        # finding, so that failure's own detail is retained too.
+        if: always()
+        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
+        with:
+          sarif_file: ${{ steps.grype-scan.outputs.sarif }}

@@ -1,5 +1,14 @@
 [build-system]
-requires = ["hatchling"]
+# Pinned (Lot 9, Codex review HIGH-002): a bare "hatchling" let `python -m build`'s
+# isolated environment install whatever the newest Hatchling (and its own
+# transitives) happened to be at build time -- the built wheel's metadata/layout
+# could differ between two builds of the same commit even with every runtime
+# dependency locked. Dockerfile's builder stage pins this exact version (plus its
+# resolved transitives: packaging, pathspec, pluggy, tomlkit, trove-classifiers)
+# and builds with `--no-isolation` instead. Refresh together: `uv pip compile` a
+# throwaway `hatchling` requirement for --python-platform linux --python-version
+# 3.12, update this pin and the Dockerfile's builder-stage pins from that output.
+requires = ["hatchling==1.32.0"]
 build-backend = "hatchling.build"
 
 [project]
@@ -20,13 +29,21 @@ classifiers = [
 ]
 
 # Minimal runtime — adapters are optional extras
+#
+# Lot 9 (external plan; not docs/refactoring-plan.md's own Lot sequence) removed
+# two dead entries here, each verified zero-import across src/ + tests/ +
+# manifests/ before removal:
+#   - pydantic-settings: leftover of app/settings.py's Settings class, deleted in
+#     ADR-0007's Étape 8 stabilization pass. docs/architecture/structure.md
+#     already documented this dependency as a "leftover... not evidence it's in
+#     active use" before pyproject.toml was ever updated to match.
+#   - python-ulid: core/ids.py generates ids via stdlib uuid.uuid4(), not ulid;
+#     no file anywhere imports the `ulid` package.
 dependencies = [
     "pydantic>=2.7",
-    "pydantic-settings>=2.3",
     "pyyaml>=6.0",
     "httpx>=0.27",
     "structlog>=24.1",
-    "python-ulid>=2.0",
 ]
 
 [project.optional-dependencies]
@@ -43,7 +60,6 @@ v1 = [
     "pymupdf>=1.24",
     "python-docx>=1.1",
     "beautifulsoup4>=4.12",
-    "langchain-text-splitters>=0.2",
     "sentence-transformers>=3.0",
     "openai>=1.30",
     # Codex review (Lot 6, fourth pass, HIGH-001): raised from >=0.28 —
@@ -66,7 +82,18 @@ v1 = [
     # actually ran against — this only corrects the declared floor to match.
     "qdrant-client>=1.10",
     "rank-bm25>=0.2",
-    "cohere>=5.5",
+    # Lot 9 (external plan; not docs/refactoring-plan.md's own Lot sequence) removed
+    # "cohere>=5.5" and "langchain-text-splitters>=0.2" from here — both verified
+    # zero-import across src/, tests/, and manifests/ (including manifests/blueprints/):
+    # no CohereGenerator/CohereReranker/CohereEmbedder class exists anywhere
+    # (generation/synthesizers/ only has OpenAIGenerator, AnthropicGenerator,
+    # DeterministicGenerator), and every chunker under ingestion/chunkers/ is native
+    # (fixed.py, adaptive.py, _windowing.py) — none uses langchain_text_splitters.
+    # Unlike the v4/v5 extras below (explicitly documented as "not yet wired into any
+    # code — V4/V5 not reached", a deliberate roadmap deferral), these two carried no
+    # such flag anywhere despite sitting inside v1, which CLAUDE.md's own roadmap
+    # (block 09) already marks implementation-complete — dead weight, not a
+    # placeholder for sequenced future work.
     # Opt-in subword token counting for chunkers (token_counter: "tiktoken" in manifests);
     # the default whitespace counter needs no dependency.
     "tiktoken>=0.7",

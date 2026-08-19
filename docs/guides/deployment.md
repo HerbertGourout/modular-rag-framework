@@ -42,8 +42,11 @@ uvicorn server:app --app-dir docker --reload --host 0.0.0.0 --port 8000
 The [`Dockerfile`](../../Dockerfile) at the repo root (Lot 16b, `docs/refactoring-plan.md`) is
 the real, current build — a multi-stage immutable image: a `builder` stage produces a wheel from
 source, the `runtime` stage installs the wheel with the `v1`, `langgraph`, `postgres`, and
-`auth` extras into a slim non-root image,
-never the source tree, dev tooling, or `.claude/research-papers/` (excluded via
+`auth` extras into a slim non-root image, constrained by
+[`requirements-lock.txt`](../../requirements-lock.txt) so every transitive dependency resolves to
+the exact version two builds of the same commit already agreed on (Lot 9 — see
+[dependency-lock.md](dependency-lock.md) for the update procedure) — never the source tree, dev
+tooling, or `.claude/research-papers/` (excluded via
 [`.dockerignore`](../../.dockerignore)). [`docker/server.py`](../../docker/server.py) is the
 `create_app()` wrapper the image runs, configurable via `MRAG_MANIFEST_PATH`. Verified in CI by
 the `container-build` job (`.github/workflows/ci.yml`) — build + a real `docker run` + `/health`

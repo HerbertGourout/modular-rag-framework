@@ -58,17 +58,22 @@ Central project configuration. Replaces `setup.py` + `setup.cfg`.
 | Package | Version | Role |
 |---|---|---|
 | `pydantic` | ≥2.7 | Data models, validation |
-| `pydantic-settings` | ≥2.3 | Environment variable loading (see the `app/settings.py` note below — this dependency is a leftover of a class that was ultimately deleted, not evidence it's in active use) |
 | `pyyaml` | ≥6.0 | YAML manifest loading |
 | `httpx` | ≥0.27 | Asynchronous HTTP client |
 | `structlog` | ≥24.1 | Structured JSON logging |
-| `python-ulid` | ≥2.0 | ULID generation (time-sortable IDs) |
+
+Removed in Lot 9 (external plan; not this file's own Lot sequence — see
+[docs/guides/dependency-lock.md](../guides/dependency-lock.md)): `pydantic-settings` (the
+`app/settings.py` class it backed was already deleted in ADR-0007's Étape 8 — this row used to
+carry that same caveat before the dependency was actually removed to match) and `python-ulid`
+(`core/ids.py` generates ids via stdlib `uuid.uuid4()`, not ulid — nothing ever imported the
+`ulid` package).
 
 **Extras groups (optional dependencies)**
 
 | Group | Command | What it adds |
 |---|---|---|
-| `v1` | `pip install -e ".[v1]"` | FastAPI, Uvicorn, Typer, pymupdf, python-docx, BS4, langchain-text-splitters, sentence-transformers, openai, anthropic, qdrant-client, rank-bm25, cohere, tiktoken (opt-in subword token counting for chunkers — the default whitespace counter needs no dependency) |
+| `v1` | `pip install -e ".[v1]"` | FastAPI, Uvicorn, Typer, pymupdf, python-docx, BS4, sentence-transformers, openai, anthropic, qdrant-client, rank-bm25, tiktoken (opt-in subword token counting for chunkers — the default whitespace counter needs no dependency). `cohere` and `langchain-text-splitters` were removed here in Lot 9 — zero imports anywhere, no adapter class ever used either |
 | `v4` | `pip install -e ".[v4]"` | opentelemetry-sdk/api/exporter-otlp (not yet wired into any code — V4 not reached) |
 | `v5` | `pip install -e ".[v5]"` | pymupdf, pillow, pytesseract (not yet wired into any code — V5 not reached) |
 | `langgraph` | `pip install -e ".[langgraph]"` | `langgraph` itself — the external `DocumentEngine` adapter (`adapters/llms/langgraph_engine.py`, ADR-0006, Lot 15). The default native adapter needs none of this; only manifests with `engine.adapter: langgraph` do |
@@ -83,10 +88,19 @@ dependencies (neo4j, networkx, spacy, python-louvain) had zero imports anywhere 
 `src/modular_rag/`, verified before removal, and backed the native GraphRAG traversal/
 community-detection build that ADR-0005 §5.2 delegates to the selected external engine instead.
 
-A `requirements-lock.txt` at the repo root (generated via `uv pip compile pyproject.toml --extra
-v1 --extra dev -o requirements-lock.txt`) pins every resolved dependency to an exact version for
-reproducible installs — `pyproject.toml`'s own bounds stay open `>=` ranges by design; the lock
-file, not the source bounds, is what a reproducible install actually resolves against.
+A `requirements-lock.txt` at the repo root (generated via `uv pip compile pyproject.toml
+--python-platform linux --python-version 3.12 --extra v1 --extra dev --extra langgraph --extra
+postgres --extra auth -o requirements-lock.txt` — widened in Lot 9 to also cover `langgraph`,
+`postgres`, and `auth`, the exact three extras the Dockerfile installs alongside `v1`, and pinned
+to the `linux` target platform since the image runs there regardless of which OS generates the
+lock) pins every resolved dependency to an exact version for reproducible installs —
+`pyproject.toml`'s own bounds stay open `>=` ranges by design; the lock file, not the source
+bounds, is what a reproducible install actually resolves against. The Dockerfile's runtime stage
+now actually consumes this lock (`pip install -c requirements-lock.txt`) instead of resolving
+freely against PyPI at build time — see
+[docs/guides/dependency-lock.md](../guides/dependency-lock.md) for the full update procedure and
+`scripts/check_lock_sync.py` for the CI gate that fails if the Dockerfile's installed extras ever
+diverge from what the lock actually covers.
 
 **CLI entry point**: `mrag` → `modular_rag.cli:app` (command installed on the PATH)
 
@@ -871,7 +885,8 @@ through as `tenant_id`/`user_id`/`roles`.
 tests/
 ├── __init__.py
 ├── unit/               ← Fast, no external services required — mirrors src/modular_rag/ closely,
-│                          plus tests/unit/scripts/ (testing scripts/check_layering.py itself) and
+│                          plus tests/unit/scripts/ (testing scripts/check_layering.py,
+│                          check_lock_sync.py, and check_dockerfile_permissions.py themselves) and
 │                          tests/unit/e2e/ (testing e2e-fixture helpers that don't themselves need
 │                          live services, placed here so `check.sh full`'s unit-scope actually
 │                          runs them — files directly under tests/e2e/ are only selected by the
