@@ -52,6 +52,18 @@ class _FakeEmbedder:
         return "fake-embedder"
 
 
+class _RecordingEmbedder(_FakeEmbedder):
+    """Records every text `embed()` was actually called with, so tests can
+    assert whether `embedding_text` or `content` was the one embedded."""
+
+    def __init__(self) -> None:
+        self.calls: list[list[str]] = []
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        self.calls.append(list(texts))
+        return super().embed(texts)
+
+
 class _FakeIndexer:
     def __init__(self) -> None:
         self.indexed: list[Chunk] = []
@@ -173,6 +185,8 @@ def _engine(
     redactor: PatternRedactor | None = None,
     review_queue: HumanReviewGate | None = None,
     lifecycle_ledger: InMemoryLifecycleLedger | None = None,
+    tracer: object | None = None,
+    embedder: _FakeEmbedder | None = None,
 ) -> tuple[RAGEngine, Container]:
     manifest = PipelineManifest(
         id="test-pipeline",
@@ -184,7 +198,7 @@ def _engine(
     )
     container = Container(manifest)
     container.register("chunker", _FakeChunker())
-    container.register("embedder", _FakeEmbedder())
+    container.register("embedder", embedder or _FakeEmbedder())
     container.register("indexer", _FakeIndexer())
     container.register("retriever", retriever or _FakeRetriever())
     container.register("generator", generator or _FakeGenerator())
@@ -202,6 +216,8 @@ def _engine(
         container.register("review_queue", review_queue)
     if lifecycle_ledger is not None:
         container.register("lifecycle_ledger", lifecycle_ledger)
+    if tracer is not None:
+        container.register("tracer", tracer)
     return RAGEngine(container), container
 
 
@@ -760,7 +776,8 @@ def test_retrieve_returns_raw_chunks_without_generation() -> None:
 
     result = engine.retrieve("What is RAG?", k=5)
 
-    assert result == [hit]
+    assert result.chunks == [hit]
+    assert result.trace_id
 
 
 def test_retrieve_raises_when_tenant_policy_configured_and_no_tenant_id_given() -> None:
@@ -780,8 +797,8 @@ def test_retrieve_filters_cross_tenant_chunks() -> None:
 
     result = engine.retrieve("What is RAG?", tenant_id="acme-corp")
 
-    assert len(result) == 1
-    assert result[0].chunk.tenant_id == "acme-corp"
+    assert len(result.chunks) == 1
+    assert result.chunks[0].chunk.tenant_id == "acme-corp"
 
 
 def test_retrieve_succeeds_without_tenant_policy_when_no_tenant_id_given() -> None:
@@ -791,7 +808,8 @@ def test_retrieve_succeeds_without_tenant_policy_when_no_tenant_id_given() -> No
 
     result = engine.retrieve("What is RAG?")
 
-    assert result == [hit]
+    assert result.chunks == [hit]
+    assert result.trace_id
 
 
 def test_ingest_chunks_embeds_missing_embeddings_then_indexes_and_feeds_retriever() -> None:
@@ -815,6 +833,38 @@ def test_ingest_chunks_does_not_re_embed_chunks_that_already_have_an_embedding()
     engine.ingest_chunks([chunk])
 
     assert chunk.embedding == [9.9, 9.9]
+
+
+def test_ingest_chunks_embeds_embedding_text_instead_of_content_when_set() -> None:
+    """ContextualEnricher sets `embedding_text` to a document-context-prefixed
+    variant of `content` (ingestion/enrichers/contextual_enricher.py);
+    `ingest_chunks()` must embed that, not the raw `content`, while leaving
+    `content` itself untouched (citations/`/retrieve` read `content` directly)."""
+    embedder = _RecordingEmbedder()
+    engine, _ = _engine(embedder=embedder)
+    chunk = Chunk(
+        doc_id=new_id(),
+        content="hello world",
+        embedding_text="Document: report.pdf\n\nhello world",
+    )
+
+    engine.ingest_chunks([chunk])
+
+    assert embedder.calls == [["Document: report.pdf\n\nhello world"]]
+    assert chunk.content == "hello world"  # unchanged
+
+
+def test_ingest_chunks_embeds_content_when_embedding_text_is_unset() -> None:
+    """Pre-existing behavior, unchanged: a chunk with no `embedding_text`
+    (e.g. produced outside `ingest_path()`, or before this enricher existed)
+    still embeds `content` as-is."""
+    embedder = _RecordingEmbedder()
+    engine, _ = _engine(embedder=embedder)
+    chunk = Chunk(doc_id=new_id(), content="hello world")
+
+    engine.ingest_chunks([chunk])
+
+    assert embedder.calls == [["hello world"]]
 
 
 def test_rag_engine_exposes_no_delete_method() -> None:
@@ -1036,3 +1086,118 @@ def test_ingest_chunks_does_not_delete_a_pre_existing_dense_version_on_lexical_f
         engine.ingest_chunks([new_chunk])
 
     assert tracking_indexer.delete_calls == []
+
+
+# -- ADR-0012: OpenTelemetry tracing (Lot 11, external plan -- OpenTelemetry;
+# not this repo's own docs/refactoring-plan.md Lot 11a/b/c sequence) --
+
+
+def test_answer_creates_nested_spans_for_each_pipeline_stage() -> None:
+    from modular_rag.adapters.observability.otel_tracing import OtelTracer
+
+    tracer, exporter = OtelTracer.for_testing()
+    hit = RetrievedChunk(
+        chunk=Chunk(doc_id=new_id(), content="Paris is the capital of France"), score=0.9, rank=1
+    )
+    engine, _ = _engine(
+        retriever=_FakeRetriever(hits=[hit]),
+        guard=_FakeGuard(),
+        tracer=tracer,
+    )
+
+    engine.answer("What is the capital of France?")
+
+    span_names = [s.name for s in exporter.get_finished_spans()]
+    assert span_names == [
+        "rag.guard_query",
+        "rag.retrieve",
+        "rag.generate",
+        "rag.guard_answer",
+        "rag.answer",
+    ]
+    # All spans belong to the same distributed trace (ADR-0012's "consistent
+    # distributed trace for a request" acceptance criterion) -- verified via
+    # OpenTelemetry's own trace_id, not a hand-rolled correlation scheme.
+    trace_ids = {s.context.trace_id for s in exporter.get_finished_spans()}
+    assert len(trace_ids) == 1
+
+
+def test_generate_span_carries_safe_provider_and_token_attributes() -> None:
+    from modular_rag.adapters.observability.otel_tracing import OtelTracer
+
+    tracer, exporter = OtelTracer.for_testing()
+    generator = _FakeGenerator()
+    engine, _ = _engine(generator=generator, tracer=tracer)
+
+    engine.answer("What is RAG?")
+
+    generate_span = next(s for s in exporter.get_finished_spans() if s.name == "rag.generate")
+    assert generate_span.attributes["provider"] == "fake-generator"
+    # The fake generator's own TraceStep (mirroring real generators) sets no
+    # "model" metadata key, so the span must not fabricate one -- it should
+    # simply be absent, not an empty string or None placeholder.
+    assert "model" not in generate_span.attributes
+    # No query/answer text ever appears as an attribute value anywhere.
+    for span in exporter.get_finished_spans():
+        for value in span.attributes.values():
+            assert "RAG?" not in str(value)
+
+
+def test_no_tracer_configured_creates_no_spans_and_does_not_raise() -> None:
+    engine, _ = _engine(guard=_FakeGuard())
+
+    answer = engine.answer("What is RAG?")
+
+    assert answer.text == "fake answer"
+
+
+def test_retrieve_creates_a_retrieve_span() -> None:
+    from modular_rag.adapters.observability.otel_tracing import OtelTracer
+
+    tracer, exporter = OtelTracer.for_testing()
+    hit = RetrievedChunk(chunk=Chunk(doc_id=new_id(), content="hit"), score=0.5, rank=1)
+    engine, _ = _engine(retriever=_FakeRetriever(hits=[hit]), tracer=tracer)
+
+    result = engine.retrieve("What is RAG?", k=3)
+
+    assert len(result.chunks) == 1
+    spans = exporter.get_finished_spans()
+    assert [s.name for s in spans] == ["rag.retrieve"]
+    assert spans[0].attributes["chunks_returned"] == 1
+    assert spans[0].attributes["k"] == 3
+    assert spans[0].attributes["rag.trace_id"] == result.trace_id
+
+
+def test_ingest_creates_ingest_and_chunk_spans() -> None:
+    from modular_rag.adapters.observability.otel_tracing import OtelTracer
+
+    tracer, exporter = OtelTracer.for_testing()
+    engine, _ = _engine(tracer=tracer)
+    doc = Document(source="doc-1.txt", content="hello world")
+
+    total = engine.ingest([doc])
+
+    assert total == 1
+    span_names = [s.name for s in exporter.get_finished_spans()]
+    # rag.ingest wraps the whole call; rag.chunk wraps this document's
+    # chunking; rag.embed wraps the embedding loop inside ingest_chunks().
+    assert span_names == ["rag.chunk", "rag.embed", "rag.ingest"]
+    ingest_span = next(s for s in exporter.get_finished_spans() if s.name == "rag.ingest")
+    assert ingest_span.attributes["document_count"] == 1
+    assert ingest_span.attributes["chunks_indexed"] == 1
+
+
+def test_ingest_chunks_creates_an_embed_span_with_provider_and_counts() -> None:
+    from modular_rag.adapters.observability.otel_tracing import OtelTracer
+
+    tracer, exporter = OtelTracer.for_testing()
+    engine, _ = _engine(tracer=tracer)
+    chunk = Chunk(doc_id=new_id(), content="hello")
+
+    engine.ingest_chunks([chunk])
+
+    spans = exporter.get_finished_spans()
+    assert [s.name for s in spans] == ["rag.embed"]
+    assert spans[0].attributes["provider"] == "fake-embedder"
+    assert spans[0].attributes["chunk_count"] == 1
+    assert spans[0].attributes["chunks_embedded"] == 1

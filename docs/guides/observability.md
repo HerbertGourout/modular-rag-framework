@@ -143,6 +143,144 @@ real fields (missing `exact_match`, `answer_precision`, `answer_recall`, `contex
 of drift that table is meant to be the single source of truth against, rather than duplicating a
 now-incomplete copy here.
 
+## Distributed tracing (OpenTelemetry)
+
+[ADR-0012](../adr/0012-opentelemetry-tracing-port.md) adds live, OpenTelemetry-compatible
+distributed tracing — a separate, both-optional mechanism from `Telemetry` above. Where
+`Telemetry.record_trace()` receives a completed `Trace` after a run finishes, `Tracer`
+(`contracts/tracing.py`) creates *live* spans as each pipeline stage executes, so a single
+request produces one correctly-nested, exportable OpenTelemetry trace.
+
+### Where spans are created
+
+Only in `orchestration/engine.py`, `app/application.py`, and `api/__init__.py` — never inside
+`ingestion/`, `retrieval/`, `generation/`, or `security/` (domain modules never import
+OpenTelemetry, directly or indirectly). `app/application.py`'s `"app.request"` span is shared by
+both `ApplicationService.answer()` and `.retrieve()` (an `operation` attribute — `"answer"` or
+`"retrieve"` — distinguishes the two in a trace viewer), but they nest very differently below
+it — corrected here after Codex review pass 1 (HIGH-002) found the previous single-diagram
+version implied `/retrieve` also flowed through `rag.answer`, which it never does:
+
+```mermaid
+%%{init: {"theme": "base"}}%%
+flowchart TB
+    A1["api.answer\n(api/__init__.py)"] --> B1["app.request\n(operation=answer — correlation_id, request_id)"]
+    B1 --> C["rag.answer\n(orchestration/engine.py — RAGEngine._run())"]
+    C --> D["rag.guard_query"]
+    C --> E["rag.retrieve"]
+    C --> F["rag.tenant_filter (if tenant_policy configured)"]
+    C --> G["rag.rerank (if reranker configured)"]
+    C --> H["rag.generate"]
+    C --> I["rag.guard_answer"]
+
+    A2["api.retrieve\n(api/__init__.py)"] --> B2["app.request\n(operation=retrieve — correlation_id, request_id, app.trace_id)"]
+    B2 --> J["rag.retrieve\n(RAGEngine.retrieve() — a separate, leaf span; no rag.answer parent)"]
+```
+
+Both `"app.request"` spans carry `app.trace_id` — a real, minimal `Trace` built specifically for
+that call (`Trace(query_id=..., pipeline_id=...)`, with one `TraceStep` for the retrieval itself
+on the `retrieve()` path). This was corrected during Lot 11's own review cycle (Codex pass 2
+HIGH-002): an earlier version omitted `app.trace_id` for `retrieve()` on the reasoning that
+`RAGEngine.retrieve()` built no `Trace` object to take an id from — but that silently narrowed the
+original "propagate correlation_id, request_id, and trace_id" acceptance criterion without an
+explicit decision to do so. Per an explicit human decision, `RAGEngine.retrieve()` now builds a
+real `Trace` and returns it via `RetrievalResult.trace_id` — a public contract change: `RAGEngine.
+retrieve()`/`ApplicationService.retrieve()` now return `RetrievalResult` (`chunks` + `trace_id`),
+not a bare `list[RetrievedChunk]`, and `GET /retrieve`'s JSON response is now `{"chunks": [...],
+"trace_id": "..."}` instead of a bare array — see `docs/api/rest.md`. This `Trace` is not recorded
+via `Telemetry`/`AuditSink` (only `answer()`/`_run()` does that); it exists solely to carry a real
+trace_id, not for the fuller answer-path observability/audit machinery.
+
+`RAGEngine.ingest()`/`ingest_chunks()` similarly create `rag.ingest` → `rag.chunk` (per document)
+and `rag.embed` spans — these are root spans when called directly (there is no `/ingest` API
+route; ingestion runs via `mrag ingest` or `RAGEngine.ingest()` directly).
+
+`engine.adapter: langgraph` manifests still produce `api.answer`/`api.retrieve` and `app.request`
+— both are engine-neutral, reading `Container.tracer` directly regardless of which
+`DocumentEngine` is selected — but never the `rag.*` spans above, since `LangGraphEngineAdapter`
+never calls into `RAGEngine` (see ADR-0012's own "LangGraphEngineAdapter internal step
+instrumentation" out-of-scope note; corrected, Codex review pass 1 HIGH-001, from an earlier
+version of `runtime_manifest_errors()` that mistakenly rejected `observability.tracer` under
+LangGraph entirely).
+
+Every span in this tree shares one OpenTelemetry trace_id automatically — via OpenTelemetry's
+own `contextvars`-based context propagation, not manual id-threading — as long as every layer
+reads the *same* `Container`-registered `Tracer` instance, which manifest-driven wiring already
+guarantees.
+
+### `Tracer`/`Span` contract
+
+```python
+def start_span(self, name: str, attributes: dict[str, str | int | float | bool] | None = None) -> Span
+def name(self) -> str
+```
+
+`Span` is a context manager: `set_attribute(key, value)` and `record_error(message)` (message
+must be a short, safe classification — e.g. an exception type name — never raw exception text).
+
+### `NullTracer` (default — tracing disabled)
+
+Omitting `observability.tracer` from a manifest (or configuring `type: null`) means
+`Container.tracer` is `None`; every instrumentation site guards with `if self._c.tracer:` (or the
+equivalent `nullcontext()` fallback in `app/`/`api/`), so zero spans are ever created — this is
+the "instrumentation can be disabled" behavior.
+
+### `OtelTracer` (real backend)
+
+```yaml
+observability:
+  tracer:
+    type: otel
+    config:
+      service_name: my-pipeline
+      otlp_endpoint: "http://otel-collector:4317"   # omit to create spans without exporting them
+      otlp_insecure: true
+      console_export: false
+```
+
+`otlp_endpoint` omitted (the default) still creates real spans — every attribute-setting code
+path is exercised identically in every environment — but attaches no exporter, so nothing is
+ever transmitted ("toggleable export function": the toggle is whether an endpoint is
+configured). Export, when enabled, runs through OpenTelemetry's own `BatchSpanProcessor` on a
+background thread, which catches and logs export failures internally rather than raising into
+application code — a down or unreachable OTLP collector has no functional impact on request
+handling.
+
+`engine.adapter: langgraph` manifests may also set `observability.tracer` — see the "Where spans
+are created" section above for exactly which spans a LangGraph-routed request gets (the
+engine-neutral `api.*`/`app.request` pair, not the `RAGEngine`-internal `rag.*` spans).
+
+### PII safety
+
+Span attributes are restricted to counts, provider/model identifiers (`Component.name()`, the
+same non-secret identifier already logged elsewhere), status, and `correlation_id`/`request_id`.
+No query text, document content, answer text, or token content is ever attached to a span — the
+same allowlist discipline as `TraceStep`'s own checklist (see `orchestration/CLAUDE.md`).
+
+### Testing with an in-memory exporter
+
+```python
+from modular_rag.adapters.observability.otel_tracing import OtelTracer
+
+tracer, exporter = OtelTracer.for_testing()
+with tracer.start_span("rag.retrieve", {"provider": "hybrid"}) as span:
+    span.set_attribute("chunks_returned", 5)
+
+spans = exporter.get_finished_spans()
+assert spans[0].name == "rag.retrieve"
+```
+
+`for_testing()` wires an in-process `InMemorySpanExporter` behind a synchronous
+`SimpleSpanProcessor` — no network, no real OTLP collector, no sleep/poll needed to observe
+finished spans.
+
+### Out of scope (see ADR-0012)
+
+Cross-service W3C `traceparent` header extraction/injection at the API boundary, unifying
+`Trace.id`/`ExecutionContext.correlation_id`/OpenTelemetry's own trace_id into one identifier, and
+`LangGraphEngineAdapter` internal step instrumentation are all explicitly deferred — recorded as
+known limitations in the ADR, not silently unhandled.
+
 ## Log configuration
 
 **There is no `MRAG_LOG_LEVEL` or `MRAG_LOG_FORMAT` environment variable in this codebase** — an

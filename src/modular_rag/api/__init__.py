@@ -13,6 +13,7 @@ from modular_rag.api.middleware import (
     ConcurrencyLimitMiddleware,
     MaxBodySizeMiddleware,
     RateLimitMiddleware,
+    TracingMiddleware,
 )
 from modular_rag.app.public import (
     AuthenticationError,
@@ -46,6 +47,18 @@ class AnswerResponse(BaseModel):
     text: str
     citations: list[dict[str, object]]
     trace_id: str | None = None
+
+
+class RetrieveResponse(BaseModel):
+    """ADR-0012, Codex review pass 2 HIGH-002: `/retrieve` used to return a
+    bare JSON array of chunks with no trace_id anywhere in the response —
+    changed to an object so a caller can correlate a retrieval call with its
+    trace, the same way `AnswerResponse.trace_id` already lets them do for
+    `/answer`. A genuine breaking response-shape change (array -> object);
+    acceptable pre-launch per the project's own pre-alpha status."""
+
+    chunks: list[dict[str, object]]
+    trace_id: str
 
 
 def create_app(
@@ -137,6 +150,7 @@ def create_app(
     api.add_middleware(RateLimitMiddleware, requests_per_minute=rate_limit_per_minute)
     api.add_middleware(MaxBodySizeMiddleware, max_bytes=max_body_bytes)
     api.add_middleware(ConcurrencyLimitMiddleware, max_concurrent=max_concurrent_requests)
+    api.add_middleware(TracingMiddleware, tracer=pipeline.tracer)
 
     _bearer = HTTPBearer(auto_error=False)
 
@@ -209,19 +223,24 @@ def create_app(
             trace_id=ans.trace_id,
         )
 
-    @api.get("/retrieve")
+    @api.get("/retrieve", response_model=RetrieveResponse)
     def retrieve(
         q: str,
         k: int = 10,
         identity: TenantContext | None = Depends(_authenticate),  # noqa: B008
-    ) -> list[dict[str, object]]:
+    ) -> RetrieveResponse:
         try:
-            chunks = pipeline.retrieve(q, k=k, tenant_id=identity.tenant_id if identity else None)
+            result = pipeline.retrieve(
+                q, k=k, tenant_id=identity.tenant_id if identity else None
+            )
         except Exception as exc:
             raise to_http_exception(exc) from exc
-        return [
-            {"chunk_id": rc.chunk.id, "score": rc.score, "content": rc.chunk.content[:300]}
-            for rc in chunks
-        ]
+        return RetrieveResponse(
+            chunks=[
+                {"chunk_id": rc.chunk.id, "score": rc.score, "content": rc.chunk.content[:300]}
+                for rc in result.chunks
+            ],
+            trace_id=result.trace_id,
+        )
 
     return api

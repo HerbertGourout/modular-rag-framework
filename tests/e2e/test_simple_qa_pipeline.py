@@ -37,6 +37,7 @@ def test_ingest_and_answer(pipeline):
 
 @pytest.mark.e2e
 def test_retrieve_only(pipeline):
-    results = pipeline.retrieve("retrieval augmented generation", k=5)
-    assert len(results) > 0
-    assert results[0].score > 0
+    result = pipeline.retrieve("retrieval augmented generation", k=5)
+    assert len(result.chunks) > 0
+    assert result.chunks[0].score > 0
+    assert result.trace_id

@@ -43,7 +43,8 @@ src/modular_rag/
 │   ├── secrets.py          SecretResolver protocol
 │   ├── security.py         SecurityGuard, Redactor, TenantPolicy protocols; GuardResult model
 │   ├── storage.py          Storage protocol (KV)
-│   └── telemetry.py        Telemetry protocol
+│   ├── telemetry.py        Telemetry protocol
+│   └── tracing.py          Tracer/Span protocols (ADR-0012, live OpenTelemetry-compatible spans)
 │                          (No `memory.py`/`KnowledgeGraphStore`, no `agents.py`/`planning.py` —
 │                          the graph-store and native-agent contracts these would have backed
 │                          were removed in the ADR-0007 stabilization pass / Lot 17 respectively;
@@ -55,6 +56,7 @@ src/modular_rag/
 │   │   ├── chunk.py
 │   │   ├── query.py
 │   │   ├── retrieved.py
+│   │   ├── retrieval_result.py  RetrievalResult (chunks + trace_id, ADR-0012)
 │   │   ├── answer.py           Answer, Citation
 │   │   ├── trace.py            Trace, TraceStep, TRACE_SCHEMA_VERSION
 │   │   ├── policy.py           Policy, PolicyRule
@@ -131,7 +133,8 @@ src/modular_rag/
 │   ├── normalizers/
 │   │   └── text_normalizer.py TextNormalizer (whitespace, newline collapsing)
 │   ├── enrichers/
-│   │   └── metadata_enricher.py  MetadataEnricher (word count, language, reading level)
+│   │   ├── metadata_enricher.py  MetadataEnricher (filename, extension, size_bytes, enriched_at)
+│   │   └── contextual_enricher.py  ContextualEnricher (document-context-prefixed embedding_text)
 │   ├── lifecycle/
 │   │   ├── in_memory_ledger.py   InMemoryLifecycleLedger
 │   │   ├── hashing.py            Content-hash helpers used by the lifecycle ledger
@@ -229,9 +232,12 @@ src/modular_rag/
 │                          synthesizer/validator) this directory used to hold were removed in
 │                          Lot 17 (zero test coverage, zero consumers).
 │
-├── observability/      ← Domain-adjacent module: structured logging + telemetry.
+├── observability/      ← Domain-adjacent module: structured logging + telemetry + no-op tracing.
 │                          Public exports via observability/__init__.py: StructlogTelemetry,
-│                          NullTelemetry — both defined directly in __init__.py, no submodule.
+│                          NullTelemetry, NullSpan, NullTracer — all defined directly in
+│                          __init__.py, no submodule. The real OpenTelemetry Tracer
+│                          (OtelTracer, ADR-0012) lives in adapters/observability/, not here —
+│                          it lazy-imports the optional opentelemetry-* packages.
 │
 ├── orchestration/      ← Runtime logic: compiles manifests, runs pipelines. May import only
 │                          contracts/ + core/ — never app/ (see the dependency-rule note below).
@@ -374,7 +380,7 @@ What each package's `__init__.py` actually exports (verified directly, not infer
 |---|---|
 | `contracts/` | `Chunker`, `Embedder`, `Indexer`, `VectorIndexer`, `Retriever`, `Reranker`, `Generator`, `SecurityGuard`, `Redactor`, `TenantPolicy`, `GuardResult`, `Evaluator`, `AnswerEngine`, `Telemetry`, `Storage`, `Parser`, `TenantContext`, `TokenVerifier`, `SecretResolver`, `ReviewItem`, `ReviewQueue`, `AuditEvent`, `AuditEventType`, `AuditSink`, `DocumentRecord`, `DocumentStatus`, `LifecycleLedger`, `ErasureProof`, `DocumentDivergence`, `ReconciliationReport`, `RepairResult`, `ManifestLoader`, `PipelineManifest`, `ComponentConfig`, `EngineSelection`, `GovernanceSection`, `ObservabilitySection`, `QualitySection`, `DocumentEngine`, `EngineCapability`, `EngineRequest`, `EngineResult`, `EngineStep`, `ExecutionContext`, `CancellationToken`, `GovernanceHook`, `GovernanceDecision` |
 | `core/` | The four *submodules* `enums`, `errors`, `ids`, `models` — not individual names (see the module tree note above) |
-| `core/models/` | `Document`, `Chunk`, `Query`, `RetrievedChunk`, `Citation`, `Answer`, `TraceStep`, `Trace`, `PolicyRule`, `Policy`, `Metrics` |
+| `core/models/` | `Document`, `Chunk`, `Query`, `RetrievedChunk`, `RetrievalResult`, `Citation`, `Answer`, `TraceStep`, `Trace`, `PolicyRule`, `Policy`, `Metrics` |
 | `core/enums` | `Modality`, `RetrievalMethod`, `PolicyAction`, `DataClassification`, `PIICategory` |
 | `core/errors` | `ModularRAGError` and every subclass — see [`overview.md` §12](overview.md#12-error-hierarchy) for the complete, current tree |
 | `ingestion/` | `ingest_path`, `ingest_directory` |
@@ -383,7 +389,7 @@ What each package's `__init__.py` actually exports (verified directly, not infer
 | `security/` | `InMemoryAuditSink`, `BasicSecurityGuard`, `HumanReviewGate`, `TenantIsolationPolicy`, `PatternRedactor` |
 | `eval/` | `BenchmarkCase`, `BenchmarkReport`, `BenchmarkRunner`, `ExactMatchEvaluator`, `compute_retrieval_metrics` |
 | `memory/` | `InMemoryStorage` (no graph submodule — see the module tree above) |
-| `observability/` | `StructlogTelemetry`, `NullTelemetry` |
+| `observability/` | `StructlogTelemetry`, `NullTelemetry`, `NullSpan`, `NullTracer` |
 | `orchestration/` | *(no `__init__.py` re-exports — import concrete classes directly from their submodule, e.g. `from modular_rag.orchestration.engine import RAGEngine`, `from modular_rag.orchestration.container import Container`)* |
 | `app/` | `public` is the intended stable surface for external callers (API/CLI); `bootstrap`, `default_factories`, and `application` are also directly importable but `public.py`'s curated re-export list is what CLI/API code actually imports from in practice |
 

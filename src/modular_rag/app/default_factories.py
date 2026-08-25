@@ -7,6 +7,7 @@ from modular_rag.orchestration.registry import ComponentRegistry
 
 if TYPE_CHECKING:
     from modular_rag.adapters.audit.postgres_sink import PostgresAuditSink
+    from modular_rag.adapters.observability.otel_tracing import OtelTracer
     from modular_rag.contracts.manifests import ComponentConfig
     from modular_rag.retrieval.retrievers.hybrid import HybridRetriever
     from modular_rag.retrieval.retrievers.sparse import PersistentSparseRetriever
@@ -86,6 +87,15 @@ def _build_sparse_qdrant_retriever(cfg: ComponentConfig) -> PersistentSparseRetr
     return PersistentSparseRetriever(store=QdrantSparseStore(**cfg.config))
 
 
+def _build_otel_tracer(cfg: ComponentConfig) -> OtelTracer:
+    """ADR-0012 — lazy-imports `OtelTracer` itself (not just the
+    `opentelemetry` package it wraps), consistent with every other
+    heavy/optional adapter factory in this file."""
+    from modular_rag.adapters.observability.otel_tracing import OtelTracer
+
+    return OtelTracer(**cfg.config)
+
+
 def _build_postgres_audit_sink(cfg: ComponentConfig) -> PostgresAuditSink:
     """Codex review, remaining-risks item (post-implementation, ADR-0011):
     a plain `lambda cfg: PostgresAuditSink(**cfg.config)` would forward
@@ -122,7 +132,7 @@ def register_defaults(reg: ComponentRegistry) -> None:
     from modular_rag.ingestion.chunkers.adaptive import AdaptiveChunker
     from modular_rag.ingestion.chunkers.fixed import FixedSizeChunker
     from modular_rag.ingestion.lifecycle.in_memory_ledger import InMemoryLifecycleLedger
-    from modular_rag.observability import NullTelemetry, StructlogTelemetry
+    from modular_rag.observability import NullTelemetry, NullTracer, StructlogTelemetry
     from modular_rag.retrieval.rerankers.cross_encoder import CrossEncoderReranker
     from modular_rag.retrieval.retrievers.vector import VectorRetriever
     from modular_rag.security.audit.store import InMemoryAuditSink
@@ -160,6 +170,8 @@ def register_defaults(reg: ComponentRegistry) -> None:
     reg.register("audit_sink", "postgres", _build_postgres_audit_sink)
     reg.register("telemetry", "structlog", lambda cfg: StructlogTelemetry())
     reg.register("telemetry", "null", lambda cfg: NullTelemetry())
+    reg.register("tracer", "otel", _build_otel_tracer)
+    reg.register("tracer", "null", lambda cfg: NullTracer())
     reg.register("lifecycle_ledger", "in-memory", lambda cfg: InMemoryLifecycleLedger())
     reg.register(
         "lifecycle_ledger", "postgres", lambda cfg: PostgresLifecycleLedger(**cfg.config)

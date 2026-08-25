@@ -167,7 +167,13 @@ exists; it also had to have a reachable, tested consumption path.
    correct.
 2. Service-backed integration/E2E behavior cannot be certified by documentation inspection.
    Those suites are not run in CI and require real Qdrant/PostgreSQL and, for the LLM scenario,
-   an external key.
+   an external key. **Superseded 2026-08-21**: this limitation was accurate as of this audit's
+   2026-08-12 date but no longer holds — Batch 10 (an external plan, pushed after this audit)
+   wired `tests/integration/` and the deterministic e2e scenario into `.github/workflows/ci.yml`
+   against real Qdrant/PostgreSQL service containers, and the LLM-backed scenario into a separate
+   scheduled/manual `nightly.yml`. Left as originally written above (not rewritten) so this
+   remains an honest record of what was true on this audit's own date; see `README.md`/`CLAUDE.md`
+   for the current state.
 3. Claude Code product-reference pages describe a fast-moving external tool. This audit checked
    their repository paths and internal consistency, not every upstream product setting against
    external vendor documentation.

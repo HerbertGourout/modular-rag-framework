@@ -32,6 +32,7 @@ from modular_rag.core.ids import new_id
 from modular_rag.core.models.answer import Answer
 from modular_rag.core.models.chunk import Chunk
 from modular_rag.core.models.health import DependencyHealth, ReadinessReport
+from modular_rag.core.models.retrieval_result import RetrievalResult
 from modular_rag.core.models.retrieved import RetrievedChunk
 
 
@@ -63,10 +64,12 @@ class _FakePipeline:
         answer_error: Exception | None = None,
         requires_identity: bool = False,
         readiness_report: ReadinessReport | None = None,
+        tracer: object | None = None,
     ) -> None:
         self.manifest_id = "fake-pipeline"
         self.closed = False
         self.requires_identity = requires_identity
+        self.tracer = tracer
         self._answer_error = answer_error
         self._readiness_report = readiness_report or ReadinessReport(
             status=ReadinessState.HEALTHY, dependencies=[]
@@ -98,10 +101,12 @@ class _FakePipeline:
 
     def retrieve(
         self, question: str, k: int = 10, tenant_id: str | None = None
-    ) -> list[RetrievedChunk]:
+    ) -> RetrievalResult:
         self.last_retrieve_tenant_id = tenant_id
         chunk = Chunk(doc_id=new_id(), content="x" * 500)
-        return [RetrievedChunk(chunk=chunk, score=0.9, rank=1)]
+        return RetrievalResult(
+            chunks=[RetrievedChunk(chunk=chunk, score=0.9, rank=1)], trace_id="retrieve-trace-456"
+        )
 
 
 def _client(
@@ -255,8 +260,9 @@ def test_retrieve_truncates_chunk_content_to_300_chars(
 
     assert response.status_code == 200
     body = response.json()
-    assert len(body) == 1
-    assert len(body[0]["content"]) == 300
+    assert len(body["chunks"]) == 1
+    assert len(body["chunks"][0]["content"]) == 300
+    assert body["trace_id"] == "retrieve-trace-456"
 
 
 def test_no_authentication_is_required_when_no_verifier_is_configured(
@@ -688,3 +694,154 @@ def test_answer_is_denied_with_a_valid_token_that_has_no_effect_without_a_tenant
     )
 
     assert response.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# ADR-0012 — OpenTelemetry tracing (Lot 11, external plan; not this repo's
+# own docs/refactoring-plan.md Lot 11a/b/c sequence).
+# ---------------------------------------------------------------------------
+
+
+def test_answer_creates_an_api_span_when_a_tracer_is_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from modular_rag.adapters.observability.otel_tracing import OtelTracer
+
+    tracer, exporter = OtelTracer.for_testing()
+    client = _client(_FakePipeline(tracer=tracer), monkeypatch)
+
+    response = client.post("/answer", json={"question": "What is RAG?"})
+
+    assert response.status_code == 200
+    assert [s.name for s in exporter.get_finished_spans()] == ["api.answer"]
+
+
+def test_retrieve_creates_an_api_span_when_a_tracer_is_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from modular_rag.adapters.observability.otel_tracing import OtelTracer
+
+    tracer, exporter = OtelTracer.for_testing()
+    client = _client(_FakePipeline(tracer=tracer), monkeypatch)
+
+    response = client.get("/retrieve", params={"q": "What is RAG?"})
+
+    assert response.status_code == 200
+    assert [s.name for s in exporter.get_finished_spans()] == ["api.retrieve"]
+
+
+def test_answer_span_records_error_without_raw_exception_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from modular_rag.adapters.observability.otel_tracing import OtelTracer
+
+    tracer, exporter = OtelTracer.for_testing()
+    client = _client(
+        _FakePipeline(answer_error=RuntimeError("db password is hunter2"), tracer=tracer),
+        monkeypatch,
+    )
+
+    response = client.post("/answer", json={"question": "hi"})
+
+    assert response.status_code == 500
+    spans = exporter.get_finished_spans()
+    assert len(spans) == 1
+    assert spans[0].status.status_code.name == "ERROR"
+    assert "hunter2" not in (spans[0].status.description or "")
+
+
+def test_no_tracer_configured_does_not_break_any_route(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every other test in this file already exercises the no-tracer path
+    implicitly (`_FakePipeline()` defaults `tracer=None`); this test exists
+    only to name the "instrumentation can be disabled" acceptance criterion
+    explicitly at the API layer."""
+    client = _client(_FakePipeline(), monkeypatch)
+
+    response = client.post("/answer", json={"question": "What is RAG?"})
+
+    assert response.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Codex review pass 1, MEDIUM-001: an earlier version created the API span
+# only inside the route handler body, so auth (401) and request-validation
+# (422) failures -- both resolved by FastAPI *before* the handler runs --
+# produced no span at all, despite the tracing code's own docstring claiming
+# to cover "the whole route handler... including auth." Moved to
+# `TracingMiddleware` (api/middleware.py), which wraps `call_next()` and
+# therefore genuinely encloses dependency resolution and validation. These
+# tests lock in the fix.
+# ---------------------------------------------------------------------------
+
+
+def test_a_missing_bearer_token_still_produces_an_api_span(monkeypatch: pytest.MonkeyPatch) -> None:
+    from modular_rag.adapters.observability.otel_tracing import OtelTracer
+
+    tracer, exporter = OtelTracer.for_testing()
+    verifier = _FakeTokenVerifier({})
+    client = _client(_FakePipeline(tracer=tracer), monkeypatch, token_verifier=verifier)
+
+    response = client.post("/answer", json={"question": "hi"})
+
+    assert response.status_code == 401
+    spans = exporter.get_finished_spans()
+    assert [s.name for s in spans] == ["api.answer"]
+    assert spans[0].attributes["http.status_code"] == 401
+    assert spans[0].status.status_code.name == "ERROR"
+
+
+def test_an_invalid_bearer_token_still_produces_an_api_span(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from modular_rag.adapters.observability.otel_tracing import OtelTracer
+
+    tracer, exporter = OtelTracer.for_testing()
+    verifier = _FakeTokenVerifier({})
+    client = _client(_FakePipeline(tracer=tracer), monkeypatch, token_verifier=verifier)
+
+    response = client.post(
+        "/answer",
+        json={"question": "hi"},
+        headers={"Authorization": "Bearer not-a-real-token"},
+    )
+
+    assert response.status_code == 401
+    spans = exporter.get_finished_spans()
+    assert [s.name for s in spans] == ["api.answer"]
+    assert spans[0].attributes["http.status_code"] == 401
+    assert spans[0].status.status_code.name == "ERROR"
+
+
+def test_an_invalid_request_payload_still_produces_an_api_span(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A body missing the required `question` field fails FastAPI's own
+    Pydantic validation (422) before `answer()`'s body ever runs."""
+    from modular_rag.adapters.observability.otel_tracing import OtelTracer
+
+    tracer, exporter = OtelTracer.for_testing()
+    client = _client(_FakePipeline(tracer=tracer), monkeypatch)
+
+    response = client.post("/answer", json={})
+
+    assert response.status_code == 422
+    spans = exporter.get_finished_spans()
+    assert [s.name for s in spans] == ["api.answer"]
+    assert spans[0].attributes["http.status_code"] == 422
+    assert spans[0].status.status_code.name == "ERROR"
+
+
+def test_health_and_ready_are_never_traced(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`TracingMiddleware` excludes /health and /ready, matching this
+    file's existing probe-exemption convention for rate/body/concurrency
+    limiting -- they aren't the RAG-operation surface this task
+    instruments."""
+    from modular_rag.adapters.observability.otel_tracing import OtelTracer
+
+    tracer, exporter = OtelTracer.for_testing()
+    client = _client(_FakePipeline(tracer=tracer), monkeypatch)
+
+    client.get("/health")
+    client.get("/ready")
+
+    assert list(exporter.get_finished_spans()) == []

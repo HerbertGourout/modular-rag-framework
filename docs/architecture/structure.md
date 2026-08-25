@@ -74,7 +74,7 @@ carry that same caveat before the dependency was actually removed to match) and 
 | Group | Command | What it adds |
 |---|---|---|
 | `v1` | `pip install -e ".[v1]"` | FastAPI, Uvicorn, Typer, pymupdf, python-docx, BS4, sentence-transformers, openai, anthropic, qdrant-client, rank-bm25, tiktoken (opt-in subword token counting for chunkers — the default whitespace counter needs no dependency). `cohere` and `langchain-text-splitters` were removed here in Lot 9 — zero imports anywhere, no adapter class ever used either |
-| `v4` | `pip install -e ".[v4]"` | opentelemetry-sdk/api/exporter-otlp (not yet wired into any code — V4 not reached) |
+| `v4` | `pip install -e ".[v4]"` | opentelemetry-sdk/api/exporter-otlp — wired since ADR-0012 (`adapters/observability/otel_tracing.py`, `observability.tracer.type: otel`) |
 | `v5` | `pip install -e ".[v5]"` | pymupdf, pillow, pytesseract (not yet wired into any code — V5 not reached) |
 | `langgraph` | `pip install -e ".[langgraph]"` | `langgraph` itself — the external `DocumentEngine` adapter (`adapters/llms/langgraph_engine.py`, ADR-0006, Lot 15). The default native adapter needs none of this; only manifests with `engine.adapter: langgraph` do |
 | `postgres` | `pip install -e ".[postgres]"` | `psycopg[binary,pool]` (ADR-0011 — the `pool` extra pulls in the separate `psycopg-pool` package) — durable audit sink and lifecycle ledger implementations (`adapters/audit/postgres_sink.py`, `adapters/lifecycle/postgres_ledger.py`), plus the shared migration runner (`adapters/postgres/migrations.py`), selected by `secure-enterprise-rag.yaml` |
@@ -297,6 +297,7 @@ index:
 | `Chunk` | `chunk.py` | No (mutable, to allow writing `embedding` after creation) | Sub-segment of a Document; also carries `tenant_id`, stamped from the parent Document or an explicit ingestion-call override |
 | `Query` | `query.py` | Yes | Immutable user query; carries `tenant_id`. Its former `routing_hint` field was removed in Lot 17 alongside `RoutingStrategy`/`QueryRouter` |
 | `RetrievedChunk` | `retrieved.py` | Yes | Chunk + retrieval metadata (`score`, `rank`, `retrieval_method`) |
+| `RetrievalResult` | `retrieval_result.py` | — | Return type of `RAGEngine.retrieve()`/`ApplicationService.retrieve()` (ADR-0012): `chunks` + a real framework `trace_id` |
 | `Citation` / `Answer` | `answer.py` | — | Generated text, citations, and traceability metadata |
 | `TraceStep` / `Trace` | `trace.py` | — | Per-step performance metrics, accumulated via `Trace.add_step()`. `Trace.routing_strategy` **no longer exists** — it was removed in Étape 8 (`TRACE_SCHEMA_VERSION` bumped `"1.1"` → `"1.2"` specifically for this), not merely left unset as an earlier pass through this documentation mistakenly concluded; see [data-model.md](data-model.md) for the full, current field table |
 | `PolicyRule` / `Policy` | `policy.py` | — | A policy rule (`condition`, `action`, `priority`) grouped under a `Policy` scoped to a tenant. **Not V4-only** — `PolicyEngine` (see the `security/` section below) is wired into the live request path today, not a future feature |
@@ -433,9 +434,9 @@ multi-provider web-search adapter (Tavily, Brave, …) — neither built yet.
 
 ### `ingestion/` — Document processing pipeline
 
-**Flow**: `File → Parser → TextNormalizer → MetadataEnricher → Chunker → list[Chunk]`, then
-(as a separate, caller-made call — see [runtime-flow.md](runtime-flow.md)) `RAGEngine.ingest_chunks(chunks)`
-embeds and indexes them.
+**Flow**: `File → Parser → TextNormalizer → MetadataEnricher → Chunker → ContextualEnricher →
+list[Chunk]`, then (as a separate, caller-made call — see [runtime-flow.md](runtime-flow.md))
+`RAGEngine.ingest_chunks(chunks)` embeds and indexes them.
 
 #### `ingestion/parsers/`
 
@@ -452,7 +453,18 @@ is frozen). NFKC unicode normalization, collapses 3+ newlines to 2 and 2+ spaces
 #### `ingestion/enrichers/`
 
 **`metadata_enricher.py` → `MetadataEnricher`**: `enrich(doc) → Document` (new instance). Adds
-`filename`, `extension`, `size_bytes`, `enriched_at` to metadata.
+`filename`, `extension`, `size_bytes`, `enriched_at` to metadata. Runs on the `Document`, before
+chunking.
+
+**`contextual_enricher.py` → `ContextualEnricher`**: `enrich(doc, chunks) → list[Chunk]` (new
+instances). Runs after chunking — sets each chunk's `embedding_text` to
+`f"Document: {title}\n\n{content}"` (`title` from `Document.metadata["filename"]`, falling back
+to `Document.source`), which `RAGEngine.ingest_chunks()` embeds instead of `content`. `content`
+itself is never touched, so citations and `/retrieve` see the original text unprefixed. A cheap,
+deterministic approximation of "contextual retrieval" — no arXiv citation backs this specific
+technique in `docs/research/DIGEST-chunking.md`/`DIGEST-retrieval.md`; see the class's own
+docstring for why an LLM-generated per-chunk summary (the fuller industry technique) was
+deliberately not used.
 
 #### `ingestion/chunkers/`
 

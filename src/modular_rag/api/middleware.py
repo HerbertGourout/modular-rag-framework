@@ -21,11 +21,18 @@ import threading
 import time
 from collections import deque
 from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp
+
+if TYPE_CHECKING:
+    # api/ may only import app/ or its own interface package (scripts/check_layering.py) --
+    # never contracts/ directly, hence via app.public's curated re-export, not
+    # modular_rag.contracts.tracing.
+    from modular_rag.app.public import Tracer
 
 _EXCLUDED_PATHS = frozenset({"/health", "/ready"})
 
@@ -137,3 +144,56 @@ class ConcurrencyLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         finally:
             self._semaphore.release()
+
+
+class TracingMiddleware(BaseHTTPMiddleware):
+    """ADR-0012 — wraps `/answer`/`/retrieve` in an `"api.answer"`/
+    `"api.retrieve"` span covering the *entire* routed request, including
+    FastAPI's own dependency resolution (`Depends(_authenticate)`) and
+    request-body validation, both of which run before a route function's
+    body starts.
+
+    Codex review pass 1 (MEDIUM-001): an earlier version created this span
+    only inside the route function body (`api/__init__.py`'s own
+    `_http_span()` helper, now removed), so a missing/invalid bearer token
+    (401, raised by `_authenticate` before the handler runs) or an invalid
+    request payload (422, raised by FastAPI's own Pydantic validation
+    before the handler runs) produced no span at all, despite the
+    docstring's claim to cover "the whole route handler... including
+    auth." ASGI middleware genuinely wraps `Depends`/validation — they
+    execute during `call_next()`, not before it — closing that gap for
+    real. `/health`/`/ready` are excluded, matching this file's existing
+    probe-exemption convention; they aren't the RAG-operation surface this
+    task instruments.
+    """
+
+    _TRACED_PATHS = {"/answer": "api.answer", "/retrieve": "api.retrieve"}
+
+    def __init__(self, app: ASGIApp, tracer: Tracer | None) -> None:
+        super().__init__(app)
+        self._tracer = tracer
+
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        span_name = self._TRACED_PATHS.get(request.url.path)
+        if self._tracer is None or span_name is None:
+            return await call_next(request)
+        with self._tracer.start_span(span_name) as span:
+            try:
+                response = await call_next(request)
+            except Exception as exc:
+                span.record_error(type(exc).__name__)
+                raise
+            span.set_attribute("http.status_code", response.status_code)
+            if response.status_code >= 400:
+                # Auth failures (401), validation failures (422), and
+                # to_http_exception()-mapped errors (403/500) all surface
+                # here as a normal Response, not a raised exception -- only
+                # the status *code* is recorded, never the response body,
+                # which may carry a safe-but-still-request-specific detail
+                # message (ADR-0012 §9 PII-safety discipline).
+                span.record_error(f"http_{response.status_code}")
+            else:
+                span.set_attribute("status", "ok")
+            return response

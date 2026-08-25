@@ -187,6 +187,24 @@ fail-closed gate on the one path that can delete audit history.
 
 ---
 
+### [ADR-0012: OpenTelemetry Tracing via a New `Tracer` Port](0012-opentelemetry-tracing-port.md)
+
+**Status:** Accepted
+**Date:** 2026-08-19
+
+Adds a new, additive `Tracer`/`Span` Protocol (`contracts/tracing.py`) for live, correctly-nested
+OpenTelemetry spans — deliberately separate from the existing post-hoc `Telemetry` Protocol. A
+real `OtelTracer` adapter (`adapters/observability/otel_tracing.py`) wires the previously-declared
+but never-used `v4` optional dependency group (`opentelemetry-sdk`/`-api`/`-exporter-otlp`) for
+the first time. Instrumentation lives only in `orchestration/engine.py`, `app/application.py`, and
+`api/__init__.py` — domain modules never depend on OpenTelemetry.
+
+**Key insight:** OpenTelemetry's own context propagation (`contextvars`), not manual id-threading,
+is what makes a request's spans nest into one coherent distributed trace — every layer just needs
+to read the same `Container`-registered `Tracer` instance.
+
+---
+
 ## Decision Making Process
 
 1. **Identification**: Problem identified in sprint planning, client feedback, or architecture review.
@@ -240,8 +258,9 @@ fail-closed gate on the one path that can delete audit history.
 - **ADR-0009**: `VectorIndexer` sub-protocol and dimension reconciliation. Accepted.
 - **ADR-0010**: `HealthCheckable` port and readiness semantics. Accepted.
 - **ADR-0011**: PostgreSQL migrations, connection pooling, and audit retention. Accepted.
+- **ADR-0012**: OpenTelemetry tracing via a new `Tracer` port. Accepted.
 
-All eleven ADRs are Accepted as of this writing — none are in Proposed status. Future ADRs will be
+All twelve ADRs are Accepted as of this writing — none are in Proposed status. Future ADRs will be
 added as new major decisions arise; per this project's own rule
 ([CLAUDE.md §07](../../CLAUDE.md#07--security-rules)), any new top-level module, layer boundary,
 or contract modification requires one.

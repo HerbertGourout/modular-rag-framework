@@ -16,6 +16,7 @@ from modular_rag.contracts.retrieval import Retriever
 from modular_rag.contracts.review import ReviewQueue
 from modular_rag.contracts.security import Redactor, SecurityGuard, TenantPolicy
 from modular_rag.contracts.telemetry import Telemetry
+from modular_rag.contracts.tracing import Tracer
 from modular_rag.core.enums import ReadinessState
 from modular_rag.core.errors import RegistryError
 from modular_rag.core.models.health import DependencyHealth, ReadinessReport
@@ -238,6 +239,15 @@ class Container:
     @property
     def telemetry(self) -> Telemetry | None:
         return self._store.get("telemetry")
+
+    @property
+    def tracer(self) -> Tracer | None:
+        """ADR-0012. Deliberately `.get()`-based (returns `None`, never
+        raises for an unregistered role) — the same pattern as every other
+        optional role below, not a "default to a no-op instance" pattern.
+        See ADR-0012's own rationale for why a third container-property
+        convention was deliberately avoided here."""
+        return self._store.get("tracer")
 
     @property
     def audit_sink(self) -> AuditSink | None:

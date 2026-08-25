@@ -59,11 +59,18 @@ class QualitySection(BaseModel):
 
 
 class ObservabilitySection(BaseModel):
-    """Telemetry component selected for runtime traces and metrics."""
+    """Telemetry and tracing components selected for runtime observability.
+
+    `telemetry` records a post-hoc `Trace`/`Metrics` summary after a run
+    completes. `tracer` (ADR-0012) creates live OpenTelemetry-compatible
+    spans as a run executes — a deliberately separate, both-optional
+    mechanism; a pipeline may configure either, both, or neither.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     telemetry: ComponentConfig | None = None
+    tracer: ComponentConfig | None = None
 
 
 class LifecycleSection(BaseModel):

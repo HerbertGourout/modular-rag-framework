@@ -90,6 +90,21 @@ def test_ingest_directory_without_a_tenant_id_yields_none_for_every_chunk(
     assert all(c.tenant_id is None for c in chunks)
 
 
+def test_ingest_path_sets_embedding_text_via_contextual_enricher(tmp_path: Path) -> None:
+    """`ingest_path()` runs `ContextualEnricher` after chunking (see its own
+    module docstring); `MetadataEnricher` already ran on the `Document`
+    before chunking and set `metadata["filename"]`, which the contextual
+    enricher reads. `content` itself must stay exactly what the chunker
+    produced."""
+    doc_file = _write(tmp_path, "doc.txt", "hello world")
+
+    chunks = ingest_path(doc_file, _FakeChunker())
+
+    assert len(chunks) == 1
+    assert chunks[0].embedding_text == "Document: doc.txt\n\nhello world"
+    assert chunks[0].content == "hello world"
+
+
 def test_unsupported_file_type_is_skipped_without_error_or_a_leaked_tenant(
     tmp_path: Path,
 ) -> None:

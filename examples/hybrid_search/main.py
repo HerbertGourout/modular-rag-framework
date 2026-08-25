@@ -77,12 +77,12 @@ def cmd_search(question: str, k: int) -> None:
     hybrid = pipeline.retriever
     vector_results = hybrid._vector.retrieve(query, k=k)
     bm25_results = hybrid._bm25.retrieve(query, k=k)
-    hybrid_results = pipeline.retrieve(question, k=k)
+    hybrid_result = pipeline.retrieve(question, k=k)
 
     print(f"Query: {question}")
     _print_results("Vector-only (semantic)", vector_results)
     _print_results("BM25-only (lexical)", bm25_results)
-    _print_results("Hybrid (RRF-fused)", hybrid_results)
+    _print_results("Hybrid (RRF-fused)", hybrid_result.chunks)
 
 
 def main() -> None:

@@ -11,6 +11,7 @@ from modular_rag.contracts.manifests import (
     ComponentConfig,
     EngineSelection,
     GovernanceSection,
+    ObservabilitySection,
     PipelineManifest,
     QualitySection,
 )
@@ -61,6 +62,7 @@ def test_optional_components_default_to_none_when_absent_from_manifest() -> None
     assert container.reranker is None
     assert container.guard is None
     assert container.telemetry is None
+    assert container.tracer is None
 
 
 def test_unknown_component_type_raises_registry_error_listing_available_types() -> None:
@@ -146,6 +148,7 @@ def test_default_registry_has_the_documented_builtin_type_names() -> None:
     assert set(reg._factories["review_queue"]) == {"human-review"}
     assert set(reg._factories["audit_sink"]) == {"in-memory", "postgres"}
     assert set(reg._factories["telemetry"]) == {"structlog", "null"}
+    assert set(reg._factories["tracer"]) == {"otel", "null"}
     assert set(reg._factories["lifecycle_ledger"]) == {"in-memory", "postgres"}
 
 
@@ -169,6 +172,44 @@ def test_wire_rejects_langgraph_control_plane_components_it_does_not_consume() -
 
     with pytest.raises(RegistryError, match="governance.audit_sink"):
         reg.wire(manifest)
+
+
+def test_wire_registers_a_configured_tracer() -> None:
+    """ADR-0012."""
+    reg = _fake_registry()
+    reg.register("tracer", "fake-tracer", lambda cfg: "a-tracer")
+    manifest = _minimal_manifest(
+        observability=ObservabilitySection(tracer=ComponentConfig(type="fake-tracer"))
+    )
+
+    container = reg.wire(manifest)
+
+    assert container.tracer == "a-tracer"
+
+
+def test_wire_accepts_a_tracer_under_the_langgraph_adapter() -> None:
+    """ADR-0012, corrected by Codex review pass 1 HIGH-001: an earlier version
+    of `runtime_manifest_errors()` blanket-rejected `observability.tracer`
+    under `engine.adapter='langgraph'`, copying the `telemetry`/`audit_sink`/
+    `policy_engine`/`review_queue` pattern without checking whether it
+    applied for the same reason. It doesn't: unlike those four (read only
+    from inside `RAGEngine`, never reached under LangGraph),
+    `Container.tracer` is also read directly by `app/application.py`'s
+    `"app.request"` span and `api/__init__.py`'s `"api.answer"`/
+    `"api.retrieve"` spans — both engine-neutral, both unconditional on the
+    selected `DocumentEngine`. Rejecting the field would have silently
+    disabled spans that actually do work, contradicting ADR-0012's own
+    claim that a LangGraph-routed request still gets those two root spans."""
+    reg = _fake_registry()
+    reg.register("tracer", "fake-tracer", lambda cfg: "a-tracer")
+    manifest = _minimal_manifest(
+        engine=EngineSelection(adapter="langgraph"),
+        observability=ObservabilitySection(tracer=ComponentConfig(type="fake-tracer")),
+    )
+
+    container = reg.wire(manifest)
+
+    assert container.tracer == "a-tracer"
 
 
 def test_wire_rejects_a_wired_tenant_policy_with_enforcement_false() -> None:

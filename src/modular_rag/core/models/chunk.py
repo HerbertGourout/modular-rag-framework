@@ -14,6 +14,11 @@ class Chunk(BaseModel):
     content: str
     modality: Modality = Modality.TEXT
     embedding: list[float] | None = None
+    embedding_text: str | None = None  # ingest-time-only: text to embed instead of `content`
+    # when set (e.g. document-context-prefixed for retrieval quality, per "contextual
+    # retrieval"-style enrichment). Never persisted to a store's payload and never shown in
+    # citations/API responses (both read `content` directly) — discarded once `embedding` is
+    # computed. `None` means "embed `content` as-is," the pre-existing behavior.
     start_char: int = 0
     end_char: int = 0
     page: int | None = None

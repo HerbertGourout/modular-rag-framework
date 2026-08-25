@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import time
+from contextlib import AbstractContextManager, nullcontext
 from datetime import UTC, datetime
 from typing import Any
 
@@ -14,12 +15,14 @@ from modular_rag.contracts.lifecycle import DocumentStatus
 from modular_rag.contracts.reconciliation import ReconciliationReport, RepairResult
 from modular_rag.contracts.retrieval import Retriever
 from modular_rag.contracts.review import ReviewItem
+from modular_rag.contracts.tracing import Span, Tracer
 from modular_rag.core.document_identity import content_hash, document_key
 from modular_rag.core.errors import ConfigurationError, SecurityError
 from modular_rag.core.models.answer import Answer
 from modular_rag.core.models.document import Document
 from modular_rag.core.models.health import ReadinessReport
 from modular_rag.core.models.query import Query
+from modular_rag.core.models.retrieval_result import RetrievalResult
 from modular_rag.core.models.retrieved import RetrievedChunk
 from modular_rag.core.models.trace import Trace, TraceStep
 from modular_rag.orchestration.container import Container
@@ -57,6 +60,25 @@ class RAGEngine:
     def close(self) -> None:
         """Release resources owned by the wired container."""
         self._c.close()
+
+    @property
+    def tracer(self) -> Tracer | None:
+        """Public accessor for the wired tracer (ADR-0012), `None` when none
+        is configured — same "public accessor" pattern as `chunker`/
+        `retriever` above, so `app/application.py` can attach its own root
+        span without reaching into the private `_c` container."""
+        return self._c.tracer
+
+    def _span(self, name: str, attributes: dict[str, Any] | None = None) -> AbstractContextManager[Span | None]:
+        """Start a span if a tracer is configured (ADR-0012), otherwise a
+        no-op context manager yielding `None` — every call site must guard
+        `if span is not None:` before calling a `Span` method, matching this
+        module's existing `if self._c.X:` convention for every other
+        optional component."""
+        tracer = self._c.tracer
+        if tracer is None:
+            return nullcontext()
+        return tracer.start_span(name, attributes)
 
     def check_readiness(self) -> ReadinessReport:
         """Lot 6 (readiness and resilience). See
@@ -112,26 +134,32 @@ class RAGEngine:
         """
         ledger = self._c.lifecycle_ledger
         total = 0
-        for doc in documents:
-            key = document_key(doc.source, doc.tenant_id) if ledger else None
-            if ledger and key is not None:
-                current_hash = content_hash(doc.content)
-                existing = ledger.get(key)
-                if (
-                    existing is not None
-                    and existing.status == DocumentStatus.ACTIVE
-                    and existing.content_hash == current_hash
-                ):
-                    log.debug("engine.ingest_skipped_unchanged", document_key=key)
-                    continue
-                if existing is not None and existing.chunk_ids:
-                    self._delete_chunk_ids(existing.chunk_ids)
-            chunks = self._c.chunker.chunk(doc)
-            total += self.ingest_chunks(chunks)
-            if ledger and key is not None:
-                ledger.record_ingested(
-                    key, doc.tenant_id, content_hash(doc.content), [c.id for c in chunks]
-                )
+        with self._span("rag.ingest", {"document_count": len(documents)}) as ingest_span:
+            for doc in documents:
+                key = document_key(doc.source, doc.tenant_id) if ledger else None
+                if ledger and key is not None:
+                    current_hash = content_hash(doc.content)
+                    existing = ledger.get(key)
+                    if (
+                        existing is not None
+                        and existing.status == DocumentStatus.ACTIVE
+                        and existing.content_hash == current_hash
+                    ):
+                        log.debug("engine.ingest_skipped_unchanged", document_key=key)
+                        continue
+                    if existing is not None and existing.chunk_ids:
+                        self._delete_chunk_ids(existing.chunk_ids)
+                with self._span("rag.chunk", {"chunker": self._c.chunker.name()}) as chunk_span:
+                    chunks = self._c.chunker.chunk(doc)
+                    if chunk_span is not None:
+                        chunk_span.set_attribute("chunk_count", len(chunks))
+                total += self.ingest_chunks(chunks)
+                if ledger and key is not None:
+                    ledger.record_ingested(
+                        key, doc.tenant_id, content_hash(doc.content), [c.id for c in chunks]
+                    )
+            if ingest_span is not None:
+                ingest_span.set_attribute("chunks_indexed", total)
         return total
 
     def delete_document(self, document_key: str) -> int:
@@ -249,15 +277,32 @@ class RAGEngine:
         Also feeds the retriever's own lexical index (BM25 or a persistent
         sparse backend — whichever `HybridRetriever.lexical` selects) so
         lexical retrieval works.
+
+        Embeds `chunk.embedding_text` when a caller (e.g. `ContextualEnricher`)
+        has set it, falling back to `chunk.content` otherwise — see `Chunk`'s
+        own field docstring.
         """
         if self._c.tenant_policy:
             # Lot 11b (docs/refactoring-plan.md): "enforce fail-closed policy before
             # indexing" — checked before any embedding/indexing work starts, not after.
             for chunk in chunks:
                 self._c.tenant_policy.enforce_ingest(chunk.tenant_id)
-        for chunk in chunks:
-            if chunk.embedding is None:
-                chunk.embedding = self._c.embedder.embed([chunk.content])[0]
+        with self._span(
+            "rag.embed", {"chunk_count": len(chunks), "provider": self._c.embedder.name()}
+        ) as embed_span:
+            embedded = 0
+            for chunk in chunks:
+                if chunk.embedding is None:
+                    # ContextualEnricher (ingestion/pipelines/default.py) may set
+                    # embedding_text to a context-prefixed variant of content, used only
+                    # for the embedding call itself -- content (and therefore citations,
+                    # /retrieve) is never touched by this substitution.
+                    chunk.embedding = self._c.embedder.embed(
+                        [chunk.embedding_text or chunk.content]
+                    )[0]
+                    embedded += 1
+            if embed_span is not None:
+                embed_span.set_attribute("chunks_embedded", embedded)
         self._c.indexer.index(chunks)
         # Lot 5: HybridRetriever now has its own index() delegating to whichever
         # lexical backend is configured — no more reaching into a private
@@ -320,8 +365,9 @@ class RAGEngine:
 
     def retrieve(
         self, question: str, k: int = 10, tenant_id: str | None = None
-    ) -> list[RetrievedChunk]:
-        """Return raw retrieved chunks without generating an answer.
+    ) -> RetrievalResult:
+        """Return raw retrieved chunks without generating an answer, paired
+        with a real framework trace_id.
 
         Applies the same tenant-isolation enforcement/filtering `answer()`
         does (Lot 16a, docs/refactoring-plan.md — found while wiring API
@@ -330,52 +376,89 @@ class RAGEngine:
         all, so a caller could retrieve any tenant's chunks through this
         method even on a pipeline where `answer()` correctly denied/filtered
         the identical request.
+
+        Codex review pass 2 (HIGH-002): this method used to return a bare
+        `list[RetrievedChunk]`, with no `Trace` object built at all (unlike
+        `answer()`/`_run()`) -- so there was no real framework trace_id to
+        propagate for `/retrieve`, only `correlation_id`/`request_id`
+        (`ApplicationService.retrieve()`). That was flagged as an incomplete
+        closure of the original "propagate correlation_id, request_id, and
+        trace_id" acceptance criterion for retrieval specifically -- fixed by
+        building a real, minimal `Trace` here (one `TraceStep` for the
+        retrieval itself, matching what `_run_steps()` records for the same
+        operation on the `answer()` path) and returning it as
+        `RetrievalResult.trace_id`. This `Trace` is not recorded via
+        `Telemetry`/`AuditSink` -- only `answer()`/`_run()` does that; adding
+        telemetry/audit parity for `retrieve()` was not part of what this
+        finding asked for and would be a separate, larger scope decision.
         """
         query = Query(text=question, tenant_id=tenant_id)
         if self._c.tenant_policy:
             self._c.tenant_policy.enforce_query(query)
-        chunks = self._retrieve(query, k)
-        if self._c.tenant_policy:
-            chunks = self._c.tenant_policy.filter_chunks(query.tenant_id, chunks)  # type: ignore[arg-type]
-        return chunks
+        trace = Trace(query_id=query.id, pipeline_id=self._c.manifest.id)
+        with self._span("rag.retrieve", {"provider": self._c.retriever.name(), "k": k}) as span:
+            t0 = time.perf_counter()
+            chunks = self._retrieve(query, k)
+            if self._c.tenant_policy:
+                chunks = self._c.tenant_policy.filter_chunks(query.tenant_id, chunks)  # type: ignore[arg-type]
+            trace.add_step(
+                TraceStep(
+                    name="retrieve",
+                    latency_ms=(time.perf_counter() - t0) * 1000,
+                    metadata={"chunks": len(chunks)},
+                )
+            )
+            if span is not None:
+                span.set_attribute("chunks_returned", len(chunks))
+                span.set_attribute("rag.trace_id", trace.id)
+        return RetrievalResult(chunks=chunks, trace_id=trace.id)
 
     # -- internal pipeline --
 
     def _run(self, query: Query) -> Answer:
         trace = Trace(query_id=query.id, pipeline_id=self._c.manifest.id)
         sm = PipelineStateMachine(self._c.manifest.id)
-        try:
-            ans = self._run_steps(query, trace, sm)
-        except Exception as exc:
-            # Lot 10 (docs/refactoring-plan.md): a failed run used to skip
-            # telemetry entirely — nothing was recorded for a blocked query,
-            # a retrieval error, or a generation failure. `trace.failed`/
-            # `failure_reason` now capture that a run happened and why it
-            # didn't complete, and telemetry still gets the trace, before the
-            # original exception propagates unchanged to the caller.
-            trace.failed = True
-            trace.failure_reason = str(exc)
+        # ADR-0012: wraps the whole run in one root span, so `answer()` alone
+        # — called directly (CLI, tests) or via `app/application.py`'s own
+        # outer span — always produces one coherent, correctly-nested trace,
+        # never a set of disconnected per-stage root spans.
+        with self._span("rag.answer") as run_span:
+            try:
+                ans = self._run_steps(query, trace, sm)
+            except Exception as exc:
+                # Lot 10 (docs/refactoring-plan.md): a failed run used to skip
+                # telemetry entirely — nothing was recorded for a blocked query,
+                # a retrieval error, or a generation failure. `trace.failed`/
+                # `failure_reason` now capture that a run happened and why it
+                # didn't complete, and telemetry still gets the trace, before the
+                # original exception propagates unchanged to the caller.
+                trace.failed = True
+                trace.failure_reason = str(exc)
+                if run_span is not None:
+                    run_span.record_error(type(exc).__name__)
+                if self._c.telemetry:
+                    self._c.telemetry.record_trace(trace)
+                self._audit(
+                    query,
+                    trace,
+                    event_type=AuditEventType.RUN_FAILED,
+                    payload={"error_type": type(exc).__name__},
+                )
+                log.warning("engine.failed", query_id=query.id, error=str(exc))
+                raise
+            if run_span is not None:
+                run_span.set_attribute("status", "ok")
             if self._c.telemetry:
                 self._c.telemetry.record_trace(trace)
             self._audit(
                 query,
                 trace,
-                event_type=AuditEventType.RUN_FAILED,
-                payload={"error_type": type(exc).__name__},
+                event_type=AuditEventType.RUN_SUCCEEDED,
+                payload={"answer_length": len(ans.text), "citation_count": len(ans.citations)},
             )
-            log.warning("engine.failed", query_id=query.id, error=str(exc))
-            raise
-        if self._c.telemetry:
-            self._c.telemetry.record_trace(trace)
-        self._audit(
-            query,
-            trace,
-            event_type=AuditEventType.RUN_SUCCEEDED,
-            payload={"answer_length": len(ans.text), "citation_count": len(ans.citations)},
-        )
-        sm.transition(PipelineState.DONE)
-        log.info("engine.answered", query_id=query.id, latency_ms=trace.total_latency_ms)
-        return ans
+            sm.transition(PipelineState.DONE)
+            log.info("engine.answered", query_id=query.id, latency_ms=trace.total_latency_ms)
+            return ans
 
     def _audit(
         self, query: Query, trace: Trace, *, event_type: AuditEventType, payload: dict[str, Any]
@@ -431,7 +514,10 @@ class RAGEngine:
         if self._c.guard:
             sm.transition(PipelineState.GUARDING_QUERY)
             t0 = time.perf_counter()
-            result = self._c.guard.check_query(query)
+            with self._span("rag.guard_query") as span:
+                result = self._c.guard.check_query(query)
+                if span is not None:
+                    span.set_attribute("allowed", result.allowed)
             trace.add_step(
                 TraceStep(name="guard_query", latency_ms=(time.perf_counter() - t0) * 1000)
             )
@@ -446,7 +532,10 @@ class RAGEngine:
 
         # 2. retrieval
         sm.transition(PipelineState.RETRIEVING)
-        context = self._retrieve(query, k=self._c.manifest.retriever.config.get("k", 20))
+        with self._span("rag.retrieve", {"provider": self._c.retriever.name()}) as span:
+            context = self._retrieve(query, k=self._c.manifest.retriever.config.get("k", 20))
+            if span is not None:
+                span.set_attribute("chunks_returned", len(context))
         # Lot 5: surface a per-source backend failure in observability, not just
         # a log line — duck-typed (only HybridRetriever sets this today),
         # matching every other Container-adjacent hasattr() check in this file.
@@ -460,7 +549,10 @@ class RAGEngine:
         # is guaranteed set here: step 0 already denied the run otherwise.
         if self._c.tenant_policy:
             before = len(context)
-            context = self._c.tenant_policy.filter_chunks(query.tenant_id, context)  # type: ignore[arg-type]
+            with self._span("rag.tenant_filter", {"chunks_before": before}) as span:
+                context = self._c.tenant_policy.filter_chunks(query.tenant_id, context)  # type: ignore[arg-type]
+                if span is not None:
+                    span.set_attribute("chunks_after", len(context))
             trace.add_step(
                 TraceStep(
                     name="tenant_filter",
@@ -473,7 +565,10 @@ class RAGEngine:
             sm.transition(PipelineState.RERANKING)
             k_rerank = self._c.manifest.retriever.config.get("reranker_k", 5)
             t0 = time.perf_counter()
-            context = self._c.reranker.rerank(query, context, k=int(k_rerank))
+            with self._span("rag.rerank", {"provider": self._c.reranker.name()}) as span:
+                context = self._c.reranker.rerank(query, context, k=int(k_rerank))
+                if span is not None:
+                    span.set_attribute("chunks_returned", len(context))
             trace.add_step(TraceStep(name="rerank", latency_ms=(time.perf_counter() - t0) * 1000))
 
         # 4. generation
@@ -485,15 +580,31 @@ class RAGEngine:
         # here duplicated the generator's own step under a different name
         # ("generate" vs. e.g. "openai_generate") with an overlapping — not
         # identical — time window, and silently double-counted generation
-        # latency into `trace.total_latency_ms`.
+        # latency into `trace.total_latency_ms`. The OTel span wrapping below is
+        # a distinct mechanism (ADR-0012) — it does not write to `trace`/
+        # `trace.total_latency_ms` at all, so it cannot reintroduce that bug.
         sm.transition(PipelineState.GENERATING)
-        ans = self._c.generator.generate(query, context, trace)
+        with self._span("rag.generate", {"provider": self._c.generator.name()}) as span:
+            ans = self._c.generator.generate(query, context, trace)
+            if span is not None and trace.steps:
+                # The generator just appended its own TraceStep (e.g.
+                # "openai_generate") — mirror its already-safe (non-PII)
+                # fields onto the span rather than recomputing them.
+                last_step = trace.steps[-1]
+                span.set_attribute("input_tokens", last_step.input_tokens)
+                span.set_attribute("output_tokens", last_step.output_tokens)
+                model = last_step.metadata.get("model")
+                if isinstance(model, str):
+                    span.set_attribute("model", model)
         ans = ans.model_copy(update={"trace_id": trace.id})
 
         # 5. security guard — answer
         if self._c.guard:
             sm.transition(PipelineState.GUARDING_ANSWER)
-            result = self._c.guard.check_answer(ans)
+            with self._span("rag.guard_answer") as span:
+                result = self._c.guard.check_answer(ans)
+                if span is not None:
+                    span.set_attribute("allowed", result.allowed)
             if not result.allowed:
                 self._audit(
                     query,

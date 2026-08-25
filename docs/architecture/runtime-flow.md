@@ -116,6 +116,7 @@ sequenceDiagram
     participant N as Normalizer
     participant En as MetadataEnricher
     participant C as Chunker
+    participant Ctx as ContextualEnricher
     participant E as RAGEngine / ApplicationService
     participant TP as TenantPolicy
     participant Emb as Embedder
@@ -129,6 +130,8 @@ sequenceDiagram
     IP->>En: enrich(doc) → Document
     IP->>C: chunk(doc) → list[Chunk]
     Note over IP: tenant_id (if given) stamped onto every chunk here
+    IP->>Ctx: enrich(doc, chunks) → list[Chunk]
+    Note over Ctx: sets chunk.embedding_text to a document-context-prefixed<br/>variant of content; content itself is never touched
     IP-->>U: list[Chunk] (embedding=None)
 
     Note over U,E: Call 2 — the caller passes the chunks from Call 1 to the engine separately
@@ -137,7 +140,7 @@ sequenceDiagram
         E->>TP: enforce_ingest(chunk.tenant_id) for every chunk — fail-closed
     end
     loop for each chunk with embedding=None
-        E->>Emb: embed([chunk.content]) → list[float]
+        E->>Emb: embed([chunk.embedding_text or chunk.content]) → list[float]
         Note over E: ONE call per chunk, not a single batched<br/>call across the whole document — see overview.md §10
         E->>E: chunk.embedding = result[0]
     end
