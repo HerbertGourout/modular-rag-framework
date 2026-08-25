@@ -7,17 +7,19 @@
 ![Built by Publicis Sapient](https://img.shields.io/badge/built%20by-Publicis%20Sapient-4a154b)
 
 > **Note on the status badge.** It reads "pre-alpha" while several sections below describe parts
-> of V1 as implemented and unit/contract-tested — but **not** the whole of V1, and not as fully
-> live-validated. Precisely: **V1.0** (CLI, REST API, hybrid retrieval, security) is
-> implementation-complete, pending only two live-validation runs `ROADMAP.md`'s own checklist
-> still lists as unchecked (`examples/simple_qa/` end-to-end, and the hybrid-retrieval
-> integration run) — not code gaps, just runs not yet independently confirmed against a real LLM
-> and Qdrant. **V1.1** (evaluation) and **V1.2** (compliance audit) are different: `ROADMAP.md`
+> of V1 as implemented and unit/contract-tested. Precisely: **V1.0** (CLI, REST API, hybrid
+> retrieval, security) is implementation-complete, and the two live-validation runs `ROADMAP.md`'s
+> checklist once listed as unchecked (`examples/simple_qa/` end-to-end, and the hybrid-retrieval
+> integration run) are now exercised automatically — the hybrid-retrieval integration suite runs
+> against a real Qdrant on every push/PR, and the same pipeline `examples/simple_qa/` uses runs
+> nightly against real Qdrant and a real LLM key (Batch 10, `.github/workflows/ci.yml` and
+> `nightly.yml`) — no longer an open validation gap. **V1.1** (evaluation) and **V1.2** (compliance
+> audit) are different: `ROADMAP.md`
 > marks both "partially built" with genuine, named implementation gaps, not just pending
 > validation — NDCG, populated golden sets, and a regression dashboard for V1.1; formatted
 > GDPR/CCPA/HIPAA report generation, an explicit data-lineage artifact, and an access-control log
 > for V1.2. So "V1 is complete" is not the claim made anywhere in this document, in either sense
-> — only "V1.0 is implemented, pending live validation" is. That distinction, and the pre-alpha
+> — only "V1.0 is implemented and live-validated" is. That distinction, and the pre-alpha
 > badge itself, are not documentation errors to silently paper over — they reflect an open
 > governance question (how "alpha" is defined for this project, and who is authorized to change
 > the badge) that this documentation pass does not have the authority to resolve on its own. If
@@ -692,8 +694,8 @@ that row.**
 | REST API | ✅ `/health`, `/ready`, `/retrieve`, `/answer` all work — the `/answer` 422 routing bug once present in an early build was fixed (see [`CHANGELOG.md`](CHANGELOG.md)) and is covered by a regression test |
 | YAML manifest wiring | ✅ for all three `manifests/presets/*.yaml` (local-hybrid-rag, secure-enterprise-rag, langgraph-rag); `manifests/blueprints/` holds design sketches (GraphRAG, multimodal) that don't load — see [manifests/README.md](manifests/README.md) |
 | Unit + contract tests | ✅ passing — run `./scripts/check.sh full` for the current count (changes too often for a static number to stay accurate). This suite requires no external services and is the one category in this table verified on every change. |
-| Integration tests (Qdrant + PostgreSQL for the full directory) | 🟡 Implemented and marked `@pytest.mark.integration`, but **not currently run by CI**. Qdrant covers vector-store/retrieval tests; PostgreSQL covers audit/lifecycle adapters. Run the relevant files against their real service, or provision both before running the entire directory. |
-| E2E tests (Qdrant, one scenario also PostgreSQL) | 🟡 Same caveat as integration tests — implemented and marked `@pytest.mark.e2e`, one scenario (`tests/e2e/test_secure_preset_e2e.py`) deliberately needs no LLM key (deterministic embedder/generator) so it can exercise tenant isolation, audit, and restart persistence without API cost, but **is not currently run by CI** either. `./scripts/check.sh e2e` requires Qdrant, PostgreSQL, *and* an LLM key up front (it fails fast rather than silently skipping the scenario one of those three doesn't apply to) — see that script for the exact prerequisite check. |
+| Integration tests (Qdrant + PostgreSQL for the full directory) | ✅ Implemented and marked `@pytest.mark.integration`, and **now run in CI** (`.github/workflows/ci.yml`'s `test-integration` job, against real Qdrant/PostgreSQL service containers). Qdrant covers vector-store/retrieval tests; PostgreSQL covers audit/lifecycle adapters. Provision both locally to run the full directory yourself. |
+| E2E tests (Qdrant, one scenario also PostgreSQL) | ✅ / 🟡 The deterministic scenario (`tests/e2e/test_secure_preset_e2e.py`, no LLM key needed — deterministic embedder/generator, exercises tenant isolation/audit/restart persistence) **now runs in CI** (`ci.yml`'s `e2e-deterministic` job). The LLM-backed scenario (`tests/e2e/test_simple_qa_pipeline.py`) still runs outside the main pipeline, in a separate scheduled/manual `.github/workflows/nightly.yml`, since it needs a real paid LLM key the main pipeline deliberately does not require. `./scripts/check.sh e2e` still requires Qdrant, PostgreSQL, *and* an LLM key up front for a full local run — see that script for the exact prerequisite check. |
 
 Track progress and milestones:
 

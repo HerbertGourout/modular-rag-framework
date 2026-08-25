@@ -13,6 +13,7 @@ from modular_rag.app.postgres_admin import (
 from modular_rag.contracts.identity import TenantContext, TokenVerifier
 from modular_rag.contracts.manifests import PipelineManifest
 from modular_rag.contracts.reconciliation import ReconciliationReport, RepairResult
+from modular_rag.contracts.tracing import Tracer
 from modular_rag.core.enums import ReadinessState
 from modular_rag.core.errors import (
     AuthenticationError,
@@ -33,6 +34,7 @@ __all__ = [
     "SecurityError",
     "TenantContext",
     "TokenVerifier",
+    "Tracer",
     "count_expired_audit_events",
     "create_default_registry",
     "ingest_directory",

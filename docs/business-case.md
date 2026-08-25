@@ -152,11 +152,14 @@ Some projects require guarantees that OSS frameworks cannot provide.
   no-external-API deployment still needs a contract-conformant local-LLM generator adapter.
 - **Explainability**: sourced citations, groundedness scores, and the full trace make it possible to justify every answer — a frequent requirement in decision-support projects.
 - **Definable SLAs**: structured traces cover query guarding, retrieval, reranking, and
-  generation latency, giving a starting point for contractual
-  SLAs. (The `v4` dependency group pulls in OpenTelemetry SDK packages for a future
-  OTLP-exporter integration, but nothing in the codebase wires them into a running pipeline
-  yet — today's shipped telemetry path is `StructlogTelemetry`'s structured JSON, not
-  OpenTelemetry itself. Don't promise OTel-based observability to a client until that's built.)
+  generation latency, giving a starting point for contractual SLAs. Since ADR-0012, a manifest can
+  also opt into live, OTLP-exportable OpenTelemetry spans (`observability.tracer.type: otel`) —
+  the API, ingestion, embedding, retrieval, reranking, and generation stages are instrumented,
+  correlation/request/trace ids propagate through one distributed trace per call, and no query/
+  document/answer/token content is ever attached as a span attribute. This is a first cut (see
+  ADR-0012's own out-of-scope notes — no cross-service `traceparent` propagation yet, and
+  LangGraph-routed requests get one root span, not per-internal-step spans); don't overclaim
+  full cross-service distributed tracing to a client beyond what's actually built.
 - **Large enterprise clients**: CIO and CISO stakeholders at large companies want governance, auditability, and control. This framework speaks directly to them.
 
 ---

@@ -329,8 +329,8 @@ def test_bm25_cross_match_is_filtered_out_by_tenant_policy(app_and_chunks):
     raw_hits = application._native.retriever.retrieve(raw_query, k=20)
     raw_ids = {rc.chunk.id for rc in raw_hits}
 
-    filtered_hits = application.retrieve(QUESTION_A, k=20, tenant_id=TENANT_A)
-    filtered_ids = {rc.chunk.id for rc in filtered_hits}
+    filtered_result = application.retrieve(QUESTION_A, k=20, tenant_id=TENANT_A)
+    filtered_ids = {rc.chunk.id for rc in filtered_result.chunks}
 
     assert raw_ids & chunk_ids_b, (
         "expected BM25's lexical overlap to surface at least one tenant-b chunk "
@@ -347,9 +347,9 @@ def test_cross_tenant_retrieve_call_excludes_other_tenant(app_and_chunks):
     d'accès croisé, via the raw retrieve() path (no generation)."""
     application, chunk_ids_a, _ = app_and_chunks
 
-    results = application.retrieve(QUESTION_A, k=20, tenant_id=TENANT_B)
+    result = application.retrieve(QUESTION_A, k=20, tenant_id=TENANT_B)
 
-    assert not ({rc.chunk.id for rc in results} & chunk_ids_a)
+    assert not ({rc.chunk.id for rc in result.chunks} & chunk_ids_a)
 
 
 @pytest.mark.e2e

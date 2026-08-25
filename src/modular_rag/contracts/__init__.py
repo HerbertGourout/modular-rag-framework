@@ -47,6 +47,7 @@ from modular_rag.contracts.secrets import SecretResolver
 from modular_rag.contracts.security import GuardResult, Redactor, SecurityGuard, TenantPolicy
 from modular_rag.contracts.storage import Storage
 from modular_rag.contracts.telemetry import Telemetry
+from modular_rag.contracts.tracing import AttributeValue, Span, Tracer
 
 __all__ = [
     "ALLOWED_PAYLOAD_KEYS", "AUDIT_SCHEMA_VERSION", "AuditEvent", "AuditEventType", "AuditSink",
@@ -81,4 +82,5 @@ __all__ = [
     "GuardResult", "Redactor", "SecurityGuard", "TenantPolicy",
     "Storage",
     "Telemetry",
+    "AttributeValue", "Span", "Tracer",
 ]

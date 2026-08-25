@@ -453,6 +453,7 @@ The domain models are defined in `src/modular_rag/core/models/`. They are Pydant
 | `Chunk` | `chunk.py` | ✗ | Sub-segment of a Document, with optional embedding |
 | `Query` | `query.py` | ✓ | User query + tenant_id (Lot 11b) |
 | `RetrievedChunk` | `retrieved.py` | ✓ | Chunk + score + rank + retrieval method |
+| `RetrievalResult` | `retrieval_result.py` | ✗ | Return type of `retrieve()`: chunks + a real trace_id (ADR-0012) |
 | `Citation` | `answer.py` | ✗ | Pointer from an answer to a source chunk |
 | `Answer` | `answer.py` | ✗ | Generated text + citations + trace_id |
 | `TraceStep` | `trace.py` | ✗ | Latency + tokens for one pipeline step |

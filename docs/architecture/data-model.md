@@ -72,6 +72,7 @@ A Chunk is a sub-segment of a Document, produced by a `Chunker`. Unlike `Documen
 | `content` | `str` | required | Text content of this chunk |
 | `modality` | `Modality` | `TEXT` | Inherited from parent document |
 | `embedding` | `list[float] \| None` | `None` | Dense embedding vector (set by Embedder after chunking) |
+| `embedding_text` | `str \| None` | `None` | Ingest-time-only: text to embed instead of `content` when set (e.g. `ingestion/enrichers/contextual_enricher.py`'s document-context prefix). `RAGEngine.ingest_chunks()` embeds `embedding_text or content`. Never persisted to a vector store's payload and never read by citations/`/retrieve` (both use `content` directly) — discarded once `embedding` is computed. |
 | `start_char` | `int` | `0` | Byte offset of chunk start in the original document |
 | `end_char` | `int` | `0` | Byte offset of chunk end |
 | `page` | `int \| None` | `None` | Page number (for PDF sources) |
@@ -168,6 +169,34 @@ rc = RetrievedChunk(
     rank=1,
     retrieval_method=RetrievalMethod.HYBRID,
 )
+```
+
+---
+
+## 4b. RetrievalResult
+
+**File**: `core/models/retrieval_result.py`
+
+Return type of `RAGEngine.retrieve()`/`ApplicationService.retrieve()` (ADR-0012, Codex review
+pass 2 HIGH-002) — pairs the retrieved chunks with a real framework `Trace.id`, the same
+"trace_id" concept `Answer.trace_id` already carries for the `answer()` path. Introduced because
+`retrieve()` previously returned a bare `list[RetrievedChunk]` with no trace of any kind attached,
+which left `/retrieve` unable to propagate a `trace_id` (only `correlation_id`/`request_id`) —
+an incomplete closure of Lot 11's original acceptance criterion.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `chunks` | `list[RetrievedChunk]` | required | The retrieved (and, if configured, tenant-filtered) chunks |
+| `trace_id` | `str` | required | `Trace.id` of a minimal `Trace` built specifically for this call (one `TraceStep` for the retrieval itself) — never recorded via `Telemetry`/`AuditSink`, unlike `answer()`'s `Trace` |
+
+**Example**
+```python
+from modular_rag.core.models.retrieval_result import RetrievalResult
+
+result = pipeline.retrieve("What is RAG?", k=5)
+print(result.trace_id)
+for rc in result.chunks:
+    print(rc.chunk.content)
 ```
 
 ---

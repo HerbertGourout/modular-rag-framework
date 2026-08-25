@@ -176,6 +176,38 @@ def test_load_application_requires_identity_is_true_with_a_wired_tenant_policy(
     assert application.requires_identity is True
 
 
+def test_load_application_with_langgraph_and_a_tracer_wires_successfully(
+    tmp_path: Path,
+) -> None:
+    """ADR-0012, Codex review pass 1 HIGH-001: `observability.tracer` must
+    not be rejected under `engine.adapter='langgraph'` — `app.request`/
+    `api.answer`/`api.retrieve` spans are created by `app/application.py`/
+    `api/__init__.py` directly against `Container.tracer`, independent of
+    which `DocumentEngine` is selected, so the declared control is genuinely
+    honored (unlike `telemetry`/`audit_sink`/`policy_engine`/`review_queue`,
+    which really are never reached under LangGraph). An earlier version of
+    `runtime_manifest_errors()` blanket-rejected this and made the field
+    unusable with the LangGraph adapter entirely — this test loads a real
+    manifest through the real default registry (not a fake) to prove the
+    combination is now accepted and the tracer reaches the application
+    facade. `type: otel` with no `otlp_endpoint` creates real spans without
+    ever exporting them over the network (ADR-0012's own "toggleable export"
+    design), so this stays a safe, no-network unit test."""
+    from modular_rag.adapters.observability.otel_tracing import OtelTracer
+
+    manifest_file = tmp_path / "manifest.yaml"
+    manifest_file.write_text(
+        _MINIMAL_MANIFEST + "engine:\n  adapter: langgraph\n"
+        "observability:\n  tracer:\n    type: otel\n    config: {}\n",
+        encoding="utf-8",
+    )
+
+    application = load_application(manifest_file)
+
+    assert application.tracer is not None
+    assert isinstance(application.tracer, OtelTracer)
+
+
 def test_load_engine_raises_on_an_unknown_adapter_name(tmp_path: Path) -> None:
     manifest_file = tmp_path / "manifest.yaml"
     manifest_file.write_text(

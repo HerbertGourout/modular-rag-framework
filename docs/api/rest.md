@@ -222,17 +222,26 @@ Authorization: Bearer <token>
 **Response**
 
 ```json
-[
-  {
-    "chunk_id": "uuid-...",
-    "score": 0.87,
-    "content": "BM25 is a probabilistic retrieval model based on term frequency..."
-  }
-]
+{
+  "chunks": [
+    {
+      "chunk_id": "uuid-...",
+      "score": 0.87,
+      "content": "BM25 is a probabilistic retrieval model based on term frequency..."
+    }
+  ],
+  "trace_id": "uuid-..."
+}
 ```
 
-Exactly these three fields — `chunk_id`, `score`, `content` (truncated to 300 characters). There
-is no `doc_id`, `source`, `rank`, or `retrieval_method` in the response.
+`chunks` — each entry has exactly `chunk_id`, `score`, `content` (truncated to 300 characters).
+There is no `doc_id`, `source`, `rank`, or `retrieval_method` in the response.
+
+`trace_id` — a real framework `Trace.id` (ADR-0012, Codex review pass 2 HIGH-002), letting a
+caller correlate this retrieval with observability data, the same way `AnswerResponse.trace_id`
+already does for `/answer`. **Response shape changed** (was a bare JSON array of chunks) —
+acceptable pre-launch per this project's own pre-alpha status (see the root `README.md`'s status
+badge note).
 
 ---
 

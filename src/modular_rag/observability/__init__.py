@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import structlog
 
+from modular_rag.contracts.tracing import AttributeValue
 from modular_rag.core.models.metrics import Metrics
 from modular_rag.core.models.trace import Trace
 
@@ -45,4 +46,32 @@ class NullTelemetry:
         pass
 
 
-__all__ = ["StructlogTelemetry", "NullTelemetry"]
+class NullSpan:
+    """No-op `Span` (ADR-0012) — returned by `NullTracer.start_span()`."""
+
+    def set_attribute(self, key: str, value: AttributeValue) -> None:
+        pass
+
+    def record_error(self, message: str) -> None:
+        pass
+
+    def __enter__(self) -> NullSpan:
+        return self
+
+    def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
+        pass
+
+
+class NullTracer:
+    """No-op tracer for testing and for explicitly disabling tracing
+    (`observability.tracer.type: null` — symmetrical with `telemetry`'s
+    `NullTelemetry`)."""
+
+    def name(self) -> str:
+        return "null"
+
+    def start_span(self, name: str, attributes: dict[str, AttributeValue] | None = None) -> NullSpan:
+        return NullSpan()
+
+
+__all__ = ["StructlogTelemetry", "NullTelemetry", "NullSpan", "NullTracer"]

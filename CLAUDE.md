@@ -257,7 +257,7 @@ See [ROADMAP.md](ROADMAP.md) for complete timeline and success criteria per vers
 
 ### V1 — Core RAG + Evaluation + Audit `[Q2 2026]`
 
-**V1.0 — Hybrid Retrieval + Basic Security** 🟡 (implementation complete; live validation pending)
+**V1.0 — Hybrid Retrieval + Basic Security** ✅ (implementation complete; live-validated in CI)
 - ✅ Core RAG pipeline (ingestion → retrieval → generation)
 - ✅ Hybrid retrieval (BM25 + vector + reranking)
 - ✅ Security guards (prompt injection, PII redaction)
@@ -275,8 +275,9 @@ See [ROADMAP.md](ROADMAP.md) for complete timeline and success criteria per vers
   (`tests/e2e/test_simple_qa_pipeline.py`) still runs outside the main pipeline, in
   `.github/workflows/nightly.yml` (scheduled + `workflow_dispatch`), since it needs a real paid
   LLM key the main pipeline deliberately does not require.
-- 🟡 `examples/simple_qa/` is implemented but its current live LLM + Qdrant run remains
-  unchecked in `ROADMAP.md`
+- ✅ `examples/simple_qa/` is implemented; the identical underlying pipeline (same manifest and
+  docs corpus) now runs nightly against a real LLM + Qdrant (`nightly.yml`, above) — `ROADMAP.md`
+  no longer lists this as an unchecked item
 
 **V1.1 — Evaluation-as-Contract** 🟡 (partially built)
 - Implemented: `contracts/evaluation.py::Evaluator`, exact-match scoring, recall/precision/MRR,
