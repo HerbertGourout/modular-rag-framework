@@ -52,16 +52,15 @@ ticks the matching checkbox in that same PR — this is a step in the checklist 
 of each change in parallel. For a non-technical explanation of what each version actually
 delivers, see [docs/onboarding.md](docs/onboarding.md), section 3.
 
-Versions are not independent batches — each depends on the one before it. V2's multi-agent
-reasoning builds on the retrieval pipeline already built in V1; V3's knowledge graph enriches
-that same retrieval rather than replacing it; V4's governance wraps around the execution of
-earlier versions rather than adding a search feature; and V5's multimodal support extends the
-ingestion and agents already in place. There is no shortcut to an advanced version without
-the earlier ones being stable first.
+Versions are not independent batches — each depends on the one before it. V2's engine boundary
+and governance build on the retrieval pipeline already built in V1; V3's delegated GraphRAG and
+native cost evidence extend that same request path; V4 expands governance already present; and V5
+extends ingestion and delegated execution to multimodal inputs. There is no shortcut to an
+advanced version without the earlier ones being stable first.
 
 ---
 
-## V1 — Core RAG `[V1.0 implementation complete, live validation pending; V1.1/V1.2 partially built]`
+## V1 — Core RAG `[V1.0 implemented and live-validated; V1.1/V1.2 partially built]`
 
 **What this version solves**: let a user ask a natural-language question over a document
 corpus (PDF, Word, HTML, Markdown, text) and get a sourced answer, without manual search.
@@ -226,7 +225,8 @@ contract-tested.
 > team coordination) are delegated to a selected external engine via the `DocumentEngine` port,
 > not built natively in this repository. The prototype implementation was removed in
 > [Lot 17](docs/refactoring/lot-17-prototype-retirement.md); see that record for what was
-> deleted and why.
+> deleted and why. The selectable `LangGraphEngineAdapter` currently runs a fixed linear RAG
+> graph; it does not implement those collaborative behaviours.
 
 ---
 
@@ -261,7 +261,7 @@ graph, not plain text search.
 **Purpose:** Report cost and latency per query, per user, per month — engine-agnostic evidence
 for governance and budget decisions, not a routing decision-maker itself.
 
-**Implementation:**
+**Target implementation:**
 - `eval/cost_reporting/`: Dashboard
   - Cost per query, per user, per month
   - Trends, anomalies (spike detection)
@@ -276,8 +276,11 @@ eval/
     └── cost_anomaly_detector.py
 ```
 
-**Status: not yet built** — `eval/cost_reporting/` doesn't exist on disk. The bullets below are
-target criteria for when it's implemented, not achieved results.
+**Status: partially built.** ADR-0013 adds aggregate OpenTelemetry request latency, generation
+token and estimated model-cost metrics, plus a reference Grafana dashboard. The price table is
+static, and the signals are not attributed per query, user or month. `eval/cost_reporting/` and an
+anomaly detector do not exist. No shipped preset enables the meter; activation currently requires
+a custom manifest.
 
 **Success criteria (target, not yet met):**
 - ⬜ Cost/latency reported per query, per user, per month, regardless of engine
@@ -334,15 +337,16 @@ that makes the framework eligible for regulated enterprise RFPs (see
 
 ### V4.0 — Multi-Tenant Policies + Environments
 
-- [ ] Policy-as-code: YAML rules, PolicyEngine, OPA integration (enhanced from V2)
+- [x] Inline policy-as-code through manifest rules and `PolicyEngine`
+- [ ] OPA-backed policy evaluation
 - [ ] Multi-environment manifests (dev/staging/prod)
-- [ ] Human-in-the-loop: review queue for high-risk answers
+- [x] Human-in-the-loop review queue for policy-routed answers
 - [ ] Risk profile per pipeline
 - [ ] Example: `examples/secure_rag/` extended
 
-**Watch point**: until this version's boxes are checked, never present multi-tenant
-governance or the full audit trail as operational to a client or an auditor — see
-[docs/onboarding.md](docs/onboarding.md), section 5.
+**Watch point**: tenant isolation, inline policies, redaction, audit sinks and review queuing are
+operational primitives. Do not present the broader V4 package — environment promotion, OPA,
+risk profiles or formatted compliance reporting — as complete.
 
 ---
 
@@ -461,11 +465,11 @@ version becomes "demonstrable" rather than "under construction".
 | **v1.1** | Q2 2026 | 🟡 Partial — recall/precision/MRR + `Evaluator` contract shipped; NDCG, populated golden sets, regression dashboard not built |
 | **v1.2** | Q3 2026 | 🟡 Partial — structured audit events + manifest-activatable sinks shipped; formatted GDPR/CCPA/HIPAA reports not built |
 | **v2.0** | Q3 2026 | ✅ Done — `PolicyEngine`/`TenantIsolationPolicy`/`HumanReviewGate` manifest-wired (multi-agent runtime ⚙️ delegated, see v2.1) |
-| **v2.1** ⚙️ | Q4 2026 | Delegated to selected external engine — see V2.1 note above |
+| **v2.1** ⚙️ | Q4 2026 | Delegated target; the current LangGraph adapter proves selection but not multi-agent behaviour |
 | **v3.0** ⚙️ | Q4 2026 | Delegated (traversal) — see V3.0 note above |
-| **v3.1** | Q1 2027 | ⬜ Not built — `eval/cost_reporting/` doesn't exist yet (routing itself ⚙️ delegated) |
+| **v3.1** | Q1 2027 | 🟡 Partial — aggregate OTel latency/token/cost signals and reference dashboard ship; per-query/user/month reporting and anomaly detection do not |
 | **v3.2** | Q1 2027 | ⬜ Not built — `eval/drift_detection.py` doesn't exist yet (fine-tuning execution ⚙️ delegated) |
-| **v4.0** | Q1 2027 | Multi-environment policies, prod-ready |
+| **v4.0** | Q1 2027 | 🟡 Core policies/tenant/audit/review primitives shipped; OPA, environments, risk profiles and reporting remain |
 | **v4.1** | Q2 2027 | 20+ languages, cultural reasoning |
 | **v5.0** ⚙️ | Q2 2027 | Delegated (VLM execution) — see V5.0 note above |
 
@@ -480,8 +484,8 @@ version becomes "demonstrable" rather than "under construction".
 | Evaluation | External (Ragas) | Built-in | ✅ **Contract-enforced, native** — `Evaluator` Protocol + recall/precision/MRR shipped; golden sets and NDCG still open (V1.1) |
 | Audit Trail | Manual | Limited | 🟡 **Primitives shipped, native** — structured, append-only audit events (in-memory or Postgres); no formatted GDPR/CCPA/HIPAA report generator yet (V1.2) |
 | Policies | None | Limited | ✅ **Policy-as-Code, native** — `PolicyEngine`/`TenantIsolationPolicy` manifest-wired and fail-closed |
-| Multi-Agent | Bolted-on | Limited | ⚙️ **Delegated to a selected external engine**, exposed via `DocumentEngine` |
-| Cost Optimization | None | None | ⬜ **Not yet built** — `eval/cost_reporting/` doesn't exist; scoped as native reporting once built, routing logic itself ⚙️ delegated (V3.1) |
+| Multi-Agent | Bolted-on | Limited | ⚙️ **Delegated target via `DocumentEngine`**; not implemented by the current fixed LangGraph graph |
+| Cost Evidence | None | None | 🟡 **Partially built** — aggregate OTel latency/token/estimated-cost metrics and a reference dashboard ship; attribution and anomaly detection remain (routing itself ⚙️ delegated) |
 | Fine-Tuning | None | None | ⬜ **Not yet built** — `eval/drift_detection.py` doesn't exist; scoped as native detection once built, execution itself ⚙️ delegated (V3.2) |
 | Graph Memory | External | External | ⚙️ **Delegated traversal**; the native data model was evaluated and removed (Étape 8, zero consumers) — no native graph capability today |
 | Multi-Language | English-first | Limited | ⬜ **Not yet built** — no `adapters/nlp/` module exists (V4.1) |

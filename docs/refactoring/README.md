@@ -151,23 +151,23 @@ correction — engineering-complete as of 2026-08-07, same sign-off caveat as Lo
 
 ## 5. What's still open — the honest list
 
-Every item below is a real, unresolved finding from the programme, not an oversight in this
-guide. Each links to the lot that found it.
+This table preserves findings from the programme and records their current disposition. Rows now
+marked resolved remain here for traceability rather than being silently deleted.
 
 | Item | Status | Lot |
 |---|---|---|
 | `pymupdf`'s AGPL-3.0/Artifex Commercial dual licence | Escalated; Herbert Gourout confirmed "leave as-is for now," not resolved | [16b](lot-16b-supply-chain.md) |
 | 56 research PDFs' unverified per-paper redistribution rights | Escalated; same "leave as-is for now" confirmation; catalogued (not resolved) in Lot 17 | [16b](lot-16b-supply-chain.md), [17](lot-17-prototype-retirement.md) |
-| `app/settings.py`'s `Settings` class never actually wired in | Found, documented, **not fixed** — every `MRAG_*` env var except `OPENAI_API_KEY` (SDK-level fallback) has zero effect | [16c](lot-16c-deployment-runbooks.md) |
-| `.gitlab-ci.yml`/`.gitlab/` removal | Confirmed by Herbert Gourout, blocked twice by the permission system for reasons not visible from `settings.json` alone | [17](lot-17-prototype-retirement.md) |
-| `memory/graph/knowledge_graph.py` — data model or delegated traversal? | Retained with a caveat; genuinely undecided, not resolved by any lot | [17](lot-17-prototype-retirement.md) |
+| `app/settings.py`'s unused `Settings` class | **Resolved in ADR-0007 Étape 8:** removed; manifest/env interpolation and SDK variables are the real configuration paths | [16c](lot-16c-deployment-runbooks.md), [19](lot-19-layer-boundary-stabilization.md) |
+| `.gitlab-ci.yml`/`.gitlab/` removal | **Resolved:** neither path exists in the current tree | [17](lot-17-prototype-retirement.md) |
+| `memory/graph/knowledge_graph.py` — data model or delegated traversal? | **Resolved in ADR-0007 Étape 8:** removed after confirming zero consumers; GraphRAG remains delegated | [17](lot-17-prototype-retirement.md), [19](lot-19-layer-boundary-stabilization.md) |
 | LangGraph adapter emits no audit evidence | `ApplicationService` now supplies the caller above the port, but its event-to-`AuditSink` bridge remains open | [15](lot-15-langgraph-adapter.md), [19](lot-19-layer-boundary-stabilization.md) |
 | Overload/soak load-test script never executed against live infra | Script exists (`scripts/loadtest_answer.py`), never run — no live deployment target in this environment | [16c](lot-16c-deployment-runbooks.md) |
 | Postgres/Qdrant backup-restore commands never executed against live infra | Commands are correct against each system's real documented tooling, unexecuted here | [16c](lot-16c-deployment-runbooks.md) |
 | CI `container-build`/`supply-chain` jobs never executed in this environment | No `docker` binary here; the next GitHub Actions run is the real verification | [16b](lot-16b-supply-chain.md) |
 | `manifests/production/_index.md` cannot be edited | Hard `permissions.deny` on `manifests/production/**`; confirmed intentional (V4+ scope), blocked two separate edit attempts | [19](lot-19-layer-boundary-stabilization.md) |
 | API/CLI engine selection | Resolved: API and CLI use `load_application()` and honor `engine.adapter` for answer execution | [19](lot-19-layer-boundary-stabilization.md) |
-| `IndexReconciler` remains programmatic-only | Not exposed through CLI/API/manifests | [19](lot-19-layer-boundary-stabilization.md) |
+| `IndexReconciler` exposure | **Partly resolved:** `mrag reconcile --mode check|repair` and Python use exist; HTTP API/manifest role do not | [19](lot-19-layer-boundary-stabilization.md) |
 | **Final sign-off** (architecture/security/operations/legal/business-quality) | **Not self-granted** — reserved for Herbert Gourout | [18](lot-18-pilot-and-closure.md), [19](lot-19-layer-boundary-stabilization.md) |
 
 ---

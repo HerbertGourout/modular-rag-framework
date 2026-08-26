@@ -61,8 +61,9 @@ mrag ingest ./my_docs/ --manifest manifests/presets/local-hybrid-rag.yaml
 ```
 
 The ingestion command:
-1. Parses every `.txt`, `.md`, `.pdf` file under `./my_docs/`.
-2. Normalizes and enriches each document.
+1. Parses every `.txt`, `.md`, `.pdf`, `.docx` and `.html` file under `./my_docs/`.
+2. Normalizes and enriches each document, including a contextual `embedding_text` used only for
+   embedding while the original content remains available for citations.
 3. Chunks using the adaptive chunker (512-token sections).
 4. Generates embeddings using `bge-small-en-v1.5`.
 5. Indexes chunks into Qdrant and builds an in-memory BM25 index for that command process.
@@ -118,12 +119,13 @@ authoritative classification and runtime prerequisites.
 |---|---|---|
 | `local-hybrid-rag.yaml` | **Runnable** | Local development, no auth, GPT-4o-mini — the reference starting point |
 | `secure-enterprise-rag.yaml` | **Runnable** (V2) | Enterprise deployment — tenant isolation, PII redaction, inline policy engine, durable Postgres audit trail and telemetry. Offline regression gates run separately. Needs `QDRANT_URL`/`QDRANT_API_KEY`/`AUDIT_DATABASE_URL` set. |
-| `langgraph-rag.yaml` | **Runnable** (V2) | Complex multi-step questions routed through `engine.adapter: langgraph` — a real `LangGraphEngineAdapter`, not native agents. Renamed from `agentic-rag.yaml`. |
+| `langgraph-rag.yaml` | **Runnable** (V2) | Questions routed through a real but fixed route → retrieve → guard → generate `LangGraphEngineAdapter`. It does not currently provide planning, tools, decomposition or collaborating agents. |
 | `manifests/blueprints/graph-memory-rag.yaml` | Blueprint | Entity-relationship reasoning — GraphRAG traversal is delegated per ADR-0005/0006 and not provided by the selected engine yet |
 | `manifests/blueprints/multimodal-rag.yaml` | Blueprint | PDF with charts, images, tables — `embedder.type: multimodal` isn't a registered factory; VLM execution is delegated |
 
 ## Next steps
 
 - [Plugin development guide](plugin-development.md) — add a custom chunker, retriever, or generator.
-- [Observability guide](observability.md) — read traces, connect to monitoring.
+- [Observability guide](observability.md) — understand traces, live spans and operational metrics,
+  including the current gauge limitations before connecting alerts.
 - [Deployment guide](deployment.md) — run the REST API in production.

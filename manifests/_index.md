@@ -1,11 +1,12 @@
 # Manifests — Configuring a pipeline without writing Python
 
 A manifest is a YAML file that describes a complete RAG pipeline: which chunker, which
-embedding model, which vector store, which retriever, which reranker, which generator, which
-security guard, which telemetry. It's the central piece of the framework's philosophy (see
+embedding model, vector store, retriever, reranker, generator, security/governance adapters,
+lifecycle ledger, trace telemetry, distributed tracer, and operational meter. It's the central
+piece of the framework's philosophy (see
 [CLAUDE.md](../CLAUDE.md), rule 03): **a component is only active if it's declared in a
-manifest** — there is no hidden wiring in the Python code that the YAML configuration
-wouldn't make visible.
+manifest**. Interface concerns such as bearer-token verification and ingestion parser dispatch
+are explicit exceptions: they are supplied by the API/application layer or selected by file type.
 
 **Why this choice over a classic Python configuration?** Three concrete reasons:
 1. A lead or a project manager on the client side can read and edit a manifest without ever
@@ -37,7 +38,7 @@ file under `presets/` loads, validates, and wires cleanly — non-executable ske
 |---|---|---|---|
 | [`local-hybrid-rag.yaml`](presets/local-hybrid-rag.yaml) | V1 | Local development: no authentication, lightweight models (GPT-4o-mini, bge-small), Qdrant on localhost. Recommended starting point for any new contributor or quick demo. | Native |
 | [`secure-enterprise-rag.yaml`](presets/secure-enterprise-rag.yaml) | V2 | Enterprise deployment: tenant isolation, PII redaction, inline policy engine, durable Postgres audit trail and telemetry. Offline quality gates are run separately. Requires `QDRANT_URL`/`QDRANT_API_KEY`/`AUDIT_DATABASE_URL` and reachable Postgres/Qdrant. | Native |
-| [`langgraph-rag.yaml`](presets/langgraph-rag.yaml) | V2 | Multi-step questions routed through `engine.adapter: langgraph` — a real `LangGraphEngineAdapter`, not a native agent runtime. Renamed from `agentic-rag.yaml`; the native five-agent design its old field names implied was removed in Lot 17. | Delegated |
+| [`langgraph-rag.yaml`](presets/langgraph-rag.yaml) | V2 | Questions routed through `engine.adapter: langgraph` — a real but fixed route → retrieve → guard → generate graph, not a native or external multi-agent workflow. Renamed from `agentic-rag.yaml`; the native five-agent design its old field names implied was removed in Lot 17. | External-engine adapter |
 
 ## `blueprints/` — design sketches, not loadable
 

@@ -2,8 +2,8 @@
 
 **For**: All team members (developers, architects, product managers, stakeholders)
 **Purpose**: Understand what this framework is, why it exists, what it does now, and what's coming
-**Rewritten**: 2026-08-06 (documentation audit, `docs/archive/documentation-audit-2026-08.md`)
-**Status**: V1.0 implementation complete, with live Qdrant/LLM validation still pending;
+**Updated**: 2026-08-26 (implementation/documentation alignment audit)
+**Status**: V1.0 implementation complete and live-validated in integration/e2e workflows;
 V1.1 evaluation and V1.2 audit are partially built. The 18-lot engine-agnostic control-plane
 refactoring programme is complete — see [ROADMAP.md](../../ROADMAP.md) for the current capability
 status and [docs/refactoring/README.md](../refactoring/README.md) for the historical programme.
@@ -45,13 +45,14 @@ execution engine (native or a selected external one) actually runs a request.
 
 ### Key facts (verified against current code, not aspirational)
 
-- **V1.0 (Core RAG)**: implementation complete, live validation pending — ingestion, hybrid retrieval (vector + BM25 + RRF), reranking,
+- **V1.0 (Core RAG)**: implemented and validated — ingestion, hybrid retrieval (vector + BM25 + RRF), reranking,
   generation, security guards, tenant isolation, audit trail, document lifecycle, offline quality gates,
   API/CLI hardening, dependency/licence gates, an immutable container build.
 - **Engine abstraction**: complete — `contracts/engine.py`'s `DocumentEngine` port has two real
   implementations (`NativeEngineAdapter`, wrapping the native pipeline; `LangGraphEngineAdapter`,
   running guard, tenant isolation and redaction through a real LangGraph `StateGraph`). Manifests
-  that request unsupported LangGraph audit/policy/review/telemetry controls fail startup.
+  that request unsupported LangGraph audit/policy/review/telemetry controls fail startup. The
+  current LangGraph graph is fixed and does not itself implement multi-agent behaviour.
 - **V2.0's Policy Engine**: real and shipped (`security/policies/policy_engine.py`,
   `TenantIsolationPolicy`) — not deferred, per ADR-0005 §5.1.
 - **V2.1 (multi-agent teams), V3.0 (GraphRAG), V3.2 (fine-tuning execution), V5.0 (multimodal
@@ -133,8 +134,8 @@ implementation exists, e.g. `contracts/retrieval.py`'s `Retriever` → `VectorRe
 by name:
 
 ```yaml
-# manifests/presets/local-hybrid-rag.yaml (the one preset that actually wires end to end —
-# see manifests/README.md for why the other four don't yet)
+# manifests/presets/local-hybrid-rag.yaml (one of three runnable presets;
+# non-runnable GraphRAG/multimodal sketches live under manifests/blueprints/)
 retriever:
   type: hybrid
   config:
@@ -153,7 +154,9 @@ checks are intentionally separate from online answer manifests (ADR-0008).
 optional reranking, and generation emit `TraceStep` records (`core/models/trace.py`). Tenant and
 policy decisions, post-generation guarding, redaction, and human review do not yet emit separate
 steps. Native governed runs emit `AuditEvent` records when an `audit_sink` is configured; the
-LangGraph adapter rejects unsupported audit/telemetry declarations per ADR-0008.
+LangGraph adapter rejects unsupported audit/telemetry declarations per ADR-0008. Optional
+`Tracer` and `Meter` ports provide live OTel spans and operational metrics; they are registered and
+tested but require a custom manifest because no shipped preset enables them.
 
 ---
 
@@ -211,9 +214,9 @@ external engine via the `DocumentEngine` port:
 | **V2.0** | Policy Engine (real, shipped), tenant isolation (real, shipped) | — |
 | **V2.1** | — | Multi-agent teams / collaborative agent orchestration |
 | **V3.0** | No native graph runtime or data model today; the zero-consumer prototype was removed in ADR-0007 Étape 8 | GraphRAG traversal, multi-hop reasoning, community detection |
-| **V3.1** | Cost-routing/caching logic, if built | — |
+| **V3.1** | Aggregate latency/token/estimated-cost OTel metrics and reference dashboard ship; attribution/anomaly detection remain | Model/query routing remains delegated |
 | **V3.2** | Drift detection / evaluation trigger | Fine-tuning execution itself |
-| **V4** | Multi-tenant policy layering, audit retention, human-in-the-loop review | — |
+| **V4** | Tenant isolation, inline policies, audit retention and human review ship; OPA, environment profiles, risk profiles and reports remain | — |
 | **V5.0** | Parsing/citation enrichment may stay native | VLM execution (image/video understanding) |
 
 The practical consequence: building "V2 agentic" or "V3 GraphRAG" support means writing an
@@ -348,10 +351,10 @@ is agreed.
 ### Your first policy
 
 `security/policies/policy_engine.py`'s `PolicyEngine` and
-`security/policies/tenant_isolation.py`'s `TenantIsolationPolicy` are real and shipped (not a
-future item) — define roles/data classifications in YAML, wire a `tenant_policy` into your
-manifest's `Container`, and test with `tests/unit/security/policies/test_tenant_isolation.py`
-as a reference.
+`security/policies/tenant_isolation.py`'s `TenantIsolationPolicy` are real and shipped. Define
+inline `governance.policy_engine.config.policies`, enable `tenant_enforcement`, and wire a
+`tenant_policy`. Caller roles are propagated but RBAC/classification-aware enforcement is not
+implemented. Use `tests/unit/security/policies/test_tenant_isolation.py` as a reference.
 
 ---
 
@@ -375,9 +378,10 @@ as a reference.
 **Can I use this for production today?**
 Treat the package as a pre-alpha framework requiring deployment-specific qualification, not as a
 turnkey production platform. V1.0 code, API/CLI hardening, tenant isolation, structured audit,
-offline evaluation primitives, and a container build exist, but integration/E2E are not run in
-CI, live V1.0 validation remains pending, V1.1/V1.2 have documented gaps, and readiness does not
-probe Qdrant/LLM connectivity. Start with [ROADMAP.md](../../ROADMAP.md), the
+offline evaluation primitives, and a container build exist. Main CI runs live Qdrant/PostgreSQL
+integration, deterministic e2e and Compose smoke checks; the real-LLM e2e runs on the
+scheduled/manual nightly workflow. Readiness probes wired Qdrant/PostgreSQL/LLM health. V1.1/V1.2
+still have documented gaps, and production qualification remains deployment-specific. Start with [ROADMAP.md](../../ROADMAP.md), the
 [capability matrix](../architecture/capability-matrix.md), and the
 [deployment guide](deployment.md).
 
@@ -400,8 +404,9 @@ selection.
 **When will native multi-agent orchestration / GraphRAG ship?**
 They won't, as native builds — per ADR-0005, that capability is delegated to the selected
 external engine (LangGraph) via the `DocumentEngine` port, which already exists and is tested.
-What ships going forward is deeper adapter integration with that engine, not a competing native
-runtime.
+The current adapter is a fixed RAG graph, so multi-agent/GraphRAG behaviour is not available merely
+by selecting it. What ships going forward is deeper external-engine integration, not a competing
+native runtime.
 
 **Can I contribute?**
 See [CONTRIBUTING.md](../../CONTRIBUTING.md).

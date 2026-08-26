@@ -1,6 +1,6 @@
 ---
 name: full-check
-description: Run unit tests, contract conformance tests, and coverage before opening a pull request
+description: Run lint, compile, layering, type, manifest, unit, and contract checks before a pull request
 ---
 
 # Full Check
@@ -30,7 +30,7 @@ script does not run).
 #   2. python -m compileall -q src/modular_rag
 #   3. python scripts/check_layering.py --strict
 #   4. mypy src/modular_rag/ (error count must not exceed .claude/mypy-baseline.txt)
-#   5. load_pipeline('manifests/presets/local-hybrid-rag.yaml') — confirms the one Runnable manifest still wires
+#   5. load/validate every manifests/presets/*.yaml — confirms all Runnable manifests still wire
 #   6. pytest tests/unit/ -v
 #   7. pytest tests/contract/ -v
 ```

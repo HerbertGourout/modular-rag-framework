@@ -1,46 +1,40 @@
 ```
 src/modular_rag/
-  core/           → enums, ids, errors, Pydantic models (Document, Chunk, Query…)
-  contracts/      → typing.Protocol interfaces for every capability
-  adapters/       → external bindings (embeddings, vectorstores, llms, auth…)
-  ingestion/      → parsers, normalizers, enrichers, chunkers
-  retrieval/      → BM25, vector, hybrid RRF, rerankers
-  generation/     → OpenAI + Anthropic generators, citations, groundedness
-  security/       → guard, adversarial detector, PII redactor, policy engine, tenant isolation
-  agents/         → engine-delegation adapter integration only (ADR-0005 §5.2) — no native
-                    agent runtime; the classes this line used to name (coordinator, planner,
-                    retriever, extractor, synthesizer, validator) were removed in Lot 17
-  memory/         → KV store, knowledge graph (data model retained with a caveat, see below)
-  eval/           → exact-match, retrieval metrics, benchmark runner, quality gate
-  observability/  → StructlogTelemetry, NullTelemetry
-  orchestration/  → RAGEngine, ComponentRegistry, NativeEngineAdapter, PipelineStateMachine,
-                    IndexReconciler — see orchestration/CLAUDE.md for the real file list
-  app/            → bootstrap, container (DI), settings (declared but not yet wired — see below)
-  cli/            → mrag ask / ingest / validate / manifest-schema / version  (Typer)
-  api/            → FastAPI create_app(), /health /ready /answer /retrieve
+  core/           → enums, ids, errors, Pydantic models, resilience, pricing
+  contracts/      → Protocol ports plus manifest and engine contracts
+  adapters/       → Qdrant, Postgres, Keycloak, embedding, LangGraph and OTel bindings
+  ingestion/      → text/PDF/DOCX/HTML parsers, normalization, enrichment, chunking, lifecycle
+  retrieval/      → in-memory BM25, Qdrant dense/sparse retrieval, hybrid RRF, reranking
+  generation/     → OpenAI, Anthropic and deterministic generators, citations, groundedness
+  security/       → guard, adversarial detection, redaction, policy, tenant isolation, audit/review
+  agents/         → namespace only; no native multi-agent runtime
+  memory/         → key/value storage only; no knowledge-graph implementation
+  eval/           → exact match, recall/precision/MRR, benchmark runner, quality gate
+  observability/  → Structlog/Null telemetry plus NullTracer/NullMeter
+  orchestration/  → RAGEngine, registry/container, native adapter, state machine, reconciliation
+  app/            → bootstrap, public application service, configuration and admin facades
+  cli/            → ask, ingest, validate, reconcile, db, audit, schema and version commands
+  api/            → FastAPI /health, /ready, /answer and /retrieve
 
-manifests/presets/   → 5 YAML pipeline configs — only local-hybrid-rag.yaml is Runnable end to
-                       end; the other four are Blueprint-only (manifests/README.md)
-tests/unit/          → fast, no external services
-tests/contract/      → isinstance(obj, Protocol) conformance checks
-tests/integration/   → requires Qdrant on localhost:6333
-tests/e2e/           → full pipeline with real LLM (not yet written)
-docs/architecture/   → overview, data-model, module-model, runtime-flow, security, structure
+manifests/presets/     → three runnable manifests: local, secure-enterprise and LangGraph
+manifests/blueprints/  → non-loadable GraphRAG and multimodal design sketches
+tests/unit/            → service-free unit suite
+tests/contract/        → Protocol/schema/boundary conformance
+tests/integration/     → live Qdrant and PostgreSQL coverage
+tests/e2e/             → deterministic governed pipeline plus scheduled real-LLM pipeline
+docs/                  → active architecture/API/guides/operations plus dated historical records
 ```
 
-> Per [ADR-0005](../docs/adr/0005-document-ai-control-plane-boundary.md) (accepted 2026-08-04):
-> `agents/`'s coordinator/planner/synthesizer/validator roles are delegated to a selected
-> external engine, not built natively — this directory hosts the adapter integration (not yet
-> written) rather than a native runtime; the five prototype classes it once held were removed
-> in Lot 17 (`docs/refactoring-plan.md`) for having zero test coverage and zero consumers. The
-> `memory/` knowledge-graph entry keeps a native *data model*
-> (`memory/graph/knowledge_graph.py`), retained with a documented caveat — whether its
-> multi-hop-traversal methods count as "data model" or delegated "traversal execution" remains
-> genuinely undecided; Lot 6's spike never produced evidence bearing on this specific question.
-> `adapters/` includes `llms`, `graphstores`, `search` as reachable engine-delegation targets
-> (Lots 6/7/15); `auth` hosts a real Keycloak `TokenVerifier` implementation (Lot 11b) and is no
-> longer unassigned. `app/settings.py`'s `Settings` class (`MRAG_*` env vars) is declared but
-> never actually constructed anywhere in the real pipeline-wiring path — found in Lot 16c
-> (`docs/refactoring/lot-16c-deployment-runbooks.md`), not yet fixed; don't assume any `MRAG_*`
-> variable configures a running pipeline without checking `app/default_factories.py`
-> first.
+The selected engine boundary is real: `NativeEngineAdapter` wraps `RAGEngine`, while
+`LangGraphEngineAdapter` runs a fixed route → retrieve → guard → generate `StateGraph`. The latter
+does not currently implement planning, tool use, query decomposition or collaborative agents;
+those behaviours remain delegated targets under ADR-0005.
+
+`adapters/auth/` contains the real `KeycloakTokenVerifier`. `adapters/graphstores/` and
+`adapters/search/` remain empty extension targets. The former `app/settings.py` and native graph
+model were removed; configuration flows through manifests, environment interpolation and
+`secret://` resolution.
+
+Observability has three separate surfaces: post-request `Trace`/`Telemetry`, live
+OpenTelemetry-compatible `Tracer` spans, and operational `Meter` metrics. The real OTel adapters
+live in `adapters/observability/`; no shipped preset enables tracer or meter yet.

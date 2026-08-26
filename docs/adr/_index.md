@@ -205,6 +205,28 @@ to read the same `Container`-registered `Tracer` instance.
 
 ---
 
+### [ADR-0013: Operational Metrics via a New `Meter` Port](0013-operational-metrics-meter-port.md)
+
+**Status:** Accepted
+**Date:** 2026-08-25
+
+Adds a new, additive `Meter` Protocol (`contracts/meter.py`) for live operational
+counters/histograms/gauges — deliberately separate from both `Telemetry` (post-hoc) and
+`core.models.metrics.Metrics` (a differently-named, per-run evaluation-quality bag). A real
+`OtelMeter` adapter (`adapters/observability/otel_meter.py`) reuses the `v4` dependency group
+ADR-0012 already wired in — OpenTelemetry's metrics API needed no new package. Covers request
+latency/errors, guard rejections, empty/degraded retrieval, generation tokens/cost (a new,
+from-scratch static price table, `core/pricing.py`), ingestion, index-reconciliation divergence,
+and human-review backlog — see [docs/observability/](../observability/) for the resulting
+reference dashboard, alerts, SLOs, and runbooks.
+
+**Key insight:** a metric *label* is not the same safety problem as a span *attribute* — an
+unbounded label value becomes a permanent, ever-growing time series in a real metrics backend, so
+`OtelMeter` enforces a cardinality denylist/pattern check in code (drop and warn, never raise),
+not only in documentation.
+
+---
+
 ## Decision Making Process
 
 1. **Identification**: Problem identified in sprint planning, client feedback, or architecture review.
@@ -259,8 +281,9 @@ to read the same `Container`-registered `Tracer` instance.
 - **ADR-0010**: `HealthCheckable` port and readiness semantics. Accepted.
 - **ADR-0011**: PostgreSQL migrations, connection pooling, and audit retention. Accepted.
 - **ADR-0012**: OpenTelemetry tracing via a new `Tracer` port. Accepted.
+- **ADR-0013**: Operational metrics via a new `Meter` port. Accepted.
 
-All twelve ADRs are Accepted as of this writing — none are in Proposed status. Future ADRs will be
+All thirteen ADRs are Accepted as of this writing — none are in Proposed status. Future ADRs will be
 added as new major decisions arise; per this project's own rule
 ([CLAUDE.md §07](../../CLAUDE.md#07--security-rules)), any new top-level module, layer boundary,
 or contract modification requires one.

@@ -181,8 +181,8 @@ EVALUATION_SCENARIOS = {
     },
 }
 # Additional scenarios (vector-only, BM25-only, reranked, alt-model) require their own manifest
-# files under manifests/presets/ — none of those variants ship today (only local-hybrid-rag.yaml
-# is Runnable end-to-end, see manifests/README.md). Copy local-hybrid-rag.yaml and change the
+# files under manifests/presets/ — none of those evaluation variants ship today, although all
+# three existing presets are Runnable (see manifests/README.md). Copy local-hybrid-rag.yaml and change the
 # relevant component's `type`/`config` to build one, and confirm it still wires with
 # `load_pipeline(...)` before adding it here.
 

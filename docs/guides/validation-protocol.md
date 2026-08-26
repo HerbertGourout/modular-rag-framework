@@ -5,9 +5,9 @@ installation, the four validation tiers, CI/CD alignment, common workflows, exit
 troubleshooting. It absorbs `docs/guides/validation.md`, which duplicated ~70% of this content
 under a different structure — see the note at the bottom for what changed.
 
-**Project status:** V1.0 implementation complete with live validation pending; V1.1/V1.2
-partially built. This page describes validation mechanics, not release completion.
-**Merged and corrected:** 2026-08-06 (documentation audit, `docs/archive/documentation-audit-2026-08.md`)
+**Project status:** V1.0 implementation and live integration/e2e validation are in place;
+V1.1/V1.2 remain partially built. This page describes validation mechanics, not release completion.
+**Last corrected:** 2026-08-26 (implementation/documentation alignment audit)
 
 ---
 
@@ -84,7 +84,7 @@ error count exceeding `.claude/mypy-baseline.txt`'s ratchet.
 up — see the file's own header comment).
 
 ### Tier 3: Integration Check (~1-2 minutes)
-**When:** With services (Qdrant running)
+**When:** With services (Qdrant and PostgreSQL for the full directory)
 **What:** Integration tests
 **Requires:** Qdrant on localhost:6333 for vector-store/retrieval files and PostgreSQL on
 localhost:5432 for the audit/lifecycle adapter files. Run individual files when only one service
@@ -104,8 +104,8 @@ docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:16
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\check.ps1 integration
 ```
 
-**Blocks on:** failed integration tests, Qdrant connection errors.
-**Skips gracefully if:** Qdrant unavailable.
+**Blocks on:** failed integration tests and service connection errors when the tier is explicitly
+requested. Individual tests may skip when their required service is unavailable.
 
 ### Tier 4: E2E Check (~2-5 minutes)
 **When:** Full pipeline validation

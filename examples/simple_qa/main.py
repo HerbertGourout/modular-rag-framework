@@ -7,7 +7,7 @@ Run:
 
 Requirements:
     pip install -e "../../[v1]"
-    export MRAG_OPENAI_API_KEY=sk-...
+    export OPENAI_API_KEY=sk-...
     docker run -d -p 6333:6333 qdrant/qdrant
 """
 from __future__ import annotations

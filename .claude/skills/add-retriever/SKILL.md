@@ -188,9 +188,9 @@ reg.register("retriever", "{retriever_name}", lambda cfg: {RetrieverName}(**cfg.
 
 ### 7. Create Manifest Example (5 min)
 
-Only `manifests/presets/local-hybrid-rag.yaml` wires end-to-end today (see
-`manifests/README.md`'s Runnable vs. Blueprint table) — either add your new retriever as a
-second option in a copy of that manifest and confirm it actually wires with
+All three files under `manifests/presets/` wire today (see `manifests/README.md`). Use a copy of
+the preset whose engine/governance/storage requirements match the new retriever, then confirm it
+actually wires with
 `load_pipeline(...)`, or clearly mark a new preset file as Blueprint until it's verified
 Runnable.
 

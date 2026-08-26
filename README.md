@@ -274,10 +274,12 @@ by `NativeEngineAdapter` to conform to a vendor-neutral `DocumentEngine` port
 **Why a port at all, if only two adapters exist today.** The port exists so that **application
 code (the CLI, the REST API, your own scripts) never needs to know or care** which engine is
 answering a question — `ApplicationService.answer()` is identical regardless of
-`engine.adapter`'s value. This is what lets the framework delegate generic multi-agent
-orchestration to LangGraph (per ADR-0005 §5.2 — the framework's stated position is that
-building a third competitive multi-agent runtime is not where this project's value lies) without
-that delegation leaking into every caller as a special case. The alternative — application code
+`engine.adapter`'s value. This is what lets the framework delegate generic orchestration to an
+external engine without that delegation leaking into every caller as a special case. The shipped
+`LangGraphEngineAdapter` currently implements a fixed route → retrieve → guard → generate graph;
+it proves the boundary and selection mechanism, but does **not** yet provide planning, tool use,
+query decomposition, or collaborative multi-agent execution. Those behaviours remain delegated
+future capabilities under ADR-0005 §5.2. The alternative — application code
 branching on "if using the agentic engine, call `.run_agentic()` instead of `.answer()`" — was
 rejected specifically because it would make every future engine option a breaking change to every
 caller, instead of an additive manifest option.
@@ -361,8 +363,9 @@ when its component is not wired, so a minimal `local-hybrid-rag.yaml` manifest w
 - Own governance, audit, evaluation, and tenant isolation natively; delegate generic
   multi-agent orchestration to a selected external engine (LangGraph, ADR-0006) via the
   `DocumentEngine` port — V2 (Policy Engine native and current; agent orchestration delegated).
-- Introduce **graph memory, governance, and multimodality** progressively
-  without rewriting the core — V3 → V5, per the same owned-vs-delegated split.
+- Extend **cost evidence, governance, language support, and multimodality** progressively without
+  rewriting the core — V3 → V5, per the same owned-vs-delegated split. Core governance primitives
+  already exist; GraphRAG traversal and VLM execution remain delegated and unavailable today.
 
 Runtime components (chunker, retriever, generator, guard, governance adapters, etc.) are wired
 through stable contracts and selected via YAML manifests. Offline evaluation helpers are the
@@ -439,9 +442,9 @@ place before deciding whether to adopt the framework:
 | Version | Theme | Key capabilities | Status |
 |---|---|---|---|
 | **V1** | Core RAG | Ingestion, adaptive chunking, hybrid retrieval (vector + BM25), grounded generation, basic safety, native evaluation, YAML manifests, HTTP API | 🟡 V1.0 (the pipeline listed here) passes its unit + contract suite and its CLI/API surface is implemented; `ROADMAP.md` is the authoritative, more granular tracker and currently lists V1.1 (Evaluation-as-Contract) and V1.2 (Compliance Audit Trail) as **partially built** — populated golden sets, NDCG, and formatted compliance-report generation are not yet shipped. See [`ROADMAP.md`](ROADMAP.md) for the exact checklist before treating V1 as fully closed. |
-| **V2** | Agentic + Security | Policy Engine (native, owned, current) + tenant isolation (real, shipped); multi-agent orchestration delegated to the selected external engine via `DocumentEngine` (ADR-0005) | 🟡 Policy Engine/tenant isolation ✅, agent delegation via LangGraph adapter ✅ (Lot 15) |
+| **V2** | Engine boundary + Security | Policy Engine (native, owned, current) + tenant isolation (real, shipped); generic multi-agent orchestration delegated through `DocumentEngine` (ADR-0005) | 🟡 Policy Engine/tenant isolation ✅; LangGraph selection boundary ✅; multi-agent behaviour not implemented by the current adapter |
 | **V3** | Graph Memory | GraphRAG traversal, multi-hop reasoning, and community summaries delegated to the external engine; the native `KnowledgeGraph` data model was removed (Étape 8, [ADR-0007](docs/adr/0007-layer-boundaries-and-control-plane-activation.md)) — zero consumers, restorable via git if a real need emerges | ⬜ Delegated (unavailable in the selected engine today) |
-| **V4** | Governance | Policy-as-code, multi-tenant, dev/staging/prod environments, fine-grained audit, human-in-the-loop, risk profiles | ⬜ Planned |
+| **V4** | Governance expansion | Policy-as-code, tenant isolation, audit and human review already ship; environment profiles, OPA integration, risk profiles and reporting remain | 🟡 Primitives shipped; expansion planned |
 | **V5** | Multimodal | Multimodal ingestion + retrieval (text/images/tables/audio/video); VLM execution delegated to the external engine, parsing/citation enrichment may stay native | ⬜ Planned |
 
 Detail per-version in [`ROADMAP.md`](ROADMAP.md) and
@@ -461,7 +464,8 @@ does not duplicate.
 
 - Python 3.11+
 - [Qdrant](https://qdrant.tech/) running on `localhost:6333` (`docker run -d -p 6333:6333 qdrant/qdrant`)
-- An OpenAI API key (or Anthropic) — only for the two LLM-backed presets; see
+- An OpenAI API key for the three shipped presets as written (Anthropic is available by changing
+  the generator component); see
   [`tests/e2e/manifests/`](tests/e2e/manifests/) for a fully deterministic, no-external-key
   pipeline you can run without any API key at all, useful for exploring the framework's mechanics
   without incurring API cost.
@@ -584,7 +588,7 @@ Four routes exist today:
 | `/health` | GET | Never required | Liveness probe — process is up and the pipeline finished wiring. |
 | `/ready` | GET | Never required | Readiness probe (Lot 6) — probes every wired component that implements `HealthCheckable` (Qdrant, PostgreSQL, and the configured LLM generator via a real, cached, non-generative authenticated call) and returns `healthy`/`degraded` (HTTP 200) or `unready` (HTTP 503); see [docs/api/rest.md](docs/api/rest.md#get-ready) for the full status/criticality contract. |
 | `/answer` | POST | Required only if `create_app(token_verifier=...)` was given a verifier (mandatory when the manifest wires `governance.tenant_policy`) | `{"question": "..."}` → `{"text": ..., "citations": [...], "trace_id": ...}` |
-| `/retrieve` | GET | Same as `/answer` | `?q=...&k=10` → raw retrieved chunks with scores, no generation |
+| `/retrieve` | GET | Same as `/answer` | `?q=...&k=10` → `{"chunks": [...], "trace_id": "..."}` with scored chunks and no generation |
 
 ```bash
 curl -X POST http://localhost:8000/answer \
@@ -655,7 +659,7 @@ pytest tests/e2e/ -v -m e2e
   [Core Concepts §6](#6-the-governance-stack--tenant-isolation-audit-redaction-policy-as-code).
 - **Built-in evaluation**: exact match plus recall/precision/MRR and a programmatic benchmark
   runner/quality gate; NDCG, populated golden datasets, and a dashboard remain open.
-- **Trace instrumentation**: query guard, retrieval, optional reranking, and generation emit
+- **Three complementary observability signals**: query guard, retrieval, optional reranking, and generation emit
   `TraceStep` records. Tenant/policy checks, post-generation guard checks, redaction, and human
   review do not yet have distinct steps. A `telemetry` component (`type: structlog` or
   `type: null`, wired under a manifest's `observability:` section — see
@@ -663,22 +667,23 @@ pytest tests/e2e/ -v -m e2e
   `Telemetry.record_trace()`; without one configured, the trace is built and then discarded after
   the request completes, matching every other optional-component precedent in this framework
   (guard, redactor, tenant policy: no-op unless wired). See
-  [`docs/guides/observability.md`](docs/guides/observability.md) for the full trace/telemetry
-  model.
+  [`docs/guides/observability.md`](docs/guides/observability.md) for the full model. Optional
+  `tracer` and `meter` components add live OpenTelemetry spans and operational metrics. They are
+  registered and tested but no shipped preset enables them; use a custom manifest to activate
+  either one.
 - **No vendor lock-in**: swap LLMs, embedders, or vector stores via a single YAML line.
-- **Planned extensions**: agentic runtime (V2), graph memory (V3), governance (V4), multimodal (V5).
+- **Planned extensions**: external-engine agentic workflows, GraphRAG traversal, governance
+  expansion, multilingual processing, and multimodal execution. Current availability is tracked
+  explicitly in the roadmap and capability matrix.
 
 ---
 
 ## Project status
 
-**V1's core pipeline (ingest → retrieve → generate) is implemented end-to-end via the CLI, direct
-Python use, and the REST API, and is covered by a unit + contract test suite that runs — and is
-verified passing — on every change (no external services required for that suite specifically).
-Two categories below (integration, e2e) require live Qdrant/PostgreSQL/an LLM key that this
-project's current CI does not provision, so their status below reflects "implemented and
-believed correct" rather than "continuously, automatically re-verified" — see the note under
-that row.**
+**V1's core pipeline (ingest → retrieve → generate) is implemented end-to-end through direct
+Python use, the CLI and the REST API. The main CI runs the service-free unit/contract suite, live
+Qdrant/PostgreSQL integration tests, a deterministic end-to-end scenario and a Compose smoke
+test. A separate scheduled/manual workflow runs the paid, LLM-backed end-to-end scenario.**
 
 | Component | Status |
 |---|---|

@@ -17,9 +17,9 @@ enough for your needs. All paths are clickable from an IDE.
 | 4 | [docs/architecture/overview.md](../architecture/overview.md) | Technical specification |
 | 5 | [CHANGELOG.md](../../CHANGELOG.md) | What changed recently |
 
-**The idea in one sentence**: a RAG pipeline where every component (parser, chunker, retriever,
-generator, guard…) is a swappable implementation of a Protocol, wired by a YAML manifest —
-never by Python code.
+**The idea in one sentence**: a RAG pipeline whose runtime components are Protocol-backed and
+selected by YAML. Parser dispatch is the explicit exception: file parsers are tried from
+`ingestion/pipelines/default.py::_PARSERS`, not selected in the manifest.
 
 ---
 
@@ -59,10 +59,8 @@ mrag ask "…" --manifest manifests/presets/local-hybrid-rag.yaml
    guard → redact → human-review → audit) lives in
    [runtime-flow.md](../architecture/runtime-flow.md) — read that file for the authoritative
    step-by-step, not this bullet list, which only names the pieces most relevant for a first
-   read-through of `local-hybrid-rag.yaml` (which wires none of the optional governance
-   components, so those steps are genuinely no-ops for this specific walkthrough):
-   - **query guard** → [security/filters/basic_guard.py](../../src/modular_rag/security/filters/basic_guard.py)
-     (12 injection patterns across 3 documented families — see [security.md](../architecture/security.md))
+   read-through of `local-hybrid-rag.yaml` (which wires no security or governance component, so
+   query/answer guards and governed steps are no-ops for this walkthrough):
    - **retrieval** → [retrieval/retrievers/hybrid.py](../../src/modular_rag/retrieval/retrievers/hybrid.py)
      which queries [vector.py](../../src/modular_rag/retrieval/retrievers/vector.py) (Qdrant) and
      [bm25.py](../../src/modular_rag/retrieval/retrievers/bm25.py), then fuses via
@@ -71,16 +69,16 @@ mrag ask "…" --manifest manifests/presets/local-hybrid-rag.yaml
    - **generation** → [generation/synthesizers/openai_gen.py](../../src/modular_rag/generation/synthesizers/openai_gen.py)
      or [anthropic_gen.py](../../src/modular_rag/generation/synthesizers/anthropic_gen.py),
      citations built by [citations/builder.py](../../src/modular_rag/generation/citations/builder.py)
-   - **answer guard** → the same guard's `check_answer()` (uncited-URL detection)
-   - to see the *rest* of the sequence (tenant isolation, policy engine, redaction, human review,
-     audit) exercised for real, read [security.md](../architecture/security.md) and follow
+   - to see guards, tenant isolation, policy engine, redaction, human review and audit exercised
+     for real, read [security.md](../architecture/security.md) and follow
      `secure-enterprise-rag.yaml` instead of `local-hybrid-rag.yaml`
 6. **The answer** — [core/models/answer.py](../../src/modular_rag/core/models/answer.py):
    `Answer` carries the text, the `Citation` list and the `Trace` id.
 
-**Hands-on exercise**: run [examples/hybrid_search/main.py](../../examples/hybrid_search/main.py)
-(`python main.py search "…"`) — it prints vector-only, BM25-only and fused results side by side,
-which makes RRF fusion concrete. (Needs Qdrant, no LLM key.)
+**Hands-on exercise**: use [examples/simple_qa/first_query.py](../../examples/simple_qa/first_query.py)
+for the current runnable hybrid path. `examples/hybrid_search/main.py` is presently a code sample,
+not a working exercise: it accesses the removed `HybridRetriever._bm25` attribute, and its
+separate `ingest`/`search` processes cannot retain the in-memory BM25 index.
 
 ---
 
@@ -96,7 +94,9 @@ mrag ingest ./docs --manifest …
    `text_parser`, `pdf_parser` (pymupdf), `docx_parser`, `html_parser` — all implement the
    [contracts/parsing.py](../../src/modular_rag/contracts/parsing.py) Protocol.
 3. **Normalization / enrichment** — [normalizers/text_normalizer.py](../../src/modular_rag/ingestion/normalizers/text_normalizer.py),
-   [enrichers/metadata_enricher.py](../../src/modular_rag/ingestion/enrichers/metadata_enricher.py).
+   [enrichers/metadata_enricher.py](../../src/modular_rag/ingestion/enrichers/metadata_enricher.py)
+   and `ContextualEnricher`, which writes a title-prefixed `embedding_text` while preserving the
+   original chunk content for retrieval and citations.
 4. **Chunking** — [chunkers/fixed.py](../../src/modular_rag/ingestion/chunkers/fixed.py) and
    [chunkers/adaptive.py](../../src/modular_rag/ingestion/chunkers/adaptive.py): **token-based**
    splitting (512 / 128 overlap, per arXiv:2604.12047) with a merge pass for small fragments
@@ -143,10 +143,12 @@ Reading the test is often the fastest way to understand a file.
    selects LangGraph as the external engine; **0007** fixes the layer-boundary/manifest-
    activation gaps that made ADR-0005 real in practice; **0008** separates offline evaluation
    from online answering and makes engine incompatibilities fail startup; **0009** adds
-   embedder/vector-store dimension reconciliation. Read 0001→0009 in order if you're new — each
+   embedder/vector-store dimension reconciliation. ADR-0010 through ADR-0013 cover bounded
+   readiness, PostgreSQL durability/migrations, OTel tracing and operational metrics. Read the
+   ADR index in order if you're new — each
    builds on the last.
-2. **The research digests** — [docs/research/README.md](../research/README.md): 39 arXiv papers
-   distilled into 7 digests. Every design choice in the code cites its digest
+2. **The research digests** — [docs/research/README.md](../research/README.md): the maintained
+   paper corpus distilled into topic digests. Design choices should cite the relevant digest
    ([CLAUDE.md](../../CLAUDE.md) coding rule 8); unsourced constants are flagged as such in the
    code (grep for `unsourced`).
 3. **Fine-grained traceability** — `git log --oneline`: the 2026-07-12 batch is split into

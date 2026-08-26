@@ -158,7 +158,11 @@ Some projects require guarantees that OSS frameworks cannot provide.
   correlation/request/trace ids propagate through one distributed trace per call, and no query/
   document/answer/token content is ever attached as a span attribute. This is a first cut (see
   ADR-0012's own out-of-scope notes — no cross-service `traceparent` propagation yet, and
-  LangGraph-routed requests get one root span, not per-internal-step spans); don't overclaim
+  LangGraph-routed requests get engine-neutral API/application spans but no internal graph-step
+  spans). ADR-0013 also exposes aggregate request latency, token and static estimated-cost metrics
+  plus reference Grafana/Prometheus material. No shipped preset enables tracer/meter, live backend
+  validation is still required, and readiness/review gauges have documented sampling limits;
+  don't overclaim
   full cross-service distributed tracing to a client beyond what's actually built.
 - **Large enterprise clients**: CIO and CISO stakeholders at large companies want governance, auditability, and control. This framework speaks directly to them.
 

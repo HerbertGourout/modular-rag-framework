@@ -192,12 +192,15 @@ Codex approval never replaces deterministic validation.
 
 1. **Contracts first.** The `contracts/` Protocol must exist before any concrete implementation.
 2. **No cross-domain imports.** Retrievers never import from `generation/`; guards never import from `ingestion/`. They share only `core/models/` types.
-3. **Manifests are the source of truth.** Register the component in `app/default_factories.py`, then select it by name in YAML. Never wire it in Python elsewhere.
+3. **Manifests are the source of truth for runtime pipeline components.** Register those in
+   `app/default_factories.py`, then select them by name in YAML. Explicit exceptions are parser
+   dispatch (`ingestion/pipelines/default.py::_PARSERS`), engine selection (`load_engine`) and API
+   identity verification (`create_app(token_verifier=...)`).
 4. **Tests mirror `src/`.** `tests/unit/ingestion/chunkers/test_fixed.py` for `src/modular_rag/ingestion/chunkers/fixed.py`. Add a contract test in `tests/contract/` for every new Protocol implementation.
-5. **Observability is mandatory for new execution steps.** Retrieval and generation methods must
-   emit a `TraceStep` via `Trace.add_step()`. Current coverage is not universal: tenant/policy
-   checks, post-generation guard checks, redaction, and human review do not yet emit distinct
-   steps; see `docs/guides/observability.md`.
+5. **Observability is mandatory for new execution steps.** Decide explicitly between framework
+   `TraceStep`/`Telemetry`, live `Tracer` spans and operational `Meter` metrics at orchestration,
+   application or API boundaries; do not change a domain Protocol merely to pass a trace. Current
+   coverage and gauge limitations are documented in `docs/guides/observability.md`.
 6. **Extend, don't rewrite.** All core modules exist. Add to them rather than recreating.
 7. **Lazy imports for heavy deps.** All optional libraries (qdrant-client, rank-bm25, sentence-transformers, openai, anthropic, fitz) must be imported inside the method that uses them, not at module level.
 8. **State of the art first.** Before any *design* decision (fusion weights, chunking parameters, guard patterns, metric choices, architectural patterns), read the matching digest in `docs/research/` (DIGEST-retrieval, DIGEST-generation, DIGEST-chunking, DIGEST-evaluation, DIGEST-security, DIGEST-overviews, DIGEST-architecture — distilled from `.claude/research-papers/`) and cite the arXiv id backing the choice. A choice that contradicts the digest must be justified explicitly. Routine implementation (tests, fixes, wiring) does not require this.
@@ -261,10 +264,9 @@ See [ROADMAP.md](ROADMAP.md) for complete timeline and success criteria per vers
 - ✅ Core RAG pipeline (ingestion → retrieval → generation)
 - ✅ Hybrid retrieval (BM25 + vector + reranking)
 - ✅ Security guards (prompt injection, PII redaction)
-- 🟡 Observability — `TraceStep` emissions are real but not universal: query guard, retrieval,
-  optional reranking, and generation are traced; tenant/policy denial, the post-generation guard
-  check, redaction, and human-review decisions do not yet emit their own step (see
-  [docs/guides/observability.md](docs/guides/observability.md))
+- 🟡 Observability — `TraceStep` coverage is not universal; optional OTel `Tracer`/`Meter` roles
+  are registered and tested but no shipped preset enables them, and two gauges have documented
+  freshness/state-reset limitations (see [docs/guides/observability.md](docs/guides/observability.md))
 - ✅ ComponentRegistry + manifest wiring
 - ✅ Unit and contract tests
 - ✅ Integration tests (`tests/integration/`) and the deterministic e2e scenario
@@ -334,9 +336,9 @@ exists in this codebase today.
 **V3.1 — Cost/Latency Evidence + Reporting** `[NEW — 2 months after V3.0]` — reframed per
 ADR-0005 §5.1: the in-house query-routing/model-selection logic is delegated; what stays
 native is reporting.
-- `eval/cost_reporting/`: Dashboard (cost/query, per user, per month), regardless of which
-  engine served the query
-- **Success**: cost/latency reported per query, anomalies flagged
+- **Partially built:** ADR-0013 exposes aggregate request latency, generation token and static
+  estimated-cost OTel metrics plus a reference dashboard. No shipped preset enables the meter.
+- **Still open:** `eval/cost_reporting/`, per-query/user/month attribution and anomaly detection.
 
 **V3.2 — Drift Detection + Evaluation Trigger** `[NEW — 3 months after V3.0]` — reframed per
 ADR-0005 §5.2: fine-tuning *execution* is delegated to external MLOps tooling; what stays
@@ -353,7 +355,7 @@ native is deciding *when* retraining is needed.
 **V4.0 — Multi-Tenant Policies + Multi-Environment**
 - Policy-as-code enhancements (OPA integration)
 - Multi-environment manifests (dev/staging/prod)
-- Human-in-the-loop: review queue for risky answers
+- Human-in-the-loop review queue: shipped; production workflow/operational integration remains
 - Risk profiles per pipeline
 - **Success**: Prod policies enforced, escalation queue works
 
@@ -485,8 +487,8 @@ per ADR-0005 — this framework's differentiator is owning governance/audit/eval
 | Evaluation | External | Built-in | 🟡 **Native offline primitives (V1.1)**; datasets/NDCG/dashboard remain open |
 | Audit Trail | Manual logs | Limited | 🟡 **Native structured audit (V1.2)**; lineage/compliance reports remain open |
 | Policies | None | Limited | ✅ **Policy-as-Code (V2.0), native** |
-| Multi-Agent | Bolted-on | Limited | ⚙️ **Delegated to a selected external engine (V2.1)**, exposed via `DocumentEngine` |
-| Cost Optimization | None | None | ⬜ **Native evidence/reporting planned (V3.1)**; routing logic delegated |
+| Multi-Agent | Bolted-on | Limited | ⚙️ **Delegated target via `DocumentEngine`**; the current fixed LangGraph graph is not multi-agent |
+| Cost Evidence | None | None | 🟡 **Aggregate OTel latency/token/estimated-cost metrics + reference dashboard ship**; attribution/anomaly detection remain, routing delegated |
 | Fine-Tuning | None | None | ⚙️ **Drift detection/eval trigger native; fine-tuning execution delegated (V3.2)** |
 | Graph Memory | External | External | ⚙️ **Delegated GraphRAG traversal (V3.0)**; the native graph data model was evaluated and removed (Étape 8, [ADR-0007](docs/adr/0007-layer-boundaries-and-control-plane-activation.md) — resolved: zero consumers, restorable via git history if a real, wired need emerges) — no native graph capability exists today |
 | Multi-Language | English-first | Limited | ⬜ **20+ languages (V4.1) — not yet built**; no `adapters/nlp/` module exists |

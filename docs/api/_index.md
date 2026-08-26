@@ -1,17 +1,17 @@
 # API — Overview
 
-The framework exposes two user-facing surfaces on top of the same engine (`RAGEngine`): a
+The framework exposes two user-facing surfaces over the same application/composition layer: a
 CLI (`mrag`, described in [CLAUDE.md](../../CLAUDE.md)) for scriptable command-line use, and
 a FastAPI REST API for integration into a third-party application (frontend, client backend
-service, chatbot). Both call exactly the same orchestration code — there is no duplicated
-logic between the two surfaces, only a difference in input/output format.
+service, chatbot). Both use `ApplicationService` and honor the manifest-selected `DocumentEngine`
+for answers. Ingestion and retrieval-only operations remain native application use cases.
 
 **Why a REST API rather than just a Python library?** Many clients already have an
 application (internal portal, Teams/Slack chatbot, existing backend) and want to call the
 RAG pipeline as a service, without embedding heavy Python dependencies
 (sentence-transformers, qdrant-client) into their own application stack.
 
-- [rest.md](rest.md) — complete reference for the endpoints (`/health`, `/answer`,
+- [rest.md](rest.md) — complete reference for the endpoints (`/health`, `/ready`, `/answer`,
   `/retrieve`), request/response schemas, error codes, Python and `curl` examples.
 
 The API has built-in authentication: `create_app(..., token_verifier=...)` (Lot 16a) requires a

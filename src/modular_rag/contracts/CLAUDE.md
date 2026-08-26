@@ -139,7 +139,7 @@ class Embedder(Protocol):
     - Be deterministic (same input → same embedding)
     
     **NOT Responsible for:**
-    - Storing embeddings (that's VectorStore's job)
+    - Storing embeddings (that's the `Indexer`/`VectorIndexer` implementation's job)
     - Ranking/reranking (that's Reranker's job)
     - Normalizing text (that's Ingestion's job)
     

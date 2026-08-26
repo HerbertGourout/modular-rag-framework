@@ -29,7 +29,7 @@ Official references:
 
 ## Available Workflows
 
-`.claude/skills/` currently holds 18 skills, not just the 5 validation-tier ones — the table
+`.claude/skills/` currently holds 19 skills, not just the 5 validation-tier ones — the table
 below is the complete list (a previous version of this table stopped at 5, which undersold what's
 actually invokable):
 
@@ -38,14 +38,15 @@ actually invokable):
 | `/test-unit` | Runs `pytest tests/unit`. | No |
 | `/test-contract` | Runs `pytest tests/contract`. | No |
 | `/qa-v1` | Runs Ruff, unit tests, contract tests, and layering audit. | No |
+| `/delivery-loop` | Runs the bounded Claude writer → Codex reviewer loop, applies one correction batch when required, and finishes with deterministic validation. Never pushes. | Codex CLI; task-specific services only when confirmed |
 | `/check-layering` | Runs `python scripts/check_layering.py`. | No |
 | `/quick-check` | Fast syntax/import validation (ruff E,F,I), under 30s. | No |
-| `/full-check` | Unit + contract tests + coverage, mirrors most of CI. | No |
-| `/release` | Pre-tag validation: full + integration + e2e, CHANGELOG/version checks. | Qdrant + LLM key |
+| `/full-check` | Lint/compile/layering/type/manifest checks plus unit + contract tests; no coverage. | No |
+| `/release` | Pre-tag validation: full + integration + e2e, CHANGELOG/version checks. | Qdrant + PostgreSQL + LLM key for the complete set |
 | `/run-simple-qa` | Runs the bundled example ingest + ask flow. | Qdrant + LLM key |
 | `/validate-security` | Manual 7-layer-defense checklist (secrets, cross-domain imports, direct wiring, lazy imports, PII patterns) — no CI job covers this yet. | No |
 | `/validate-architecture` | Hexagonal layering, imports, and design-pattern validation. | No |
-| `/add-component` | Scaffold a new V1 component (chunker, metric, embedder, vectorstore adapter) with implementation + unit + contract tests. | No |
+| `/add-component` | Scaffold a new contract-backed component (chunker, meter, embedder, indexer adapter) with implementation + unit + contract tests. | No |
 | `/add-retriever` | Step-by-step workflow for a new `Retriever` implementation. | No |
 | `/add-generator` | Step-by-step workflow for a new `Generator` implementation. | No |
 | `/add-security-guard` | Step-by-step workflow for a new guard/filter/detector/policy. | No |
@@ -57,8 +58,19 @@ actually invokable):
 Use `/qa-v1` before opening a GitHub PR. Use `/run-simple-qa` or `/release` only when Qdrant is
 available on `localhost:6333` and the required LLM API key is set.
 
-When pairing Claude Code with Codex, keep Claude Code as the default writer and use
-Codex for independent review. The full workflow is documented in
+When pairing Claude Code with Codex, the preferred entrypoint is one command:
+
+```text
+/delivery-loop <goal, acceptance criteria, and intended file scope>
+```
+
+Claude Code remains the writer and invokes Codex non-interactively in a read-only
+sandbox. The skill performs at most two Codex passes, stops immediately at
+`READY_FOR_FINAL_VALIDATION`, and never pushes. Codex discovery does not rely only
+on Claude's sandboxed `PATH`: the helper also detects the executable bundled by the
+VS Code/VS Code Insiders/Cursor extension, or accepts `CODEX_CLI_PATH`/
+`-CodexPath`. It also verifies the CLI's own saved authentication before starting
+a review; chat/IDE login alone may not initialize CLI login. The full workflow is documented in
 [AI engineering workflow](ai-engineering-workflow.md) and
 [Model routing](model-routing.md).
 

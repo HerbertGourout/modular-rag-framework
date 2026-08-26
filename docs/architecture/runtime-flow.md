@@ -196,8 +196,9 @@ in the current codebase: a manifest's `engine.adapter` field selects which `Docu
 (`contracts/engine.py`) implementation `app/bootstrap.py::load_engine()` returns.
 `"native"` (or no `engine` section) gets `NativeEngineAdapter` — the fixed V1 pipeline from the
 diagrams above. `"langgraph"` gets `LangGraphEngineAdapter`
-(`adapters/llms/langgraph_engine.py`), whose internal graph is the real, current replacement for
-the V2/V3 native-agent and GraphRAG designs once sketched here — both adapters share the same
+(`adapters/llms/langgraph_engine.py`), whose fixed internal graph proves the external-engine
+boundary but does not implement the V2/V3 multi-agent or GraphRAG designs once sketched here —
+both adapters share the same
 `Container` (identical chunker/retriever/guard/generator selection); only the orchestration
 engine differs.
 
@@ -257,4 +258,3 @@ is selected here — neither was ever built as native code beyond the multi-agen
 data model (`memory/graph/knowledge_graph.py`) was removed 2026-08-07 (Étape 8,
 [ADR-0007](../adr/0007-layer-boundaries-and-control-plane-activation.md)) — zero consumers
 anywhere, restorable via git history. There is no native graph capability of any kind today.
-</content>

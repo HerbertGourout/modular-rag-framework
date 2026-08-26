@@ -241,11 +241,11 @@ def corpus():
     ]
 
 @pytest.fixture
-def vector_store(corpus):
-    """Mock vector store."""
-    store = MagicMock(spec=VectorStoreProtocol)
-    store.search.return_value = [
-        SearchResult(doc_id="1", score=0.9, text=corpus[0]["text"])
+def retriever(corpus):
+    """Mock the real Retriever contract."""
+    store = MagicMock(spec=Retriever)
+    store.retrieve.return_value = [
+        RetrievedChunk(chunk_id="1", score=0.9, content=corpus[0]["text"])
     ]
     return store
 ```

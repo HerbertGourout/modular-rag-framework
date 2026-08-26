@@ -2,10 +2,10 @@
 # docs/adr/0007-layer-boundaries-and-control-plane-activation.md). The old `planner`/`agents`
 # fields described a native multi-agent runtime that was never built (silently ignored by
 # ComponentRegistry.wire() — see docs/refactoring-plan.md §2) and was removed as dead prototype
-# code in Lot 17. Multi-step/agentic behavior is delegated to LangGraph via `engine.adapter`
-# (contracts/engine.py's DocumentEngine port, ADR-0006) instead of a native agent graph. Select
-# this manifest through app/bootstrap.py::load_engine(), which returns a LangGraphEngineAdapter
-# wrapping the same V1 components declared below.
+# code in Lot 17. Generic multi-step/agentic behavior remains delegated through `engine.adapter`,
+# but the current LangGraphEngineAdapter implements only a fixed route -> retrieve -> guard ->
+# generate graph; this preset does not activate planning, tools, decomposition, or collaborating
+# agents. Select it through app/bootstrap.py::load_engine(), which wraps the same components below.
 version: "2.0"
 id: langgraph-rag
 description: "Hybrid retrieval pipeline routed through the LangGraph DocumentEngine adapter instead of the native sequential pipeline."

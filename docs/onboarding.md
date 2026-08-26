@@ -10,13 +10,9 @@
 > **If you specifically want to understand the 2026-08 engine-agnostic control-plane
 > refactoring programme** (ADR-0005's owned-vs-delegated pivot, 18 lots, Phase A-D) rather
 > than the framework in general, go straight to
-> [docs/refactoring/README.md](refactoring/README.md) instead — this document's V2/V3
-> sections below (§3) still describe the pre-ADR-0005 native-build intent for agentic
-> orchestration and graph memory, which that programme superseded (generic multi-agent
-> orchestration and GraphRAG traversal are now delegated to a selected external engine, not
-> built natively along the lines described below). Not rewritten here in full — see
-> `docs/refactoring/lot-17-prototype-retirement.md` for what was corrected and why a full
-> rewrite of this file wasn't this programme's job to do unprompted.
+> [docs/refactoring/README.md](refactoring/README.md) instead. The version summaries below use the
+> current owned/delegated boundary and distinguish a selectable adapter from capabilities that the
+> adapter does not yet implement.
 
 ---
 
@@ -175,10 +171,10 @@ pipeline already built in V1).
 ```mermaid
 %%{init: {"theme": "base"}}%%
 flowchart LR
-    V1["V1 — Core RAG\nanswer from documents"] -->|"adds multi-step\nreasoning on top of"| V2["V2 — Agentic\nmulti-step questions"]
-    V2 -->|"adds relationships\nbetween facts on top of"| V3["V3 — Graph Memory\nmulti-hop reasoning"]
-    V3 -->|"wraps governance\naround execution of"| V4["V4 — Governance\nregulated, multi-tenant"]
-    V4 -->|"extends ingestion + agents\nto non-text modalities"| V5["V5 — Multimodal\nimages, tables, audio, video"]
+    V1["V1 — Core RAG\nanswer from documents"] -->|"adds an engine boundary\nand native policies"| V2["V2 — Engine + Security"]
+    V2 -->|"delegates graph reasoning;\nadds cost evidence"| V3["V3 — GraphRAG + Evidence"]
+    V3 -->|"expands existing\ngovernance"| V4["V4 — Governance expansion"]
+    V4 -->|"extends ingestion + execution\nto non-text modalities"| V5["V5 — Multimodal"]
 ```
 
 ### V1 — Core RAG: answering a question from documents
@@ -199,34 +195,33 @@ terms, blind to paraphrasing. Combining the two (RRF fusion, detailed in
 [docs/architecture/overview.md](architecture/overview.md), section 11) gives the best of
 both worlds without sacrificing either.
 
-**Status**: 🟡 implementation complete and covered by unit/contract tests, and — since Batch 10,
-an external plan not tracked in this repo's own Lot sequence — also by integration tests and the
-deterministic e2e scenario running in CI (`.github/workflows/ci.yml`'s `test-integration`/
-`e2e-deterministic` jobs); the current live LLM + Qdrant execution of `examples/simple_qa/`
-itself remains pending in `ROADMAP.md`, and that specific LLM-backed e2e scenario runs only in
-`.github/workflows/nightly.yml`, not on every PR.
+**Status**: ✅ the core path is covered by unit/contract tests, live Qdrant/PostgreSQL integration,
+a deterministic governed e2e scenario in the main CI, and an LLM-backed Qdrant scenario in the
+scheduled/manual nightly workflow. The paid LLM path is deliberately not run on every PR.
 
-### V2 — Agentic: questions that need several reasoning steps
+### V2 — Engine boundary and security
 
 **The problem solved.** V1 works well for "what was Q3 revenue?" but fails on "compare Q3
 results to the initial forecast and explain the gap" — a question that requires pulling
 several pieces of information, cross-referencing them, and then double-checking the answer
 is well supported before returning it.
 
-**How it works here.** The framework sends the normalized request through the selected
-`DocumentEngine`. The shipped LangGraph adapter owns multi-step execution while this package
-keeps configuration, tenant context, governance, audit contracts, and result shapes
-engine-neutral. There is no native team of specialized agents in this repository.
+**How it works here.** The framework sends a normalized request through the selected
+`DocumentEngine`, keeping context and results vendor-neutral. The shipped LangGraph adapter is a
+real selectable `StateGraph`, but its graph is fixed (route → retrieve → guard → generate): it does
+not yet decompose questions, call tools, maintain conversations, or coordinate agents. There is no
+native team of specialized agents in this repository.
 
 > Per [ADR-0005](adr/0005-document-ai-control-plane-boundary.md) (accepted 2026-08-04),
 > this native five-agent design is **not** what gets built — generic multi-agent orchestration
 > is delegated to a selected external engine (LangGraph, see
 > [ADR-0006](adr/0006-external-engine-selection.md)) via the `DocumentEngine` port. The
-> policy-engine half of V2 (RBAC, tenant isolation) shipped natively and is current, not planned
+> policy-engine half of V2 (inline rules and tenant isolation) shipped natively and is current,
+> while RBAC enforcement is not implemented
 > — see [ROADMAP.md](../ROADMAP.md) V2.0.
 
-**Status**: ⚙️ multi-agent coordination delegated (adapter in place, `adapters/llms/`); policy
-engine ✅ shipped — see [ROADMAP.md](../ROADMAP.md).
+**Status**: ⚙️ multi-agent coordination is a delegated target and unavailable in the current
+adapter; the engine boundary and native policy/tenant mechanisms are shipped.
 
 ### V3 — Graph Memory: understanding relationships between facts, not just their content
 
@@ -235,7 +230,7 @@ engine ✅ shipped — see [ROADMAP.md](../ROADMAP.md).
 Z". This kind of multi-hop question ("who is affected, in cascade, by the incident at Y?")
 needs a knowledge graph, not just text search.
 
-**How it works.** The corpus is analyzed to extract entities (people, organizations,
+**Target behaviour.** The corpus would be analyzed to extract entities (people, organizations,
 projects) and their relationships, building a graph. At query time, the framework starts
 from the entities mentioned, explores the graph N hops out, and injects that sub-graph as
 structured context alongside the usual text chunks. A feedback mechanism (EvoRAG)
@@ -249,7 +244,9 @@ them turned out to be correct.
 > edge-reinforcement feedback loop was removed entirely in Lot 17 (`docs/refactoring-plan.md`):
 > zero consumers, dead code.
 
-**Status**: ⬜ planned, and partly delegated per ADR-0005 — see [ROADMAP.md](../ROADMAP.md).
+**Status**: ⬜ GraphRAG is delegated and unavailable. Separately, V3.1 is partly delivered through
+aggregate OTel latency/token/estimated-cost metrics and a reference dashboard; per-user/query/month
+reporting and anomaly detection remain absent.
 
 ### V4 — Governance: making the system usable in a regulated context, at scale
 
@@ -258,17 +255,15 @@ governance. A deployment shared across a bank, an insurer, or multiple clients o
 instance absolutely does: who is allowed to see which data, how to prove to a regulator that
 a given answer didn't leak PII, how to fully isolate one client's data from another's.
 
-**How it works.** Governance rules are written in YAML ("policy-as-code"), versioned in Git
-like code, and automatically applied to every query and every agent action. Each tenant
-(client, business unit) has its own rules and its own data, with no risk of cross-
-contamination. Every security decision is logged for audit. Answers judged risky can be held
-for human review before being returned.
+**How it works today.** Inline policy rules are declared in a manifest and applied in the native
+RAG path. Tenant identity is enforced fail-closed and used for store-side and defense-in-depth
+chunk filtering. Pattern redaction, structured audit sinks and human-review queuing are optional
+manifest components. The current LangGraph adapter supports tenant isolation, guards and
+redaction, but rejects audit, policy-engine, review-queue and telemetry controls it cannot honor.
 
-**Status**: ⬜ planned overall, but two of its checklist items already shipped as part of V2.0's
-Policy Engine — `HumanReviewGate` (manifest `governance.review_queue.type: human-review`) and
-policy-as-code evaluation are real and manifest-activatable today. What's genuinely still
-missing is multi-environment manifest layering (dev/staging/prod overrides) and OPA
-integration — see [ROADMAP.md](../ROADMAP.md). This is the version that unlocks client
+**Status**: 🟡 core primitives (inline policy, tenant isolation, redaction, audit sinks and
+`HumanReviewGate`) are real and manifest-activatable. Multi-environment layering, OPA integration,
+risk profiles and formatted compliance reporting remain — see [ROADMAP.md](../ROADMAP.md). This is the version that unlocks client
 projects in regulated sectors (see [docs/business-case.md](business-case.md), section 4).
 
 ### V5 — Multimodal: beyond text
@@ -314,16 +309,17 @@ To avoid repeating the gap identified in the 2026-05-20 review (documentation an
 capabilities that weren't delivered), here is the honest state as of this document's
 writing:
 
-- Everything listed as V2 through V5 in section 3 is **planned, not delivered**. Code may
-  already exist partially (see the "Implementation roadmap per version" table in
-  [docs/architecture/structure.md](architecture/structure.md)), but "code written" doesn't
-  mean "tested end to end and demonstrable to a client."
-- `adapters/llms/`, `adapters/auth/`, `adapters/graphstores/`, `adapters/search/` are empty
-  placeholders (see [CLAUDE.md](../CLAUDE.md), section 09).
-- `tests/integration/` and `tests/e2e/` exist but require external services (Qdrant, an LLM
-  API key) to run.
-- `manifests/dev/`, `manifests/staging/`, `manifests/production/` are V4 stubs — see
-  [manifests/_index.md](../manifests/_index.md).
+- The LangGraph adapter does not provide multi-agent coordination, query decomposition, tool use
+  or multi-turn interaction; selecting its preset does not activate those behaviours.
+- GraphRAG traversal, multilingual/cultural reasoning, drift detection, fine-tuning execution and
+  multimodal execution do not exist in the current runtime. Graph and multimodal manifests are
+  blueprints, not presets.
+- RBAC/classification-aware enforcement, OPA, environment promotion and formatted compliance
+  reports are not implemented, even though core tenant/policy/audit/review primitives ship.
+- `adapters/llms/` and `adapters/auth/` are implemented; only `adapters/graphstores/` and
+  `adapters/search/` remain empty extension targets.
+- Integration and e2e suites are real. The main CI provisions Qdrant/PostgreSQL for live tests;
+  only the paid LLM-backed scenario is separated into the nightly workflow.
 
 Before any client presentation or contractual commitment on a capability, check its status
 in [ROADMAP.md](../ROADMAP.md) rather than relying on memory or a previous conversation —

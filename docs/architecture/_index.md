@@ -35,8 +35,8 @@ client architect, this is where the answer lives — complemented by the "why" c
 6. [security.md](security.md) and [structure.md](structure.md) — as reference, as needed.
 
 This folder documents both what's built and what's still a target: V1.0 is implemented and
-unit/contract-tested, while its live Qdrant/LLM validation remains pending in `ROADMAP.md`; V1.1
-and V1.2 are partially built. In parallel,
+validated by service-free, live integration and deterministic end-to-end CI, with the paid
+LLM-backed scenario scheduled separately; V1.1 and V1.2 are partially built. In parallel,
 a substantial slice of V2 native scope — policy-as-code enforcement, fail-closed tenant isolation,
 compliance audit events, redaction, and human-in-the-loop review — is real, wired, and covered by
 tests today, not merely designed. What remains a target is mostly the *delegated* capabilities
