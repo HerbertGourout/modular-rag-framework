@@ -381,13 +381,14 @@ src/modular_rag/
 
 **Configuration**: One directory per skill under `.claude/skills/<skill-name>/SKILL.md`, with `name` + `description` frontmatter only. A **flat** `.claude/skills/<name>.md` file is *not* discovered — this project's skills were flat files until 2026-06-22 and were silently invisible to Claude Code until converted to the directory form.
 
-**18 skills available** (corrected 2026-08-06 — this table previously listed 13):
+**19 skills available** (updated 2026-08-18 — this table previously listed 18):
 
 | Skill | Purpose |
 |-------|---------|
 | `/quick-check` | Syntax + imports (30s) |
-| `/full-check` | Unit + contract tests (2-5m) |
+| `/full-check` | Lint + compile + layering + mypy + manifests + unit + contract (2-5m; no coverage) |
 | `/qa-v1` | Ruff + unit + contract + layering audit — the local V1 gate before an MR |
+| `/delivery-loop` | One-command Claude writer → Codex read-only reviewer loop, bounded to two passes and no push |
 | `/test-unit` | `pytest tests/unit` only |
 | `/test-contract` | `pytest tests/contract` only |
 | `/check-layering` | `scripts/check_layering.py` — hexagonal import boundary audit |
@@ -415,8 +416,8 @@ Claude: Runs ./scripts/check.sh quick and reports results
 ```bash
 quick        # Syntax + imports (ruff E,F,I)
 full         # Unit + contract tests
-integration  # Add integration tests (needs Qdrant)
-e2e          # Full pipeline (needs LLM API)
+integration  # Full directory needs Qdrant + PostgreSQL
+e2e          # Complete set needs Qdrant + PostgreSQL + LLM API key
 all          # All checks (10 min)
 ```
 
@@ -744,26 +745,25 @@ Fix: Add import from modular_rag.core.models import Document
 
 ### `/full-check` — Comprehensive Validation
 
-**What it does**: All unit + contract tests + coverage (2-5 minutes)
+**What it does**: Lint, compilation, layering, ratcheted mypy, runnable-manifest wiring, unit and
+contract tests (2-5 minutes). Coverage is a separate CI job.
 
 **Equivalent**: `./scripts/check.sh full`
 
 **Checks**:
-- ✅ Quick checks (syntax, imports)
+- ✅ Ruff, compilation, layering and ratcheted mypy
+- ✅ Runnable-manifest wiring checks
 - ✅ Unit tests (tests/unit/)
 - ✅ Contract conformance tests (tests/contract/)
-- ✅ Code coverage
 
 **When to use**: Before pushing PR
 
 **Output**:
 ```
-✓ Quick checks passed (0.8s)
-✓ Unit tests: 42 passed (2.1s)
-✓ Contract tests: 8 passed (1.3s)
-✓ Coverage: 92% (3.5s)
----
-✓ All checks passed (7.7s)
+✓ Lint / compile / layering / type ratchet passed
+✓ Runnable manifests wired
+✓ Unit tests passed
+✓ Contract tests passed
 ```
 
 ---
@@ -847,7 +847,6 @@ Claude creates:
 - ✅ Quick + full checks
 - ✅ Integration tests (full directory requires Qdrant + PostgreSQL)
 - ✅ E2E tests (Qdrant + PostgreSQL + an LLM key for the complete multi-scenario gate)
-- ✅ Documentation builds
 - ✅ CHANGELOG.md updated
 - ✅ Version bumped in pyproject.toml
 - ✅ ADR written (if structural change)
@@ -867,10 +866,8 @@ Full validation:
   ✓ Quick checks passed
   ✓ Unit tests: 42 passed
   ✓ Contract tests: 8 passed
-  ✓ Integration tests: 5 passed [Qdrant required]
-  ✓ E2E tests: 3 passed [LLM API required]
-  ✓ Coverage: 92%
-  ✓ Docs build: OK
+  ✓ Integration tests passed [Qdrant + PostgreSQL for full directory]
+  ✓ E2E tests passed [scenario-dependent services; full set also needs an LLM key]
   ✓ CHANGELOG.md updated: YES
   ✓ Version bumped: YES (1.0.5)
   

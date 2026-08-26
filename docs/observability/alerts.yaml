@@ -1,0 +1,116 @@
+# Reference Prometheus/Alertmanager alerting rules for the Modular RAG framework
+# (ADR-0013, docs/adr/0013-operational-metrics-meter-port.md).
+#
+# Written against Prometheus-style metric names (see dashboard.json's own note on the
+# OTel-to-Prometheus naming conversion this assumes). This is a *minimum* alert set, per the
+# task's own "define minimum alerts and SLOs" wording -- not an exhaustive catalog. Every alert
+# below links to a runbook section in runbooks.md (the "Documented action" acceptance
+# criterion) and to the SLO it protects, where one applies (see slo.md).
+#
+# Not deployed or validated against a live Prometheus/Alertmanager instance in this sandboxed
+# environment -- reference material to adapt to your actual scrape/collector topology, alert
+# routing, and notification channels.
+#
+# Intentionally omitted: readiness-state and review-backlog alerts. The current emitter does not
+# reset old readiness label series and does not refresh review depth after resolution, so those
+# gauges cannot safely drive alerts yet. See docs/observability/slo.md.
+
+groups:
+  - name: mrag-request-health
+    rules:
+      - alert: MRAGHighErrorRate
+        expr: >
+          sum(rate(mrag_request_errors_total[5m])) by (operation)
+          /
+          sum(rate(mrag_request_duration_ms_count[5m])) by (operation)
+          > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          runbook: mrag-high-error-rate
+        annotations:
+          summary: "More than 5% of {{ $labels.operation }} requests are failing"
+          description: >
+            Error rate for operation={{ $labels.operation }} has exceeded 5% for 5 minutes.
+            Protects the request-success-rate SLO (docs/observability/slo.md).
+          runbook_url: "docs/observability/runbooks.md#mrag-high-error-rate"
+
+      - alert: MRAGHighP95Latency
+        expr: >
+          histogram_quantile(0.95, sum(rate(mrag_request_duration_ms_bucket[5m])) by (le, operation))
+          > 5000
+        for: 10m
+        labels:
+          severity: warning
+          runbook: mrag-high-latency
+        annotations:
+          summary: "p95 latency for {{ $labels.operation }} exceeds 5s"
+          description: >
+            p95 request latency for operation={{ $labels.operation }} has been above 5000ms for
+            10 minutes. Protects the request-latency SLO (docs/observability/slo.md).
+          runbook_url: "docs/observability/runbooks.md#mrag-high-latency"
+
+  - name: mrag-retrieval-health
+    rules:
+      - alert: MRAGRetrievalDegraded
+        expr: sum(rate(mrag_retrieve_degraded_total[10m])) by (source) > 0
+        for: 10m
+        labels:
+          severity: warning
+          runbook: mrag-retrieval-degraded
+        annotations:
+          summary: "Retrieval leg '{{ $labels.source }}' is failing on real requests"
+          description: >
+            One or more requests in the last 10 minutes had their {{ $labels.source }} retrieval
+            leg fail and silently degrade (HybridRetriever._safe_retrieve()). Retrieval is still
+            serving traffic (this is not a readiness failure by itself), but at reduced recall.
+          runbook_url: "docs/observability/runbooks.md#mrag-retrieval-degraded"
+
+      - alert: MRAGHighEmptyFetchRate
+        expr: >
+          sum(rate(mrag_retrieve_empty_total[15m])) by (operation)
+          /
+          sum(rate(mrag_request_duration_ms_count[15m])) by (operation)
+          > 0.20
+        for: 15m
+        labels:
+          severity: warning
+          runbook: mrag-empty-fetch
+        annotations:
+          summary: "More than 20% of {{ $labels.operation }} requests return zero chunks"
+          description: >
+            A sustained spike in empty-fetch results usually indicates an ingestion gap, a
+            misconfigured retriever, or a corpus/query mismatch rather than a random per-query
+            fluke.
+          runbook_url: "docs/observability/runbooks.md#mrag-empty-fetch"
+
+  - name: mrag-cost-and-governance
+    rules:
+      - alert: MRAGCostBudgetExceeded
+        expr: sum(rate(mrag_generation_cost_usd_total[1h])) * 24 > 100
+        for: 15m
+        labels:
+          severity: warning
+          runbook: mrag-cost-budget
+        annotations:
+          summary: "Projected daily generation cost exceeds $100"
+          description: >
+            Extrapolating the last hour's generation cost rate to a full day exceeds the
+            reference $100/day budget. Adjust the threshold to your actual approved budget --
+            this is a placeholder, not a validated production limit.
+          runbook_url: "docs/observability/runbooks.md#mrag-cost-budget"
+
+      - alert: MRAGIndexDivergenceDetected
+        expr: sum(mrag_reconciliation_divergences) by (type) > 0
+        for: 0m
+        labels:
+          severity: warning
+          runbook: mrag-index-divergence
+        annotations:
+          summary: "Index reconciliation found {{ $labels.type }} divergence"
+          description: >
+            The most recent IndexReconciler.check() run found at least one id-presence
+            divergence of type={{ $labels.type }} between the lifecycle ledger and the
+            vector/lexical stores. Fires immediately (for: 0m) since this metric is only updated
+            when check() actually runs, not continuously -- there is no "duration" to wait out.
+          runbook_url: "docs/observability/runbooks.md#mrag-index-divergence"

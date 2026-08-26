@@ -48,7 +48,7 @@ here when you need to understand *why* something works the way it does, not just
 | **Loose coupling** | The orchestrator depends on interfaces, never on concrete implementations | `orchestration/engine.py` never imports `QdrantStore` or `OpenAIGenerator` by name — only `Container.indexer`/`Container.generator`, typed against the Protocol. This is what makes `scripts/check_layering.py`'s static enforcement possible: if orchestration *could* import a concrete adapter, the layering rule would be unenforceable by tooling and would degrade to a code-review convention, exactly the failure mode described in the root README's [Core Concepts §1](../../README.md#1-hexagonal-ports-and-adapters-architecture--what-and-why). |
 | **Native evaluation** | A standalone measurement contract exists (`contracts/evaluation.py`'s `Evaluator`) — not, as an earlier version of this row claimed, one measurement protocol per building block | A RAG pipeline's failure modes (hallucination, missed context, cost blowup) are invisible without measurement, and are the single most common reason a client-facing RAG deployment gets pulled back after launch. `Evaluator.evaluate(query, answer, expected, context) -> Metrics` scores a completed run as a whole; retrievers and generators do not each implement their own per-component metric Protocol — see [data-model.md](data-model.md#metrics) for what `Metrics` actually covers today, and V1.1 in `ROADMAP.md` for what's still open (NDCG, populated golden sets). |
 | **Secure by default** | Input filtering and guardrails run upstream of reasoning | The security guard's `check_query()` runs *before* retrieval, not after generation. A prompt-injection attempt that is denied before retrieval never has the chance to influence which context gets retrieved in the first place — running the guard after generation would only catch the attack after it already shaped the answer. |
-| **Native observability** | Traces, provenance, scores, costs, and latency logged at the steps that are instrumented today — not, as an earlier version of this row claimed, unconditionally at every step | `.claude/.instructions.md` §3 makes `TraceStep` emission a mandatory rule for the steps it applies to, but coverage today is real and specific, not universal: `guard_query`, `retrieve`, `rerank` (when configured), and `generate` (self-instrumented by the generator) each emit a `TraceStep`. Tenant/policy denial, the post-generation guard check, redaction, and human-review do **not** currently emit their own named step — see [observability.md](../guides/observability.md) for the exact, current list. A `Trace` that only covers part of a run is still more useful than none, but "every step, unconditionally" overstates what exists; extending coverage to the ungoverned steps is open work, not a documented invariant to build against yet. |
+| **Native observability** | Framework traces, live spans and operational metrics are separate, optional signals | `TraceStep` coverage is specific (`guard_query`, `retrieve`, optional `rerank`, `generate`); optional `Telemetry` records the resulting `Trace`. ADR-0012/0013 add manifest-activatable OTel `Tracer` and `Meter` ports at orchestration/application/API boundaries. No shipped preset enables them, and readiness/review gauges have documented sampling limitations — see [observability.md](../guides/observability.md). |
 | **Progressive rollout** | Advanced features (graph, governance, multimodal) stay optional until stabilized | Every governed component (`tenant_policy`, `audit_sink`, `policy_engine`, `redactor`, `review_queue`, `reranker`) is optional in `Container` and no-ops when absent. This lets `manifests/presets/local-hybrid-rag.yaml` (a minimal local-dev pipeline) and `manifests/presets/secure-enterprise-rag.yaml` (the full governance stack) run through the **identical** `RAGEngine._run_steps()` code path — the enterprise manifest does not fork the pipeline logic, it only adds components that were already conditionally supported. |
 
 ---
@@ -143,7 +143,8 @@ and **limits/constraints** (what it deliberately does not do today).
   across many `chunk()` calls with no accumulated state (unlike, say, `BM25Retriever`, which does
   accumulate an in-memory index — that statefulness lives in the knowledge plane, not here).
 - **Extension points.** A new file format is a new `Parser` implementation (`supports(path)` +
-  `parse(path) → Document`), registered under `parser` role. A new chunking strategy is a new
+  `parse(path) → Document`), added to `ingestion/pipelines/default.py::_PARSERS`; parsers are not
+  manifest/registry roles today. A new chunking strategy is a new
   `Chunker` implementation. See
   [`docs/guides/plugin-development.md`](../guides/plugin-development.md) for the full worked
   example of adding a chunker.
@@ -304,19 +305,22 @@ rather than replacing it.
 
 ### V2 — Policy Engine + Delegated Orchestration
 **Additions:**
-- Policy-as-code (native): RBAC, data classification, multi-tenant isolation.
+- Policy-as-code (native): inline manifest rules and multi-tenant isolation. Roles are propagated
+  in `ExecutionContext`, but RBAC enforcement and classification-aware rules are not implemented.
 - Multi-agent orchestration, adaptive routing, and multi-step agentic workflows: delegated to
   the selected external engine via the `DocumentEngine` port — not built natively. See
   [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) §5.2. The LangGraph adapter
   (`LangGraphEngineAdapter`) is implemented and selectable today via `engine.adapter: langgraph`
-  in a manifest — see `manifests/presets/langgraph-rag.yaml`.
+  in a manifest, but currently runs a fixed route → retrieve → guard → generate graph rather than
+  the delegated multi-agent behaviours — see `manifests/presets/langgraph-rag.yaml`.
 
 ### V3 — GraphRAG (Delegated) + Cost/Fine-Tuning Evidence (Native)
 **Additions:**
 - GraphRAG traversal/reasoning: delegated to the selected external engine — not built natively.
-  A native knowledge-graph data model may still live in `memory/`, pending Lot 6 evidence.
-- Cost/latency evidence and reporting (native): dashboards, per-query/user/month attribution —
-  the routing logic itself is delegated.
+  The unused native knowledge-graph data model was removed in Étape 8.
+- Cost/latency evidence and reporting (native): aggregate OTel latency/token/estimated-cost metrics
+  and a reference dashboard exist; per-query/user/month attribution and anomaly detection do not.
+  Routing logic itself remains delegated.
 - Drift detection and evaluation trigger (native): decides *when* retraining is needed;
   fine-tuning execution itself is delegated.
 
@@ -412,6 +416,8 @@ define an `async` twin of their main method (`aembed`/`aretrieve`/`agenerate`, e
 | `TokenVerifier` | `verify(token) → TenantContext` — the identity-verification boundary consumed by `create_app(token_verifier=...)`; must raise `AuthenticationError` on any invalid token, never return a placeholder identity | V1 (Lot 11b) |
 | `DocumentEngine` | `run(request, context) → EngineResult` | V1 (Lot 7 — native and LangGraph adapters) |
 | `Telemetry` | `record_trace(trace)` | V1 |
+| `Tracer` / `Span` | Live distributed spans (`start_span`, attributes, errors, end) | ADR-0012 |
+| `Meter` | Operational counters, histograms and gauges | ADR-0013 |
 | `AuditSink` | `record(event)` | V1 (Lot 10) |
 | `LifecycleLedger` | `record_ingested`/`tombstone`/`export_all` | V1 (Lot 12a) |
 | `ReviewQueue` | `should_review(answer) → bool` / `enqueue(item)` / `resolve(id, approved, reviewer)` | V1 (Lot 11c) |
@@ -524,8 +530,8 @@ as an opaque `ImportError` on a malformed dotted path.
 ```mermaid
 %%{init: {"theme": "base"}}%%
 flowchart TD
-    File["File (PDF / Markdown / plain text)"]
-    File --> Parser["ingestion/parsers/\nTextParser → Document (.txt, .md, .html)\nPDFParser → Document (.pdf, via PyMuPDF)"]
+    File["File (PDF / DOCX / HTML / Markdown / plain text)"]
+    File --> Parser["ingestion/parsers/\nTextParser (.txt, .md) / HTMLParser / DocxParser / PDFParser"]
     Parser --> Normalize["ingestion/normalizers/TextNormalizer.normalize(doc)\n• Collapse excessive newlines (3+ → 2)\n• Collapse excessive spaces (2+ → 1)\n• Strip leading/trailing whitespace\n→ new Document (frozen → new instance)"]
     Normalize --> Enrich["ingestion/enrichers/MetadataEnricher.enrich(doc)\n• Computes word_count, lang, reading_level\n• Merges with existing metadata\n→ new Document"]
     Enrich --> Chunk["contracts/chunking.Chunker.chunk(doc) → list[Chunk]\nFixedSizeChunker: windows of N tokens with overlap\nAdaptiveChunker: splits on Markdown headings (##, ###)"]
@@ -702,7 +708,7 @@ step-by-step worked examples of the first four rows.
 
 | I want to add… | Implement | Register in | Select via |
 |---|---|---|---|
-| A file format | `Parser` | `app/default_factories.py` | (parsers are tried in registration order, not manifest-selected today) |
+| A file format | `Parser` | `ingestion/pipelines/default.py::_PARSERS` | Parsers are tried by file support; not manifest-selected today |
 | A chunking strategy | `Chunker` | `app/default_factories.py` | `chunker.type` in a manifest |
 | An embedding model/provider | `Embedder` (+ `VectorIndexer.bind_embedder()` compatibility if paired with a dimension-aware store) | `app/default_factories.py` | `embedder.type` |
 | A vector/lexical store | `Indexer` (`VectorIndexer` if dimension-aware) | `app/default_factories.py` | `indexer.type` |
@@ -713,4 +719,3 @@ step-by-step worked examples of the first four rows.
 | A governance policy component | `TenantPolicy` / policy engine rules | `app/default_factories.py` (component) or manifest `governance.policy_engine.config.policies` (rules) | `governance.*` |
 | An execution engine (native pipeline alternative) | `DocumentEngine` | `app/bootstrap.py::load_engine()` | `engine.adapter` |
 | A genuinely new capability category (not covered above) | A new `Protocol` in `contracts/` | — | Requires an ADR first, per `CLAUDE.md` §07 |
-</content>

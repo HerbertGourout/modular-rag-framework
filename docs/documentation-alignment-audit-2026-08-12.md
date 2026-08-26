@@ -1,5 +1,10 @@
 # Documentation Alignment & Consistency Audit
 
+> **Historical snapshot.** This report records the repository state on 2026-08-12 and is retained
+> as audit evidence. For current capability status, use
+> [`architecture/capability-matrix.md`](architecture/capability-matrix.md), the current roadmap,
+> and the executable validation commands documented there.
+
 **Date:** 2026-08-12  
 **Scope:** active Markdown documentation at the repository root, `docs/`, `manifests/`,
 `examples/`, and module-level `CLAUDE.md` files; implementation and configuration under
@@ -210,4 +215,3 @@ exists; it also had to have a reachable, tested consumption path.
   explicitly marked hypothetical extension files.
 - `git diff --check`: passed.
 - No implementation file or ADR was changed by this documentation audit.
-

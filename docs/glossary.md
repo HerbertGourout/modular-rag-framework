@@ -20,7 +20,8 @@ multi-agent orchestration is now **delegated** to a selected external engine (La
 the `DocumentEngine` port, not built as a native runtime — the five prototype classes above
 were built once and removed in Lot 17 (`docs/refactoring-plan.md`) for having zero test
 coverage and zero consumers. `src/modular_rag/agents/` today hosts only the adapter-integration
-shell, not agent implementations. `RAGEngine` runs its fixed pipeline sequentially either way.
+shell, not agent implementations. The selectable LangGraph adapter also runs a fixed RAG graph
+today; selecting it does not activate multi-agent behaviour.
 See [ROADMAP.md](../ROADMAP.md), V2, and `docs/refactoring/lot-17-prototype-retirement.md`.
 
 ### BM25 (Best Match 25)
@@ -122,9 +123,10 @@ history if a real, wired need emerges. See [structure.md](architecture/structure
 
 ### Manifest
 A YAML file describing a complete pipeline configuration — which chunker, embedder,
-retriever, reranker, generator, guard, and telemetry backend to use, and with what
-parameters. The single source of truth for what's wired into a running pipeline; no
-component runs unless it's declared here. See [manifests/_index.md](../manifests/_index.md).
+retriever, reranker, generator, guard, governance/lifecycle adapters, telemetry, tracer and meter
+to use, and with what parameters. It is the source of truth for runtime pipeline components.
+Bearer-token verification and file-parser dispatch are explicit application/ingestion exceptions.
+See [manifests/_index.md](../manifests/_index.md).
 
 ### Multi-hop reasoning
 Answering a question that requires following more than one relationship (A relates to B,
@@ -132,15 +134,17 @@ which relates to C) rather than a single direct match — the reason V3 needs a 
 graph instead of only chunk-level retrieval.
 
 ### Reciprocal Rank Fusion (RRF)
-The parameter-free algorithm that merges two independently ranked result lists (vector +
-BM25) into one, using the formula `score(d) = Σ 1/(rrf_k + rank_i(d))`. Chosen because it's
+An algorithm that merges independently ranked result lists using
+`score(d) = Σ weight_i/(rrf_k + rank_i(d))`. This implementation exposes `rrf_k` and optional
+per-list weights. It is chosen because it is
 robust to the two lists having incomparable raw score scales. See
 [overview.md](architecture/overview.md), section 11.
 
 ### Retriever
 A component implementing `contracts/retrieval.py`'s `Retriever` Protocol —
 `retrieve(query, k) → list[RetrievedChunk]`. Built-in implementations: `BM25Retriever`,
-`VectorRetriever`, `HybridRetriever` (which fuses the first two via RRF).
+`VectorRetriever`, `BM25Retriever`, `PersistentSparseRetriever`, and `HybridRetriever` (which
+fuses dense and lexical legs via RRF).
 
 ### Trace / TraceStep
 The execution trace of one pipeline request (distinct from the compliance `AuditEvent` stream).
@@ -149,6 +153,12 @@ and policy checks, post-generation guarding, redaction, and human review do not 
 own named steps. `add_step()` updates running totals, and `Answer.trace_id` provides correlation.
 See [data-model.md](architecture/data-model.md), section 6, and
 [observability.md](guides/observability.md) for the exact coverage.
+
+### Tracer / Meter
+`Tracer` is the live distributed-span port introduced by ADR-0012. `Meter` is the separate
+operational counter/histogram/gauge port introduced by ADR-0013; it is not the evaluation
+`core.models.Metrics` bag. Both are optional manifest roles with OTel and null implementations.
+No shipped preset enables them today.
 
 ### ULID (Universally Unique Lexicographically Sortable Identifier)
 The ID format used for every entity in `core/models/` (`Document.id`, `Chunk.id`,

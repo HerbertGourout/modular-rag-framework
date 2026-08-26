@@ -190,11 +190,12 @@ def migrate_v1_to_v2(raw: dict[str, Any]) -> dict[str, Any]:
 
 
 def rollback_v2_to_v1(raw: dict[str, Any]) -> dict[str, Any]:
-    """Strip v2-only sections and reset the version marker. Safe today
-    because none of governance/quality/observability enforcement is
-    implemented yet (Lots 11/13/10) — nothing load-bearing is lost. If any
-    of those sections ever gain real enforcement behavior, this function
-    must be revisited before it can still be called "safe."
+    """Strip v2-only sections and reset the version marker.
+
+    This rollback is intentionally lossy: governance, observability and
+    lifecycle declarations are operational in V2 and are removed here along
+    with the other V2-only sections. Callers must explicitly accept that loss;
+    this helper does not establish that a downgrade is safe for a deployment.
     """
     rolled_back = {k: v for k, v in raw.items() if k not in _V2_ONLY_SECTIONS}
     rolled_back["version"] = "1.0"

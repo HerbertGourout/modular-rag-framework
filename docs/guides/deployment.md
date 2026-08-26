@@ -147,6 +147,31 @@ curl http://localhost:8000/ready
 # not a bug. See docs/api/rest.md and docs/adr/0010-health-checkable-and-readiness-semantics.md.
 ```
 
+## Operational observability
+
+No shipped preset enables live OpenTelemetry export. Copy the relevant preset and add the signals
+you operate:
+
+```yaml
+observability:
+  telemetry:
+    type: structlog
+  tracer:
+    type: otel
+    config:
+      otlp_endpoint: "http://otel-collector:4317"
+  meter:
+    type: otel
+    config:
+      otlp_endpoint: "http://otel-collector:4317"
+```
+
+Install `.[v4]` for either OTel role. `mrag validate` currently omits tracer/meter type checks, so
+perform a real wiring/startup smoke test. Before importing the reference dashboard or alerts, read
+[the observability guide](observability.md) and [operations caveats](../observability/README.md):
+HTTP middleware rejections are outside request metrics, readiness state labels can remain sticky,
+and review depth is not refreshed on resolution.
+
 ## Scaling
 
 - **Horizontal**: replicas are safe only after every required stateful capability is externalized

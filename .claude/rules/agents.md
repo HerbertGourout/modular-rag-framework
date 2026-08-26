@@ -32,7 +32,9 @@ There is no `contracts/agents.py` — it was deleted in Lot 17 along with the pr
 described. Any agent *behavior* (planning, tool use, multi-step reasoning) belongs in the
 selected external engine, reached through `contracts/engine.py`'s `DocumentEngine` Protocol:
 ```python
-def astream(self, query: Query, context: EngineContext) -> AsyncIterator[EngineEvent]: ...
+def run(self, request: EngineRequest, context: ExecutionContext) -> EngineResult: ...
+def astream(self, request: EngineRequest, context: ExecutionContext) -> AsyncIterator[EngineStep]: ...
+@property
 def capabilities(self) -> frozenset[EngineCapability]: ...
 ```
 (see `contracts/engine.py` for the full, real Protocol). `agents/` may host code that:
@@ -50,7 +52,7 @@ to this module.
 
 State passing across a multi-step agent workflow (context accumulation across planning,
 retrieval, generation, validation steps) is the delegated engine's concern, not this module's —
-`DocumentEngine.astream()` yields `EngineEvent`s that already carry whatever context the engine
+`DocumentEngine.astream()` yields `EngineStep`s while engine-private state remains inside the adapter
 needs internally. `RAGEngine.answer(question: str) -> Answer` (`orchestration/engine.py`) remains the real,
 current V1 path for the native (non-delegated) sequential pipeline — it builds a `Query` and
 runs guard→retrieve→rerank→generate internally via `_run()`, with no per-step agent handoff.
@@ -92,18 +94,18 @@ not instantiated directly in application code.
 
 ## 5. Error Handling
 
-### Rule: Use `EngineError` and Its Subclasses for Delegated-Engine Failures
-`core/errors.py` already defines the real error hierarchy for this boundary — don't invent new
-error types:
+### Rule: Use the Existing Error Hierarchy
+`core/errors.py` defines the engine-boundary errors — do not invent an `AgentError`:
 ```python
 EngineError               # Base error for all DocumentEngine failures (ADR-0005 §5.2 / ADR-0006)
 EngineTimeoutError         # A DocumentEngine call exceeded its deadline
 EngineCancelledError       # Cancelled via the ExecutionContext's CancellationToken
 EngineCapabilityError      # Caller invoked a method the adapter doesn't declare support for
-AgentError                 # Generic agent-task failure (pre-dates the engine hierarchy; still valid for anything not engine-specific)
 ```
-Translate any exception raised by the underlying engine SDK into one of these — never let a raw
-SDK exception propagate out of `agents/` code.
+Translate engine lifecycle/capability failures when one of these types applies, while preserving
+the framework's existing `SecurityError`/`PolicyViolationError`. The current LangGraph adapter
+also lets a generator exception propagate; do not document or rely on a blanket translation rule
+that the implementation does not provide.
 
 ---
 
@@ -127,8 +129,8 @@ any new `DocumentEngine` behavior; don't create a parallel test file for `agents
 - ✅ `agents/` hosts adapter-integration glue calling into the selected external engine via
   `DocumentEngine` — currently five empty placeholder directories, nothing implemented yet
 - ✅ Engine selection goes through `app/bootstrap.py::load_engine()`, not the component registry
-- ✅ Any code here must translate SDK exceptions to `EngineError`/its subclasses and fold its
-  own tracing into `EngineStep`/`TraceStep`
+- ✅ Any code here must use the existing error hierarchy where applicable and fold its own tracing
+  into `EngineStep`/`TraceStep`
 - ✅ Tests belong in `tests/contract/test_engine_conformance.py` (Protocol conformance) and
   alongside `tests/unit/adapters/llms/test_langgraph_engine.py` (adapter-specific behavior)
 

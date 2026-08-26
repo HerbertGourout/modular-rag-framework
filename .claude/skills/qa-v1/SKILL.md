@@ -22,7 +22,8 @@ If a local virtual environment exists, prefer:
 .\.venv\Scripts\python.exe scripts/check_layering.py
 ```
 
-Do not run `tests/integration` unless Qdrant is confirmed on `localhost:6333`.
-Do not run `tests/e2e` unless Qdrant and the required LLM API key are confirmed.
+Do not run the complete `tests/integration` directory unless Qdrant and PostgreSQL are confirmed.
+Do not run the complete `tests/e2e` directory unless Qdrant, PostgreSQL and the required LLM API
+key are confirmed; individual deterministic scenarios have narrower prerequisites.
 
 Report results in this order: lint, unit tests, contract tests, layering. Include the exact failing command for any failure.

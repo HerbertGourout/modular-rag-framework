@@ -11,7 +11,7 @@ conflating them makes troubleshooting slower.
 
 - Python 3.11 or later
 - Git
-- Access to at least one LLM backend (OpenAI, Azure OpenAI, or Anthropic)
+- Access to OpenAI or Anthropic for LLM-backed runs (the deterministic test generator needs none)
 - Optional: Docker (for Qdrant vector store)
 
 ## Development installation
@@ -43,7 +43,7 @@ dependencies into a CI image or a client's production container. Install only wh
 | Group | Install command | What it adds |
 |---|---|---|
 | `v1` | `pip install -e ".[v1]"` | Core RAG: fastapi, uvicorn, typer, pymupdf, python-docx, beautifulsoup4, sentence-transformers, openai, anthropic, qdrant-client, rank-bm25, tiktoken. `cohere` and `langchain-text-splitters` were removed here in Lot 9 (Codex review MEDIUM-004) — zero imports anywhere, no adapter class ever used either |
-| `v4` | `pip install -e ".[v4]"` | Observability: opentelemetry-sdk/api/exporter-otlp — wired since [ADR-0012](../adr/0012-opentelemetry-tracing-port.md) (`observability.tracer.type: otel`, see `docs/guides/observability.md`); only required if a manifest selects that tracer type |
+| `v4` | `pip install -e ".[v4]"` | Observability: opentelemetry-sdk/api/exporter-otlp — backs both [ADR-0012](../adr/0012-opentelemetry-tracing-port.md) tracing (`observability.tracer.type: otel`) and ADR-0013 metrics (`observability.meter.type: otel`); required only when either role is selected |
 | `v5` | `pip install -e ".[v5]"` | Multimodal: pymupdf (already in `v1`), pillow, pytesseract — not yet wired into any code (V5 not reached) |
 | `langgraph` | `pip install -e ".[langgraph]"` | The external `DocumentEngine` adapter (Lot 15) — only needed if a manifest sets `engine.adapter: "langgraph"` |
 | `postgres` | `pip install -e ".[postgres]"` | `psycopg` driver for the durable audit and lifecycle components used by `secure-enterprise-rag.yaml` |
@@ -130,4 +130,6 @@ command prints `f"modular-rag {__version__}"` directly, reading the same
 `importlib.metadata.version("modular-rag")`-backed value everything else in the codebase does
 (single source: `pyproject.toml`'s `[project].version`).
 
-> At the current pre-alpha stage (`v0.0.x`), this command confirms the package is importable. Full end-to-end verification will be available at `v0.1` with `examples/simple_qa/`.
+> At the current pre-alpha stage (`v0.0.x`), this command confirms the package is importable.
+> End-to-end coverage already exists under `tests/e2e/`: a deterministic governed scenario runs in
+> main CI and the real-LLM scenario runs in the scheduled/manual nightly workflow.

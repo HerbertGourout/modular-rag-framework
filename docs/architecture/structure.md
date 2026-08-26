@@ -24,7 +24,7 @@ modular-rag-framework/
 ├── tests/                        ← Test suite (unit, contract, integration, e2e)
 ├── docs/                         ← Complete technical documentation
 ├── manifests/                    ← YAML pipeline configurations
-├── examples/                     ← Runnable example applications
+├── examples/                     ← Example applications (one complete; see limitations below)
 ├── benchmarks/                   ← Performance benchmarks (still empty — V3 scope)
 ├── scripts/                      ← Utility scripts and local audits (layering, docs, licenses…)
 ├── .claude/                      ← Claude Code skills, hooks, rules, and settings
@@ -74,7 +74,7 @@ carry that same caveat before the dependency was actually removed to match) and 
 | Group | Command | What it adds |
 |---|---|---|
 | `v1` | `pip install -e ".[v1]"` | FastAPI, Uvicorn, Typer, pymupdf, python-docx, BS4, sentence-transformers, openai, anthropic, qdrant-client, rank-bm25, tiktoken (opt-in subword token counting for chunkers — the default whitespace counter needs no dependency). `cohere` and `langchain-text-splitters` were removed here in Lot 9 — zero imports anywhere, no adapter class ever used either |
-| `v4` | `pip install -e ".[v4]"` | opentelemetry-sdk/api/exporter-otlp — wired since ADR-0012 (`adapters/observability/otel_tracing.py`, `observability.tracer.type: otel`) |
+| `v4` | `pip install -e ".[v4]"` | opentelemetry-sdk/api/exporter-otlp — wired since ADR-0012 (`adapters/observability/otel_tracing.py`, `observability.tracer.type: otel`) and ADR-0013 (`adapters/observability/otel_meter.py`, `observability.meter.type: otel`) — the same three packages back both the tracing and metrics APIs, no new dependency for ADR-0013 |
 | `v5` | `pip install -e ".[v5]"` | pymupdf, pillow, pytesseract (not yet wired into any code — V5 not reached) |
 | `langgraph` | `pip install -e ".[langgraph]"` | `langgraph` itself — the external `DocumentEngine` adapter (`adapters/llms/langgraph_engine.py`, ADR-0006, Lot 15). The default native adapter needs none of this; only manifests with `engine.adapter: langgraph` do |
 | `postgres` | `pip install -e ".[postgres]"` | `psycopg[binary,pool]` (ADR-0011 — the `pool` extra pulls in the separate `psycopg-pool` package) — durable audit sink and lifecycle ledger implementations (`adapters/audit/postgres_sink.py`, `adapters/lifecycle/postgres_ledger.py`), plus the shared migration runner (`adapters/postgres/migrations.py`), selected by `secure-enterprise-rag.yaml` |
@@ -202,7 +202,7 @@ src/modular_rag/
 │                                  native multi-agent runtime; see the dedicated section below
 ├── memory/                     ← Domain: key/value storage only — no graph data model today
 ├── eval/                       ← Domain: metrics, benchmarks, regression gating
-├── observability/               ← Domain: structured telemetry
+├── observability/               ← Domain: trace telemetry plus null tracing/metrics adapters
 ├── orchestration/                ← Runtime: engine, container, registry, native engine, state
 │                                    machine, index reconciliation
 ├── app/                          ← Process-level wiring: bootstrap, application service, config
@@ -517,9 +517,9 @@ one, and for the confirmed per-chunk (not batched) embedding loop inside `ingest
 
 #### `retrieval/fusion/rrf.py`
 
-**`reciprocal_rank_fusion(lists, k, rrf_k=60) → list[RetrievedChunk]`**: pure function,
-`score(d) = Σ 1 / (rrf_k + rank_i(d))`. Deduplicates by `chunk.id`, limits to `k`, renumbers ranks
-1..N.
+**`reciprocal_rank_fusion(lists, k=10, rrf_k=60, weights=None) → list[RetrievedChunk]`**: pure
+function, `score(d) = Σ weight_i / (rrf_k + rank_i(d))`. Weights default to `1.0` per list.
+Deduplicates by `chunk.id`, limits to `k`, renumbers ranks 1..N.
 
 #### `retrieval/rerankers/`
 
@@ -687,6 +687,12 @@ and `memory/versioning/` are `.gitkeep`-only today.
 **`StructlogTelemetry`**: implements `Telemetry`. Structured JSON logs via structlog.
 
 **`NullTelemetry`**: implements `Telemetry`. No-op for tests (zero overhead).
+
+**`NullTracer` / `NullSpan`**: no-op implementations of the live span contract. The real
+OpenTelemetry adapter lives under `adapters/observability/otel_tracing.py`.
+
+**`NullMeter`**: no-op implementation of operational counters, histograms and gauges. The real
+OpenTelemetry adapter lives under `adapters/observability/otel_meter.py`.
 
 ---
 
@@ -941,7 +947,7 @@ their shared fixture/replay helper modules.
 
 ```
 docs/
-├── adr/                          ← 9 ADRs (0001–0009) plus an _index.md
+├── adr/                          ← 13 ADRs (0001–0013) plus an _index.md
 ├── api/
 │   └── rest.md                   ← REST reference (endpoints, schemas, error codes)
 ├── architecture/
@@ -961,6 +967,7 @@ docs/
 │                                       observability, plugin-development, validation, backup-
 │                                       restore, audit-traceability, troubleshooting, and the
 │                                       Claude Code / model-routing / AI-workflow guide set
+├── observability/                   ← Reference dashboard, Prometheus alerts, SLOs and runbooks
 ├── refactoring/                     ← Per-lot execution records (Lot 2, 17, and others)
 ├── refactoring-plan.md               ← The full 18-lot programme, current-state gaps, change log
 └── archive/                          ← Superseded/low-utility documents, kept for the record
@@ -1011,15 +1018,21 @@ deterministic twin of `secure-enterprise-rag.yaml` swapping in `DeterministicEmb
 
 ```
 examples/
-├── simple_qa/                    ← Only complete, runnable example (V1)
+├── simple_qa/                    ← Complete, runnable example (V1)
 │   ├── main.py                   ← argparse CLI: ingest + ask
 │   ├── README.md                 ← Prerequisites, walkthrough, demonstrated features
 │   └── docs/                     ← Sample documents used as the ingested corpus
 ├── agentic_rag/                  ← Placeholder — would demonstrate engine delegation (LangGraph), not native agents
 ├── graph_memory/                 ← Placeholder — GraphRAG delegated, no native example possible today
-├── hybrid_search/                ← V1-variant placeholder
+├── hybrid_search/                ← Populated V1 variant, currently not runnable as documented
 └── secure_rag/                   ← Secured-V1 placeholder
 ```
+
+`hybrid_search/` contains code and a README, so it is not an empty placeholder. Its entry point is
+nevertheless incompatible with the current `HybridRetriever` (`_bm25` was renamed to `_lexical`),
+and its separate `ingest` then `search` commands cannot preserve the process-local BM25 index.
+Treat it as a code sample until the implementation is repaired; `simple_qa/first_query.py` is the
+current runnable hybrid demonstration.
 
 **`examples/simple_qa/main.py`** — the reference script:
 
@@ -1044,9 +1057,9 @@ for c in answer.citations:
 |---|---|
 | **Contracts first** | Before any concrete implementation, the Protocol exists and is tested |
 | **No cross-domain imports** | A retriever cannot import from `generation/` — test isolation without an LLM |
-| **Manifests as source of truth** | A component is only "enabled" if it is in the YAML — no hidden Python wiring |
+| **Manifests as source of truth** | Runtime pipeline components are selected in YAML; parser dispatch, engine adapters and API identity follow explicit composition paths |
 | **Tests mirror src/** | `tests/unit/ingestion/chunkers/test_fixed.py` for `src/modular_rag/ingestion/chunkers/fixed.py` |
 | **ADR before structural changes** | Any new layer or contract requires an ADR under `docs/adr/` |
-| **Observability is mandatory for new execution steps** | Retrieval and generation are traced today; governance/redaction/review coverage is incomplete and tracked in `docs/guides/observability.md` |
-| **Safety ≠ Security** | Safety (injection, PII) in `security/filters/` and `security/redaction/`; Security (RBAC, tenant isolation, policy) in `security/policies/` |
+| **Observability is mandatory for new execution steps** | Choose Trace/Telemetry, Tracer and/or Meter at an orchestration boundary; current coverage and gauge limitations are tracked in `docs/guides/observability.md` |
+| **Safety ≠ Security** | Safety (injection, PII) lives in filters/redaction; security includes tenant isolation and policy enforcement. RBAC is not implemented |
 | **Delegate, don't reimplement** | Generic multi-agent orchestration, GraphRAG traversal, fine-tuning execution, and multimodal VLM execution are delegated to a selected external engine (ADR-0005) — this codebase owns governance/audit/eval/portability around that engine, not the engine's own mechanics |

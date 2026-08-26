@@ -1,0 +1,173 @@
+{
+  "title": "Modular RAG — Operations Overview",
+  "uid": "mrag-ops-overview",
+  "schemaVersion": 39,
+  "timezone": "utc",
+  "editable": true,
+  "time": { "from": "now-6h", "to": "now" },
+  "refresh": "30s",
+  "__note": "Reference dashboard for ADR-0013. Written against Prometheus-style names produced from dotted mrag.* names by a typical OTel Collector exporter. Request panels cover ApplicationService calls, not HTTP middleware rejections. The readiness panel can retain old labelled states because the emitter does not reset them; review pending is sampled on enqueue and not resolution. Treat those two panels as diagnostic only. See docs/observability/README.md. Not validated against a live Grafana instance -- reference material to adapt, not a guaranteed drop-in.",
+  "tags": ["modular-rag", "adr-0013"],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request rate by operation",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(mrag_request_duration_ms_count[5m])) by (operation, engine)",
+          "legendFormat": "{{operation}} ({{engine}})"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Error rate by operation",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(mrag_request_errors_total[5m])) by (operation, engine, error_type)",
+          "legendFormat": "{{operation}} ({{engine}}) - {{error_type}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Request latency (p50 / p95 / p99) by operation",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(mrag_request_duration_ms_bucket[5m])) by (le, operation))",
+          "legendFormat": "p50 {{operation}}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(mrag_request_duration_ms_bucket[5m])) by (le, operation))",
+          "legendFormat": "p95 {{operation}}"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(mrag_request_duration_ms_bucket[5m])) by (le, operation))",
+          "legendFormat": "p99 {{operation}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Readiness emissions (diagnostic; old states may persist)",
+      "type": "state-timeline",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "mrag_readiness_state",
+          "legendFormat": "{{state}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Guard rejections by stage",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "expr": "sum(rate(mrag_guard_rejections_total[5m])) by (stage)",
+          "legendFormat": "{{stage}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Empty-fetch rate by operation",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 16 },
+      "targets": [
+        {
+          "expr": "sum(rate(mrag_retrieve_empty_total[5m])) by (operation)",
+          "legendFormat": "{{operation}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Degraded retrieval (per-request) by source",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 16 },
+      "targets": [
+        {
+          "expr": "sum(rate(mrag_retrieve_degraded_total[5m])) by (source)",
+          "legendFormat": "{{source}}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Generation cost (USD/hour) by model",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "targets": [
+        {
+          "expr": "sum(rate(mrag_generation_cost_usd_total[1h])) by (model) * 3600",
+          "legendFormat": "{{model}}"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Generation tokens/sec by direction and model",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "targets": [
+        {
+          "expr": "sum(rate(mrag_generation_tokens_total[5m])) by (direction, model)",
+          "legendFormat": "{{direction}} ({{model}})"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Ingestion throughput (documents/chunks per minute)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 32 },
+      "targets": [
+        {
+          "expr": "sum(rate(mrag_ingest_documents_total[5m])) * 60",
+          "legendFormat": "documents/min"
+        },
+        {
+          "expr": "sum(rate(mrag_ingest_chunks_total[5m])) * 60",
+          "legendFormat": "chunks/min"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Index reconciliation divergences by type",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 32 },
+      "targets": [
+        {
+          "expr": "mrag_reconciliation_divergences",
+          "legendFormat": "{{type}}"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "Human review samples (pending may be stale)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 32 },
+      "targets": [
+        {
+          "expr": "mrag_review_pending",
+          "legendFormat": "pending"
+        },
+        {
+          "expr": "sum(rate(mrag_review_enqueued_total[5m])) * 60",
+          "legendFormat": "enqueued/min"
+        }
+      ]
+    }
+  ]
+}

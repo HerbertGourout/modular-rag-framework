@@ -376,20 +376,20 @@ class HFEmbedder:
 ```
 src/modular_rag/adapters/
 ├── embeddings/
-│   ├── __init__.py
-│   ├── hf_embedder.py         (Hugging Face, lazy imports)
-│   └── mock_embedder.py       (For testing)
+│   ├── hf_embedder.py
+│   ├── openai_embedder.py
+│   └── deterministic_embedder.py
 ├── vectorstores/
-│   ├── __init__.py
-│   ├── qdrant_store.py        (Qdrant, lazy imports)
-│   └── mock_store.py
+│   ├── qdrant_store.py
+│   └── qdrant_sparse_store.py
 ├── llms/
-│   ├── __init__.py
-│   └── .gitkeep              (engine-delegation target, Lots 6/7/15 — see ADR-0005)
-├── graphstores/
-│   └── .gitkeep              (engine-delegation target, Lots 6/7/15 — see ADR-0005)
-└── auth/
-    └── keycloak_verifier.py  (Keycloak OIDC token verification, lazy imports — Lot 11b)
+│   └── langgraph_engine.py
+├── auth/
+│   └── keycloak_verifier.py
+├── audit/ and lifecycle/      (durable PostgreSQL adapters)
+├── postgres/                  (migration runner and packaged SQL)
+├── observability/             (OpenTelemetry tracer and meter adapters)
+└── graphstores/ and search/   (empty delegated extension targets)
 ```
 
 ### Rules
@@ -398,9 +398,9 @@ src/modular_rag/adapters/
   repo are plain namespace packages with no `__init__.py` — submodules are imported by their full
   path, e.g. `from modular_rag.adapters.auth.keycloak_verifier import KeycloakTokenVerifier`)
 - `.gitkeep` for stubs not yet implemented
-- `llms/`, `graphstores/`, `search/` implement calls to the engine selected in Lot 6 (via the
-  `DocumentEngine` port, Lot 7) — they are not a native reimplementation of orchestration,
-  GraphRAG traversal, or search ranking. `auth/` implements `contracts/identity.py`'s
+- `llms/` contains the selectable LangGraph adapter. `graphstores/` and `search/` are still empty;
+  any future code there must not become a native reimplementation of GraphRAG traversal or generic
+  agent orchestration. `auth/` implements `contracts/identity.py`'s
   `TokenVerifier` Protocol against Keycloak specifically (Lot 11b) — tenant-isolation
   *enforcement* against the verified identity lives in `security/policies/`, not here.
 

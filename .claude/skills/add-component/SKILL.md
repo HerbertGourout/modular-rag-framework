@@ -11,7 +11,10 @@ Generic scaffolding workflow for any new V1 component. For retrievers, generator
 
 ## Steps
 
-1. **Confirm the Protocol exists.** Check `src/modular_rag/contracts/` for the relevant Protocol (e.g. `Chunker`, `MetricsProtocol`, `Embedder`, `VectorStore`). If it doesn't exist yet, stop and ask — contracts are `ask`-tier in `.claude/settings.json` and CLAUDE.md rule 05.1 requires Protocol-first development.
+1. **Confirm the Protocol exists.** Check `src/modular_rag/contracts/` for the relevant Protocol
+   (e.g. `Chunker`, `Embedder`, `Indexer`, `Retriever`, `Meter`). If it doesn't exist yet, stop and
+   ask — contracts are `ask`-tier in `.claude/settings.json` and CLAUDE.md rule 05.1 requires
+   Protocol-first development.
 
 2. **Implement.** Create the concrete class in the matching domain module (`ingestion/`, `eval/`) or adapter folder (`adapters/embeddings/`, `adapters/vectorstores/`), following an existing sibling implementation's structure and naming. Heavy external libraries must be lazily imported inside methods (CLAUDE.md rule 05.7).
 

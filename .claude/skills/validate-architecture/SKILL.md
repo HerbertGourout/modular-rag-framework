@@ -174,8 +174,8 @@ grep -r "MyRetriever()" src/modular_rag/
 # File: src/modular_rag/adapters/vectorstores/my_store.py
 
 # ✅ ALLOWED imports
-from modular_rag.contracts.indexing import VectorStoreProtocol  # Protocol
-from modular_rag.core.models import Document  # Core
+from modular_rag.contracts.indexing import Indexer, VectorIndexer  # Protocols
+from modular_rag.core.models.chunk import Chunk  # Core model
 from external_lib import ExternalStore  # External library (lazy)
 
 # ❌ NOT ALLOWED imports
@@ -294,7 +294,7 @@ generator = OpenAIGenerator(model_config)  # ❌ Direct instantiation
 ```python
 # Use registry + manifest
 registry = ComponentRegistry()
-config = load_manifest("manifests/presets/local-rag.yaml")
+config = load_manifest("manifests/presets/local-hybrid-rag.yaml")
 retriever = registry.create("retriever", config["retrieval"])
 generator = registry.create("generator", config["generation"])
 ```

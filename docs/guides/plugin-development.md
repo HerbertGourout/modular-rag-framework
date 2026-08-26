@@ -1,8 +1,10 @@
 # Plugin Development Guide
 
-This guide explains how to add a new component (chunker, retriever, generator, etc.)
-to the framework. The framework is contract-driven: all components are discovered
-through the `ComponentRegistry` and selected by name in YAML manifests.
+This guide explains how to add a new runtime component (chunker, retriever, generator, etc.)
+to the framework. Most runtime components are built through `ComponentRegistry` and selected by
+name in YAML. File parsers (`_PARSERS`), engine adapters (`load_engine`) and API token verifiers
+are explicit composition exceptions; follow their existing paths rather than forcing them into a
+manifest role.
 
 ## The pattern (four steps)
 
@@ -140,14 +142,22 @@ CHUNKERS = [
 | `Chunker` | Splits documents into chunks | `ingestion/chunkers/` |
 | `Embedder` | Generates vector embeddings | `adapters/embeddings/` |
 | `Indexer` | Stores chunks in a vector store | `adapters/vectorstores/` |
+| `VectorIndexer` | Adds embedder/dimension reconciliation to an indexer | `adapters/vectorstores/` |
 | `Retriever` | Retrieves relevant chunks | `retrieval/retrievers/` |
 | `Reranker` | Re-scores retrieved candidates | `retrieval/rerankers/` |
 | `Generator` | Generates an answer from context | `generation/synthesizers/` |
 | `SecurityGuard` | Checks queries and answers | `security/filters/` |
 | `Redactor` | Removes PII from text | `security/redaction/` |
+| `TenantPolicy` | Enforces and filters tenant identity | `security/policies/` |
+| `AuditSink` / `ReviewQueue` | Records audit events / holds review items | `security/audit/`, `security/policies/` or adapters |
 | `Evaluator` | Scores a (query, answer) pair | `eval/scorers/` |
-| `Telemetry` | Records traces and metrics | `observability/` |
+| `Telemetry` | Records completed framework traces/evaluation metrics | `observability/` |
+| `Tracer` / `Span` | Emits live distributed spans | `adapters/observability/` |
+| `Meter` | Emits operational counters, histograms and gauges | `adapters/observability/` |
+| `LifecycleLedger` | Persists document lifecycle state | `ingestion/lifecycle/` or adapters |
 | `Storage` | Key-value persistence | `memory/kv/` |
+| `Parser` | Converts supported files to `Document`; registered in `_PARSERS`, not the component registry | `ingestion/parsers/` |
+| `DocumentEngine` | Engine-neutral answer execution | `orchestration/` or `adapters/llms/` |
 
 **No `Planner` or `Agent` contract exists to extend.** An earlier version of this table listed
 both, pointing at `retrieval/planners/` and `agents/<role>/`. Neither is a real, implementable

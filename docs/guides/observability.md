@@ -249,6 +249,7 @@ handling.
 `engine.adapter: langgraph` manifests may also set `observability.tracer` — see the "Where spans
 are created" section above for exactly which spans a LangGraph-routed request gets (the
 engine-neutral `api.*`/`app.request` pair, not the `RAGEngine`-internal `rag.*` spans).
+No shipped preset currently declares a tracer; copy a preset to activate this role.
 
 ### PII safety
 
@@ -280,6 +281,102 @@ Cross-service W3C `traceparent` header extraction/injection at the API boundary,
 `Trace.id`/`ExecutionContext.correlation_id`/OpenTelemetry's own trace_id into one identifier, and
 `LangGraphEngineAdapter` internal step instrumentation are all explicitly deferred — recorded as
 known limitations in the ADR, not silently unhandled.
+
+## Operational metrics (Meter)
+
+[ADR-0013](../adr/0013-operational-metrics-meter-port.md) adds live, collectable operational
+metrics — counters, histograms, gauges — a third, deliberately separate mechanism from both
+`Telemetry` (post-hoc `Trace`/`Metrics` recording) and `Tracer` (live spans, above). **Not the same
+thing as `core.models.metrics.Metrics`** (the 16-field evaluation-quality bag `Telemetry.
+record_metrics()` takes) — that name collision is exactly why this Protocol is called `Meter`, not
+`Metrics`.
+
+### `Meter`/instrument contract
+
+```python
+def counter(self, name: str, value: int | float = 1, attributes: dict[str, str | int | float | bool] | None = None) -> None
+def histogram(self, name: str, value: float, attributes: dict[str, str | int | float | bool] | None = None) -> None
+def gauge(self, name: str, value: float, attributes: dict[str, str | int | float | bool] | None = None) -> None
+def name(self) -> str
+```
+
+A counter accumulates (multiple calls with the same name+attributes add); a gauge overwrites (the
+latest value wins); a histogram records a distribution of observed values (for percentile queries
+like p95 latency).
+
+### Where metrics are recorded
+
+Only in `orchestration/engine.py`, `orchestration/reconciliation.py`, `app/application.py`, and
+`api/__init__.py` — the same engine-neutral/pipeline-stage split ADR-0012 already establishes for
+spans, never inside `ingestion/`, `retrieval/`, `generation/`, or `security/`.
+
+| Metric | Type | Labels | Where |
+|---|---|---|---|
+| `mrag.request.duration_ms` | histogram | `operation`, `engine`, `status` | `ApplicationService.answer()`/`.retrieve()` — **not** also inside `RAGEngine`, to avoid double-counting. HTTP requests rejected earlier by authentication, body-size, validation, rate-limit or concurrency middleware are outside this denominator. |
+| `mrag.request.errors` | counter | `operation`, `engine`, `error_type` | same scope: exceptions raised after entering `ApplicationService`, not all HTTP error responses |
+| `mrag.ingest.documents` | counter | — | `RAGEngine.ingest()` |
+| `mrag.ingest.chunks` | counter | — | `RAGEngine.ingest_chunks()` (covers both entry points — `ingest()` calls this internally per document) |
+| `mrag.ingest.duration_ms` | histogram | — | same |
+| `mrag.ingest.errors` | counter | `error_type` | same, on lexical-index failure |
+| `mrag.guard.rejections` | counter | `stage` (`query`/`answer`) | `RAGEngine._run_steps()` |
+| `mrag.retrieve.empty` | counter | `operation` (`answer`/`retrieve`) | `RAGEngine._run_steps()`/`.retrieve()` |
+| `mrag.retrieve.degraded` | counter | `source` (`vector`/`lexical`) | same, reading `HybridRetriever.last_degraded_sources` |
+| `mrag.readiness.state` | gauge | `state` (`healthy`/`degraded`/`unready`) | `GET /ready` — emitted on probe. Current code writes `1` only for the observed state and does not reset the other labelled series, so an old state can remain visible after recovery; do not use it as an authoritative current-state alert until fixed. |
+| `mrag.generation.tokens` | counter | `direction` (`input`/`output`), `model` | `RAGEngine._run_steps()`, reading the generator's own `TraceStep` |
+| `mrag.generation.cost_usd` | counter | `model` | same, reading `TraceStep.metadata["cost_usd"]` (only when present — an unpriced model gets no cost counter, never a fabricated 0.0) |
+| `mrag.reconciliation.divergences` | gauge | `type` (`missing_in_vector`/`missing_in_lexical`/`orphaned_in_vector`/`orphaned_in_lexical`) | `IndexReconciler.check()` |
+| `mrag.review.enqueued` | counter | — | `RAGEngine._run_steps()` |
+| `mrag.review.pending` | gauge | — | same, sampled only at enqueue time. Resolution does not refresh it, so it can overstate current queue depth. |
+
+See [docs/observability/](../observability/) for the reference dashboard, minimum alerts, SLOs,
+and runbooks built against this exact catalog.
+
+The reference material deliberately omits deployable readiness-state and review-backlog alerts
+until those two gauges report current state reliably. These are implementation limitations, not
+collector configuration issues.
+
+### Cardinality safety
+
+`OtelMeter._sanitize_attributes()` drops (never raises — logs a warning and continues) any
+attribute whose key matches a denylist of per-request identifiers (`correlation_id`, `request_id`,
+`trace_id`, `chunk_id`, `document_id`/`doc_id`, ...) or whose value is UUID/ULID-shaped, applied to
+every `counter()`/`histogram()`/`gauge()` call — defense in depth on top of the primary discipline
+(no first-party call site passes one of those values as a label at all). This check exists
+*specifically* for `Meter`, not `Tracer`: a metric label creates a persistent time series per
+distinct value combination in a real backend, so unbounded cardinality here is a production
+incident; a span attribute carries no such risk.
+
+### `NullMeter` / `OtelMeter`
+
+Symmetrical with `Tracer`'s `NullTracer`/`OtelTracer`:
+
+```yaml
+observability:
+  meter:
+    type: otel   # or "null" to explicitly disable
+    config:
+      otlp_endpoint: "http://otel-collector:4317"   # omit to record without exporting
+```
+
+```python
+from modular_rag.adapters.observability.otel_meter import OtelMeter
+
+meter, reader = OtelMeter.for_testing()
+meter.counter("mrag.request.errors", attributes={"operation": "answer"})
+
+data = reader.get_metrics_data()
+```
+
+`for_testing()` wires an in-process `InMemoryMetricReader` — no network, no real OTLP collector.
+No shipped preset currently declares a meter; copy a preset to activate this role.
+
+### Cost estimation
+
+`core/pricing.py::estimate_cost_usd(model, input_tokens, output_tokens)` is a static, manually-
+refreshed price table (USD per 1M tokens) — not a live provider API lookup. Returns `None` (never
+a fabricated `0.0`) for a model the table doesn't recognize. Both `OpenAIGenerator` and
+`AnthropicGenerator` call it inside their own `generate()` and attach the result to their
+`TraceStep.metadata["cost_usd"]` only when it is not `None`.
 
 ## Log configuration
 

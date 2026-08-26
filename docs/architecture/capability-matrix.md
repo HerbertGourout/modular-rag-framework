@@ -1,10 +1,9 @@
 # Capability Matrix — Current Operational Truth
 
 **Baseline snapshot date:** 2026-08-07 (before ADR-0007's Étapes 4-8 landed).
-**Last updated:** 2026-08-08 (ADR-0008 — offline evaluation boundary and fail-closed engine
-activation).
-**Scope:** [ADR-0007](../adr/0007-layer-boundaries-and-control-plane-activation.md)'s
-boundary and manifest-activation correction.
+**Last updated:** 2026-08-26 (full implementation/documentation alignment audit).
+**Scope:** current repository state, including the ADR-0007 boundary correction and
+ADR-0012/ADR-0013 observability ports.
 
 This matrix is the evidence-based source for whether a capability is actually usable. A class
 existing under `src/` is not sufficient: a capability is **operational** only when a supported
@@ -18,12 +17,13 @@ Before the Step-3 checker tests were added, the repository contained 214 Python 
 Markdown files. Compilation passed and the local service-free suite reported 548 passing tests
 (466 unit + 82 contract). After adding the 27 dependency-policy tests, the same suite reported
 575 passing tests. As of the 2026-08-08 finalization pass, the suite reported 593 tests
-(503 unit + 90 contract). This count keeps growing as work continues — as of this documentation
-pass, `find src tests -name "*.py" -not -path "*__pycache__*" | wc -l` reports 226 Python files
-(107 under `src/`, 119 under `tests/`), and `pytest tests/unit tests/contract --collect-only -q`
-reports 717 tests (608 unit + 109 contract). Rather than re-freezing a new number here that will
-itself go stale, run that same `--collect-only` command for the live count — the historical
-numbers above are kept as a "before" reference point, not a claim about the current state.
+(503 unit + 90 contract). A later 2026-08-08 intermediate snapshot reported 226 Python files and
+717 service-free tests (608 unit + 109 contract). These numbers are retained only as historical
+"before" evidence. The 2026-08-26 alignment audit executed the current service-free suite:
+**1,185 passed** (1,058 unit + 127 contract); it also collected 69 integration and 15 e2e tests
+without running those service-dependent suites. Run
+`pytest tests/unit tests/contract --collect-only -q` for the live count rather than treating any
+snapshot as a permanent badge.
 
 Built-in manifest factories, current as of this update:
 
@@ -42,6 +42,8 @@ Built-in manifest factories, current as of this update:
 | `review_queue` | `human-review` |
 | `audit_sink` | `in-memory`, `postgres` |
 | `telemetry` | `structlog`, `null` |
+| `tracer` | `otel`, `null` |
+| `meter` | `otel`, `null` |
 | `lifecycle_ledger` | `in-memory`, `postgres` |
 
 The `deterministic` `embedder`/`generator` pair (`DeterministicEmbedder`, `DeterministicGenerator`)
@@ -75,10 +77,10 @@ factory) were removed from `ComponentRegistry` in Étape 8.
 |---|---|---|---|
 | Native ingestion, retrieval and generation | **Operational** | V1 manifest → `load_pipeline()` → `ComponentRegistry.wire()` → `RAGEngine` | `manifests/presets/local-hybrid-rag.yaml`; `tests/e2e/test_simple_qa_pipeline.py` (service-dependent). |
 | Engine-neutral native adapter | **Operational** | `load_native_engine()` or `load_engine()` with `engine.adapter: native` | `app/bootstrap.py`; engine conformance tests. |
-| LangGraph adapter | **Operational** | `load_engine()` or `load_application()` with `engine.adapter: langgraph`, including `manifests/presets/langgraph-rag.yaml` | Unit/conformance coverage; API and CLI import `load_application()` through `app.public` and therefore honor the selected adapter. Raw retrieval remains a native application use case because `DocumentEngine` intentionally exposes answer orchestration, not retrieval-only execution. |
+| LangGraph adapter | **Operational** | `load_engine()` or `load_application()` with `engine.adapter: langgraph`, including `manifests/presets/langgraph-rag.yaml` | Unit/conformance coverage; API and CLI honor the selected adapter. The current graph is a fixed route → retrieve → guard → generate flow, not a multi-agent planner. Raw retrieval remains a native application use case because `DocumentEngine` intentionally exposes answer orchestration, not retrieval-only execution. |
 | Manifest YAML validation | **Operational** | `load_manifest()` / `PipelineManifest.model_validate()` | Unknown top-level fields are rejected (`extra="forbid"`). Legacy fields (`planner`/`agents`/`graph_store`/old-style `policies`/`modalities`) now hard-fail validation instead of being silently ignored (Étape 7). |
 | Environment layering, `${VAR}` and `secret://` | **Operational** for `mrag validate` and `load_pipeline()` | `resolve_manifest()`, called by both `mrag validate` and `load_pipeline()` | Verified end-to-end on `secure-enterprise-rag.yaml` (Étape 7): `${QDRANT_URL}`, `secret://QDRANT_API_KEY`, `secret://AUDIT_DATABASE_URL` all resolve. |
-| Capability dry-run validation | **Operational**, extended | `mrag validate` → `validate_capabilities()` | Checks registered runtime roles, tenant-enforcement coherence, engine compatibility, and rejects offline evaluation/gate declarations in runnable manifests. |
+| Capability dry-run validation | **Operational, with a known gap** | `mrag validate` → `validate_capabilities()` | Checks most registered runtime roles, tenant-enforcement coherence, engine compatibility, and rejects offline evaluation/gate declarations. It currently omits `observability.tracer` and `observability.meter`; an unknown type can therefore pass dry-run and fail later in `ComponentRegistry.wire()`. |
 | Legacy `planner`, `agents`, `graph_store`, `policies`, `modalities` fields | **Removed from the active schema** | Rejected by `PipelineManifest.model_validate()` | Only present in `manifests/blueprints/*.yaml`, which are never loaded through `resolve_manifest()` (Étape 7). |
 
 ## Owned control-plane capabilities
@@ -92,22 +94,23 @@ factory) were removed from `ComponentRegistry` in Étape 8.
 | OIDC/Keycloak identity verification | **Programmatic only** (by design) | Pass a `TokenVerifier` to `create_app()` | ADR-0007 explicitly keeps this a service/interface concern, not a manifest-wired domain policy — mixing identity verification with policy enforcement is what the ADR warns against. |
 | Structured audit events | **Operational (native)** | Manifest `governance.audit_sink.type: in-memory` or `postgres` | Consumed by `RAGEngine`. LangGraph manifests declaring an audit sink fail startup until an engine-independent bridge exists. |
 | Trace telemetry | **Operational (native)** | Manifest `observability.telemetry.type: structlog` or `null` | Consumed by `RAGEngine`. LangGraph manifests declaring telemetry fail startup. |
-| Distributed tracing (OpenTelemetry) | **Operational (native)** | Manifest `observability.tracer.type: otel` or `null` | ADR-0012. Live spans in `orchestration/engine.py`/`app/application.py`/`api/`; consumed only by the native pipeline — LangGraph manifests declaring a tracer fail startup, same as telemetry. |
+| Distributed tracing (OpenTelemetry) | **Operational, custom manifest** | Manifest `observability.tracer.type: otel` or `null` | ADR-0012. `RAGEngine`-internal spans are native-only; engine-neutral `app.request`/`api.*` spans also work with LangGraph. No shipped preset enables a tracer. |
+| Operational metrics (OpenTelemetry) | **Operational, custom manifest** | Manifest `observability.meter.type: otel` or `null` | ADR-0013. Request metrics work with either engine; pipeline-stage metrics are native-only. No shipped preset enables a meter. Read the sampling limitations in `docs/observability/` before deploying the reference alerts. |
 | Human review queue | **Operational (native)** | Manifest `governance.review_queue.type: human-review` | Consumed by `RAGEngine`; rejected with LangGraph today. |
 | Document lifecycle and erasure | **Operational** | Manifest `lifecycle.ledger.type: in-memory` or `postgres` | Both registered (Postgres added Étape 6); engine methods tested. |
-| Index reconciliation | **Programmatic only** | Construct `IndexReconciler` with a configured container | Still not exposed through CLI/API or manifests — unchanged by this update. |
+| Index reconciliation | **Operational through CLI and Python** | `mrag reconcile --mode check|repair` or construct `IndexReconciler` | Not exposed through the HTTP API or a manifest role; the CLI resolves the selected pipeline and executes check/repair. |
 | Exact-match evaluator | **Programmatic only** | Construct `ExactMatchEvaluator` for an offline benchmark | Contract/unit-tested. It requires an expected answer and is intentionally rejected in runnable pipeline manifests. |
 | Golden-set benchmark runner | **Programmatic only** | Construct `BenchmarkRunner` | Implemented and unit-tested; no shipped golden-set catalogue (`eval/datasets/` is empty) or user-facing runner. |
 | Quality gates | **Programmatic only** | Apply `QualityGate` to offline benchmark metrics | Unit-tested `report_only`/`blocking` behavior. Intentionally rejected in runnable pipeline manifests; see ADR-0008. |
 | Data-classification vocabulary | **Construction only** | `DataClassification` enum and fixtures | No classification-aware policy enforcement consumes the values — unchanged by this update. |
-| Cost/latency evidence reporting (V3.1) | **Not built** | None | `eval/cost_reporting/` doesn't exist on disk. |
+| Cost/latency evidence reporting (V3.1) | **Partially operational** | Custom manifest with `observability.meter.type: otel`; reference Grafana dashboard | Aggregate request latency, token and static estimated-cost series exist. Per-query/user/month attribution, a cost-reporting module and anomaly detection do not. |
 | Drift detection / eval trigger (V3.2) | **Not built** | None | `eval/drift_detection.py`/`eval/feedback_collection/` don't exist on disk. |
 
 ## Delegated, removed, and future capabilities
 
 | Capability | Status | Activation path today | Evidence / limitation |
 |---|---|---|---|
-| Generic multi-agent orchestration | **Delegated** | External engine through `DocumentEngine` (`manifests/presets/langgraph-rag.yaml`) | Native agent prototypes were removed in Lot 17. `langgraph-rag.yaml` (renamed from `agentic-rag.yaml`, Étape 7) makes delegation the manifest-visible reality instead of a dead `agents:` field. |
+| Generic multi-agent orchestration | **Delegated target, unavailable today** | Future external engine through `DocumentEngine` | Native prototypes were removed in Lot 17. `langgraph-rag.yaml` proves adapter selection but its current graph is fixed and contains no planning, tools or collaborating agents. |
 | GraphRAG traversal | **Delegated** | Intended external-engine capability, not available in LangGraph today | `manifests/blueprints/graph-memory-rag.yaml` documents the sketch; not loadable. |
 | Native knowledge-graph data model | **Removed** (Étape 8, resolves ADR-0007's open decision #4) | None — `memory/graph/` no longer exists | Zero consumers anywhere outside its own test; `neighbours()`/`subgraph_for_query()` were genuine traversal logic, not passive storage. Restorable via git history. |
 | Fine-tuning execution | **Delegated** | External MLOps tooling | Native ownership is limited to drift detection/evaluation triggers, which are themselves not built yet (see above). |
@@ -135,6 +138,6 @@ Resolved by Étapes 4-8 (previously listed here as open debt):
    resolves the manifest and selects Native or LangGraph before serving answers.
 
 Still open:
-8. `IndexReconciler` remains programmatic-only, not exposed through CLI/API/manifests.
+8. `IndexReconciler` is available through CLI/Python but not through the HTTP API or manifests.
 9. Audit, telemetry, policy-engine and human-review bridging above the delegated-engine boundary
    remains unimplemented; incompatible LangGraph manifests now fail startup rather than no-op.

@@ -5,6 +5,29 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added — operational hardening and observability (through 2026-08-26)
+
+- Bounded `/ready` dependency probes for Qdrant, PostgreSQL and configured LLM generators
+  ([ADR-0010](docs/adr/0010-health-checkable-and-readiness-semantics.md)).
+- Durable PostgreSQL lifecycle/audit adapters, packaged migrations, reconciliation and retention
+  administration commands ([ADR-0011](docs/adr/0011-postgresql-migrations-pooling-and-retention.md)).
+- OpenTelemetry-compatible distributed tracing through optional `Tracer`/`Span` manifest roles
+  ([ADR-0012](docs/adr/0012-opentelemetry-tracing-port.md)).
+- Operational `Meter` counters, histograms and gauges, static generation-cost estimates, and
+  reference dashboard/alerts/SLO/runbooks ([ADR-0013](docs/adr/0013-operational-metrics-meter-port.md)).
+  No shipped preset enables the tracer or meter yet; both require a custom manifest.
+- Contextual ingestion enrichment: chunks retain original citation content while using a
+  title-prefixed `embedding_text` for embedding.
+- Main CI coverage for live Qdrant/PostgreSQL integration, deterministic governed e2e and Compose
+  smoke; real-LLM e2e remains in the scheduled/manual nightly workflow.
+
+### Documentation — implementation alignment (2026-08-26)
+
+- Reconciled active architecture, onboarding, manifests, examples and operations documentation
+  against the current source tree and test/CI entry points.
+- Marked the current LangGraph graph as fixed rather than multi-agent, the `hybrid_search` example
+  as presently incompatible, and the readiness/review metric sampling limitations explicitly.
+
 ### Fixed — embedder/Qdrant vector-dimension consistency (2026-08-11)
 
 [ADR-0009](docs/adr/0009-vector-indexer-dimension-reconciliation.md): `QdrantStore` no longer

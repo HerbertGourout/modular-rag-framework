@@ -988,8 +988,8 @@ under `governance.redactor` in a valid V2 manifest.
 |-------|---------|------------|------|----------|
 | **Unit** | `pytest tests/unit/` | After every code change | 30s-1m | Nothing |
 | **Contract** | `pytest tests/contract/` | After Protocol implementation | 1m | Nothing |
-| **Integration** | `pytest tests/integration/ -m integration` | With external services | 2-5m | Qdrant on :6333 |
-| **E2E** | `pytest tests/e2e/ -m e2e` | Full pipeline validation | 5-10m | Qdrant + LLM API key |
+| **Integration** | `pytest tests/integration/ -m integration` | With external services | 2-5m | Qdrant + PostgreSQL for the full directory |
+| **E2E** | `pytest tests/e2e/ -m e2e` | Full pipeline validation | 5-10m | Qdrant + PostgreSQL + LLM key for the complete set; scenarios vary |
 | **All** | `./scripts/check.sh all` | Pre-release, CI/CD | 10-15m | Everything |
 
 ### Testing Checklist

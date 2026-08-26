@@ -107,14 +107,17 @@ class ComponentRegistry:
 
 Roles pre-declared in `__init__`: `chunker`, `embedder`, `indexer`, `retriever`, `reranker`,
 `generator`, `guard`, `tenant_policy`, `policy_engine`, `redactor`, `review_queue`, `audit_sink`,
-`telemetry`, `tracer`, `lifecycle_ledger`. `tracer` (ADR-0012) creates live OpenTelemetry spans —
-a separate, both-optional mechanism from `telemetry`'s post-hoc trace recording.
-**Unlike `telemetry`**, `observability.tracer` IS permitted under `engine.adapter='langgraph'`
+`telemetry`, `tracer`, `meter`, `lifecycle_ledger`. `tracer` (ADR-0012) creates live spans and
+`meter` (ADR-0013) operational metrics — both separate from `telemetry`'s post-hoc trace recording.
+**Unlike `telemetry`**, `observability.tracer` and `observability.meter` are permitted under
+`engine.adapter='langgraph'`
 (corrected, Codex review pass 1 HIGH-001): `app/application.py`'s `"app.request"` span and
 `api/__init__.py`'s `"api.answer"`/`"api.retrieve"` spans read `Container.tracer` directly,
 independent of which `DocumentEngine` is selected, so the declared control is never silently
 ignored — only `RAGEngine`-internal spans (`rag.answer`, `rag.guard_query`, ...) are unavailable
-under LangGraph, since `LangGraphEngineAdapter` never calls into `RAGEngine`. Exact-match
+under LangGraph, since `LangGraphEngineAdapter` never calls into `RAGEngine`. The same split
+applies to request-level versus `RAGEngine`-stage metrics. `validate_capabilities()` currently
+omits the tracer and meter role names, so `wire()` remains their definitive type check. Exact-match
 evaluation and quality gates are offline utilities,
 not runtime registry roles (ADR-0008). The `planner` and
 `graph_store` placeholder roles (never had a registered factory) were removed in Étape 8 — do
@@ -122,8 +125,7 @@ not reintroduce them without a concrete, wired consumer.
 
 ### Registering Components
 
-**Location**: `app/default_factories.py` — the single source of truth for every built-in
-factory (moved here from `app/default_factories.py`, Étape 4 — see the file header).
+**Location**: `app/default_factories.py` — the single source of truth for every built-in factory.
 Real pattern:
 
 ```python

@@ -29,11 +29,12 @@ Hybrid retrieval combines dense and sparse signals. The two ranked lists are
 fused using Reciprocal Rank Fusion (RRF):
 
 ```
-RRF_score(d) = Σ 1 / (k + rank_i(d))
+RRF_score(d) = Σ weight_i / (rrf_k + rank_i(d))
 ```
 
-where `k=60` is a smoothing constant and `rank_i(d)` is the rank of document `d`
-in list `i`. The fusion is parameter-free and robust to score scale differences.
+where `rrf_k=60` is the default smoothing constant, `weight_i` defaults to `1.0`, and
+`rank_i(d)` is the rank of document `d` in list `i`. The method is robust to incomparable raw
+score scales; this implementation also exposes `rrf_k` and per-list weights.
 
 ## Reranking
 

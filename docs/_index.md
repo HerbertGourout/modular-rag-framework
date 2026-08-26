@@ -25,7 +25,8 @@ full V1 → V5 journey in plain language.
 | Understand why a structural decision was made | [adr/_index.md](adr/_index.md) |
 | Add a new component (chunker, retriever, generator...) | [guides/plugin-development.md](guides/plugin-development.md) |
 | Deploy to production | [guides/deployment.md](guides/deployment.md) |
-| Read or wire up telemetry / traces | [guides/observability.md](guides/observability.md) |
+| Read or wire up trace telemetry, live spans or operational metrics | [guides/observability.md](guides/observability.md) |
+| Adapt the reference dashboard, alerts, SLOs and runbooks | [observability/README.md](observability/README.md) |
 | Use the REST API | [api/_index.md](api/_index.md) |
 | Choose a manifest or create a new one | [../manifests/_index.md](../manifests/_index.md) |
 | Contribute code (setup, rules, MR checklist) | [../CONTRIBUTING.md](../CONTRIBUTING.md) |
@@ -42,6 +43,7 @@ docs/
 ├── api/                ← REST API reference
 ├── architecture/        ← Complete technical specification (layers, models, flows, security)
 ├── guides/              ← Practical, task-oriented guides (installation, deployment, plugins...)
+├── observability/       ← Reference dashboard, alerts, SLOs and runbooks
 ├── glossary.md          ← Definitions of recurring terms (RRF, ULID, groundedness, EvoRAG...)
 └── archive/             ← Superseded or low-ongoing-utility documents, kept for the record —
                             see archive/README.md for what's there and why

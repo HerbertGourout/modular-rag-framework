@@ -1,4 +1,10 @@
-# hybrid_search — Retrieval Comparison Example
+# hybrid_search — Retrieval Comparison Code Sample
+
+> **Current status: not runnable without a code fix.** `main.py` still reads
+> `HybridRetriever._bm25`, while the implementation now stores the lexical leg in `_lexical`.
+> In addition, the documented `ingest` and `search` commands start separate processes, so the
+> local preset's in-memory BM25 index is lost before search. Use
+> `examples/simple_qa/first_query.py` for a working hybrid pipeline today.
 
 This example shows what hybrid retrieval actually buys you: it runs the same
 query through the vector-only, BM25-only, and RRF-fused hybrid retriever from
@@ -23,7 +29,7 @@ pip install -e ".[v1]"
 docker run -d -p 6333:6333 qdrant/qdrant
 ```
 
-## Run
+## Intended flow (currently blocked by the limitation above)
 
 ### Ingest documents
 
@@ -45,7 +51,7 @@ python examples/hybrid_search/main.py search "BM25 term frequency inverse docume
 python examples/hybrid_search/main.py search "how to find documents that mean the same thing but use different words"
 ```
 
-Expected output shape:
+Intended output shape after the example is repaired:
 
 ```
 Query: BM25 term frequency inverse document frequency
@@ -77,7 +83,7 @@ Hybrid (RRF-fused) (top 5):
 
 ## Extending
 
-- Tune the fusion balance: change `retriever.config.vector_weight` /
-  `bm25_weight` in the manifest and re-run `search` to see the ranking shift.
+- Once repaired, tune the fusion balance by changing `retriever.config.vector_weight` /
+  `bm25_weight` in a copied manifest and re-running the comparison in one process.
 - Add your own documents to `docs/` to see hybrid retrieval on your own
   corpus.

@@ -4,7 +4,7 @@
 > [data-classification-policy.md](data-classification-policy.md) (sensitivity levels, PII/tenant
 > schema) — both added in Lot 11a (`docs/refactoring-plan.md`). This document covers **Safety**
 > (`security/filters/`, `security/redaction/`) — prompt injection, poisoning, PII leakage. For
-> **Security** proper (tenant isolation, RBAC, policy enforcement) see
+> **Security** proper (tenant isolation and policy enforcement; RBAC is not implemented) see
 > [`overview.md` §3](overview.md#the-systems-six-planes)'s Safety plane section and the root
 > [README's Core Concepts §6](../../README.md#6-the-governance-stack--tenant-isolation-audit-redaction-policy-as-code)
 > — `.claude/rules/security.md`'s "Safety ≠ Security" rule is the reason these two concerns live
@@ -214,12 +214,11 @@ flowchart TD
     Q3 -->|Yes| A3["Enable all of the above\n+ PolicyEngine with tenant-scoped rules\n+ TenantIsolationPolicy\n+ HumanReviewGate for high-risk answers"]
 ```
 
-In the manifest, this maps to (see `manifests/presets/local-hybrid-rag.yaml` and
-`manifests/presets/secure-enterprise-rag.yaml` for the real, complete, currently-valid versions
-of these two shapes — the snippets below are illustrative excerpts, not copy-paste-complete
-manifests):
+In a manifest, this maps to the following illustrative excerpts. The shipped
+`local-hybrid-rag.yaml` intentionally has **no** `security` section; add the first block only in a
+copied/custom dev manifest. `secure-enterprise-rag.yaml` contains the governed shape shown second.
 ```yaml
-# local-hybrid-rag.yaml-style (dev) — security section only
+# Optional guard for a custom dev manifest
 security:
   type: basic
   config:
@@ -247,4 +246,3 @@ governance:
     config:
       dsn: "secret://AUDIT_DATABASE_URL"
 ```
-</content>
