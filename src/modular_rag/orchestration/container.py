@@ -11,6 +11,7 @@ from modular_rag.contracts.generation import Generator
 from modular_rag.contracts.indexing import Indexer
 from modular_rag.contracts.lifecycle import LifecycleLedger
 from modular_rag.contracts.manifests import PipelineManifest
+from modular_rag.contracts.meter import Meter
 from modular_rag.contracts.reranking import Reranker
 from modular_rag.contracts.retrieval import Retriever
 from modular_rag.contracts.review import ReviewQueue
@@ -248,6 +249,12 @@ class Container:
         See ADR-0012's own rationale for why a third container-property
         convention was deliberately avoided here."""
         return self._store.get("tracer")
+
+    @property
+    def meter(self) -> Meter | None:
+        """ADR-0013 — same `.get()`-based optional-role pattern as `tracer`
+        above."""
+        return self._store.get("meter")
 
     @property
     def audit_sink(self) -> AuditSink | None:

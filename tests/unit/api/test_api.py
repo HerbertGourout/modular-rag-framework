@@ -65,11 +65,13 @@ class _FakePipeline:
         requires_identity: bool = False,
         readiness_report: ReadinessReport | None = None,
         tracer: object | None = None,
+        meter: object | None = None,
     ) -> None:
         self.manifest_id = "fake-pipeline"
         self.closed = False
         self.requires_identity = requires_identity
         self.tracer = tracer
+        self.meter = meter
         self._answer_error = answer_error
         self._readiness_report = readiness_report or ReadinessReport(
             status=ReadinessState.HEALTHY, dependencies=[]
@@ -845,3 +847,61 @@ def test_health_and_ready_are_never_traced(monkeypatch: pytest.MonkeyPatch) -> N
     client.get("/ready")
 
     assert list(exporter.get_finished_spans()) == []
+
+
+# ---------------------------------------------------------------------------
+# ADR-0013 (Lot 12, external plan — "Metrics, Dashboards, and SLO"):
+# `/ready` records `mrag.readiness.state`, the *static, whole-process*
+# degraded-mode signal ("visible degraded modes" acceptance criterion).
+# ---------------------------------------------------------------------------
+
+
+class _RecordingMeter:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, float, dict]] = []
+
+    def counter(self, name: str, value: float = 1, attributes: dict | None = None) -> None:
+        pass
+
+    def histogram(self, name: str, value: float, attributes: dict | None = None) -> None:
+        pass
+
+    def gauge(self, name: str, value: float, attributes: dict | None = None) -> None:
+        self.calls.append((name, value, attributes or {}))
+
+    def name(self) -> str:
+        return "recording-meter"
+
+
+def test_ready_emits_a_readiness_state_gauge_when_healthy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    meter = _RecordingMeter()
+    report = ReadinessReport(status=ReadinessState.HEALTHY, dependencies=[])
+    client = _client(_FakePipeline(readiness_report=report, meter=meter), monkeypatch)
+
+    client.get("/ready")
+
+    assert meter.calls == [("mrag.readiness.state", 1, {"state": "healthy"})]
+
+
+def test_ready_emits_a_readiness_state_gauge_when_unready(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    meter = _RecordingMeter()
+    report = ReadinessReport(
+        status=ReadinessState.UNREADY,
+        dependencies=[DependencyHealth(name="generator", healthy=False)],
+    )
+    client = _client(_FakePipeline(readiness_report=report, meter=meter), monkeypatch)
+
+    response = client.get("/ready")
+
+    assert response.status_code == 503
+    assert meter.calls == [("mrag.readiness.state", 1, {"state": "unready"})]
+
+
+def test_ready_with_no_meter_configured_does_not_raise(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = _client(_FakePipeline(), monkeypatch)
+
+    assert client.get("/ready").status_code == 200

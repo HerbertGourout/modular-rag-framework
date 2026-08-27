@@ -34,6 +34,7 @@ from modular_rag.contracts.manifests import (
     PipelineManifest,
     QualitySection,
 )
+from modular_rag.contracts.meter import Meter
 from modular_rag.contracts.parsing import Parser
 from modular_rag.contracts.reconciliation import (
     DocumentDivergence,
@@ -73,6 +74,7 @@ __all__ = [
     "ComponentConfig",
     "EngineSelection", "GovernanceSection", "ObservabilitySection", "QualitySection",
     "ManifestLoader", "PipelineManifest",
+    "Meter",
     "Parser",
     "DocumentDivergence", "ReconciliationReport", "RepairResult",
     "Reranker",

@@ -116,8 +116,9 @@ Roles pre-declared in `__init__`: `chunker`, `embedder`, `indexer`, `retriever`,
 independent of which `DocumentEngine` is selected, so the declared control is never silently
 ignored — only `RAGEngine`-internal spans (`rag.answer`, `rag.guard_query`, ...) are unavailable
 under LangGraph, since `LangGraphEngineAdapter` never calls into `RAGEngine`. The same split
-applies to request-level versus `RAGEngine`-stage metrics. `validate_capabilities()` currently
-omits the tracer and meter role names, so `wire()` remains their definitive type check. Exact-match
+applies to request-level versus `RAGEngine`-stage metrics. `validate_capabilities()` (corrected,
+Codex review pass 1 HIGH-003) now also dry-run checks the `tracer` and `meter` role names, so an
+unregistered type under either is caught before `wire()`, not only by it. Exact-match
 evaluation and quality gates are offline utilities,
 not runtime registry roles (ADR-0008). The `planner` and
 `graph_store` placeholder roles (never had a registered factory) were removed in Étape 8 — do

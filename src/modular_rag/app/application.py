@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 from contextlib import AbstractContextManager, nullcontext
 from typing import TYPE_CHECKING
@@ -14,6 +15,7 @@ from modular_rag.orchestration.engine import RAGEngine
 if TYPE_CHECKING:
     from modular_rag.contracts.chunking import Chunker
     from modular_rag.contracts.engine import DocumentEngine
+    from modular_rag.contracts.meter import Meter
     from modular_rag.contracts.reconciliation import ReconciliationReport, RepairResult
     from modular_rag.contracts.tracing import Span, Tracer
     from modular_rag.core.models.chunk import Chunk
@@ -50,6 +52,19 @@ class ApplicationService:
         propagation, under the same trace this class's `answer()`/
         `retrieve()` start)."""
         return self._native.tracer
+
+    @property
+    def meter(self) -> Meter | None:
+        """ADR-0013 — public accessor for the wired meter, same pattern as
+        `tracer` above. `None` when no `observability.meter` is configured.
+        This is the *only* place `mrag.request.duration_ms`/`mrag.request.errors`
+        are recorded (not also inside `RAGEngine._run()`/`retrieve()`) —
+        deliberately, so a native-engine request is counted exactly once,
+        not twice (once here, once again inside `RAGEngine`), and so a
+        LangGraph-routed request (which never calls into `RAGEngine` at all)
+        is still counted here, since this boundary runs identically
+        regardless of which `DocumentEngine` is selected."""
+        return self._native.meter
 
     @property
     def requires_identity(self) -> bool:
@@ -100,20 +115,24 @@ class ApplicationService:
         # task's own requirement) rather than unified into OpenTelemetry's
         # own trace_id — see ADR-0012's explicit out-of-scope note on why
         # those stay separate concepts.
+        engine_name = self._selected.name()
+        t0 = time.perf_counter()
         with self._request_span(
-            "answer", correlation_id, request_id, {"engine": self._selected.name()}
+            "answer", correlation_id, request_id, {"engine": engine_name}
         ) as span:
             try:
                 result = self._selected.run(EngineRequest(query=query), context)
             except Exception as exc:
                 if span is not None:
                     span.record_error(type(exc).__name__)
+                self._record_request_metrics("answer", engine_name, t0, error=exc)
                 raise
             answer_trace_id = result.metadata.get("trace_id")
             if span is not None:
                 if isinstance(answer_trace_id, str):
                     span.set_attribute("app.trace_id", answer_trace_id)
                 span.set_attribute("status", "ok")
+            self._record_request_metrics("answer", engine_name, t0, error=None)
         return Answer(
             query_id=query.id,
             text=result.text,
@@ -147,17 +166,45 @@ class ApplicationService:
         """
         request_id = str(uuid.uuid4())
         correlation_id = str(uuid.uuid4())
+        t0 = time.perf_counter()
         with self._request_span("retrieve", correlation_id, request_id) as span:
             try:
                 result = self._native.retrieve(question, k=k, tenant_id=tenant_id)
             except Exception as exc:
                 if span is not None:
                     span.record_error(type(exc).__name__)
+                self._record_request_metrics("retrieve", "native", t0, error=exc)
                 raise
             if span is not None:
                 span.set_attribute("app.trace_id", result.trace_id)
                 span.set_attribute("status", "ok")
+            self._record_request_metrics("retrieve", "native", t0, error=None)
         return result
+
+    def _record_request_metrics(
+        self, operation: str, engine: str, t0: float, *, error: BaseException | None
+    ) -> None:
+        """Shared RED-metric (rate/errors/duration) recording for `answer()`/
+        `retrieve()` (ADR-0013). `None` meter -> no-op, matching every other
+        optional-component guard in this codebase. `error_type` is a bounded
+        exception-class name, never `str(error)` — the same PII-safety
+        discipline ADR-0012 §9 already applies to span error recording."""
+        meter = self.meter
+        if meter is None:
+            return
+        duration_ms = (time.perf_counter() - t0) * 1000
+        status = "error" if error is not None else "ok"
+        attributes: dict[str, str | int | float | bool] = {
+            "operation": operation,
+            "engine": engine,
+            "status": status,
+        }
+        meter.histogram("mrag.request.duration_ms", duration_ms, attributes=attributes)
+        if error is not None:
+            meter.counter(
+                "mrag.request.errors",
+                attributes={"operation": operation, "engine": engine, "error_type": type(error).__name__},
+            )
 
     def _request_span(
         self,

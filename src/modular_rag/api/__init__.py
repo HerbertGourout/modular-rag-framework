@@ -193,10 +193,21 @@ def create_app(
         HTTP 503 only for `unready` — `degraded` still returns 200 so an
         orchestrator keeps the pod in rotation, just visibly flagged, per
         `core.enums.ReadinessState`'s own docstring on the distinction.
+
+        ADR-0013 ("degraded modes"): when a meter is configured, also
+        records `mrag.readiness.state` — a gauge, one call per `/ready` poll,
+        labeled by the current `state` (a fixed 3-value set:
+        `healthy`/`degraded`/`unready`). This is the *static, whole-process*
+        degradation signal; `mrag.retrieve.degraded` (recorded in
+        `orchestration/engine.py`) is the complementary *per-request* signal
+        — see ADR-0013's own note on why these are deliberately two separate
+        metrics, not one.
         """
         report = pipeline.check_readiness()
         if report.status == ReadinessState.UNREADY:
             response.status_code = 503
+        if pipeline.meter is not None:
+            pipeline.meter.gauge("mrag.readiness.state", 1, attributes={"state": report.status.value})
         return {
             "status": report.status.value,
             "pipeline": pipeline.manifest_id,

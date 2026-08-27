@@ -20,6 +20,7 @@ from modular_rag.contracts.manifests import (
     ComponentConfig,
     EngineSelection,
     GovernanceSection,
+    ObservabilitySection,
     PipelineManifest,
     QualitySection,
 )
@@ -190,6 +191,52 @@ def test_validate_capabilities_accepts_tenant_enforcement_true_with_a_tenant_pol
     errors = validate_capabilities(manifest, registry)
 
     assert not any("tenant_enforcement" in e for e in errors)
+
+
+def test_validate_capabilities_reports_unknown_meter_type_without_wiring() -> None:
+    """Codex review pass 1 (HIGH-003): `validate_capabilities()` checked
+    `observability.telemetry` but never `observability.meter` -- a typo'd or
+    unregistered meter type passed dry-run validation and only failed later,
+    deep inside `registry.wire()`. Same class of bug as the pre-existing
+    `chunker`/`embedder`/... checks above, just for a role that was missing
+    from the `_check()` call list entirely."""
+    registry = ComponentRegistry()
+    manifest = PipelineManifest(
+        id="x",
+        observability=ObservabilitySection(meter=ComponentConfig(type="not-registered")),
+    )
+
+    errors = validate_capabilities(manifest, registry)
+
+    assert any("meter" in e and "not-registered" in e for e in errors)
+
+
+def test_validate_capabilities_reports_unknown_tracer_type_without_wiring() -> None:
+    """Same gap, `tracer` sibling -- fixed alongside `meter` since both were
+    missing from `_check()` for the identical reason (orchestration/CLAUDE.md
+    documented both as omitted before this fix)."""
+    registry = ComponentRegistry()
+    manifest = PipelineManifest(
+        id="x",
+        observability=ObservabilitySection(tracer=ComponentConfig(type="not-registered")),
+    )
+
+    errors = validate_capabilities(manifest, registry)
+
+    assert any("tracer" in e and "not-registered" in e for e in errors)
+
+
+def test_validate_capabilities_accepts_a_registered_meter_type() -> None:
+    registry = ComponentRegistry()
+    registry.register("meter", "otel", lambda cfg: object())
+    manifest = PipelineManifest(
+        id="x",
+        observability=ObservabilitySection(meter=ComponentConfig(type="otel")),
+    )
+
+    errors = validate_capabilities(manifest, registry)
+
+    assert not any("meter" in e for e in errors)
 
 
 def test_validate_capabilities_rejects_unsupported_langgraph_audit() -> None:

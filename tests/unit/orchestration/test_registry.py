@@ -212,6 +212,38 @@ def test_wire_accepts_a_tracer_under_the_langgraph_adapter() -> None:
     assert container.tracer == "a-tracer"
 
 
+def test_wire_registers_a_configured_meter() -> None:
+    """ADR-0013."""
+    reg = _fake_registry()
+    reg.register("meter", "fake-meter", lambda cfg: "a-meter")
+    manifest = _minimal_manifest(
+        observability=ObservabilitySection(meter=ComponentConfig(type="fake-meter"))
+    )
+
+    container = reg.wire(manifest)
+
+    assert container.meter == "a-meter"
+
+
+def test_wire_accepts_a_meter_under_the_langgraph_adapter() -> None:
+    """ADR-0013, following ADR-0012's own precedent (`observability.tracer`)
+    exactly, applied here from the start rather than needing a corrective
+    round: `Container.meter` is also read directly by `app/application.py`'s
+    `mrag.request.duration`/`mrag.request.errors` recording — engine-neutral,
+    unconditional on the selected `DocumentEngine` — so rejecting it under
+    LangGraph would silently disable metrics that actually work."""
+    reg = _fake_registry()
+    reg.register("meter", "fake-meter", lambda cfg: "a-meter")
+    manifest = _minimal_manifest(
+        engine=EngineSelection(adapter="langgraph"),
+        observability=ObservabilitySection(meter=ComponentConfig(type="fake-meter")),
+    )
+
+    container = reg.wire(manifest)
+
+    assert container.meter == "a-meter"
+
+
 def test_wire_rejects_a_wired_tenant_policy_with_enforcement_false() -> None:
     """Codex review finding (Lot 1, second pass): `validate_capabilities()`
     rejected this contradiction, but `ComponentRegistry.wire()` — a public

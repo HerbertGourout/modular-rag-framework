@@ -126,9 +126,31 @@
     },
     "ObservabilitySection": {
       "additionalProperties": false,
-      "description": "Telemetry component selected for runtime traces and metrics.",
+      "description": "Telemetry, tracing, and metrics components selected for runtime\nobservability.\n\n`telemetry` records a post-hoc `Trace`/`Metrics` summary after a run\ncompletes. `tracer` (ADR-0012) creates live OpenTelemetry-compatible\nspans as a run executes. `meter` (ADR-0013) records live operational\ncounters/histograms/gauges as a run executes \u2014 three deliberately\nseparate, all-optional mechanisms; a pipeline may configure any\ncombination, including none.",
       "properties": {
         "telemetry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ComponentConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tracer": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ComponentConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "meter": {
           "anyOf": [
             {
               "$ref": "#/$defs/ComponentConfig"

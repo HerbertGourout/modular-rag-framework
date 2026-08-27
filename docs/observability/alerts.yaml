@@ -35,19 +35,41 @@ groups:
             Protects the request-success-rate SLO (docs/observability/slo.md).
           runbook_url: "docs/observability/runbooks.md#mrag-high-error-rate"
 
-      - alert: MRAGHighP95Latency
+      # Split into two operation-specific rules (Codex review pass 1,
+      # MEDIUM-002): a single 5000ms threshold applied to both `answer` and
+      # `retrieve` via `by (operation)` didn't match slo.md's own stated
+      # targets (answer: 5s p95, retrieve: 1s p95) -- `retrieve` could run 4x
+      # over its actual SLO without ever paging.
+      - alert: MRAGHighP95LatencyAnswer
         expr: >
-          histogram_quantile(0.95, sum(rate(mrag_request_duration_ms_bucket[5m])) by (le, operation))
+          histogram_quantile(0.95, sum(rate(mrag_request_duration_ms_bucket{operation="answer"}[5m])) by (le))
           > 5000
         for: 10m
         labels:
           severity: warning
+          operation: answer
           runbook: mrag-high-latency
         annotations:
-          summary: "p95 latency for {{ $labels.operation }} exceeds 5s"
+          summary: "p95 latency for answer exceeds 5s"
           description: >
-            p95 request latency for operation={{ $labels.operation }} has been above 5000ms for
-            10 minutes. Protects the request-latency SLO (docs/observability/slo.md).
+            p95 request latency for operation=answer has been above 5000ms for 10 minutes.
+            Protects the request-latency SLO (docs/observability/slo.md).
+          runbook_url: "docs/observability/runbooks.md#mrag-high-latency"
+
+      - alert: MRAGHighP95LatencyRetrieve
+        expr: >
+          histogram_quantile(0.95, sum(rate(mrag_request_duration_ms_bucket{operation="retrieve"}[5m])) by (le))
+          > 1000
+        for: 10m
+        labels:
+          severity: warning
+          operation: retrieve
+          runbook: mrag-high-latency
+        annotations:
+          summary: "p95 latency for retrieve exceeds 1s"
+          description: >
+            p95 request latency for operation=retrieve has been above 1000ms for 10 minutes.
+            Protects the request-latency SLO (docs/observability/slo.md).
           runbook_url: "docs/observability/runbooks.md#mrag-high-latency"
 
   - name: mrag-retrieval-health
@@ -87,7 +109,13 @@ groups:
   - name: mrag-cost-and-governance
     rules:
       - alert: MRAGCostBudgetExceeded
-        expr: sum(rate(mrag_generation_cost_usd_total[1h])) * 24 > 100
+        # `rate(...[1h])` is a per-*second* average rate (PromQL semantics),
+        # not a per-hour one -- projecting it to a full day means multiplying
+        # by 86400 (seconds/day), not 24 (a prior version used `* 24`, a
+        # 3600x under-count: at this $100/day threshold it would only have
+        # fired near $360,000/day of actual spend). Codex review pass 1,
+        # HIGH-004.
+        expr: sum(rate(mrag_generation_cost_usd_total[1h])) * 86400 > 100
         for: 15m
         labels:
           severity: warning

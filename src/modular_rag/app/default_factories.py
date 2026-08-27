@@ -7,6 +7,7 @@ from modular_rag.orchestration.registry import ComponentRegistry
 
 if TYPE_CHECKING:
     from modular_rag.adapters.audit.postgres_sink import PostgresAuditSink
+    from modular_rag.adapters.observability.otel_meter import OtelMeter
     from modular_rag.adapters.observability.otel_tracing import OtelTracer
     from modular_rag.contracts.manifests import ComponentConfig
     from modular_rag.retrieval.retrievers.hybrid import HybridRetriever
@@ -96,6 +97,14 @@ def _build_otel_tracer(cfg: ComponentConfig) -> OtelTracer:
     return OtelTracer(**cfg.config)
 
 
+def _build_otel_meter(cfg: ComponentConfig) -> OtelMeter:
+    """ADR-0013 — same lazy-import-the-adapter-itself pattern as
+    `_build_otel_tracer` above."""
+    from modular_rag.adapters.observability.otel_meter import OtelMeter
+
+    return OtelMeter(**cfg.config)
+
+
 def _build_postgres_audit_sink(cfg: ComponentConfig) -> PostgresAuditSink:
     """Codex review, remaining-risks item (post-implementation, ADR-0011):
     a plain `lambda cfg: PostgresAuditSink(**cfg.config)` would forward
@@ -132,7 +141,12 @@ def register_defaults(reg: ComponentRegistry) -> None:
     from modular_rag.ingestion.chunkers.adaptive import AdaptiveChunker
     from modular_rag.ingestion.chunkers.fixed import FixedSizeChunker
     from modular_rag.ingestion.lifecycle.in_memory_ledger import InMemoryLifecycleLedger
-    from modular_rag.observability import NullTelemetry, NullTracer, StructlogTelemetry
+    from modular_rag.observability import (
+        NullMeter,
+        NullTelemetry,
+        NullTracer,
+        StructlogTelemetry,
+    )
     from modular_rag.retrieval.rerankers.cross_encoder import CrossEncoderReranker
     from modular_rag.retrieval.retrievers.vector import VectorRetriever
     from modular_rag.security.audit.store import InMemoryAuditSink
@@ -172,6 +186,8 @@ def register_defaults(reg: ComponentRegistry) -> None:
     reg.register("telemetry", "null", lambda cfg: NullTelemetry())
     reg.register("tracer", "otel", _build_otel_tracer)
     reg.register("tracer", "null", lambda cfg: NullTracer())
+    reg.register("meter", "otel", _build_otel_meter)
+    reg.register("meter", "null", lambda cfg: NullMeter())
     reg.register("lifecycle_ledger", "in-memory", lambda cfg: InMemoryLifecycleLedger())
     reg.register(
         "lifecycle_ledger", "postgres", lambda cfg: PostgresLifecycleLedger(**cfg.config)

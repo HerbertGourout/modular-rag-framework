@@ -74,4 +74,32 @@ class NullTracer:
         return NullSpan()
 
 
-__all__ = ["StructlogTelemetry", "NullTelemetry", "NullSpan", "NullTracer"]
+class NullMeter:
+    """No-op meter (ADR-0013) for testing and for explicitly disabling
+    metrics (`observability.meter.type: null` — symmetrical with
+    `telemetry`'s `NullTelemetry` and `tracer`'s `NullTracer`)."""
+
+    def name(self) -> str:
+        return "null"
+
+    def counter(
+        self, name: str, value: int | float = 1, attributes: dict[str, AttributeValue] | None = None
+    ) -> None:
+        pass
+
+    def histogram(
+        self, name: str, value: float, attributes: dict[str, AttributeValue] | None = None
+    ) -> None:
+        pass
+
+    def gauge(self, name: str, value: float, attributes: dict[str, AttributeValue] | None = None) -> None:
+        pass
+
+
+__all__ = [
+    "StructlogTelemetry",
+    "NullTelemetry",
+    "NullSpan",
+    "NullTracer",
+    "NullMeter",
+]
