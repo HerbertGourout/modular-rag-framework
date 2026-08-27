@@ -72,12 +72,40 @@ class IndexReconciler:
                     )
                 )
 
-        return ReconciliationReport(
+        report = ReconciliationReport(
             documents_checked=len(active_records),
             divergences=divergences,
             orphaned_in_vector=sorted(vector_ids - all_expected),
             orphaned_in_lexical=sorted(lexical_ids - all_expected),
         )
+        if self._c.meter:
+            # ADR-0013 ("index discrepancy"): one gauge per divergence type, each a
+            # small, fixed set of four category names, never per-chunk-id labels —
+            # a chunk id would be exactly the unbounded-cardinality mistake
+            # OtelMeter's own sanitizer exists to catch.
+            missing_in_vector_count = sum(len(d.missing_in_vector) for d in divergences)
+            missing_in_lexical_count = sum(len(d.missing_in_lexical) for d in divergences)
+            self._c.meter.gauge(
+                "mrag.reconciliation.divergences",
+                missing_in_vector_count,
+                attributes={"type": "missing_in_vector"},
+            )
+            self._c.meter.gauge(
+                "mrag.reconciliation.divergences",
+                missing_in_lexical_count,
+                attributes={"type": "missing_in_lexical"},
+            )
+            self._c.meter.gauge(
+                "mrag.reconciliation.divergences",
+                len(report.orphaned_in_vector),
+                attributes={"type": "orphaned_in_vector"},
+            )
+            self._c.meter.gauge(
+                "mrag.reconciliation.divergences",
+                len(report.orphaned_in_lexical),
+                attributes={"type": "orphaned_in_lexical"},
+            )
+        return report
 
     def repair(self, report: ReconciliationReport) -> RepairResult:
         """Repair what's safely repairable: orphaned ids (present in a store,

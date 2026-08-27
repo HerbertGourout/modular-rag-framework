@@ -103,6 +103,38 @@ def test_trace_step_records_token_usage_and_model():
     assert steps[0].latency_ms >= 0
 
 
+def test_trace_step_records_cost_usd_for_the_default_priced_model():
+    """Lot 12 (external plan — "Metrics, Dashboards, and SLO"): the
+    generator's own default model (`claude-opus-4-7`, this file's `_generate`
+    helper's implicit default via `AnthropicGenerator()`) is the one Claude
+    model `core.pricing` actually has a price for — see that module's own
+    docstring on why."""
+    from modular_rag.core.pricing import estimate_cost_usd
+
+    generator = AnthropicGenerator()  # default model: claude-opus-4-7
+    generator._client = _fake_client()
+
+    _, trace, _ = _generate(generator, ["some context"])
+
+    steps = [s for s in trace.steps if s.name == "anthropic_generate"]
+    expected = estimate_cost_usd("claude-opus-4-7", 21, 43)
+    assert steps[0].metadata["cost_usd"] == expected
+    assert expected is not None and expected > 0
+
+
+def test_trace_step_omits_cost_usd_for_an_unpriced_model():
+    """`claude-sonnet-5` (used elsewhere in this file) isn't in
+    `core.pricing`'s table -- the field must be absent, never fabricated
+    as 0.0."""
+    generator = AnthropicGenerator(model="claude-sonnet-5")
+    generator._client = _fake_client()
+
+    _, trace, _ = _generate(generator, ["some context"])
+
+    steps = [s for s in trace.steps if s.name == "anthropic_generate"]
+    assert "cost_usd" not in steps[0].metadata
+
+
 def test_prompt_contains_numbered_sources_and_question():
     generator = AnthropicGenerator()
     client = _fake_client()

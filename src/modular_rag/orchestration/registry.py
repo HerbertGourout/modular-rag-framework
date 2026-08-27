@@ -92,22 +92,26 @@ def runtime_manifest_errors(manifest: PipelineManifest) -> list[str]:
             ),
         }
         # ADR-0012 correction (Codex review, pass 1, HIGH-001): `observability.tracer`
-        # deliberately does NOT go in the `unsupported` dict above. Unlike `telemetry`/
-        # `audit_sink`/`policy_engine`/`review_queue` (read only from inside
+        # (and, per ADR-0013, `observability.meter` for the identical reason) deliberately
+        # does NOT go in the `unsupported` dict above. Unlike `telemetry`/`audit_sink`/
+        # `policy_engine`/`review_queue` (read only from inside
         # `RAGEngine._run_steps()`/`_run()`, never reached at all under
-        # `engine.adapter='langgraph'`), `Container.tracer` is also read directly by
-        # `app/application.py::ApplicationService.answer()`/`retrieve()` (the
-        # `"app.request"` span) and `api/__init__.py` (the `"api.answer"`/
-        # `"api.retrieve"` spans) — both engine-neutral boundaries that run
-        # identically regardless of which `DocumentEngine` is selected. A LangGraph
-        # manifest with `observability.tracer` configured does NOT silently ignore
-        # it (ADR-0008's actual concern): those two layers' spans are created exactly
-        # as documented. Only `RAGEngine`-internal spans (`rag.answer`,
-        # `rag.guard_query`, ...) are unavailable under LangGraph, because
-        # `LangGraphEngineAdapter` never calls into `RAGEngine` at all — that is a
-        # real, narrower, and already-documented scope boundary (ADR-0012's own
-        # "LangGraphEngineAdapter internal step instrumentation" out-of-scope note),
-        # not a case of a declared control being ignored.
+        # `engine.adapter='langgraph'`), `Container.tracer`/`Container.meter` are also
+        # read directly by `app/application.py::ApplicationService.answer()`/`retrieve()`
+        # (the `"app.request"` span, plus — per ADR-0013 — the `mrag.request.duration_ms`/
+        # `mrag.request.errors` metrics recorded at that same boundary) and `api/__init__.py`
+        # (the `"api.answer"`/`"api.retrieve"` spans) — both engine-neutral boundaries that
+        # run identically regardless of which `DocumentEngine` is selected. A LangGraph
+        # manifest with `observability.tracer`/`observability.meter` configured does NOT
+        # silently ignore either (ADR-0008's actual concern): those two layers' spans and
+        # request-level metrics are created exactly as documented. Only `RAGEngine`-internal
+        # spans (`rag.answer`, `rag.guard_query`, ...) and pipeline-stage metrics
+        # (`mrag.guard.rejections`, `mrag.generation.tokens`, ...) are unavailable under
+        # LangGraph, because `LangGraphEngineAdapter` never calls into `RAGEngine` at all —
+        # that is a real, narrower, and already-documented scope boundary (ADR-0012's own
+        # "LangGraphEngineAdapter internal step instrumentation" out-of-scope note, extended
+        # by ADR-0013 to cover the equivalent pipeline-stage metrics), not a case of a
+        # declared control being ignored.
         for path, value in unsupported.items():
             if value is not None:
                 errors.append(
@@ -136,6 +140,7 @@ class ComponentRegistry:
             "audit_sink": {},
             "telemetry": {},
             "tracer": {},
+            "meter": {},
             "lifecycle_ledger": {},
         }
 
@@ -195,6 +200,10 @@ class ComponentRegistry:
         if manifest.observability and manifest.observability.tracer:
             container.register(
                 "tracer", self._build("tracer", manifest.observability.tracer)
+            )
+        if manifest.observability and manifest.observability.meter:
+            container.register(
+                "meter", self._build("meter", manifest.observability.meter)
             )
         if manifest.lifecycle and manifest.lifecycle.ledger:
             container.register(

@@ -71,8 +71,29 @@ class _RetrieverWithoutListIds:
         return "minimal-retriever"
 
 
+class _RecordingMeter:
+    """ADR-0013 — records every gauge() call, mirroring
+    `tests/unit/orchestration/test_engine.py`'s own fake (not imported
+    directly to keep this file's fixtures self-contained)."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, float, dict]] = []
+
+    def counter(self, name: str, value: float = 1, attributes: dict | None = None) -> None:
+        pass
+
+    def histogram(self, name: str, value: float, attributes: dict | None = None) -> None:
+        pass
+
+    def gauge(self, name: str, value: float, attributes: dict | None = None) -> None:
+        self.calls.append((name, value, attributes or {}))
+
+    def name(self) -> str:
+        return "recording-meter"
+
+
 def _container(
-    indexer: _FakeIndexer, retriever, lifecycle_ledger=None  # type: ignore[no-untyped-def]
+    indexer: _FakeIndexer, retriever, lifecycle_ledger=None, meter=None  # type: ignore[no-untyped-def]
 ) -> Container:
     manifest = PipelineManifest(
         id="reconciliation-test",
@@ -90,6 +111,8 @@ def _container(
     container.register("generator", object())
     if lifecycle_ledger is not None:
         container.register("lifecycle_ledger", lifecycle_ledger)
+    if meter is not None:
+        container.register("meter", meter)
     return container
 
 
@@ -262,3 +285,83 @@ def test_repair_skips_lexical_deletion_when_retriever_cannot_delete() -> None:
 
     assert result.removed_orphans_in_vector == ["orphan-vector"]
     assert result.removed_orphans_in_lexical == []
+
+
+# ---------------------------------------------------------------------------
+# ADR-0013 ("index discrepancy"): `check()` emits one gauge per divergence
+# type, always the same fixed four-value `type` label set — never a
+# per-chunk-id label, which would be exactly the unbounded-cardinality
+# mistake the "No unbounded cardinality" acceptance criterion forbids.
+# ---------------------------------------------------------------------------
+
+
+def test_check_with_no_meter_configured_does_not_raise() -> None:
+    ledger = InMemoryLifecycleLedger()
+    ledger.record_ingested("doc-1", "acme-corp", "hash-a", ["c1"])
+    reconciler = IndexReconciler(
+        _container(_FakeIndexer(ids=["c1"]), _FakeRetriever(ids=["c1"]), ledger)
+    )
+
+    reconciler.check()
+
+
+def test_check_emits_zero_valued_gauges_for_all_four_types_when_clean() -> None:
+    ledger = InMemoryLifecycleLedger()
+    ledger.record_ingested("doc-1", "acme-corp", "hash-a", ["c1"])
+    meter = _RecordingMeter()
+    reconciler = IndexReconciler(
+        _container(_FakeIndexer(ids=["c1"]), _FakeRetriever(ids=["c1"]), ledger, meter)
+    )
+
+    reconciler.check()
+
+    by_type = {c[2]["type"]: c[1] for c in meter.calls}
+    assert by_type == {
+        "missing_in_vector": 0,
+        "missing_in_lexical": 0,
+        "orphaned_in_vector": 0,
+        "orphaned_in_lexical": 0,
+    }
+
+
+def test_check_emits_the_real_counts_for_each_divergence_type() -> None:
+    ledger = InMemoryLifecycleLedger()
+    ledger.record_ingested("doc-1", "acme-corp", "hash-a", ["c1", "c2"])
+    # c1: missing from vector. c2: missing from lexical. "orphan-v"/"orphan-l":
+    # present in a store but expected by no active document.
+    indexer = _FakeIndexer(ids=["c2", "orphan-v"])
+    retriever = _FakeRetriever(ids=["c1", "orphan-l"])
+    meter = _RecordingMeter()
+    reconciler = IndexReconciler(_container(indexer, retriever, ledger, meter))
+
+    reconciler.check()
+
+    by_type = {c[2]["type"]: c[1] for c in meter.calls}
+    assert by_type == {
+        "missing_in_vector": 1,
+        "missing_in_lexical": 1,
+        "orphaned_in_vector": 1,
+        "orphaned_in_lexical": 1,
+    }
+
+
+def test_check_never_emits_a_chunk_id_as_a_label_value() -> None:
+    """The concrete cardinality-safety check: no gauge call's attributes
+    ever contain a chunk id anywhere, only the bounded `type` category."""
+    ledger = InMemoryLifecycleLedger()
+    ledger.record_ingested("doc-1", "acme-corp", "hash-a", ["c1", "c2"])
+    indexer = _FakeIndexer(ids=["orphan-v"])
+    retriever = _FakeRetriever(ids=["orphan-l"])
+    meter = _RecordingMeter()
+    reconciler = IndexReconciler(_container(indexer, retriever, ledger, meter))
+
+    reconciler.check()
+
+    for _name, _value, attributes in meter.calls:
+        assert set(attributes) == {"type"}
+        assert attributes["type"] in {
+            "missing_in_vector",
+            "missing_in_lexical",
+            "orphaned_in_vector",
+            "orphaned_in_lexical",
+        }

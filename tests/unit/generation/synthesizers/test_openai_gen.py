@@ -105,6 +105,36 @@ def test_trace_step_records_token_usage_and_model():
     assert steps[0].latency_ms >= 0
 
 
+def test_trace_step_records_cost_usd_for_a_priced_model():
+    """Lot 12 (external plan — "Metrics, Dashboards, and SLO"): cost is
+    computed from `core.pricing.estimate_cost_usd()` and attached to the
+    same TraceStep metadata the tokens/model already live in — this is what
+    `orchestration/engine.py` reads to emit `mrag.generation.cost_usd`."""
+    from modular_rag.core.pricing import estimate_cost_usd
+
+    generator = OpenAIGenerator(model="gpt-4o-mini")
+    generator._client = _fake_client()
+
+    _, trace, _ = _generate(generator, ["some context"])
+
+    steps = [s for s in trace.steps if s.name == "openai_generate"]
+    expected = estimate_cost_usd("gpt-4o-mini", 12, 34)
+    assert steps[0].metadata["cost_usd"] == expected
+    assert expected is not None and expected > 0
+
+
+def test_trace_step_omits_cost_usd_for_an_unpriced_model():
+    """Never fabricate a cost for a model `core.pricing` doesn't recognize —
+    the field is absent entirely, not set to 0.0."""
+    generator = OpenAIGenerator(model="some-future-model-not-in-the-price-table")
+    generator._client = _fake_client()
+
+    _, trace, _ = _generate(generator, ["some context"])
+
+    steps = [s for s in trace.steps if s.name == "openai_generate"]
+    assert "cost_usd" not in steps[0].metadata
+
+
 def test_prompt_contains_numbered_sources_and_question():
     generator = OpenAIGenerator()
     client = _fake_client()

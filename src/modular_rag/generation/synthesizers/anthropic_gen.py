@@ -11,6 +11,7 @@ from modular_rag.core.models.health import DependencyHealth
 from modular_rag.core.models.query import Query
 from modular_rag.core.models.retrieved import RetrievedChunk
 from modular_rag.core.models.trace import Trace, TraceStep
+from modular_rag.core.pricing import estimate_cost_usd
 from modular_rag.generation.citations.builder import build_citations
 from modular_rag.generation.validators.groundedness import GroundednessValidator
 
@@ -109,13 +110,19 @@ class AnthropicGenerator:
             ],
         )
         latency_ms = (time.perf_counter() - t0) * 1000
+        metadata: dict[str, object] = {"model": self.model}
+        cost_usd = estimate_cost_usd(
+            self.model, response.usage.input_tokens, response.usage.output_tokens
+        )
+        if cost_usd is not None:
+            metadata["cost_usd"] = cost_usd
         trace.add_step(
             TraceStep(
                 name="anthropic_generate",
                 input_tokens=response.usage.input_tokens,
                 output_tokens=response.usage.output_tokens,
                 latency_ms=latency_ms,
-                metadata={"model": self.model},
+                metadata=metadata,
             )
         )
         text = response.content[0].text

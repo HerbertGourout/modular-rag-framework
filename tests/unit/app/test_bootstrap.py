@@ -208,6 +208,28 @@ def test_load_application_with_langgraph_and_a_tracer_wires_successfully(
     assert isinstance(application.tracer, OtelTracer)
 
 
+def test_load_application_with_langgraph_and_a_meter_wires_successfully(
+    tmp_path: Path,
+) -> None:
+    """ADR-0013, following ADR-0012's own precedent exactly (see the
+    tracer/langgraph test above) — loads a real manifest through the real
+    default registry to prove `observability.meter` is accepted under
+    `engine.adapter='langgraph'` and reaches the application facade."""
+    from modular_rag.adapters.observability.otel_meter import OtelMeter
+
+    manifest_file = tmp_path / "manifest.yaml"
+    manifest_file.write_text(
+        _MINIMAL_MANIFEST + "engine:\n  adapter: langgraph\n"
+        "observability:\n  meter:\n    type: otel\n    config: {}\n",
+        encoding="utf-8",
+    )
+
+    application = load_application(manifest_file)
+
+    assert application.meter is not None
+    assert isinstance(application.meter, OtelMeter)
+
+
 def test_load_engine_raises_on_an_unknown_adapter_name(tmp_path: Path) -> None:
     manifest_file = tmp_path / "manifest.yaml"
     manifest_file.write_text(

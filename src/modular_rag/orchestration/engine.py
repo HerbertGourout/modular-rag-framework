@@ -12,6 +12,7 @@ from modular_rag.contracts.audit import AuditEvent, AuditEventType
 from modular_rag.contracts.chunking import Chunker
 from modular_rag.contracts.erasure import ErasureProof
 from modular_rag.contracts.lifecycle import DocumentStatus
+from modular_rag.contracts.meter import Meter
 from modular_rag.contracts.reconciliation import ReconciliationReport, RepairResult
 from modular_rag.contracts.retrieval import Retriever
 from modular_rag.contracts.review import ReviewItem
@@ -68,6 +69,14 @@ class RAGEngine:
         `retriever` above, so `app/application.py` can attach its own root
         span without reaching into the private `_c` container."""
         return self._c.tracer
+
+    @property
+    def meter(self) -> Meter | None:
+        """Public accessor for the wired meter (ADR-0013), `None` when none
+        is configured — same "public accessor" pattern as `tracer` above, so
+        `app/application.py` can record its own request-level metrics
+        without reaching into the private `_c` container."""
+        return self._c.meter
 
     def _span(self, name: str, attributes: dict[str, Any] | None = None) -> AbstractContextManager[Span | None]:
         """Start a span if a tracer is configured (ADR-0012), otherwise a
@@ -134,6 +143,8 @@ class RAGEngine:
         """
         ledger = self._c.lifecycle_ledger
         total = 0
+        if self._c.meter:
+            self._c.meter.counter("mrag.ingest.documents", len(documents))
         with self._span("rag.ingest", {"document_count": len(documents)}) as ingest_span:
             for doc in documents:
                 key = document_key(doc.source, doc.tenant_id) if ledger else None
@@ -287,6 +298,7 @@ class RAGEngine:
             # indexing" — checked before any embedding/indexing work starts, not after.
             for chunk in chunks:
                 self._c.tenant_policy.enforce_ingest(chunk.tenant_id)
+        ingest_t0 = time.perf_counter()
         with self._span(
             "rag.embed", {"chunk_count": len(chunks), "provider": self._c.embedder.name()}
         ) as embed_span:
@@ -354,7 +366,14 @@ class RAGEngine:
                     chunk_ids=[c.id for c in chunks],
                     error=str(exc),
                 )
+                if self._c.meter:
+                    self._c.meter.counter("mrag.ingest.errors", attributes={"error_type": type(exc).__name__})
                 raise
+        if self._c.meter:
+            self._c.meter.counter("mrag.ingest.chunks", len(chunks))
+            self._c.meter.histogram(
+                "mrag.ingest.duration_ms", (time.perf_counter() - ingest_t0) * 1000
+            )
         log.info("engine.ingested", chunks=len(chunks))
         return len(chunks)
 
@@ -398,7 +417,19 @@ class RAGEngine:
         trace = Trace(query_id=query.id, pipeline_id=self._c.manifest.id)
         with self._span("rag.retrieve", {"provider": self._c.retriever.name(), "k": k}) as span:
             t0 = time.perf_counter()
-            chunks = self._retrieve(query, k)
+            try:
+                chunks = self._retrieve(query, k)
+            except Exception as exc:
+                # `mrag.request.errors` is deliberately NOT emitted here --
+                # `ApplicationService.retrieve()` (the standard CLI/API entry
+                # point, which calls straight into this method) already emits
+                # it once per request. Emitting it here too would double-count
+                # every failure that reaches this method through that path --
+                # see `ApplicationService.meter`'s own docstring for why
+                # request-level RED metrics live at that layer only.
+                if span is not None:
+                    span.record_error(type(exc).__name__)
+                raise
             if self._c.tenant_policy:
                 chunks = self._c.tenant_policy.filter_chunks(query.tenant_id, chunks)  # type: ignore[arg-type]
             trace.add_step(
@@ -411,6 +442,12 @@ class RAGEngine:
             if span is not None:
                 span.set_attribute("chunks_returned", len(chunks))
                 span.set_attribute("rag.trace_id", trace.id)
+            if self._c.meter:
+                if not chunks:
+                    self._c.meter.counter("mrag.retrieve.empty", attributes={"operation": "retrieve"})
+                degraded_sources = getattr(self._c.retriever, "last_degraded_sources", None)
+                for source in degraded_sources or []:
+                    self._c.meter.counter("mrag.retrieve.degraded", attributes={"source": source})
         return RetrievalResult(chunks=chunks, trace_id=trace.id)
 
     # -- internal pipeline --
@@ -522,6 +559,8 @@ class RAGEngine:
                 TraceStep(name="guard_query", latency_ms=(time.perf_counter() - t0) * 1000)
             )
             if not result.allowed:
+                if self._c.meter:
+                    self._c.meter.counter("mrag.guard.rejections", attributes={"stage": "query"})
                 self._audit(
                     query,
                     trace,
@@ -544,6 +583,9 @@ class RAGEngine:
         if degraded_sources:
             retrieve_metadata["degraded_sources"] = list(degraded_sources)
         trace.add_step(TraceStep(name="retrieve", metadata=retrieve_metadata))
+        if self._c.meter:
+            for source in degraded_sources or []:
+                self._c.meter.counter("mrag.retrieve.degraded", attributes={"source": source})
 
         # 2b. tenant isolation — filter retrieved context (Lot 11b). `query.tenant_id`
         # is guaranteed set here: step 0 already denied the run otherwise.
@@ -571,6 +613,17 @@ class RAGEngine:
                     span.set_attribute("chunks_returned", len(context))
             trace.add_step(TraceStep(name="rerank", latency_ms=(time.perf_counter() - t0) * 1000))
 
+        # Codex review pass 1 (MEDIUM-001): `mrag.retrieve.empty` used to be
+        # emitted right after step 2's raw retrieval, before tenant filtering
+        # and reranking could still reduce `context` to zero -- a request
+        # whose only retrieved chunks belonged to another tenant (later
+        # zeroed out by `filter_chunks()`) was counted as "non-empty," even
+        # though the generator below ultimately receives no usable context.
+        # Moved here, after both steps, to match what `retrieve()`'s own
+        # standalone path already does correctly.
+        if self._c.meter and not context:
+            self._c.meter.counter("mrag.retrieve.empty", attributes={"operation": "answer"})
+
         # 4. generation
         # No wrapping TraceStep here on purpose (Lot 10, docs/refactoring-plan.md):
         # every registered Generator already calls `trace.add_step(...)` itself
@@ -586,16 +639,36 @@ class RAGEngine:
         sm.transition(PipelineState.GENERATING)
         with self._span("rag.generate", {"provider": self._c.generator.name()}) as span:
             ans = self._c.generator.generate(query, context, trace)
-            if span is not None and trace.steps:
+            if trace.steps:
                 # The generator just appended its own TraceStep (e.g.
                 # "openai_generate") — mirror its already-safe (non-PII)
-                # fields onto the span rather than recomputing them.
+                # fields onto the span/meter rather than recomputing them.
                 last_step = trace.steps[-1]
-                span.set_attribute("input_tokens", last_step.input_tokens)
-                span.set_attribute("output_tokens", last_step.output_tokens)
                 model = last_step.metadata.get("model")
-                if isinstance(model, str):
-                    span.set_attribute("model", model)
+                if span is not None:
+                    span.set_attribute("input_tokens", last_step.input_tokens)
+                    span.set_attribute("output_tokens", last_step.output_tokens)
+                    if isinstance(model, str):
+                        span.set_attribute("model", model)
+                if self._c.meter:
+                    model_attr: dict[str, str | int | float | bool] = (
+                        {"model": model} if isinstance(model, str) else {}
+                    )
+                    self._c.meter.counter(
+                        "mrag.generation.tokens",
+                        last_step.input_tokens,
+                        attributes={"direction": "input", **model_attr},
+                    )
+                    self._c.meter.counter(
+                        "mrag.generation.tokens",
+                        last_step.output_tokens,
+                        attributes={"direction": "output", **model_attr},
+                    )
+                    cost_usd = last_step.metadata.get("cost_usd")
+                    if isinstance(cost_usd, int | float):
+                        self._c.meter.counter(
+                            "mrag.generation.cost_usd", cost_usd, attributes=model_attr
+                        )
         ans = ans.model_copy(update={"trace_id": trace.id})
 
         # 5. security guard — answer
@@ -606,6 +679,8 @@ class RAGEngine:
                 if span is not None:
                     span.set_attribute("allowed", result.allowed)
             if not result.allowed:
+                if self._c.meter:
+                    self._c.meter.counter("mrag.guard.rejections", attributes={"stage": "answer"})
                 self._audit(
                     query,
                     trace,
@@ -636,6 +711,16 @@ class RAGEngine:
                     confidence=ans.confidence,
                 )
             )
+            if self._c.meter:
+                self._c.meter.counter("mrag.review.enqueued")
+                # `pending` is not part of the `ReviewQueue` Protocol (only
+                # `HumanReviewGate`, the one concrete implementer, has it) --
+                # duck-typed, not a Protocol change, per
+                # `.claude/rules/health-checks.md` rule 11's precedent for
+                # exactly this "optional, gauge-only convenience" situation.
+                pending = getattr(self._c.review_queue, "pending", None)
+                if pending is not None:
+                    self._c.meter.gauge("mrag.review.pending", len(pending))
             self._audit(
                 query,
                 trace,

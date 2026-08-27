@@ -11,10 +11,17 @@ from modular_rag.core.models.retrieved import RetrievedChunk
 class _Native:
     manifest_id = "test"
 
-    def __init__(self, *, tenant_policy_active: bool = False, tracer: Any | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        tenant_policy_active: bool = False,
+        tracer: Any | None = None,
+        meter: Any | None = None,
+    ) -> None:
         self.closed = False
         self.tenant_policy_active = tenant_policy_active
         self.tracer = tracer
+        self.meter = meter
         self.last_retrieve_question: str | None = None
         self.retrieve_error: Exception | None = None
 
@@ -31,6 +38,29 @@ class _Native:
         return RetrievalResult(
             chunks=[RetrievedChunk(chunk=chunk, score=0.9, rank=1)], trace_id=new_id()
         )
+
+
+class _RecordingMeter:
+    """ADR-0013 — records every counter()/histogram()/gauge() call, mirroring
+    `tests/unit/orchestration/test_engine.py`'s own fake."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str, float, dict]] = []
+
+    def counter(self, name: str, value: float = 1, attributes: dict | None = None) -> None:
+        self.calls.append(("counter", name, value, attributes or {}))
+
+    def histogram(self, name: str, value: float, attributes: dict | None = None) -> None:
+        self.calls.append(("histogram", name, value, attributes or {}))
+
+    def gauge(self, name: str, value: float, attributes: dict | None = None) -> None:
+        self.calls.append(("gauge", name, value, attributes or {}))
+
+    def name(self) -> str:
+        return "recording-meter"
+
+    def calls_named(self, metric_name: str) -> list[tuple[str, str, float, dict]]:
+        return [c for c in self.calls if c[1] == metric_name]
 
 
 class _Selected:
@@ -307,3 +337,76 @@ def test_retrieve_records_error_on_span_without_raw_exception_text() -> None:
     assert spans[0].status.status_code.name == "ERROR"
     assert spans[0].status.description == "RuntimeError"
     assert "hunter2" not in (spans[0].status.description or "")
+
+
+# ---------------------------------------------------------------------------
+# ADR-0013 (Lot 12, external plan): `mrag.request.duration_ms`/
+# `mrag.request.errors` are recorded here (ApplicationService), not inside
+# `RAGEngine._run()`/`.retrieve()` -- deliberately, so a native-engine
+# request is counted exactly once (not twice) and a LangGraph-routed request
+# (which never reaches `RAGEngine` at all) is still counted, since this
+# boundary is engine-neutral.
+# ---------------------------------------------------------------------------
+
+
+def test_answer_with_no_meter_configured_does_not_raise() -> None:
+    service = ApplicationService(_Native(), _Selected())  # type: ignore[arg-type]
+
+    service.answer("What is RAG?")
+
+
+def test_answer_emits_a_duration_histogram_with_operation_engine_and_status() -> None:
+    meter = _RecordingMeter()
+    service = ApplicationService(_Native(meter=meter), _Selected())  # type: ignore[arg-type]
+
+    service.answer("What is RAG?")
+
+    call = meter.calls_named("mrag.request.duration_ms")[0]
+    assert call[0] == "histogram"
+    assert call[3] == {"operation": "answer", "engine": "selected-engine", "status": "ok"}
+
+
+def test_answer_emits_an_errors_counter_with_status_error_and_no_duration_status_ok() -> None:
+    import pytest
+
+    meter = _RecordingMeter()
+    service = ApplicationService(_Native(meter=meter), _FailingSelected())  # type: ignore[arg-type]
+
+    with pytest.raises(RuntimeError):
+        service.answer("What is RAG?")
+
+    duration_call = meter.calls_named("mrag.request.duration_ms")[0]
+    assert duration_call[3]["status"] == "error"
+    error_call = meter.calls_named("mrag.request.errors")[0]
+    assert error_call[3] == {
+        "operation": "answer",
+        "engine": "selected-engine",
+        "error_type": "RuntimeError",
+    }
+
+
+def test_retrieve_emits_a_duration_histogram_with_native_engine_label() -> None:
+    meter = _RecordingMeter()
+    service = ApplicationService(_Native(meter=meter), _Selected())  # type: ignore[arg-type]
+
+    service.retrieve("What is RAG?")
+
+    call = meter.calls_named("mrag.request.duration_ms")[0]
+    assert call[3] == {"operation": "retrieve", "engine": "native", "status": "ok"}
+
+
+def test_retrieve_emits_an_errors_counter_on_failure() -> None:
+    import pytest
+
+    meter = _RecordingMeter()
+    native = _Native(meter=meter)
+    native.retrieve_error = RuntimeError("db password is hunter2")
+    service = ApplicationService(native, _Selected())  # type: ignore[arg-type]
+
+    with pytest.raises(RuntimeError):
+        service.retrieve("What is RAG?")
+
+    call = meter.calls_named("mrag.request.errors")[0]
+    assert call[3] == {"operation": "retrieve", "engine": "native", "error_type": "RuntimeError"}
+    # PII safety: the exception message itself must never reach a label value.
+    assert "hunter2" not in str(call[3])

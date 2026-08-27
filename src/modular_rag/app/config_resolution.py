@@ -161,6 +161,8 @@ def validate_capabilities(manifest: PipelineManifest, registry: ComponentRegistr
         # enforcement point.
     if manifest.observability:
         _check("telemetry", manifest.observability.telemetry)
+        _check("tracer", manifest.observability.tracer)
+        _check("meter", manifest.observability.meter)
     if manifest.lifecycle:
         _check("lifecycle_ledger", manifest.lifecycle.ledger)
     errors.extend(runtime_manifest_errors(manifest))
