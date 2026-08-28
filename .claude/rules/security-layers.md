@@ -106,7 +106,9 @@ speculatively.
 - **F** — Undefined names (missing imports, typos)
 - **I** — Import ordering (alphabetical, grouped by type)
 
-**When it runs**: After every Edit or Write tool call. Note: `matcher` matches the **tool name** (`Edit|Write`), not file paths — there is no native per-path hook filter. The hook therefore lints the entire `src/modular_rag/` + `tests/` tree on every Edit/Write regardless of which file changed.
+**When it runs**: After every Edit or Write tool call.
+
+Note: `matcher` matches the **tool name** (`Edit|Write`), not file paths — there is no native per-path hook filter. The hook therefore lints the entire `src/modular_rag/` + `tests/` tree on every Edit/Write regardless of which file changed.
 
 ### Reserved Validation Ideas (not in settings.json — backlog only)
 

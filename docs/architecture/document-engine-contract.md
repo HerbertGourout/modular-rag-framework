@@ -91,13 +91,15 @@ Beyond the contract-level proof, `LangGraphEngineAdapter`'s `_node_guard()` now 
 real: it reads `state["context"].governance_hook`, and — only when the adapter declares
 `GOVERNANCE_INTERCEPT` and a hook is actually present — calls `hook.check("generate", {"query":
 ...})`, blocking the run on a `decision.allowed=False` exactly as the conformance suite requires.
+
 This sits *alongside*, not instead of, that same node's direct `Container.guard.check_query()`
-call (the adapter's own inline comment is explicit about the distinction: the direct guard call
+call. The adapter's own inline comment is explicit about the distinction: the direct guard call
 must behave identically to `RAGEngine`/`NativeEngineAdapter`'s own `SecurityError` convention, an
 adapter-specific parity requirement from Lot 15; the port-level `GovernanceHook` is the separate,
-generic mechanism any `DocumentEngine` caller can rely on regardless of which adapter is
-selected). `NativeEngineAdapter` has no `GovernanceHook`-equivalent wiring to stay parallel with —
-its own governance path is `RAGEngine`'s direct calls into `Container.guard`/`policy_engine`/
+generic mechanism any `DocumentEngine` caller can rely on regardless of which adapter is selected.
+
+`NativeEngineAdapter` has no `GovernanceHook`-equivalent wiring to stay parallel with — its own
+governance path is `RAGEngine`'s direct calls into `Container.guard`/`policy_engine`/
 `tenant_policy`, which predate the `DocumentEngine` port entirely.
 
 ## Cancellation, concretely

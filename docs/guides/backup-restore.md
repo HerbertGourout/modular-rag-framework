@@ -1,18 +1,21 @@
 # Backup, Restore, and Rollback
 
 Lot 16c (`docs/refactoring-plan.md`) — the runbook Lots 12c and 14 deferred here explicitly:
-Lot 12c proved the lifecycle-ledger backup/restore *mechanism* with a genuine round-trip
-exercise but left production PostgreSQL/Qdrant-native tooling "documented, not reimplemented";
-Lot 14 left overload/soak evidence for this lot, "needs live load-testing infra." Both are
-addressed below with real, runnable commands. **Honesty note, read before relying on this
-document**: none of the Postgres/Qdrant/container commands below were executed against live
-infrastructure while writing this — the sandboxed environment this lot was written in has no
-`docker`, `psql`, `pg_dump`, or reachable Qdrant/Postgres instance (verified: `which docker
-psql pg_dump` all fail, `curl localhost:6333` and `localhost:5432` both refuse to connect). Every
-command is either (a) this framework's own tested Python-level API, or (b) Postgres'/Qdrant's own
-standard, publicly documented tooling used exactly as documented upstream — not invented syntax —
-but "documented correctly" is not the same claim as "executed here." The first time any team runs
-these for real, treat it as the actual verification exercise, and record what happened.
+- Lot 12c proved the lifecycle-ledger backup/restore *mechanism* with a genuine round-trip
+  exercise, but left production PostgreSQL/Qdrant-native tooling "documented, not reimplemented."
+- Lot 14 left overload/soak evidence for this lot: "needs live load-testing infra."
+
+Both are addressed below with real, runnable commands.
+
+**Honesty note, read before relying on this document**: none of the Postgres/Qdrant/container
+commands below were executed against live infrastructure while writing this. The sandboxed
+environment this lot was written in has no `docker`, `psql`, `pg_dump`, or reachable
+Qdrant/Postgres instance (verified: `which docker psql pg_dump` all fail, `curl localhost:6333`
+and `localhost:5432` both refuse to connect). Every command is either (a) this framework's own
+tested Python-level API, or (b) Postgres'/Qdrant's own standard, publicly documented tooling used
+exactly as documented upstream — not invented syntax. But "documented correctly" is not the same
+claim as "executed here." The first time any team runs these for real, treat it as the actual
+verification exercise, and record what happened.
 
 ---
 
@@ -50,15 +53,17 @@ restore_ledger(container.lifecycle_ledger, Path("ledger-backup.json").read_text(
 ```
 
 **Proven** (`tests/unit/ingestion/lifecycle/test_backup.py`, Lot 12c): a genuine fresh-instance
-round trip — records backed up from one `InMemoryLifecycleLedger`, restored into a brand-new
+round trip. Records backed up from one `InMemoryLifecycleLedger`, restored into a brand-new
 instance, verified identical including tombstoned records (a backup that silently dropped
-tombstone history would make right-to-erasure proof unverifiable after a restore). This
-mechanism is ledger-implementation-agnostic — it only calls `LifecycleLedger.export_all()`/
-`restore_record()` (`contracts/lifecycle.py`), so it works identically against
-`PostgresLifecycleLedger`. **Not separately proven against a live Postgres instance in this
-lot** — `tests/integration/test_postgres_lifecycle_ledger.py` covers the Postgres adapter's own
-CRUD correctness but requires live Postgres to run, which this sandboxed environment does not
-have.
+tombstone history would make right-to-erasure proof unverifiable after a restore).
+
+This mechanism is ledger-implementation-agnostic — it only calls
+`LifecycleLedger.export_all()`/`restore_record()` (`contracts/lifecycle.py`), so it works
+identically against `PostgresLifecycleLedger`.
+
+**Not separately proven against a live Postgres instance in this lot** —
+`tests/integration/test_postgres_lifecycle_ledger.py` covers the Postgres adapter's own CRUD
+correctness but requires live Postgres to run, which this sandboxed environment does not have.
 
 ### Postgres-native backup (`PostgresLifecycleLedger`, disaster-recovery grade)
 
@@ -158,17 +163,21 @@ curl -X PUT "http://localhost:6333/collections/enterprise_docs_sparse/snapshots/
 ```
 
 **Consistency with the dense collection and the ledger — read before relying on this**: the two
-Qdrant collections are independent stores with no shared transaction, so a snapshot of one taken
-at a different instant than the other (or than the ledger) can restore a state where a chunk id
-exists on one side with different content than the other — `IndexReconciler.check()` cannot
-detect this specific case (see its own docstring: it only compares *which ids are present*
-against the ledger's `chunk_ids`, never content or a version/hash, so two present-but-diverged
-copies of the same id look clean to it). Take both collections' snapshots as close together in
-time as practical, and treat any suspected content-level drift as a case for
-`rebuild_document()` (which re-indexes both sides from source, overwriting whatever was there)
-rather than trusting the reconciler to flag it. After restoring **either** collection, still run
-`IndexReconciler.check()` for the id-presence class of drift it *does* catch (orphaned/missing
-ids from the snapshot's point-in-time gap), then `rebuild_document()` for anything flagged.
+Qdrant collections are independent stores with no shared transaction. A snapshot of one taken at
+a different instant than the other (or than the ledger) can restore a state where a chunk id
+exists on one side with different content than the other.
+
+`IndexReconciler.check()` cannot detect this specific case — see its own docstring: it only
+compares *which ids are present* against the ledger's `chunk_ids`, never content or a
+version/hash, so two present-but-diverged copies of the same id look clean to it.
+
+Two practical consequences:
+- Take both collections' snapshots as close together in time as practical, and treat any
+  suspected content-level drift as a case for `rebuild_document()` (which re-indexes both sides
+  from source, overwriting whatever was there) rather than trusting the reconciler to flag it.
+- After restoring **either** collection, still run `IndexReconciler.check()` for the
+  id-presence class of drift it *does* catch (orphaned/missing ids from the snapshot's
+  point-in-time gap), then `rebuild_document()` for anything flagged.
 
 ---
 
@@ -226,10 +235,13 @@ fabricate numbers it cannot produce:
 python scripts/loadtest_answer.py --url http://localhost:8000 --concurrency 20 --requests 200
 ```
 
-What to look for once this is actually run: a 429 rate should climb as `--concurrency` exceeds
-`create_app()`'s configured `rate_limit_per_minute` (Lot 16a) — that is the rate limiter working
-as designed, not a failure. A genuine failure signature is 5xx responses or latency growing
-without bound as concurrency increases; either means the deployment's worker count, timeout
-settings (Lot 14's per-adapter `timeout` params), or `rate_limit_per_minute` need tuning before
-that deployment can be qualified for the tested load. This load test alone does not establish
-production readiness.
+What to look for once this is actually run:
+- A 429 rate should climb as `--concurrency` exceeds `create_app()`'s configured
+  `rate_limit_per_minute` (Lot 16a) — that is the rate limiter working as designed, not a
+  failure.
+- A genuine failure signature is 5xx responses, or latency growing without bound as concurrency
+  increases. Either means the deployment's worker count, timeout settings (Lot 14's per-adapter
+  `timeout` params), or `rate_limit_per_minute` need tuning before that deployment can be
+  qualified for the tested load.
+
+This load test alone does not establish production readiness.

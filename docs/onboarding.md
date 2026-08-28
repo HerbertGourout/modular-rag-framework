@@ -145,8 +145,9 @@ not yet delivered." That's no longer true: per [ADR-0005](adr/0005-document-ai-c
 (accepted 2026-08-04), the Policy Engine, fail-closed tenant isolation, and a structured audit
 trail are owned and shipped now (V2.0/Lot 10/Lot 11b-c), not deferred to V4. What genuinely
 remains undelivered per V4 is the *multi-environment* layering (dev/staging/prod overrides) and
-full regulatory/human-in-the-loop review workflows — see [ROADMAP.md](../ROADMAP.md). Still
-never present a capability as operational before checking its actual status here or in
+full regulatory/human-in-the-loop review workflows — see [ROADMAP.md](../ROADMAP.md).
+
+Still never present a capability as operational before checking its actual status here or in
 [docs/refactoring/README.md](refactoring/README.md) §5's honest "what's still open" list — this
 is exactly the kind of gap between documented promise and delivered code that the initial
 review of 2026-05-20 flagged as the project's #1 risk (see

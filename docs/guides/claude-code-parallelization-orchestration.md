@@ -8,11 +8,12 @@
 > `.claude/settings.json` has a working `"parallelization": {"enabled": true, ...}` key. It
 > doesn't — that file's own `notes.removedFromV1` field says explicitly this key is
 > **"narrative-only, never read by Claude Code"** and points back at this document as its home
-> as illustrative content, not configuration. Fixed in §11. Separately, per
-> [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md), the "V2+ multi-agent
-> orchestration" sections (§4, §10, §13 Example 3, §14) describe a *delegated* capability
-> (handed to the selected external engine via the `DocumentEngine` port), not a native build
-> this framework will implement itself — retained below as historical design intent, not a
+> as illustrative content, not configuration. Fixed in §11.
+>
+> Separately, per [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md), the "V2+
+> multi-agent orchestration" sections (§4, §10, §13 Example 3, §14) describe a *delegated*
+> capability (handed to the selected external engine via the `DocumentEngine` port), not a native
+> build this framework will implement itself — retained below as historical design intent, not a
 > roadmap commitment.
 
 ---
@@ -155,11 +156,11 @@ async def hybrid_retrieve(query: str):
 ### Implementation
 
 **File:** `src/modular_rag/retrieval/retrievers/hybrid.py` (the real, shipped file — corrected
-below; an earlier version of this example used a nonexistent path/module layout, a
-`RetrieverProtocol`/`SearchResult` naming that doesn't exist in this codebase — the real names
-are `Retriever`/`RetrievedChunk` — a `core.trace` import path instead of the real
-`core.models.trace`, and an `async def retrieve()` signature, when the real Protocol defines
-`retrieve()` and `aretrieve()` as two separate sync/async methods, not one async-only method)
+below). An earlier version of this example used a nonexistent path/module layout: a
+`RetrieverProtocol`/`SearchResult` naming that doesn't exist in this codebase (the real names are
+`Retriever`/`RetrievedChunk`), a `core.trace` import path instead of the real
+`core.models.trace`, and an `async def retrieve()` signature — when the real Protocol defines
+`retrieve()` and `aretrieve()` as two separate sync/async methods, not one async-only method.
 
 ```python
 from modular_rag.contracts.retrieval import Retriever

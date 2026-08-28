@@ -39,12 +39,14 @@ public and confidential content is classified `confidential`, not split).
 above — tenant-scoped retrieval (`TenantIsolationPolicy`), `PatternRedactor`, audit evidence
 (`AuditSink`), `HumanReviewGate` — are all real, shipped, and operational today (Lots 10, 11b,
 11c). What is **not** real is any code path that reads a document's `DataClassification` level and
-*automatically* turns the right controls on for you. Nothing in this codebase currently sets or
-consumes a per-document classification value at runtime — a manifest author must still choose to
-enable `governance.redactor`, `governance.tenant_policy`, etc. by hand, the same way regardless of
-what classification level a human might mentally assign the data. This table is the policy a
-deployment *should* follow, worked out level by level; it is not yet a policy the system enforces
-for you based on a classification field.
+*automatically* turns the right controls on for you.
+
+Nothing in this codebase currently sets or consumes a per-document classification value at
+runtime — a manifest author must still choose to enable `governance.redactor`,
+`governance.tenant_policy`, etc. by hand, the same way regardless of what classification level a
+human might mentally assign the data. This table is the policy a deployment *should* follow,
+worked out level by level; it is not yet a policy the system enforces for you based on a
+classification field.
 
 **Default when unclassified:** `restricted`, as a policy recommendation — an operator manually
 configuring a deployment should default to the `restricted` handling requirements when a

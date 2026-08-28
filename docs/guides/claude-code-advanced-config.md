@@ -43,7 +43,19 @@ Use subagents for:
 **Illustrative file**: `.claude/agents/code-reviewer.md` (not currently present in this project;
 the checked-in reviewer is `.claude/agents/architecture-reviewer.md`)
 
-> **Correction (2026-06-22, revised)**: an earlier pass through this doc over-corrected. Only `name` and `description` are required, but there are **15 real optional fields**, not "exactly four": `tools`, `disallowedTools`, `model`, `permissionMode`, `maxTurns`, `skills`, `mcpServers`, `hooks`, `memory`, `background`, `effort`, `isolation`, `color`, `initialPrompt`. What's genuinely **not** real: a `permissions` block with `allow`/`deny` path arrays (the real, much simpler equivalent is the `permissionMode` enum: `default`/`acceptEdits`/`auto`/`dontAsk`/`bypassPermissions`/`plan`), an `autoMemory` boolean (the real field is `memory: user|project|local`, see below), and `expertise_level`/`domain`/`instructions` (not recognized — put that content in the body). Also: `claude-opus-4-6` **is** a real model ID (just not the current latest, which is `claude-opus-4-8`) — an earlier note here wrongly called it fake.
+> **Correction (2026-06-22, revised)**: an earlier pass through this doc over-corrected.
+>
+> - Only `name` and `description` are required, but there are **15 real optional fields**, not
+>   "exactly four": `tools`, `disallowedTools`, `model`, `permissionMode`, `maxTurns`, `skills`,
+>   `mcpServers`, `hooks`, `memory`, `background`, `effort`, `isolation`, `color`,
+>   `initialPrompt`.
+> - What's genuinely **not** real: a `permissions` block with `allow`/`deny` path arrays (the
+>   real, much simpler equivalent is the `permissionMode` enum: `default`/`acceptEdits`/`auto`/
+>   `dontAsk`/`bypassPermissions`/`plan`), an `autoMemory` boolean (the real field is `memory:
+>   user|project|local`, see below), and `expertise_level`/`domain`/`instructions` (not
+>   recognized — put that content in the body).
+> - Also: `claude-opus-4-6` **is** a real model ID (just not the current latest, which is
+>   `claude-opus-4-8`) — an earlier note here wrongly called it fake.
 
 ```markdown
 ---

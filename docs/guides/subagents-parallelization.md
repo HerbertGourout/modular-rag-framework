@@ -1,12 +1,15 @@
 # Sub-Agents and Parallelization
 
-This guide explains how to use Claude Code's sub-agents to explore complex topics in parallel and isolate context — particularly useful for large tasks that have several independent dimensions.
+This guide explains how to use Claude Code's sub-agents to explore complex topics in parallel and
+isolate context — particularly useful for large tasks that have several independent dimensions.
 
 ---
 
 ## What Are Sub-Agents?
 
-**Sub-agents** are specialized Claude instances that run in parallel, each focused on a specific aspect of a larger problem. They work independently and return their findings to the main agent, which synthesizes results and makes decisions.
+**Sub-agents** are specialized Claude instances that run in parallel, each focused on a specific
+aspect of a larger problem. They work independently and return their findings to the main agent,
+which synthesizes results and makes decisions.
 
 **Why use them?**
 - Large monorepos are hard to understand in one go
@@ -22,23 +25,28 @@ This guide explains how to use Claude Code's sub-agents to explore complex topic
 
 ---
 
-**Important — read before the examples below**: every "Expected output" block in this guide is
-an illustrative *template* showing the shape a subagent's response might take, not a real,
-verified report about this codebase. Several of them contain specific claims that are simply
-false today — a `Chroma` vectorstore adapter that doesn't exist (only `QdrantStore` does), a
-`clear_cache()` method that isn't part of the real `Retriever` Protocol, chunkers named
-`RegexChunker` that were never built (the real ones are `FixedSizeChunker`/`AdaptiveChunker`).
-Treat the *structure* of these examples as the useful part (how to phrase a subagent prompt, how
-to organize the findings), not the specific facts inside them — those are corrected inline below
+**Important — read before the examples below**: every "Expected output" block in this guide is an
+illustrative *template* showing the shape a subagent's response might take, not a real, verified
+report about this codebase.
+
+Several of them contain specific claims that are simply false today:
+- A `Chroma` vectorstore adapter that doesn't exist (only `QdrantStore` does).
+- A `clear_cache()` method that isn't part of the real `Retriever` Protocol.
+- Chunkers named `RegexChunker` that were never built (the real ones are
+  `FixedSizeChunker`/`AdaptiveChunker`).
+
+Treat the *structure* of these examples as the useful part — how to phrase a subagent prompt, how
+to organize the findings — not the specific facts inside them. Those are corrected inline below
 only where the error is severe enough to actively mislead; the rest are left as placeholder-style
 illustrations by design, the same way a code example elsewhere might use `<name>` as a stand-in.
 
 Also distinct from the "4 sub-agent types" below: this project separately has **8 pre-configured,
 named domain-specialist subagents** (`@retrieval-specialist`, `@security-specialist`, etc. — see
-[.claude/AGENTS.md](../../.claude/AGENTS.md)). The two aren't the same feature — the types below
-are ad-hoc, task-scoped subagents you describe in a prompt each time; the 8 named ones are
-persistent personas with their own tool access already configured. Both are real Claude Code
-capabilities, used for different things.
+[.claude/AGENTS.md](../../.claude/AGENTS.md)). The two aren't the same feature:
+- The types below are ad-hoc, task-scoped subagents you describe in a prompt each time.
+- The 8 named ones are persistent personas with their own tool access already configured.
+
+Both are real Claude Code capabilities, used for different things.
 
 ## The 4 Sub-Agent Types
 

@@ -70,12 +70,16 @@ OpenTelemetry."
    flag duplicating that information: `OtelTracer(otlp_endpoint=None)` (the default) creates
    real spans — so every attribute-setting/error-recording code path is still exercised
    uniformly in every environment — but attaches no span processor that talks to a network
-   endpoint, so nothing is ever transmitted. Setting `otlp_endpoint` attaches a
+   endpoint, so nothing is ever transmitted.
+
+   Setting `otlp_endpoint` attaches a
    `BatchSpanProcessor(OTLPSpanExporter(...))`; OpenTelemetry's own `BatchSpanProcessor`
    exports asynchronously on a background thread and swallows/logs export failures
    internally rather than propagating them to instrumented application code — this is the
    mechanism satisfying "no functional impact if the exporter is unavailable," not new code
-   this adapter has to build itself. A dedicated `OtelTracer.for_testing()` constructor wires
+   this adapter has to build itself.
+
+   A dedicated `OtelTracer.for_testing()` constructor wires
    an in-process `InMemorySpanExporter` via a `SimpleSpanProcessor` (synchronous, so tests can
    assert on finished spans without a sleep/poll) instead of the OTLP path — this is the
    "test using an in-memory exporter" requirement.
@@ -115,14 +119,18 @@ OpenTelemetry."
    an earlier version of this decision rejected the combination, copying the
    `observability.telemetry`/`governance.audit_sink`/`governance.policy_engine`/
    `governance.review_queue` rejection pattern (`orchestration/registry.py::
-   runtime_manifest_errors()`) without checking whether it applied for the same reason. It does
+   runtime_manifest_errors()`) without checking whether it applied for the same reason.
+
+   It does
    not: `Container.tracer` is read directly by `app/application.py`'s `"app.request"` span and
    `api/__init__.py`'s `"api.answer"`/`"api.retrieve"` spans, both engine-neutral and
    unconditional on which `DocumentEngine` is selected — unlike `telemetry`/`audit_sink`/
    `policy_engine`/`review_queue`, which are read only from inside `RAGEngine`, never reached at
    all under `engine.adapter: "langgraph"`. ADR-0008's actual concern ("a selected engine must
    never silently ignore a declared control") does not apply: the declared tracer genuinely *is*
-   consulted, at those two engine-neutral boundaries. Only `RAGEngine`-internal spans (`rag.answer`,
+   consulted, at those two engine-neutral boundaries.
+
+   Only `RAGEngine`-internal spans (`rag.answer`,
    `rag.guard_query`, ...) are unavailable under LangGraph — a narrower, already-documented scope
    boundary (this ADR's own "LangGraphEngineAdapter internal step instrumentation" note below),
    not a case of a declared control being ignored.

@@ -4,12 +4,15 @@ Complete guide for IT teams deploying Claude Code at scale in organizations.
 
 > **Corrected 2026-08-06** (documentation-utility pass): none of this is configured in this
 > project — there is no MDM enrollment, Group Policy object, or `managed-settings.json` anywhere
-> in this repository or its infrastructure, and nothing here was verified against Claude Code's
-> actual enterprise-deployment behavior from this environment (no network access to confirm
-> field names like `forceLoginOrgUUID`, `policyHelper`, `requiredMaximumVersion`, or the
-> `/status`/`/doctor` command output shown below). Treat this file as unverified illustrative
-> material for a hypothetical future rollout, not a description of anything this project does
-> today. One concrete, cross-checked issue: "Policy 3" (`30-dev-team.json`) uses
+> in this repository or its infrastructure.
+>
+> Nothing here was verified against Claude Code's actual enterprise-deployment behavior from
+> this environment (no network access to confirm field names like `forceLoginOrgUUID`,
+> `policyHelper`, `requiredMaximumVersion`, or the `/status`/`/doctor` command output shown
+> below). Treat this file as unverified illustrative material for a hypothetical future rollout,
+> not a description of anything this project does today.
+>
+> One concrete, cross-checked issue: "Policy 3" (`30-dev-team.json`) uses
 > `allowedMcpServers`/`deniedMcpServers`/`allowManagedMcpServersOnly` — the same MCP field
 > vocabulary already flagged as unverified/likely-invented in
 > [claude-code-mcp-setup.md](claude-code-mcp-setup.md) and corrected in

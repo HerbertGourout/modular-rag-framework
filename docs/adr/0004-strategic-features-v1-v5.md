@@ -17,10 +17,12 @@ than becoming a dead link or an empty gap in the ADR series.
 since 2026-08-04, but the full document remained 666 lines describing 4 of its 8 features
 (Multi-Agent Teams, Knowledge Graphs, Fine-Tuning Loop, Multi-Language) as native builds that
 [ADR-0005](0005-document-ai-control-plane-boundary.md) (accepted the same day) redirected to
-"delegate via adapter." A superseded-but-still-fully-visible ADR of that length was judged more
-likely to be skimmed and misread than genuinely useful as an active reference — archiving it
-removes it from routine navigation (`docs/adr/_index.md`, `docs/architecture/overview.md`)
-while keeping the full text available, and Git history, for anyone doing historical research.
+"delegate via adapter."
+
+A superseded-but-still-fully-visible ADR of that length was judged more likely to be skimmed
+and misread than genuinely useful as an active reference — archiving it removes it from routine
+navigation (`docs/adr/_index.md`, `docs/architecture/overview.md`) while keeping the full text
+available, and Git history, for anyone doing historical research.
 
 **For current, active guidance on what's owned vs. delegated across V2-V5**, read
 [ADR-0005](0005-document-ai-control-plane-boundary.md) directly — it supersedes this one and is

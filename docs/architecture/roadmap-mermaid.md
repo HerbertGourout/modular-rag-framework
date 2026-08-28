@@ -145,11 +145,12 @@ diagram showed:** it does **not** produce a distinct "pending" response withheld
 caller. The real behavior (`RAGEngine._run_steps()`'s human-review step) generates the answer
 normally, then — if `review_queue.should_review(answer)` says yes — returns that *same* answer
 to the caller immediately, with `metadata["requires_review"] = True` set on it, while separately
-enqueuing a `ReviewItem` for a human reviewer and recording a `GUARD_DECISION` audit event. The
-requester is not blocked waiting on a human; the flagging is informational metadata on an answer
-they already received, plus an asynchronous review-queue entry. A caller that wants to actually
-withhold flagged answers from end users has to check `answer.metadata["requires_review"]` itself
-and decide what to do with that — this codebase doesn't withhold on your behalf.
+enqueuing a `ReviewItem` for a human reviewer and recording a `GUARD_DECISION` audit event.
+
+The requester is not blocked waiting on a human; the flagging is informational metadata on an
+answer they already received, plus an asynchronous review-queue entry. A caller that wants to
+actually withhold flagged answers from end users has to check `answer.metadata["requires_review"]`
+itself and decide what to do with that — this codebase doesn't withhold on your behalf.
 
 ```mermaid
 %%{init: {"theme": "base"}}%%

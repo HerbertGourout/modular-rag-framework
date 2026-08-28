@@ -31,7 +31,9 @@ does not currently implement planning, tool use, query decomposition or collabor
 those behaviours remain delegated targets under ADR-0005.
 
 `adapters/auth/` contains the real `KeycloakTokenVerifier`. `adapters/graphstores/` and
-`adapters/search/` remain empty extension targets. The former `app/settings.py` and native graph
+`adapters/search/` remain empty extension targets.
+
+The former `app/settings.py` and native graph
 model were removed; configuration flows through manifests, environment interpolation and
 `secret://` resolution.
 

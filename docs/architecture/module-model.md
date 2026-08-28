@@ -443,18 +443,25 @@ from modular_rag.contracts.chunking import Chunker  # ✗
 
 ## Historical note — why this document insists on "verified directly against the filesystem"
 
-The version of this document that predated this revision described `generation/` and
-`retrieval/` with flat, single-file layouts (`generation/openai_gen.py`,
-`retrieval/vector.py`) that had not matched the real, nested package structure
-(`generation/synthesizers/openai_gen.py`, `retrieval/retrievers/vector.py`) for some time; listed
-`adapters/llms/` as holding the OpenAI/Anthropic generators (they have never lived there — that
-directory is the LangGraph engine-delegation adapter target); described `adapters/auth/` as an
-empty placeholder after a real `KeycloakTokenVerifier` implementation had already shipped;
-claimed `orchestration/registry.py` contains a `_default_factories` map (the real factory
-catalogue is in `app/default_factories.py`); and — most seriously — still described
-`app/settings.py`'s `Settings` class as a real, active file, months after it had been confirmed
-as dead code and deleted outright. None of these were malicious; each was accurate the day it was
-written and simply never got updated as the code moved on. The corrective habit this document
-now tries to model: when in doubt about a path, `find src/modular_rag -name "*.py"` and read the
-actual file before writing a sentence about it, rather than trusting the previous version of this
-document (including, eventually, this one).
+The version of this document that predated this revision had drifted from the real filesystem in
+several ways:
+
+- Described `generation/` and `retrieval/` with flat, single-file layouts
+  (`generation/openai_gen.py`, `retrieval/vector.py`) that had not matched the real, nested
+  package structure (`generation/synthesizers/openai_gen.py`, `retrieval/retrievers/vector.py`)
+  for some time.
+- Listed `adapters/llms/` as holding the OpenAI/Anthropic generators — they have never lived
+  there; that directory is the LangGraph engine-delegation adapter target.
+- Described `adapters/auth/` as an empty placeholder after a real `KeycloakTokenVerifier`
+  implementation had already shipped.
+- Claimed `orchestration/registry.py` contains a `_default_factories` map (the real factory
+  catalogue is in `app/default_factories.py`).
+- Most seriously, it still described `app/settings.py`'s `Settings` class as a real, active file,
+  months after it had been confirmed as dead code and deleted outright.
+
+None of these were malicious; each was accurate the day it was written and simply never got
+updated as the code moved on.
+
+The corrective habit this document now tries to model: when in doubt about a path, `find
+src/modular_rag -name "*.py"` and read the actual file before writing a sentence about it, rather
+than trusting the previous version of this document (including, eventually, this one).

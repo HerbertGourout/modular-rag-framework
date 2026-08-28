@@ -193,14 +193,14 @@ flowchart LR
 
 Per [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) §5.2, this is the real fork
 in the current codebase: a manifest's `engine.adapter` field selects which `DocumentEngine`
-(`contracts/engine.py`) implementation `app/bootstrap.py::load_engine()` returns.
-`"native"` (or no `engine` section) gets `NativeEngineAdapter` — the fixed V1 pipeline from the
-diagrams above. `"langgraph"` gets `LangGraphEngineAdapter`
-(`adapters/llms/langgraph_engine.py`), whose fixed internal graph proves the external-engine
-boundary but does not implement the V2/V3 multi-agent or GraphRAG designs once sketched here —
-both adapters share the same
-`Container` (identical chunker/retriever/guard/generator selection); only the orchestration
-engine differs.
+(`contracts/engine.py`) implementation `app/bootstrap.py::load_engine()` returns. `"native"` (or
+no `engine` section) gets `NativeEngineAdapter` — the fixed V1 pipeline from the diagrams above.
+`"langgraph"` gets `LangGraphEngineAdapter` (`adapters/llms/langgraph_engine.py`), whose fixed
+internal graph proves the external-engine boundary but does not implement the V2/V3 multi-agent
+or GraphRAG designs once sketched here.
+
+Both adapters share the same `Container` (identical chunker/retriever/guard/generator selection);
+only the orchestration engine differs.
 
 ```mermaid
 flowchart TD
@@ -227,15 +227,16 @@ out explicitly, since the node names alone (`route`/`retrieve`/`guard`/`generate
 obvious: tenant isolation is **not** a separate node — `tenant_policy.enforce_query()` and
 `.filter_chunks()` both run *inside* the `retrieve` node, immediately before and after the actual
 retrieval call. Similarly, redaction is not a separate node — `redactor.redact()` runs *inside*
-`generate`, immediately after the answer guard check. This was not always correct: Lot 18's
-pilot-comparison script (running the identical request through both engine adapters and diffing
-the result) found a real bug where a query with no `tenant_id` returned a `200` through this
-adapter while the identical request correctly raised `SecurityError` on the native engine — the
-`retrieve` node used to only *filter* chunks when `query.tenant_id` happened to already be set,
-and never *denied* the request outright when it wasn't. The current `_node_retrieve()` method
-(`enforce_query()` called unconditionally, before the retrieval call, whenever a `tenant_policy`
-is wired) is the fix; that method's own inline comment is the authoritative record of this
-history if you need the full detail.
+`generate`, immediately after the answer guard check.
+
+This was not always correct: Lot 18's pilot-comparison script (running the identical request
+through both engine adapters and diffing the result) found a real bug where a query with no
+`tenant_id` returned a `200` through this adapter while the identical request correctly raised
+`SecurityError` on the native engine — the `retrieve` node used to only *filter* chunks when
+`query.tenant_id` happened to already be set, and never *denied* the request outright when it
+wasn't. The current `_node_retrieve()` method (`enforce_query()` called unconditionally, before
+the retrieval call, whenever a `tenant_policy` is wired) is the fix; that method's own inline
+comment is the authoritative record of this history if you need the full detail.
 
 **What this adapter deliberately does not replicate.** Per its own module docstring:
 `AuditSink` event emission and human-review queueing are **not** performed by
@@ -243,18 +244,21 @@ history if you need the full detail.
 level too, by rejecting a manifest that selects `engine.adapter: langgraph` while also declaring
 `governance.policy_engine`, `governance.review_queue`, `governance.audit_sink`, or
 `observability.telemetry` (fails validation at startup, per ADR-0007 §3 — a manifest cannot
-declare a control this adapter cannot actually activate). A caller that needs audit evidence
-today should use the native engine (`NativeEngineAdapter`/`RAGEngine`, or `load_pipeline()`), not
-the LangGraph adapter — this is a real, current capability gap, not a documentation oversight,
-and closing it is future work (folding audit/review into the control plane *above* the
-`DocumentEngine` boundary, so every adapter gets it for free, rather than re-implementing it
-inside each one).
+declare a control this adapter cannot actually activate).
+
+A caller that needs audit evidence today should use the native engine
+(`NativeEngineAdapter`/`RAGEngine`, or `load_pipeline()`), not the LangGraph adapter — this is a
+real, current capability gap, not a documentation oversight, and closing it is future work
+(folding audit/review into the control plane *above* the `DocumentEngine` boundary, so every
+adapter gets it for free, rather than re-implementing it inside each one).
 
 Generic multi-agent orchestration (the pre-ADR-0005 `Router`/`Coordinator`/`Planner`/
 `Retriever Agent`/`Extractor`/`Synthesizer`/`Validator` design) and GraphRAG traversal
 (`Entity Extractor`/`Graph Retriever`/`Context Builder`) are both delegated to whichever engine
 is selected here — neither was ever built as native code beyond the multi-agent prototype
-[removed in Lot 17](../refactoring/lot-17-prototype-retirement.md). The native `KnowledgeGraph`
-data model (`memory/graph/knowledge_graph.py`) was removed 2026-08-07 (Étape 8,
-[ADR-0007](../adr/0007-layer-boundaries-and-control-plane-activation.md)) — zero consumers
-anywhere, restorable via git history. There is no native graph capability of any kind today.
+[removed in Lot 17](../refactoring/lot-17-prototype-retirement.md).
+
+The native `KnowledgeGraph` data model (`memory/graph/knowledge_graph.py`) was removed 2026-08-07
+(Étape 8, [ADR-0007](../adr/0007-layer-boundaries-and-control-plane-activation.md)) — zero
+consumers anywhere, restorable via git history. There is no native graph capability of any kind
+today.

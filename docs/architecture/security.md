@@ -27,10 +27,12 @@
 content.** `SecurityGuard.check_query(query)` runs *before* retrieval and `check_answer(answer)`
 runs *after* generation (see [`runtime-flow.md`](runtime-flow.md)'s sequence diagram) — there is
 no guard checkpoint between retrieval and generation that inspects the raw retrieved chunk text
-itself. This is a deliberate scope boundary of V1's guard, not an oversight: catching poisoned
-*content* already in the corpus is an ingestion-time / provenance concern, not a per-query
-runtime-guard concern, and this codebase does not implement ingestion-time content screening
-today (see the "Data poisoning at ingestion" row above).
+itself.
+
+This is a deliberate scope boundary of V1's guard, not an oversight: catching poisoned *content*
+already in the corpus is an ingestion-time / provenance concern, not a per-query runtime-guard
+concern, and this codebase does not implement ingestion-time content screening today (see the
+"Data poisoning at ingestion" row above).
 
 ## Guard chain (V1)
 
@@ -159,7 +161,9 @@ generated answer text and flags the answer (`allowed=False`, `risk_score=0.8`) i
 **not** present in any citation's `source` or `passage` field — the dominant observable effect of
 corpus poisoning is an attacker URL appended to an otherwise-correct answer (PoisonCraft,
 arXiv:2505.06579 again). An answer with no URLs, or whose URLs all trace back to a real citation,
-passes. This check can be disabled via the `check_answer_urls` constructor parameter
+passes.
+
+This check can be disabled via the `check_answer_urls` constructor parameter
 (`BasicSecurityGuard(check_answer_urls=False)`) if a deployment's use case makes it too
 aggressive, but it is **on by default**.
 
@@ -191,7 +195,9 @@ unaddressed gap, not something already handled elsewhere.
 `AdversarialDetector` (`security/detectors/adversarial.py`) is a real, functioning class — it
 checks queries against three exfiltration-pattern regexes (`send (to|all) (email|slack|webhook|http)`,
 `output (all|every|entire) (document|file|data)`, `base64|curl\s+http`) and returns `risk_score=0.95`
-on a match. **It is not registered in `app/default_factories.py`** — no `reg.register("guard",
+on a match.
+
+**It is not registered in `app/default_factories.py`** — no `reg.register("guard",
 "adversarial", ...)` call exists — so no manifest can select it via `security.type` today,
 regardless of what any other document (including a previous version of this one) might imply.
 Its own module docstring labels it `(V4)`, not V2 as earlier documentation in this repository

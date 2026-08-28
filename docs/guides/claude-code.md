@@ -64,14 +64,17 @@ When pairing Claude Code with Codex, the preferred entrypoint is one command:
 /delivery-loop <goal, acceptance criteria, and intended file scope>
 ```
 
-Claude Code remains the writer and invokes Codex non-interactively in a read-only
-sandbox. The skill performs at most two Codex passes, stops immediately at
-`READY_FOR_FINAL_VALIDATION`, and never pushes. Codex discovery does not rely only
-on Claude's sandboxed `PATH`: the helper also detects the executable bundled by the
-VS Code/VS Code Insiders/Cursor extension, or accepts `CODEX_CLI_PATH`/
-`-CodexPath`. It also verifies the CLI's own saved authentication before starting
-a review; chat/IDE login alone may not initialize CLI login. The full workflow is documented in
-[AI engineering workflow](ai-engineering-workflow.md) and
+Claude Code remains the writer and invokes Codex non-interactively in a read-only sandbox. The
+skill performs at most two Codex passes, stops immediately at `READY_FOR_FINAL_VALIDATION`, and
+never pushes.
+
+Codex discovery does not rely only on Claude's sandboxed `PATH`:
+- The helper also detects the executable bundled by the VS Code/VS Code Insiders/Cursor
+  extension, or accepts `CODEX_CLI_PATH`/`-CodexPath`.
+- It verifies the CLI's own saved authentication before starting a review — chat/IDE login alone
+  may not initialize CLI login.
+
+The full workflow is documented in [AI engineering workflow](ai-engineering-workflow.md) and
 [Model routing](model-routing.md).
 
 ## Post-Edit Hook

@@ -53,9 +53,12 @@ to this module.
 State passing across a multi-step agent workflow (context accumulation across planning,
 retrieval, generation, validation steps) is the delegated engine's concern, not this module's —
 `DocumentEngine.astream()` yields `EngineStep`s while engine-private state remains inside the adapter
-needs internally. `RAGEngine.answer(question: str) -> Answer` (`orchestration/engine.py`) remains the real,
+needs internally.
+
+`RAGEngine.answer(question: str) -> Answer` (`orchestration/engine.py`) remains the real,
 current V1 path for the native (non-delegated) sequential pipeline — it builds a `Query` and
 runs guard→retrieve→rerank→generate internally via `_run()`, with no per-step agent handoff.
+
 Any adapter-integration code in `agents/` that needs to track state across an engine's streamed
 events should do so locally, scoped to the adapter call — not by inventing a new shared
 cross-agent context type.
@@ -118,6 +121,7 @@ Lot 17 along with the tests for it. The real, current conformance tests for this
 which test `DocumentEngine` implementations (including `FakeDocumentEngine`,
 `tests/contract/fakes/document_engine.py`) against the real Protocol. Add new cases there for
 any new `DocumentEngine` behavior; don't create a parallel test file for `agents/`.
+
 `tests/unit/adapters/llms/test_langgraph_engine.py` is the real unit-test reference for how the
 `LangGraphEngineAdapter` implementation itself is tested.
 

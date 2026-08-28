@@ -103,7 +103,9 @@ capability-declaration mechanism than exists today.
   non-explicit, which reintroduced the original gap: a genuinely wrong collection (an existing
   384-dim collection against a bound 768-dim embedder) reported healthy again, unconditionally,
   until real traffic hit `_ensure_collection()` (Codex review HIGH-003, fourth pass — reproduced
-  live). Fixed (fourth pass) by resolving the expected size from the bound embedder's `.dimensions`
+  live).
+
+  Fixed (fourth pass) by resolving the expected size from the bound embedder's `.dimensions`
   directly when not explicit, instead of skipping. That fix carried its own residual gap (Codex
   review HIGH-002, fifth pass — reproduced live): `.dimensions` is not uniformly cheap —
   `HuggingFaceEmbedder.dimensions` falls back to `_get_model()`, a real `sentence_transformers`
@@ -111,7 +113,9 @@ capability-declaration mechanism than exists today.
   outside its static `_DIMENSIONS` table. A probe against a bound embedder using an unrecognized
   model name could therefore hang pod startup indefinitely on a slow or unreachable model registry,
   even with Qdrant itself fully healthy — contradicting the "never trigger a costly first-use
-  side effect from a probe" rule this same bullet exists to uphold. Fixed by adding a new,
+  side effect from a probe" rule this same bullet exists to uphold.
+
+  Fixed by adding a new,
   optional, duck-typed `known_dimensions() -> int | None` method to all three `Embedder`
   implementations (`HuggingFaceEmbedder`, `OpenAIEmbedder`, `DeterministicEmbedder`) — a
   cheap-only variant that returns the dimension when free to compute (a static-table/dict lookup)
@@ -130,7 +134,9 @@ capability-declaration mechanism than exists today.
   reused the shared, cached connection on a "warm" path — bounding `self._lock` acquisition with
   `_HEALTH_LOCK_ACQUIRE_TIMEOUT` (reporting `"busy"` on timeout), then issuing `SHOW
   statement_timeout` / `SET statement_timeout = ...` / the probe query / a restoring `SET` back to
-  the exact prior value, all under that lock. Codex review HIGH-001 (fifth pass, reproduced live)
+  the exact prior value, all under that lock.
+
+  Codex review HIGH-001 (fifth pass, reproduced live)
   found this still under-bounded in three compounding ways: the `SHOW`/first `SET` themselves ran
   with no query-level deadline active yet, so a connection whose transport had gone silent after
   the original TCP handshake (network partition, dropped NAT mapping) could hang the probe
@@ -138,6 +144,7 @@ capability-declaration mechanism than exists today.
   `statement_timeout` only fires if the server's backend process is alive to enforce it, so it
   cannot detect a transport gone silent client-side; and the whole warm path mutated
   `self._lock`-guarded shared state from what is supposed to be a side-effect-free probe.
+
   `PostgresLifecycleLedger`/`PostgresAuditSink.check_health()` were redesigned to always open a
   fresh, dedicated, short-lived probe connection — cold or warm makes no difference, so there is
   only one code path, and it never touches `self._conn` or `self._lock` at all. `statement_timeout`
@@ -163,11 +170,15 @@ capability-declaration mechanism than exists today.
   review HIGH-002, fourth pass). `self._health_lock` is itself now acquired with a bound
   (`_HEALTH_LOCK_ACQUIRE_TIMEOUT`) rather than indefinitely, reporting `"busy"` on timeout, so a
   probe stuck despite the above can't also block every other concurrent `/ready` call behind the
-  same lock. `models.retrieve(self.model)` — not `models.list()`, whose result an earlier version
+  same lock.
+
+  `models.retrieve(self.model)` — not `models.list()`, whose result an earlier version
   discarded entirely (Codex review HIGH-004, fourth pass: a valid key for *any* model reported
   healthy even if `self.model` itself was misspelled, retired, or inaccessible to this account) —
   validates the credential against the *specific* configured model, catching the same
-  `AuthenticationError`/`NotFoundError` a real `generate()` call would hit. Cached for 30s per
+  `AuthenticationError`/`NotFoundError` a real `generate()` call would hit.
+
+  Cached for 30s per
   generator instance (`_HEALTH_CHECK_CACHE_SECONDS`, guarded by the same lock, which also
   serializes concurrent cache-miss refreshes into one real call) — the Lot 6 "no costly LLM call
   per probe" criterion is honored by bounding *frequency*, not by avoiding the call altogether:
@@ -202,7 +213,9 @@ capability-declaration mechanism than exists today.
 
 `GET /ready` is deliberately exempt from authentication, rate limiting, and the concurrency
 limit — an orchestrator's own probe must never be blocked by any of them — which also means it
-is reachable by anyone who can route to the process at all. `core/resilience.py`'s
+is reachable by anyone who can route to the process at all.
+
+`core/resilience.py`'s
 `unhealthy_dependency()` helper is the classification/logging pattern every adapter's
 `check_health()` failure branch (and `Container.check_readiness()`'s own defensive catch around a
 component's `check_health()` raising) routes through: it classifies the exception to one of a
@@ -210,7 +223,9 @@ small set of stable, non-sensitive codes (`timeout`, `unreachable`; plus the lit
 hand-authored `circuit open` and `busy` states, which never touch `str(exc)` at all) with a short
 correlation id, and logs the full exception — which can embed hostnames, DSNs, collection names,
 or a third-party SDK's own message content — server-side via `structlog`, never in the HTTP
-response body. `generation/synthesizers/{openai,anthropic}_gen.py` implement the identical
+response body.
+
+`generation/synthesizers/{openai,anthropic}_gen.py` implement the identical
 pattern via a private, file-local `_unhealthy()` rather than importing the shared helper — domain
 modules may import only `contracts/` + `core/models/` per `CLAUDE.md` §02, and
 `core.resilience` is outside that boundary (Codex review MEDIUM-001, third pass); `adapters/` has
