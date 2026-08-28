@@ -267,6 +267,58 @@ jobs:
           echo "--- PostgreSQL logs ---"
           docker logs ${{ job.services.postgres.id }} || true
 
+  benchmark-gate:
+    # Batch 13 (external plan — "Offline benchmark"; not this repo's own
+    # docs/refactoring-plan.md Lot numbering, which already used "Lot 13"
+    # for an unrelated, already-completed metric-vocabulary fix). Reuses the
+    # same Qdrant service image/digest as test-integration/e2e-deterministic
+    # above -- not a new CI service -- and needs no LLM key: the benchmark's
+    # own manifest (src/modular_rag/eval/manifests/benchmark-deterministic.yaml)
+    # wires the deterministic embedder/generator, same as the e2e-deterministic
+    # job's manifest.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      qdrant:
+        image: qdrant/qdrant:v1.12.4@sha256:241edb9d7778327516ef218f8c74e1bd61b5ea42cd4f193cb8d0896199705636
+        ports:
+          - 6333:6333
+        # No `options: --health-cmd` here -- same reason as the other two
+        # Qdrant services in this workflow (the official image has no
+        # curl/wget to run one); the "Wait for Qdrant" step below is the
+        # real check.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e .[v1,dev]
+      - name: Wait for Qdrant to accept connections
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:6333/readyz; then
+              echo "Qdrant ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Qdrant did not become ready within the timeout"
+          exit 1
+      - name: Run the offline benchmark quality gate (blocking)
+        run: python scripts/run_benchmark.py --enforce
+      - name: Upload the benchmark report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-report
+          path: |
+            src/modular_rag/eval/reports/latest.json
+            src/modular_rag/eval/reports/latest.md
+
   compose-smoke:
     # Batch 10: "a container smoke test that goes beyond the /health
     # endpoint." Deliberately not folded into container-build below (which

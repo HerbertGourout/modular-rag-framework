@@ -19,6 +19,8 @@ CLAUDE.local.md
 
 # Local Claude Code <-> Codex review handoff
 .review/codex-review.md
+.review/codex-review-pass1.md
+.review/handoff.md
 
 ---
 ## PYTHON BUILD & PACKAGES
@@ -67,6 +69,14 @@ coverage.xml
 htmlcov/
 junit.xml
 test-results/
+
+---
+## OFFLINE BENCHMARK — generated reports (Batch 13, external plan)
+---
+# scripts/run_benchmark.py writes these fresh on every run; only
+# src/modular_rag/eval/reports/baseline.json is meant to be versioned.
+src/modular_rag/eval/reports/latest.json
+src/modular_rag/eval/reports/latest.md
 
 ---
 ## TYPE CHECKING

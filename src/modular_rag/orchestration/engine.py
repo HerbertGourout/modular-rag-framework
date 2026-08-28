@@ -11,6 +11,7 @@ import structlog
 from modular_rag.contracts.audit import AuditEvent, AuditEventType
 from modular_rag.contracts.chunking import Chunker
 from modular_rag.contracts.erasure import ErasureProof
+from modular_rag.contracts.indexing import Indexer
 from modular_rag.contracts.lifecycle import DocumentStatus
 from modular_rag.contracts.meter import Meter
 from modular_rag.contracts.reconciliation import ReconciliationReport, RepairResult
@@ -125,6 +126,16 @@ class RAGEngine:
         examples/hybrid_search/ comparing vector-only vs. BM25-only vs. fused
         results) instead of reaching into `pipeline._c.retriever`."""
         return self._c.retriever
+
+    @property
+    def indexer(self) -> Indexer:
+        """Public accessor for the wired indexer, same "public accessor"
+        pattern as `chunker`/`retriever` above. Added for
+        `scripts/run_benchmark.py` (Codex review pass 1, MEDIUM-002), which
+        needs to call `Indexer.clear()` on the benchmark's own dedicated
+        collection before each ingest for a reproducible run, without
+        reaching into `pipeline._c.indexer` directly."""
+        return self._c.indexer
 
     def ingest(self, documents: list[Document]) -> int:
         """Chunk and index a list of documents. Returns the number of chunks indexed.

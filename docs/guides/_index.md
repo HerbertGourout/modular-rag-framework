@@ -22,6 +22,7 @@ break every existing link into this directory), but the tables below keep them a
 | Deploy to production (container, manifest, hardening) | [deployment.md](deployment.md) |
 | Back up, restore, or roll back a deployment | [backup-restore.md](backup-restore.md) |
 | Read or wire up trace telemetry, live spans or operational metrics | [observability.md](observability.md) |
+| Run the offline golden-set benchmark, or tune its quality-gate thresholds | [offline-evaluation.md](offline-evaluation.md) |
 | Run the local/CI validation tiers, or debug a failing check | [validation-protocol.md](validation-protocol.md) |
 | Fix a common error (Qdrant unreachable, RegistryError, layering violation...) | [troubleshooting.md](troubleshooting.md) |
 | Understand the Claude Code / Codex two-provider review workflow | [ai-engineering-workflow.md](ai-engineering-workflow.md) |

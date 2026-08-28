@@ -15,6 +15,7 @@ from modular_rag.orchestration.engine import RAGEngine
 if TYPE_CHECKING:
     from modular_rag.contracts.chunking import Chunker
     from modular_rag.contracts.engine import DocumentEngine
+    from modular_rag.contracts.indexing import Indexer
     from modular_rag.contracts.meter import Meter
     from modular_rag.contracts.reconciliation import ReconciliationReport, RepairResult
     from modular_rag.contracts.tracing import Span, Tracer
@@ -42,6 +43,14 @@ class ApplicationService:
     @property
     def chunker(self) -> Chunker:
         return self._native.chunker
+
+    @property
+    def indexer(self) -> Indexer:
+        """Public accessor for the wired indexer, same pattern as `chunker`
+        above. Added for `scripts/run_benchmark.py` (Codex review pass 1,
+        MEDIUM-002) to clear the benchmark's own dedicated collection before
+        each ingest, for a reproducible run."""
+        return self._native.indexer
 
     @property
     def tracer(self) -> Tracer | None:
