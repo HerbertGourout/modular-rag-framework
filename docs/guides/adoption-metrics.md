@@ -4,13 +4,14 @@ This guide defines how to measure Claude Code adoption and success on the Modula
 
 **Read this as a template for a multi-person team, not a current-state report.** The examples
 below (developer counts, weekly adoption percentages, multi-reviewer approval chains) assume a
-team this project doesn't have today — the current, actual team size is one active developer with
-sole decision authority (a target of up to a handful more, not yet assembled; see
-[ADR-0005](../adr/0005-document-ai-control-plane-boundary.md)'s own authors line). Nothing here
-is a claim about today's adoption numbers. Use this framework once the team actually grows past
-one person; a single-developer project should skip the team-adoption-rate metrics entirely and
-focus on the ones that still apply solo (validation performance, test coverage, architecture
-violations).
+team this project doesn't have today — the current, actual team size is one active developer
+with sole decision authority (a target of up to a handful more, not yet assembled; see
+[ADR-0005](../adr/0005-document-ai-control-plane-boundary.md)'s own authors line). Nothing here is
+a claim about today's adoption numbers.
+
+Use this framework once the team actually grows past one person. A single-developer project
+should skip the team-adoption-rate metrics entirely and focus on the ones that still apply solo:
+validation performance, test coverage, architecture violations.
 
 ---
 

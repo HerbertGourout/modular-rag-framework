@@ -160,7 +160,10 @@ Your security is protected by **7 independent layers**, each with a different co
 
 ### Layer 01: Permissions (First Line of Control)
 
-**What it does**: Globally defines what is possible. Granular per-path, using Claude Code's **real** `permissions.allow` / `permissions.ask` / `permissions.deny` schema (corrected 2026-06-22 — earlier revisions of this doc and of `.claude/settings.json` used invented keys `denylists`/`noAskPaths`/`autoPaths`/`restrictedPaths` that Claude Code never read).
+**What it does**: Globally defines what is possible. Granular per-path, using Claude Code's
+**real** `permissions.allow` / `permissions.ask` / `permissions.deny` schema (corrected
+2026-06-22 — earlier revisions of this doc and of `.claude/settings.json` used invented keys
+`denylists`/`noAskPaths`/`autoPaths`/`restrictedPaths` that Claude Code never read).
 
 **3-Bucket Model** (this is the actual Claude Code model, not a 4-tier one — `deny` and `ask` are absolute; everything else falls under `allow` or the session's `defaultMode`). Corrected 2026-08-06: `.claude/rules/**` and `adapters/{llms,graphstores,search,auth}/**` moved
 `deny`→`ask` on 2026-08-04/05 (ADR-0005/Lot 11b) — an earlier version of this table still
@@ -196,7 +199,10 @@ is now a harmless dangling entry (matches nothing).
 **What it does**: Automatic validation after file writes.
 
 **PostToolUse Hooks** (implemented):
-- `matcher: "Edit|Write"` → after every Edit/Write tool call (any file, not just `.py` — the `matcher` field matches **tool names**, not file paths; Claude Code has no native per-path hook filter) → runs `PATH="$HOME/.local/bin:$PATH" ruff check src/modular_rag/ tests/ --select E,F,I --ignore E501 --quiet`
+- `matcher: "Edit|Write"` → after every Edit/Write tool call (any file, not just `.py` — the
+  `matcher` field matches **tool names**, not file paths; Claude Code has no native per-path hook
+  filter) → runs `PATH="$HOME/.local/bin:$PATH" ruff check src/modular_rag/ tests/ --select E,F,I
+  --ignore E501 --quiet`
 - `PATH` prefix: ruff is at `~/.local/bin/ruff` (installed via `curl -LsSf https://astral.sh/ruff/install.sh | sh`), not in default PATH
 - `--ignore E501`: line-length is a style preference, not a syntax error; hook intent is syntax (E), undefined names (F), import order (I)
 - Catches: syntax errors, undefined names, import order violations
@@ -353,23 +359,36 @@ src/modular_rag/
 
 ### Mechanism 2: 📐 Rules (path-scoped auto-context — distinct from Skills, see Mechanism 3)
 
-**What it does**: Markdown files Claude Code automatically loads into context, either always (no `paths:` frontmatter) or only when a file matching `paths:` is opened.
+**What it does**: Markdown files Claude Code automatically loads into context, either always (no
+`paths:` frontmatter) or only when a file matching `paths:` is opened.
 
 **7 path-scoped rules** (loaded automatically when their `paths:` glob is touched):
-1. [orchestration.md](../../.claude/rules/orchestration.md) — `src/modular_rag/orchestration/**/*.py`
+1. [orchestration.md](../../.claude/rules/orchestration.md) —
+   `src/modular_rag/orchestration/**/*.py`
 2. [adapters.md](../../.claude/rules/adapters.md) — `src/modular_rag/adapters/**/*.py`
-3. [agents.md](../../.claude/rules/agents.md) — `src/modular_rag/agents/**/*.py` (rewritten 2026-08-06 to describe the current `DocumentEngine` adapter-integration scope, per ADR-0005 §5.2; `agentic_workflows.md`, its ~90%-old-vision former companion rule for the same path, was deleted rather than kept as historical reference)
+3. [agents.md](../../.claude/rules/agents.md) — `src/modular_rag/agents/**/*.py`. Rewritten
+   2026-08-06 to describe the current `DocumentEngine` adapter-integration scope, per ADR-0005
+   §5.2. `agentic_workflows.md`, its ~90%-old-vision former companion rule for the same path, was
+   deleted rather than kept as historical reference.
 4. [contracts.md](../../.claude/rules/contracts.md) — `src/modular_rag/contracts/**/*.py`
 5. [security.md](../../.claude/rules/security.md) — `src/modular_rag/security/**/*.py`
 6. [tests.md](../../.claude/rules/tests.md) — `tests/**/*.py`
-7. [health-checks.md](../../.claude/rules/health-checks.md) — `contracts/health.py`, `core/models/health.py`, `core/resilience.py`, `orchestration/container.py`, `adapters/**/*.py`, `generation/synthesizers/*.py`, `retrieval/retrievers/*.py` (added 2026-08-18 after Lot 6's "readiness and resilience" work took five Codex review rounds to land — codifies the `check_health()` invariants discovered reactively across those rounds so the next `HealthCheckable` implementer gets them right on the first pass)
+7. [health-checks.md](../../.claude/rules/health-checks.md) — `contracts/health.py`,
+   `core/models/health.py`, `core/resilience.py`, `orchestration/container.py`,
+   `adapters/**/*.py`, `generation/synthesizers/*.py`, `retrieval/retrievers/*.py`. Added
+   2026-08-18 after Lot 6's "readiness and resilience" work took five Codex review rounds to
+   land — codifies the `check_health()` invariants discovered reactively across those rounds so
+   the next `HealthCheckable` implementer gets them right on the first pass.
 
 **1 always-on rule** (no `paths:` frontmatter → loaded every session, like CLAUDE.md):
 - [security-layers.md](../../.claude/rules/security-layers.md) — 7-layer defense system
 
-**Configuration**: Automatic discovery of every `.md` file under `.claude/rules/`. The scoping key is `paths:` in YAML frontmatter (a list of globs), not `applyTo` (that's a different tool's convention).
+**Configuration**: Automatic discovery of every `.md` file under `.claude/rules/`. The scoping
+key is `paths:` in YAML frontmatter (a list of globs), not `applyTo` (that's a different tool's
+convention).
 
-**Example**: When editing `src/modular_rag/adapters/embeddings/hf_embedder.py`, `adapters.md` is automatically loaded into context — no invocation needed.
+**Example**: When editing `src/modular_rag/adapters/embeddings/hf_embedder.py`, `adapters.md` is
+automatically loaded into context — no invocation needed.
 
 > `.claude/.instructions.md` and `.claude/.prompt.md` are **not** rules and are **not** auto-discovered by Claude Code on their own — they're plain files that only load because `CLAUDE.md` now `@`-imports them (see Configuration Files Reference below).
 
@@ -379,7 +398,10 @@ src/modular_rag/
 
 **What it does**: Reusable workflows that Claude (or a user typing `/<name>`) explicitly invokes — unlike Rules, skills are never loaded automatically just because a file path matched.
 
-**Configuration**: One directory per skill under `.claude/skills/<skill-name>/SKILL.md`, with `name` + `description` frontmatter only. A **flat** `.claude/skills/<name>.md` file is *not* discovered — this project's skills were flat files until 2026-06-22 and were silently invisible to Claude Code until converted to the directory form.
+**Configuration**: One directory per skill under `.claude/skills/<skill-name>/SKILL.md`, with
+`name` + `description` frontmatter only. A **flat** `.claude/skills/<name>.md` file is *not*
+discovered — this project's skills were flat files until 2026-06-22 and were silently invisible
+to Claude Code until converted to the directory form.
 
 **19 skills available** (updated 2026-08-18 — this table previously listed 18):
 

@@ -104,7 +104,16 @@ Define **exactly** which paths the MCP can access. This is internal governance b
 
 ### Step 4: Integration into .mcp.json
 
-> **Correction (2026-06-22)**: MCP servers are configured in a **`.mcp.json` file at the project root**, not inside `.claude/settings.json`. `mcpServers` is not a recognized key in `settings.json` — Claude Code only reads it from `.mcp.json`. The `allowPaths`/`denyPaths`/`scope`/`approvedDate` fields below are this project's own governance metadata (useful for the review process and audit trail), not fields Claude Code itself understands — Claude Code's real `.mcp.json` entry shape is just `command`/`args`/`env` (for a local `stdio` server) or `type`/`url` (for a remote `http`/`sse` server). Keep the governance metadata in this guide's "Current MCP Integrations" section below instead of inventing extra JSON keys.
+> **Correction (2026-06-22)**: MCP servers are configured in a **`.mcp.json` file at the project
+> root**, not inside `.claude/settings.json`. `mcpServers` is not a recognized key in
+> `settings.json` — Claude Code only reads it from `.mcp.json`.
+>
+> The `allowPaths`/`denyPaths`/`scope`/`approvedDate` fields below are this project's own
+> governance metadata (useful for the review process and audit trail), not fields Claude Code
+> itself understands. Claude Code's real `.mcp.json` entry shape is just `command`/`args`/`env`
+> (for a local `stdio` server) or `type`/`url` (for a remote `http`/`sse` server). Keep the
+> governance metadata in this guide's "Current MCP Integrations" section below instead of
+> inventing extra JSON keys.
 
 Once approved, add the MCP to a project-root `.mcp.json`:
 

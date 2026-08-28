@@ -67,11 +67,12 @@ Publicis Sapient works with banks, insurers, pharmaceutical players, and utiliti
 
 - **Audit trail — primitives shipped, not a turnkey compliance report**: every run captures a
   structured `AuditEvent` (PII/secret payload allowlist enforced by a validator) to a
-  manifest-configured sink (`governance.audit_sink.type: in-memory` or `postgres` — the
-  Postgres sink is append-only by construction, no UPDATE/DELETE anywhere in the code). What's
-  **not** shipped yet: a formatted GDPR/CCPA/HIPAA report *generator* — turning captured events
-  into a report a DPO can hand to a regulator is still a manual query today. Say "captures a
-  durable, structured audit trail," not "generates compliance reports."
+  manifest-configured sink (`governance.audit_sink.type: in-memory` or `postgres` — the Postgres
+  sink is append-only by construction, no UPDATE/DELETE anywhere in the code).
+
+  What's **not** shipped yet: a formatted GDPR/CCPA/HIPAA report *generator* — turning captured
+  events into a report a DPO can hand to a regulator is still a manual query today. Say "captures
+  a durable, structured audit trail," not "generates compliance reports."
 - **Automatic PII redaction**: emails, phone numbers, IBANs, API keys removed before exposure
   via a manifest-activatable redactor (`governance.redactor.type: patterns`) — documentable in
   a DPIA.
@@ -152,18 +153,21 @@ Some projects require guarantees that OSS frameworks cannot provide.
   no-external-API deployment still needs a contract-conformant local-LLM generator adapter.
 - **Explainability**: sourced citations, groundedness scores, and the full trace make it possible to justify every answer — a frequent requirement in decision-support projects.
 - **Definable SLAs**: structured traces cover query guarding, retrieval, reranking, and
-  generation latency, giving a starting point for contractual SLAs. Since ADR-0012, a manifest can
-  also opt into live, OTLP-exportable OpenTelemetry spans (`observability.tracer.type: otel`) —
-  the API, ingestion, embedding, retrieval, reranking, and generation stages are instrumented,
-  correlation/request/trace ids propagate through one distributed trace per call, and no query/
-  document/answer/token content is ever attached as a span attribute. This is a first cut (see
-  ADR-0012's own out-of-scope notes — no cross-service `traceparent` propagation yet, and
-  LangGraph-routed requests get engine-neutral API/application spans but no internal graph-step
-  spans). ADR-0013 also exposes aggregate request latency, token and static estimated-cost metrics
-  plus reference Grafana/Prometheus material. No shipped preset enables tracer/meter, live backend
-  validation is still required, and readiness/review gauges have documented sampling limits;
-  don't overclaim
-  full cross-service distributed tracing to a client beyond what's actually built.
+  generation latency, giving a starting point for contractual SLAs.
+
+  Since ADR-0012, a manifest can also opt into live, OTLP-exportable OpenTelemetry spans
+  (`observability.tracer.type: otel`) — the API, ingestion, embedding, retrieval, reranking, and
+  generation stages are instrumented, correlation/request/trace ids propagate through one
+  distributed trace per call, and no query/document/answer/token content is ever attached as a
+  span attribute. This is a first cut (see ADR-0012's own out-of-scope notes — no cross-service
+  `traceparent` propagation yet, and LangGraph-routed requests get engine-neutral API/application
+  spans but no internal graph-step spans).
+
+  ADR-0013 also exposes aggregate request latency, token and static estimated-cost metrics plus
+  reference Grafana/Prometheus material. No shipped preset enables tracer/meter, live backend
+  validation is still required, and readiness/review gauges have documented sampling limits —
+  don't overclaim full cross-service distributed tracing to a client beyond what's actually
+  built.
 - **Large enterprise clients**: CIO and CISO stakeholders at large companies want governance, auditability, and control. This framework speaks directly to them.
 
 ---

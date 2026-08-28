@@ -60,9 +60,10 @@ hedged this as "contingent on Lot 6 evidence, not decided yet" — Lot 6 (the La
 Workflows spike, ADR-0006) never actually produced evidence bearing on this specific question,
 so it remains genuinely undecided. Retained rather than removed given the test coverage and the
 open question; documented with an explicit caveat directly in the module's own docstring and in
-`docs/architecture/structure.md`, rather than silently kept as if fully resolved. Also corrected
-a false claim in its docstring ("using networkx") — it is plain Python dict/list and never
-imported `networkx`.
+`docs/architecture/structure.md`, rather than silently kept as if fully resolved.
+
+Also corrected a false claim in its docstring ("using networkx") — it is plain Python dict/list and
+never imported `networkx`.
 
 ## Blocked, not decided: stale GitLab assets
 
@@ -126,15 +127,20 @@ New `docs/research/EVIDENCE-CATALOGUE.md` — a per-paper index of all 56 files 
 `.claude/research-papers/`, cross-referencing every `## [arXiv-id] Title` header across all
 seven `DIGEST-*.md` files against the actual filenames on disk (not by re-reading all 56 PDFs,
 which is out of scope — that is the specialist-agent digest-generation process
-`docs/research/README.md` already documents separately). Found and recorded, via `md5sum`,
-that the corpus is **56 files but only 55 unique papers**: `2604.11623v3.pdf` is byte-identical
-in both `advanced_architecture/` and `agentic/`. Also resolved an apparent inconsistency in
-`DIGEST-retrieval.md`'s own header ("4 arXiv PDFs" when `retrieval/` holds only 3 files): the
-4th is a legitimate cross-citation of a `security/`-folder paper (2603.21654), not a missing or
-misplaced file — corrected the header to say so explicitly. 38 of 55 unique papers have a
-digest entry; the remaining 17 (`agentic/`, `graph_rag/`, `multimodal_rag/`) are listed by
-arXiv id only, matching `docs/research/README.md`'s existing "deferred per roadmap discipline"
-policy — not distilled in this lot, which would be scope creep into V2/V3/V5 work.
+`docs/research/README.md` already documents separately).
+
+Found and recorded, via `md5sum`, that the corpus is **56 files but only 55 unique papers**:
+`2604.11623v3.pdf` is byte-identical in both `advanced_architecture/` and `agentic/`.
+
+Also resolved an apparent inconsistency in `DIGEST-retrieval.md`'s own header ("4 arXiv PDFs"
+when `retrieval/` holds only 3 files): the 4th is a legitimate cross-citation of a
+`security/`-folder paper (2603.21654), not a missing or misplaced file — corrected the header to
+say so explicitly.
+
+38 of 55 unique papers have a digest entry; the remaining 17 (`agentic/`, `graph_rag/`,
+`multimodal_rag/`) are listed by arXiv id only, matching `docs/research/README.md`'s existing
+"deferred per roadmap discipline" policy — not distilled in this lot, which would be scope creep
+into V2/V3/V5 work.
 
 Redistribution rights remain exactly where Lot 16b left them (escalated, "leave as-is for now"
 per Herbert Gourout) — the catalogue documents provenance, it does not re-open or resolve that

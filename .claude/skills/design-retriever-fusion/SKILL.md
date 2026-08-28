@@ -93,10 +93,11 @@ retriever = HybridRetriever(vector_weight=0.7, bm25_weight=0.3, k=20, reranker_k
 
 `reciprocal_rank_fusion()` itself takes `rrf_k` (the RRF smoothing constant, default 60 — this
 is the "no normalization needed" advantage of RRF over raw weighted-score combination) and
-`weights` (per-list multipliers). If you need a from-scratch weighted **score** (not rank)
-combination for comparison, note that requires score normalization first (RRF's main advantage
-is avoiding exactly that step) — do this only as an experiment, not a replacement, unless the
-golden-set numbers clearly favor it.
+`weights` (per-list multipliers).
+
+If you need a from-scratch weighted **score** (not rank) combination for comparison, note that
+requires score normalization first (RRF's main advantage is avoiding exactly that step) — do this
+only as an experiment, not a replacement, unless the golden-set numbers clearly favor it.
 
 ### 3. Add a Third Signal (Optional, 20 min)
 

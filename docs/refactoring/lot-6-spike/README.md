@@ -3,6 +3,9 @@
 **Status:** Spike complete; recommendation drafted in
 [ADR-0006](../../adr/0006-external-engine-selection.md) as `Proposed`, pending Herbert
 Gourout's explicit sign-off (sole decision authority, `docs/refactoring/lot-0-baseline.md` §2).
+**Since accepted** — ADR-0006 itself now records `Status: Accepted`, dated the same day as this
+spike. This record is kept describing the pre-acceptance state, not edited to claim the
+recommendation was already final when it was written.
 **Date:** 2026-08-04
 **Candidates spiked (user's choice):** LangGraph 1.2.10, LlamaIndex Workflows
 (`llama-index-core` 0.14.23 / `llama-index-workflows` 2.22.2). Haystack was explicitly not

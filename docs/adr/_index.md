@@ -222,7 +222,7 @@ reference dashboard, alerts, SLOs, and runbooks.
 
 **Key insight:** a metric *label* is not the same safety problem as a span *attribute* — an
 unbounded label value becomes a permanent, ever-growing time series in a real metrics backend, so
-`OtelMeter` enforces a cardinality denylist/pattern check in code (drop and warn, never raise),
+`OtelMeter` enforces a cardinality allowlist/pattern check in code (drop and warn, never raise),
 not only in documentation.
 
 ---

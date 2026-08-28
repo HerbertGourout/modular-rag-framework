@@ -4,7 +4,9 @@ Documents moved out of active navigation, most on 2026-08-06 (documentation-util
 follow-up to the 2026-08-06 documentation audit — itself archived here as of 2026-08-07, see
 the last row below). Nothing here is deleted or rewritten — each file is kept verbatim (or, for
 the ADR, verbatim-plus-its-existing-banner) as a historical record, with Git history intact via
-`git mv`. If you're looking for **current, active** guidance, none of these five files is it —
+`git mv`.
+
+If you're looking for **current, active** guidance, none of these five files is it —
 follow the pointer in each entry below instead.
 
 | File | What it was | Why archived | Current guidance instead |

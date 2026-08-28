@@ -161,16 +161,21 @@ CHUNKERS = [
 
 **No `Planner` or `Agent` contract exists to extend.** An earlier version of this table listed
 both, pointing at `retrieval/planners/` and `agents/<role>/`. Neither is a real, implementable
-extension point today: `retrieval/planners/` is an empty `.gitkeep`-only directory, and
-`contracts/planning.py`/`contracts/agents.py` (which would have defined `Planner`/`Agent`
-Protocols) don't exist in the current source at all — both were removed in
-[Lot 17](../refactoring/lot-17-prototype-retirement.md) alongside the native agent prototype
-cluster. Generic multi-agent orchestration is delegated to a selected external engine per
+extension point today:
+- `retrieval/planners/` is an empty `.gitkeep`-only directory.
+- `contracts/planning.py`/`contracts/agents.py` (which would have defined `Planner`/`Agent`
+  Protocols) don't exist in the current source at all — both were removed in
+  [Lot 17](../refactoring/lot-17-prototype-retirement.md) alongside the native agent prototype
+  cluster.
+
+Generic multi-agent orchestration is delegated to a selected external engine per
 [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) §5.2, reached through the
-`DocumentEngine` port (see [document-engine-contract.md](../architecture/document-engine-contract.md))
-— it is not a plugin point this guide's four-step recipe applies to. If you want to add a new
-`DocumentEngine` adapter (a third engine beside native and LangGraph), that's a different,
-heavier undertaking than this guide covers; start from
+`DocumentEngine` port (see
+[document-engine-contract.md](../architecture/document-engine-contract.md)). It is not a plugin
+point this guide's four-step recipe applies to.
+
+If you want to add a new `DocumentEngine` adapter (a third engine beside native and LangGraph),
+that's a different, heavier undertaking than this guide covers — start from
 `adapters/llms/langgraph_engine.py` as the worked reference implementation.
 
 ## Versioning

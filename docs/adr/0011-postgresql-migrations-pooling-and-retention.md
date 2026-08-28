@@ -97,7 +97,9 @@ Both adapters' connection-establishment path no longer runs any DDL. A new `auto
 False` constructor parameter, when `True`, calls the *same* `MigrationRunner.migrate()` lazily on
 first connection — so there remains exactly one source of schema truth (the migration files),
 whether applied explicitly via the CLI or implicitly for convenience, never a second, parallel
-DDL mechanism. Default `False`: a fresh deployment must run `mrag db migrate` (§5) before first
+DDL mechanism.
+
+Default `False`: a fresh deployment must run `mrag db migrate` (§5) before first
 use; a query against a not-yet-migrated database now fails with a `StorageError` that names the
 migrate command explicitly (detecting `UndefinedTable` by exception class name, the same
 name-based classification style `_is_connection_level_error()` already uses, so this still never
@@ -110,10 +112,14 @@ never hold (§4).
 
 `self._conn: psycopg.Connection | None` + a per-query `threading.Lock()` are replaced by
 `psycopg_pool.ConnectionPool` (`pip install "psycopg[pool]"`, verified against psycopg's own
-docs before adding — not guessed). Constructed lazily, `open=False` + a non-blocking `.open(wait=
+docs before adding — not guessed).
+
+Constructed lazily, `open=False` + a non-blocking `.open(wait=
 False)` on first real use (matching every other adapter's `_client`/`_get_client()` no-I/O-in-
 `__init__` convention, and avoiding `psycopg_pool`'s own documented deprecation of blocking-open-
-in-constructor behavior). `min_size`/`max_size` are manifest-configurable (`**cfg.config`, no
+in-constructor behavior).
+
+`min_size`/`max_size` are manifest-configurable (`**cfg.config`, no
 `app/default_factories.py` change needed) but validated in `__init__` (`1 <= min_size <= max_size
 <= 32`, raising `ConfigurationError`) — architecture-reviewer flagged that an unguarded, manifest-
 driven pool size had no upper bound against `max_connections` exhaustion across two adapters,
@@ -123,13 +129,17 @@ Reconnection is now mostly the pool's own job: `psycopg_pool.ConnectionPool` dis
 replaces a broken or expired connection automatically, with exponential backoff up to a
 configurable `reconnect_timeout` — satisfying this lot's "stratégie de reconnexion" acceptance
 criterion largely for free, with sensible library defaults, rather than via more hand-rolled
-retry logic. What is *not* redundant and is explicitly kept (test-specialist, pre-implementation):
+retry logic.
+
+What is *not* redundant and is explicitly kept (test-specialist, pre-implementation):
 `_is_connection_level_error()`'s exception-class-name MRO walk and the existing `CircuitBreaker`+
 `retry_with_backoff` wrapping around `_execute()`. The pool's own reconnection covers connection
 *establishment* failures; a connection that dies **mid-query**, after this code has already
 checked it out via `with pool.connection() as conn:`, is a failure `_execute()`'s own caller still
 needs classified so the *query* gets retried (checking out a fresh connection), which is a
-different concern than the pool's internal bookkeeping. The former manual `self._conn = None`
+different concern than the pool's internal bookkeeping.
+
+The former manual `self._conn = None`
 invalidation is gone — there is no more single cached connection to invalidate; the pool decides
 on its own whether a returned connection is fit for reuse.
 
@@ -154,7 +164,9 @@ introduce silently: today, a reachable-but-schema-less database self-heals on th
 connection via the inline DDL; after retiring that, `check_health()`'s `SELECT 1` would keep
 reporting `healthy` while every real query failed with "relation does not exist." `SELECT 1` is
 replaced by `SELECT to_regclass('<table>') IS NOT NULL` — the same single query, same cost, now
-also proving the expected table exists. A `False` result reports a hand-authored, non-sensitive
+also proving the expected table exists.
+
+A `False` result reports a hand-authored, non-sensitive
 detail string ("schema not migrated ... run `mrag db migrate`"), exempt from the raw-exception-
 leak classification requirement for the same reason Qdrant's collection-validation messages are
 (ADR-0010 §5: fully self-authored, drawn only from internally-known values, not external
@@ -166,13 +178,17 @@ exception content).
 `DELETE` statement, batched (500 rows per statement, looped until an *empty* batch — see §9's
 MEDIUM-002 for why empty, not merely short), executed without automatic retry (§9's second-pass
 MEDIUM-001) so a large backlog does not hold one long-lived table lock on an autocommit
-connection. Filters on a plain `expires_at` column populated by `record()` at write time (§9's
+connection.
+
+Filters on a plain `expires_at` column populated by `record()` at write time (§9's
 MEDIUM-003 and its own second-pass HIGH-001 correction; originally an inline
 `"timestamp" + make_interval(days => retention_days)` expression evaluated on every query), with
 `retention_days > 0` as a defensive guard (`AuditEvent.retention_days` now also carries
 `Field(ge=1)` validation at construction — `contracts/audit.py`) and rejects a timezone-naive
 `now` explicitly (the column is `TIMESTAMPTZ`; a naive value would otherwise be silently coerced
-via the session's own `TimeZone` setting rather than raising). A companion
+via the session's own `TimeZone` setting rather than raising).
+
+A companion
 `count_expired(now=None) -> int` is a SELECT-only dry-run/monitoring variant, deliberately **not**
 gated behind the same guard as the destructive method (see next paragraph) — security-specialist's
 explicit recommendation against a single `dry_run=` flag on one method, which is a classic
@@ -183,14 +199,18 @@ inspection.
 closed `allow_purge: bool = False` flag explicitly set `True`. This was security-specialist's
 primary structural finding: DB-role separation alone (§6) is the right *compensating* control,
 but a single misconfiguration (an app-role DSN that accidentally has `DELETE`) should not be
-sufficient on its own to let a purge run through the ordinary request-serving instance. The
+sufficient on its own to let a purge run through the ordinary request-serving instance.
+
+The
 manifest-wired instance used by the live application never sets `allow_purge=True` **— now
 structurally, not just by convention** (§9's remaining-risks fix: `app/default_factories.py`'s
 `audit_sink: postgres` factory strips `allow_purge` from a manifest's `config:` block before
 construction, since generic `**cfg.config` forwarding meant a manifest *could* have set it despite
 this paragraph's original claim that it never would). Only a dedicated instance the CLI (§7)
 constructs from an explicit `--dsn` argument can set it — two independent things have to be
-misconfigured at once, not one. (`SecurityError`'s docstring in `core/errors.py` was broadened,
+misconfigured at once, not one.
+
+(`SecurityError`'s docstring in `core/errors.py` was broadened,
 not narrowed, to cover this: "a security-sensitive administrative operation ... refused by a
 fail-closed authorization check," alongside its original "a security guard blocks a query or
 answer" scope.)
@@ -211,18 +231,23 @@ only role that should ever run `mrag db migrate` / construct an adapter with `au
 `app_role` (the running application's own DSN — `INSERT`/`SELECT` on `audit_events`, no
 `UPDATE`/`DELETE` at all; `INSERT`/`SELECT`/`UPDATE` on the mutable `document_lifecycle`), and
 `retention_role` (a **separate** DSN used only by the purge CLI invocation — `SELECT`/`DELETE` on
-`audit_events`, nothing else). This directly resolved a blocker security-specialist raised
+`audit_events`, nothing else).
+
+This directly resolved a blocker security-specialist raised
 against an earlier draft of this design: retiring the inline DDL (§2) was a *precondition* for
 this permission scheme to even function, since an INSERT/SELECT-only `app_role` attempting the
 old unconditional `CREATE TABLE IF NOT EXISTS`/`CREATE INDEX IF NOT EXISTS` on every connect
 would have failed at cold start on insufficient schema-`CREATE` privilege.
 
-The permissions guide records several residual limitations explicitly rather than silently: not
-tamper-evident (a DELETE-capable role existing anywhere is permission-separation, not
-cryptographic/WORM immutability); retention is currently global (`retention_days` is `365`
-everywhere in this codebase, no per-tenant variation exists); backups outlive purges (a `pg_dump`
-snapshot predating a purge run still contains the purged rows — no backup-rotation policy is set
-by this ADR); no per-subject erasure path exists for `audit_events.actor` specifically.
+The permissions guide records several residual limitations explicitly rather than silently:
+
+- Not tamper-evident — a DELETE-capable role existing anywhere is permission-separation, not
+  cryptographic/WORM immutability.
+- Retention is currently global — `retention_days` is `365` everywhere in this codebase, no
+  per-tenant variation exists.
+- Backups outlive purges — a `pg_dump` snapshot predating a purge run still contains the purged
+  rows; no backup-rotation policy is set by this ADR.
+- No per-subject erasure path exists for `audit_events.actor` specifically.
 
 ### 7. CLI
 
@@ -271,7 +296,9 @@ verified against the real source before fixing, then fixed in the same change:
   it back — but the connection pool (§3) made the race *routine*: two concurrent calls for the
   same `document_key` now genuinely execute in parallel on separate physical connections, where
   the single-connection-plus-lock design before this ADR at least serialized (without truly
-  preventing) the interleaving. Fixed by making both operations atomic *inside PostgreSQL*
+  preventing) the interleaving.
+
+  Fixed by making both operations atomic *inside PostgreSQL*
   instead of split across a Python read and a Python write: `record_ingested()` now issues one
   `INSERT ... ON CONFLICT (document_key) DO UPDATE SET version = document_lifecycle.version + 1
   ... RETURNING *` (a fresh row starts at `1` via `VALUES`; an existing row's version increments
@@ -280,7 +307,9 @@ verified against the real source before fixing, then fixed in the same change:
   returning `None` when it matches zero rows rather than checking existence with a prior `get()`.
   `restore_record()` keeps the original verbatim-write `_UPSERT`/`_write()` unchanged — it
   legitimately needs to write a caller-supplied version exactly, the backup/restore use case, not
-  auto-increment. Proven with a genuine concurrency test in
+  auto-increment.
+
+  Proven with a genuine concurrency test in
   `tests/integration/test_postgres_lifecycle_ledger.py`: N separate `PostgresLifecycleLedger`
   instances (separate pools, not just separate threads sharing one) calling `record_ingested()` on
   the same key concurrently must produce every version `1..N` exactly once, no gaps, no repeats —
@@ -294,11 +323,15 @@ verified against the real source before fixing, then fixed in the same change:
   `purge_expired()`'s `SELECT` batch and `DELETE ... WHERE id = ANY(...)` were two independent
   autocommit statements; two concurrent purges could both select the same batch, the first
   `DELETE` would remove it, and the second `DELETE` — now affecting zero rows — still had its
-  caller add the *selected* count (not the *deleted* count) to its running total. Fixed by
+  caller add the *selected* count (not the *deleted* count) to its running total.
+
+  Fixed by
   combining select-and-delete into one atomic statement: `WITH batch AS (SELECT id ... FOR UPDATE
   SKIP LOCKED) DELETE ... RETURNING id`, counting only what `RETURNING` actually reports. `FOR
   UPDATE SKIP LOCKED` also means concurrent purge jobs now work on genuinely different rows in
-  parallel instead of one blocking on the other's locks. The loop's termination condition changed
+  parallel instead of one blocking on the other's locks.
+
+  The loop's termination condition changed
   from "batch shorter than the page size" to "batch empty," since `SKIP LOCKED` can legitimately
   make a batch short while expired rows still remain, just temporarily locked by another purge —
   stopping only on empty avoids leaving them for longer than necessary.
@@ -327,7 +360,9 @@ verified against the real source before fixing, then fixed in the same change:
   that an already-applied migration's `.sql` file was edited afterward — a real gap for a team
   that might edit a "shipped" migration instead of adding a new one, out of scope for this pass
   (would need a schema change to `schema_migrations` itself and a policy decision on what to do
-  with a detected mismatch, not a small fix). Migration version numbers are not currently checked
+  with a detected mismatch, not a small fix).
+
+  Migration version numbers are not currently checked
   for strict sequential contiguity (a deliberately skipped number is accepted) — judged acceptable
   rather than a defect, since a version genuinely reverted before ever shipping is a legitimate
   pattern other migration tools also allow.
@@ -347,15 +382,21 @@ rather than pre-existing:
   and DST transitions whenever the interval carries day/month components — which
   `make_interval(days => ...)` always does. Independently verified (not just taken on the
   review's word) against PostgreSQL's own mailing-list discussion of this exact error before
-  fixing. `mrag db migrate` would have failed applying `0004` with "generation expression is not
+  fixing.
+
+  `mrag db migrate` would have failed applying `0004` with "generation expression is not
   immutable" on every fresh database — a hard failure blocking this ADR's own core acceptance
-  criterion, "démarrage sur base vide via migrations." Fixed by abandoning the generated-column
+  criterion, "démarrage sur base vide via migrations."
+
+  Fixed by abandoning the generated-column
   approach entirely: `0004` now adds a **plain** `expires_at TIMESTAMPTZ` column, backfilled once
   via an ordinary `UPDATE audit_events SET expires_at = "timestamp" + make_interval(days =>
   retention_days) WHERE expires_at IS NULL` (the IMMUTABLE restriction applies only to generated-
   column expressions and index expressions, never to regular DML, so this one-time backfill can
   safely use the same STABLE arithmetic the generated column couldn't), then `SET NOT NULL`, then
-  indexed. Going forward, `PostgresAuditSink.record()` computes `expires_at` in Python
+  indexed.
+
+  Going forward, `PostgresAuditSink.record()` computes `expires_at` in Python
   (`event.timestamp + timedelta(days=event.retention_days)`, both UTC-based per
   `AuditEvent.timestamp`'s own default field, so there is no DST/timezone ambiguity to begin with)
   and passes it as an ordinary `INSERT` value — sidestepping the IMMUTABLE-classification question
@@ -367,12 +408,16 @@ rather than pre-existing:
   concurrent-*different*-callers race — but `record_ingested()` still executed `_UPSERT_INGEST`
   through `_execute()`, which retries any connection-level failure automatically. That retry
   assumes the wrapped statement is idempotent (true for a plain `SELECT`, or `record()`'s `INSERT
-  ... ON CONFLICT DO NOTHING`); it is not true for `version = document_lifecycle.version + 1`. If
+  ... ON CONFLICT DO NOTHING`); it is not true for `version = document_lifecycle.version + 1`.
+
+  If
   PostgreSQL executes and commits the UPSERT but the client never receives the result before the
   connection breaks — an inherently ambiguous outcome no client-side signal can distinguish from
   "never executed at all" — the automatic retry would run the same increment a second time for one
   logical call, silently producing a version gap (e.g. 3 → 5) that looks like two ingestions
-  happened. Fixed by splitting the shared connection-checkout-and-classify logic (`_run_once()`)
+  happened.
+
+  Fixed by splitting the shared connection-checkout-and-classify logic (`_run_once()`)
   out from two separate callers: `_execute()` (unchanged behavior — wraps `_run_once()` in
   `retry_with_backoff`, for statements safe to repeat) and a new `_execute_once()` (goes through
   the circuit breaker only, never retries a connection-level failure). `record_ingested()` now
@@ -385,13 +430,17 @@ rather than pre-existing:
 - **MEDIUM-001 (second pass) — the same non-retry-safety gap existed in `purge_expired()`.**
   §9's MEDIUM-002 fix made select-and-delete one atomic `WITH ... FOR UPDATE SKIP LOCKED ...
   DELETE ... RETURNING` statement, correctly closing the concurrent-purge-jobs over-count — but
-  `purge_expired()` still executed it through the same automatically-retrying `_execute()`. The
+  `purge_expired()` still executed it through the same automatically-retrying `_execute()`.
+
+  The
   identical ambiguous-outcome scenario applies: if a batch's `DELETE` commits but the client never
   sees `RETURNING` before the connection breaks, a retry would select and delete a *different*
   batch of still-expired rows (the first batch is already gone), and the first batch's row count
   would never be added to `total_deleted` — a real under-count of how many audit rows were
   actually removed, reintroducing in the retry path exactly the class of inaccuracy §9's
-  MEDIUM-002 fix was meant to eliminate in the concurrency path. Fixed the same way: `purge_expired()`
+  MEDIUM-002 fix was meant to eliminate in the concurrency path.
+
+  Fixed the same way: `purge_expired()`
   now calls the sink's own new `_execute_once()` instead of `_execute()`. `record()` and
   `count_expired()` are unaffected — both already used naturally retry-safe statements (`INSERT
   ... ON CONFLICT DO NOTHING`, a plain `SELECT count(*)`).

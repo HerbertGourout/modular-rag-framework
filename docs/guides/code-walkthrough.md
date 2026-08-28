@@ -49,18 +49,19 @@ mrag ask "…" --manifest manifests/presets/local-hybrid-rag.yaml
    `type: hybrid` in YAML → factory `HybridRetriever(**cfg.config)`. This is where (and only
    where) new components get registered.
 5. **The engine** — [src/modular_rag/orchestration/engine.py](../../src/modular_rag/orchestration/engine.py):
-   `RAGEngine._run_steps()` is the conductor for the native path (a manifest can instead select
-   `LangGraphEngineAdapter` via `engine.adapter: langgraph` — see
-   [document-engine-contract.md](../architecture/document-engine-contract.md) — but
-   `local-hybrid-rag.yaml` uses native, which this walkthrough follows). Read it in full; it is
-   **more than 5 fixed stages** — every step past retrieval is conditionally run only if its
-   component is configured on the manifest, and the *complete*, verified sequence (tenant-policy
-   check → policy-engine check → guard → retrieve → tenant-filter → rerank → generate → answer
-   guard → redact → human-review → audit) lives in
-   [runtime-flow.md](../architecture/runtime-flow.md) — read that file for the authoritative
-   step-by-step, not this bullet list, which only names the pieces most relevant for a first
-   read-through of `local-hybrid-rag.yaml` (which wires no security or governance component, so
-   query/answer guards and governed steps are no-ops for this walkthrough):
+   `RAGEngine._run_steps()` is the conductor for the native path. A manifest can instead select
+   `LangGraphEngineAdapter` via `engine.adapter: langgraph` (see
+   [document-engine-contract.md](../architecture/document-engine-contract.md)), but
+   `local-hybrid-rag.yaml` uses native, which this walkthrough follows.
+
+   Read it in full — it is **more than 5 fixed stages**. Every step past retrieval runs only if
+   its component is configured on the manifest. `local-hybrid-rag.yaml` wires no security or
+   governance component, so query/answer guards and governed steps are no-ops for this
+   walkthrough. The *complete*, verified sequence — tenant-policy check → policy-engine check →
+   guard → retrieve → tenant-filter → rerank → generate → answer guard → redact → human-review →
+   audit — lives in [runtime-flow.md](../architecture/runtime-flow.md). Read that file for the
+   authoritative step-by-step; the bullet list below only names the pieces most relevant for a
+   first read-through:
    - **retrieval** → [retrieval/retrievers/hybrid.py](../../src/modular_rag/retrieval/retrievers/hybrid.py)
      which queries [vector.py](../../src/modular_rag/retrieval/retrievers/vector.py) (Qdrant) and
      [bm25.py](../../src/modular_rag/retrieval/retrievers/bm25.py), then fuses via
@@ -134,19 +135,23 @@ Reading the test is often the fastest way to understand a file.
 
 ## Level 4 — The "why": decisions and state of the art
 
-1. **The ADRs** — [docs/adr/](../adr/): 0001 (hexagonal layering), 0002 (contracts + plugins),
-   0003 (security & governance) — all three still accepted, each now with a short 2026-08
-   amendment note where ADR-0005 superseded a specific claim. 0004 (strategic features V1-V5) is
-   archived, superseded by **0005** (document-AI control plane boundary — the single most
-   important ADR to read if you're getting oriented: it's why `agents/`, GraphRAG, fine-tuning
-   execution, and multimodal execution are delegated rather than built natively). **0006**
-   selects LangGraph as the external engine; **0007** fixes the layer-boundary/manifest-
-   activation gaps that made ADR-0005 real in practice; **0008** separates offline evaluation
-   from online answering and makes engine incompatibilities fail startup; **0009** adds
-   embedder/vector-store dimension reconciliation. ADR-0010 through ADR-0013 cover bounded
-   readiness, PostgreSQL durability/migrations, OTel tracing and operational metrics. Read the
-   ADR index in order if you're new — each
-   builds on the last.
+1. **The ADRs** — [docs/adr/](../adr/). Read the index in order if you're new — each builds on
+   the last:
+   - **0001-0003** (hexagonal layering, contracts + plugins, security & governance) — all three
+     still accepted, each with a short 2026-08 amendment note where ADR-0005 superseded a
+     specific claim.
+   - **0004** (strategic features V1-V5) — archived, superseded by 0005.
+   - **0005** (document-AI control plane boundary) — the single most important ADR to read if
+     you're getting oriented: it's why `agents/`, GraphRAG, fine-tuning execution, and multimodal
+     execution are delegated rather than built natively.
+   - **0006** — selects LangGraph as the external engine.
+   - **0007** — fixes the layer-boundary/manifest-activation gaps that made ADR-0005 real in
+     practice.
+   - **0008** — separates offline evaluation from online answering and makes engine
+     incompatibilities fail startup.
+   - **0009** — adds embedder/vector-store dimension reconciliation.
+   - **0010-0013** — bounded readiness, PostgreSQL durability/migrations, OTel tracing, and
+     operational metrics.
 2. **The research digests** — [docs/research/README.md](../research/README.md): the maintained
    paper corpus distilled into topic digests. Design choices should cite the relevant digest
    ([CLAUDE.md](../../CLAUDE.md) coding rule 8); unsourced constants are flagged as such in the

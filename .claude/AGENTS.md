@@ -537,7 +537,7 @@ Each subagent is grounded in **research papers** from the `.claude/research-pape
 ## References
 
 - [Subagent Implementations](./agents/) — All 8 subagent definitions
-- [Reusable Skills](./skills/) — 18 workflow skills (add-retriever, add-generator, add-security-guard, etc.)
+- [Reusable Skills](./skills/) — 19 workflow skills (add-retriever, add-generator, add-security-guard, etc.)
 - [Parallelization Guide](../docs/guides/claude-code-parallelization-orchestration.md)
 - [CLAUDE.md](../CLAUDE.md) — Project rules and roadmap
 - [.claude/settings.json](./settings.json) — Configuration

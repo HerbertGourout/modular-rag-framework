@@ -82,7 +82,16 @@ Claude Code uses a **5-level scope system** where higher levels override lower o
   "fallbackModel": ["claude-sonnet-4-6", "claude-haiku-4-5"]
 }
 ```
-When Opus is overloaded → switch to Sonnet, then Haiku. (Use the alias `"opus"`/`"sonnet"`/`"haiku"` to always track the latest model in that tier, or a full dated ID like `claude-opus-4-8` to pin a specific snapshot. **Self-correction (2026-06-22)**: an earlier revision of this note claimed `claude-opus-4-6` "does not exist" — that was wrong. It's a real, valid Opus snapshot, just not the current latest one (`claude-opus-4-8`, as of this session). Pinning an older snapshot is legitimate if you want reproducible behavior; use the `opus` alias instead if you want to always track the newest release.)
+When Opus is overloaded → switch to Sonnet, then Haiku.
+
+Use the alias `"opus"`/`"sonnet"`/`"haiku"` to always track the latest model in that tier, or a
+full dated ID like `claude-opus-4-8` to pin a specific snapshot.
+
+**Self-correction (2026-06-22)**: an earlier revision of this note claimed `claude-opus-4-6` "does
+not exist" — that was wrong. It's a real, valid Opus snapshot, just not the current latest one
+(`claude-opus-4-8`, as of this session). Pinning an older snapshot is legitimate if you want
+reproducible behavior; use the `opus` alias instead if you want to always track the newest
+release.
 
 ### Permissions & Security
 
@@ -286,7 +295,12 @@ When Opus is overloaded → switch to Sonnet, then Haiku. (Use the alias `"opus"
 
 **Example: Ruff Linting Hook**
 
-> **Correction (2026-06-22)**: there is no `filePattern` field — `matcher` matches the **tool name** only (regex over `Edit|Create|Write|...`), not a file path glob. Claude Code has no native per-path hook filter; the command below therefore lints the whole `src/` tree on every matching tool call, not just the file that was touched. If you need true per-file filtering, the hook command itself must read `tool_input.file_path` from the JSON Claude Code pipes to it on stdin and decide there.
+> **Correction (2026-06-22)**: there is no `filePattern` field — `matcher` matches the **tool
+> name** only (regex over `Edit|Create|Write|...`), not a file path glob. Claude Code has no
+> native per-path hook filter; the command below therefore lints the whole `src/` tree on every
+> matching tool call, not just the file that was touched. If you need true per-file filtering,
+> the hook command itself must read `tool_input.file_path` from the JSON Claude Code pipes to it
+> on stdin and decide there.
 
 ```json
 {

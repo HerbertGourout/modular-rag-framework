@@ -23,13 +23,15 @@ export OPENAI_API_KEY="sk-..."
 ```
 
 Note the variable name: it's the OpenAI SDK's own standard `OPENAI_API_KEY`, **not**
-`MRAG_OPENAI_API_KEY`. `app/settings.py`'s `Settings` class once declared `MRAG_`-prefixed
-variables, but every adapter is built only from the manifest's own config — nothing in the
-pipeline-wiring path ever constructed a `Settings()`, so `MRAG_OPENAI_API_KEY` never had any
-effect (found in Lot 16c, `docs/refactoring/lot-16c-deployment-runbooks.md`), and the file was
-deleted outright in Étape 8 of the ADR-0007 stabilization pass. `OpenAIGenerator` passes
-`api_key=None` to the SDK when the manifest doesn't set one explicitly, and the SDK itself falls
-back to plain `OPENAI_API_KEY`.
+`MRAG_OPENAI_API_KEY`.
+
+- Every adapter is built only from the manifest's own config. Nothing in the pipeline-wiring path
+  ever constructs a `Settings()` object.
+- `MRAG_OPENAI_API_KEY` never had any effect (found in Lot 16c,
+  `docs/refactoring/lot-16c-deployment-runbooks.md`). The `Settings` class that once declared it
+  was deleted outright in Étape 8 of the ADR-0007 stabilization pass.
+- `OpenAIGenerator` passes `api_key=None` to the SDK when the manifest doesn't set one explicitly.
+  The SDK itself then falls back to plain `OPENAI_API_KEY`.
 
 ## Step 3 — Run a genuinely hybrid query in one process
 
@@ -75,13 +77,15 @@ mrag ask "What are the main findings in the Q3 report?" \
          --manifest manifests/presets/local-hybrid-rag.yaml
 ```
 
-Because this is a new process and `local-hybrid-rag.yaml` uses the default `lexical: bm25-memory`
-backend, its BM25 index starts empty and `HybridRetriever` falls back to the persistent
-Qdrant/vector side. This is supported, but it is not a full hybrid query. Use the single-process
-example above for hybrid behavior, or select `lexical: sparse-qdrant` in the manifest before
-deploying multiple workers — a built-in persistent lexical backend, not something you need to
-supply yourself (see `manifests/presets/secure-enterprise-rag.yaml`, requires Qdrant client/server
-1.10+).
+Because this is a new process, and `local-hybrid-rag.yaml` uses the default `lexical:
+bm25-memory` backend, its BM25 index starts empty. `HybridRetriever` falls back to the
+persistent Qdrant/vector side — supported, but not a full hybrid query.
+
+Two ways to get real hybrid behavior:
+- Use the single-process example from Step 3 above.
+- Select `lexical: sparse-qdrant` in the manifest before deploying multiple workers. This is a
+  built-in persistent lexical backend — you don't need to supply your own (see
+  `manifests/presets/secure-enterprise-rag.yaml`; requires Qdrant client/server 1.10+).
 
 Typical output:
 

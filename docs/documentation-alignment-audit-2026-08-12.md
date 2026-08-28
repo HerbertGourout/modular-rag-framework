@@ -20,6 +20,7 @@ The active documentation is now broadly aligned with the implementation and ADR-
 ADR-0009. The largest pre-audit risk was not broken links: it was contradictory maturity
 language. Several high-visibility pages simultaneously described V1 as complete while the
 roadmap correctly recorded pending V1.0 live validation and incomplete V1.1/V1.2 deliverables.
+
 Other confirmed drift concerned nonexistent evaluation APIs/paths, overstated trace coverage,
 incomplete integration prerequisites, and an unsupported fully offline/local-LLM claim.
 

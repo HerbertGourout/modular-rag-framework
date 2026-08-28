@@ -115,10 +115,11 @@ which single edit broke validation.
 
 ### `SecurityError`: query blocked before it even reaches retrieval
 
-**Why**: `BasicSecurityGuard.check_query()` matched an injection pattern, a blocked term, or
-the query exceeded `max_query_length`. This is often a **false positive** during local
-testing — e.g., a question that happens to contain "ignore" near "instructions", or a test
-string with `exec(` in it.
+**Why**: `BasicSecurityGuard.check_query()` matched an injection pattern, a blocked term, or the
+query exceeded `max_query_length`.
+
+This is often a **false positive** during local testing — e.g., a question that happens to
+contain "ignore" near "instructions", or a test string with `exec(` in it.
 
 **Fix**: see the exact patterns in [security.md](../architecture/security.md) to understand
 why a specific query was blocked. In a dev manifest, you can disable the guard entirely
@@ -157,18 +158,23 @@ recipe.
 ### I get `NotImplementedError` from a component I expected to work
 
 **Why**: you're likely calling into a stub reserved for a later version, or a method a real
-adapter deliberately doesn't implement yet. Two of the four historically-`.gitkeep`-only
-`adapters/` subdirectories now hold real code — `adapters/llms/langgraph_engine.py`
-(`LangGraphEngineAdapter`) and `adapters/auth/keycloak_verifier.py` (`KeycloakTokenVerifier`) —
-so a `NotImplementedError` from either of those means a specific unimplemented method on a real
-class (check that class directly), not a missing file. `adapters/graphstores/` and
-`adapters/search/` are still genuinely `.gitkeep`-only placeholders (see
-[CLAUDE.md](../../CLAUDE.md) section 09 and [structure.md](../architecture/structure.md)). One
-other real, expected `NotImplementedError`: `QdrantStore.retrieve()` (the bare, embedder-less
-`Retriever`-shaped call) always raises it by design — use `VectorRetriever`, or call
-`retrieve_by_vector()` directly with a vector you already computed. Check
-[ROADMAP.md](../../ROADMAP.md) and [capability-matrix.md](../architecture/capability-matrix.md)
-to confirm the capability you're expecting has actually shipped before assuming it's a bug.
+adapter deliberately doesn't implement yet.
+
+- Two of the four historically-`.gitkeep`-only `adapters/` subdirectories now hold real code —
+  `adapters/llms/langgraph_engine.py` (`LangGraphEngineAdapter`) and
+  `adapters/auth/keycloak_verifier.py` (`KeycloakTokenVerifier`). A `NotImplementedError` from
+  either means a specific unimplemented method on a real class (check that class directly), not
+  a missing file.
+- `adapters/graphstores/` and `adapters/search/` are still genuinely `.gitkeep`-only placeholders
+  (see [CLAUDE.md](../../CLAUDE.md) section 09 and
+  [structure.md](../architecture/structure.md)).
+- One other real, expected `NotImplementedError`: `QdrantStore.retrieve()` (the bare,
+  embedder-less `Retriever`-shaped call) always raises it by design. Use `VectorRetriever`, or
+  call `retrieve_by_vector()` directly with a vector you already computed.
+
+Check [ROADMAP.md](../../ROADMAP.md) and
+[capability-matrix.md](../architecture/capability-matrix.md) to confirm the capability you're
+expecting has actually shipped before assuming it's a bug.
 
 ---
 
