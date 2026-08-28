@@ -62,15 +62,26 @@ case — Codex review pass 1, HIGH-001 follow-up: `Metrics.for_failure()` previo
 `None` for every failure branch) and, best-effort, `cost_usd` from
 `Answer.metadata.get("cost_usd")`.
 
-**`DeterministicGenerator` now records a real, measured `cost_usd: 0.0`** (Codex review pass 1,
-HIGH-003) — it never calls an LLM, so this is a genuine, confident measurement, not a fabricated
-default. `BenchmarkReport.cost_measured_count` (surfaced in the report payload and Markdown
-rendering) reports how many cases actually had a cost measurement, so a run against a different,
-real LLM-backed manifest — where nothing currently populates `Answer.metadata["cost_usd"]` (cost
-lives on a `Trace`/`TraceStep` per ADR-0013, not on `Answer` itself) — shows `0/N measured`
-rather than a misleading `avg_cost_usd: 0.0` indistinguishable from a genuine zero. Real LLM cost
-propagation through the engine/result boundary remains a known limitation, not attempted here —
-see "Explicitly out of scope" below.
+**`DeterministicGenerator` records a real, measured `cost_usd: 0.0`**, and every safety-probe
+branch does too — including a query blocked before generation ever ran (no generator, real or
+deterministic, was invoked, so `0.0` is a genuine measurement there as well) — so a fully
+successful run against the shipped deterministic manifest has 100% cost coverage
+(`cost_measured_count == total_cases`), not a partial one (Codex review pass 1 HIGH-003, tightened
+at pass 2 after a first attempt still left the three `expect_block: true` safety cases
+uncovered).
+
+`BenchmarkReport.cost_measured_count` (surfaced in the report payload and Markdown rendering)
+reports how many cases actually had a cost measurement. Critically, **`avg_cost_usd` itself fails
+closed to `math.inf` whenever `cost_measured_count` is `0`** (Codex review pass 2, HIGH-003) —
+matching `QualityGate`'s own "missing lower-is-better metric is infinite, never zero" convention
+— rather than the ambiguous `0.0` an earlier version of this fix left in place, which let a
+zero-coverage run silently pass a `0.0` baseline. A run against a different, real LLM-backed
+manifest — where nothing currently populates `Answer.metadata["cost_usd"]` outside the blocked-
+pre-generation case (cost otherwise lives on a `Trace`/`TraceStep` per ADR-0013, not on `Answer`
+itself) — now reports `avg_cost_usd: Infinity` and fails the gate, instead of a misleading
+`avg_cost_usd: 0.0` indistinguishable from a genuine zero. Real LLM cost propagation through the
+engine/result boundary remains a known limitation, not attempted here — see "Explicitly out of
+scope" below.
 
 ## Retrieval and generation errors are distinguished, not lumped together
 
@@ -97,15 +108,26 @@ wires:
   zero-network pattern `tests/e2e/test_secure_preset_e2e.py` already established for this
   codebase's deterministic e2e scenario.
 
-**Collection state, not just corpus content, is now reproducible** (Codex review pass 1,
-MEDIUM-002): `scripts/run_benchmark.py` clears the manifest's wired indexer
-(`Indexer.clear()` — delete + recreate the collection) before every ingest, by default. Before
-this fix, `index()`'s upsert-only semantics meant a stale point from a previous run — a corpus
-entry since removed from `core_v1.yaml`, or a leftover from a different manifest that happened to
-point at the same collection — could silently affect a local rerun's retrieval scoring; only a
-fresh CI service container was actually clean. Pass `--no-clear-collection` to skip this (e.g. to
-inspect a collection's state across runs); this is destructive to whatever the manifest's
-`indexer.config.collection` currently holds.
+**Collection state, not just corpus content, is reproducible for the shipped benchmark manifest**
+(Codex review pass 1, MEDIUM-002). Before this, `index()`'s upsert-only semantics meant a stale
+point from a previous run — a corpus entry since removed from `core_v1.yaml`, or a leftover from
+a different manifest that happened to point at the same collection — could silently affect a
+local rerun's retrieval scoring; only a fresh CI service container was actually clean.
+
+`scripts/run_benchmark.py` now clears the wired indexer (`Indexer.clear()` — delete + recreate the
+collection) before ingest, but **only when it can confirm the collection is benchmark-owned** —
+gated by `_should_clear_collection()`, which checks the wired manifest's own `id` field against
+`KNOWN_BENCHMARK_MANIFEST_ID` (`"eval-benchmark-deterministic"`, the shipped manifest's real id).
+Running the script with its default `--manifest` therefore still gets a fully reproducible,
+clean-state run automatically. Pointing `--manifest` at any other manifest leaves its collection
+untouched unless you pass `--clear-collection` explicitly, having confirmed that collection is
+safe to wipe — this flag is destructive (delete + recreate) to whatever that manifest's
+`indexer.config.collection` currently holds. (Codex review pass 2, HIGH-004: an earlier version of
+this fix cleared whichever `--manifest`'s collection was supplied, by default, with only an
+opt-*out* flag — destructive against an arbitrary custom, shared, or production collection for
+anyone running this against their own manifest, which this document's own "Real LLM-backed
+generators" section below has always said works unchanged. The ownership check above closes that
+gap; the flag is opt-*in* now, not opt-out.)
 
 **Golden-set schema validation** (Codex review pass 1, MEDIUM-001):
 `eval/datasets/loader.py` now rejects a case with an invalid `case_type` (anything other than
@@ -144,7 +166,7 @@ today, not placeholders:
 | Metric | Baseline | Why this one is trustworthy without a real run |
 |---|---|---|
 | `safety_pass_rate` | `1.0` | `BasicSecurityGuard` is pure, exact regex matching — deterministic, not statistical. A regression here means a pattern genuinely broke. |
-| `avg_cost_usd` | `0.0` | `DeterministicGenerator` explicitly records a real, measured `cost_usd=0.0` — never a fabricated default (see "What it measures" above). Any positive value is a real bug (e.g. a manifest accidentally wired to a real generator). |
+| `avg_cost_usd` | `0.0` | `DeterministicGenerator` and every safety-probe branch explicitly record a real, measured `cost_usd=0.0` — never a fabricated default (see "What it measures" above), and the golden set's own 13 cases reach 100% coverage under the shipped manifest. Any positive value is a real bug (e.g. a manifest accidentally wired to a real generator); a *missing* measurement now reports `Infinity` and fails the gate rather than a suspicious `0.0`. |
 | `failure_rate` | `0.0` | The golden set's 13 cases are all expected to run to completion — any failure is a real regression, not statistical noise. Gated via `cost_summary()`'s `lower_is_better` set (Codex review pass 1, HIGH-001): before this, a majority-failed run could still pass, since `_avg()` excludes every failed case from every other gated metric. |
 
 Every other threshold (`avg_recall`, `avg_ndcg`, `avg_faithfulness`, `avg_answer_correctness`,
