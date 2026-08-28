@@ -17,11 +17,13 @@ class _Native:
         tenant_policy_active: bool = False,
         tracer: Any | None = None,
         meter: Any | None = None,
+        indexer: Any | None = None,
     ) -> None:
         self.closed = False
         self.tenant_policy_active = tenant_policy_active
         self.tracer = tracer
         self.meter = meter
+        self.indexer = indexer
         self.last_retrieve_question: str | None = None
         self.retrieve_error: Exception | None = None
 
@@ -86,6 +88,16 @@ def test_application_exposes_selected_engine_name() -> None:
     service = ApplicationService(_Native(), _Selected())  # type: ignore[arg-type]
 
     assert service.engine_name == "selected-engine"
+
+
+def test_indexer_property_delegates_to_native() -> None:
+    """Codex review (pass 1, MEDIUM-002): `scripts/run_benchmark.py` needs
+    `ApplicationService.indexer` to call `.clear()` before each ingest,
+    same "public accessor" pattern already used for `tracer`/`meter`."""
+    indexer = object()
+    service = ApplicationService(_Native(indexer=indexer), _Selected())  # type: ignore[arg-type]
+
+    assert service.indexer is indexer
 
 
 def test_application_closes_native_container_resources() -> None:

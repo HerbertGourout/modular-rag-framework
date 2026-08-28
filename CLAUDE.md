@@ -14,19 +14,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 01 — Project purpose
 
 Production-grade modular RAG framework for Publicis enterprise use cases, built around three
-things: a **bounded native engine** (hybrid retrieval, generation, security — the V1 pipeline,
-`NativeEngineAdapter`), an **owned control plane** (governance, audit, offline evaluation,
-config/manifests, tenant isolation, portability — native, with runtime activation explicitly
-validated per engine), and **delegated external engines** for generic multi-agent orchestration
-and GraphRAG traversal (LangGraph today, selected via [ADR-0006](docs/adr/0006-external-engine-selection.md),
-reached through the `DocumentEngine` port). The historical "V1 Core RAG → V2 Agentic → V3 Graph
-Memory → V4 Governance → V5 Multimodal" progression in block 09 still organizes the detailed
-roadmap, but per [ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md) (accepted
-2026-08-04) and [ADR-0007](docs/adr/0007-layer-boundaries-and-control-plane-activation.md)
-(accepted 2026-08-07), plus [ADR-0008](docs/adr/0008-offline-evaluation-and-engine-activation.md),
-most version numbers no longer map to "built natively in that version" —
-see block 09 for the current owned/delegated split, which is reconciled with the ADRs, not an
-interim marker awaiting a future rewrite.
+things:
+- A **bounded native engine** (hybrid retrieval, generation, security — the V1 pipeline,
+  `NativeEngineAdapter`).
+- An **owned control plane** (governance, audit, offline evaluation, config/manifests, tenant
+  isolation, portability — native, with runtime activation explicitly validated per engine).
+- **Delegated external engines** for generic multi-agent orchestration and GraphRAG traversal
+  (LangGraph today, selected via [ADR-0006](docs/adr/0006-external-engine-selection.md), reached
+  through the `DocumentEngine` port).
+
+The historical "V1 Core RAG → V2 Agentic → V3 Graph Memory → V4 Governance → V5 Multimodal"
+progression in block 09 still organizes the detailed roadmap, but per
+[ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md) (accepted 2026-08-04) and
+[ADR-0007](docs/adr/0007-layer-boundaries-and-control-plane-activation.md) (accepted 2026-08-07),
+plus [ADR-0008](docs/adr/0008-offline-evaluation-and-engine-activation.md), most version numbers
+no longer map to "built natively in that version" — see block 09 for the current owned/delegated
+split, which is reconciled with the ADRs, not an interim marker awaiting a future rewrite.
 
 **Non-negotiable priority**: preserve the V1 end-to-end path before adding V3+ features. New graph, governance, or multimodal work must not break `examples/simple_qa/`, unit tests, contract tests, or the local layering audit.
 
@@ -281,13 +284,26 @@ See [ROADMAP.md](ROADMAP.md) for complete timeline and success criteria per vers
   docs corpus) now runs nightly against a real LLM + Qdrant (`nightly.yml`, above) — `ROADMAP.md`
   no longer lists this as an unchecked item
 
-**V1.1 — Evaluation-as-Contract** 🟡 (partially built)
-- Implemented: `contracts/evaluation.py::Evaluator`, exact-match scoring, recall/precision/MRR,
-  `BenchmarkRunner`, in-memory `GoldenSet` classes, and a programmatic offline `QualityGate`.
-- Not built: NDCG, semantic/factuality scorers, populated per-domain datasets, a regression
-  dashboard, and a manifest-driven evaluation runner.
-- Per ADR-0008, evaluation and gold-dependent quality gates are offline capabilities, not online
-  runtime pipeline components.
+**V1.1 — Evaluation-as-Contract** 🟡 (partially built; expanded by Batch 13, external plan —
+"Offline benchmark," not this repo's own `docs/refactoring-plan.md` Lot numbering)
+- Implemented: `contracts/evaluation.py::Evaluator`, exact-match scoring, recall/precision/MRR/
+  NDCG (binary-relevance, `eval/scorers/retrieval_metrics.py`), `BenchmarkRunner` (classifies
+  every failure's `error_stage` — retrieval/generation/security/infra — and scores safety-probe
+  cases separately from QA cases), `GoldenSet` with one populated `default`-domain dataset
+  (`eval/datasets/core_v1.yaml`, loaded via `eval/datasets/loader.py`), deterministic lexical-
+  proxy faithfulness/answer-correctness scorers (`eval/scorers/faithfulness.py`,
+  `answer_correctness.py` — explicitly not an LLM-judge), a programmatic offline `QualityGate`
+  (now supports `lower_is_better` metrics, e.g. latency/cost), and a JSON+Markdown report writer
+  (`eval/reporting.py`) enabling commit-to-commit comparison, gated in CI
+  (`scripts/run_benchmark.py`, `.github/workflows/ci.yml`'s `benchmark-gate` job). See
+  [docs/guides/offline-evaluation.md](docs/guides/offline-evaluation.md).
+- Not built: semantic/LLM-judge scorers (RAGAS/ARES/TRACe-style — deferred, would need a
+  non-deterministic paid LLM call this benchmark's own reproducibility requirement rules out),
+  per-stratum/per-cluster golden-set coverage, additional per-domain datasets beyond the one
+  `default`-domain set, and a live regression-dashboard UI (the Markdown/JSON report is the
+  current artifact).
+- Per ADR-0008, evaluation and gold-dependent quality gates remain offline capabilities, not
+  online runtime pipeline components — the benchmark is script-driven, never manifest-activated.
 
 **V1.2 — Compliance Audit Trail** 🟡 (partially built)
 - Implemented: structured `AuditEvent`/`AuditSink`, in-memory and append-only PostgreSQL sinks,
@@ -484,7 +500,7 @@ per ADR-0005 — this framework's differentiator is owning governance/audit/eval
 
 | Capability | LangChain | Haystack | **This Framework** |
 |---|---|---|---|
-| Evaluation | External | Built-in | 🟡 **Native offline primitives (V1.1)**; datasets/NDCG/dashboard remain open |
+| Evaluation | External | Built-in | 🟡 **Native offline primitives + NDCG, one golden dataset, CI-gated (V1.1, Batch 13)**; LLM-judge scoring and a dashboard UI remain open |
 | Audit Trail | Manual logs | Limited | 🟡 **Native structured audit (V1.2)**; lineage/compliance reports remain open |
 | Policies | None | Limited | ✅ **Policy-as-Code (V2.0), native** |
 | Multi-Agent | Bolted-on | Limited | ⚙️ **Delegated target via `DocumentEngine`**; the current fixed LangGraph graph is not multi-agent |

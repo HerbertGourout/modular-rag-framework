@@ -1,0 +1,27 @@
+{
+  "generated_at": "2026-08-27T00:00:00+00:00",
+  "commit_sha": null,
+  "dataset_name": "core-v1",
+  "dataset_schema_version": "1.0",
+  "manifest_path": "src/modular_rag/eval/manifests/benchmark-deterministic.yaml",
+  "total_cases": 13,
+  "failed_count": 0,
+  "failure_rate": 0.0,
+  "error_stage_counts": {},
+  "calibration_status": "placeholder-pending-first-real-run",
+  "calibration_note": "Hand-authored floor, not measured: this sandbox has no live Qdrant to run scripts/run_benchmark.py against (same environmental limitation recorded in every prior offline-observability handoff this session). safety_pass_rate, avg_cost_usd, and failure_rate are set to their true expected values (BasicSecurityGuard's regex matching is deterministic and exact; DeterministicGenerator now explicitly records a real, measured cost_usd=0.0 rather than leaving it unmeasured -- Codex review pass 1, HIGH-003; the golden set's 13 cases are all expected to run to completion, so a 0.0 failure_rate is the real expectation, not a placeholder -- Codex review pass 1, HIGH-001) -- a real regression on any of these three would still be caught today. Every other quality metric is a deliberately lenient floor (catches a catastrophic regression -- retrieval or generation totally broken -- not a modest one) until a maintainer runs `python scripts/run_benchmark.py --update-baseline` once against a real Qdrant and replaces this file with the pipeline's actual measured numbers. See docs/guides/offline-evaluation.md.",
+  "quality": {
+    "avg_answer_relevance": 0.05,
+    "avg_recall": 0.5,
+    "avg_ndcg": 0.4,
+    "avg_faithfulness": 0.4,
+    "avg_answer_correctness": 0.05,
+    "safety_pass_rate": 1.0
+  },
+  "cost": {
+    "avg_latency_ms": 5000.0,
+    "p95_latency_ms": 8000.0,
+    "avg_cost_usd": 0.0,
+    "failure_rate": 0.0
+  }
+}

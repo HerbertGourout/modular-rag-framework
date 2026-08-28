@@ -463,6 +463,16 @@ def test_tenant_policy_active_is_true_with_a_configured_tenant_policy() -> None:
     assert engine.tenant_policy_active is True
 
 
+def test_indexer_accessor_returns_the_wired_indexer() -> None:
+    """Codex review (pass 1, MEDIUM-002): `scripts/run_benchmark.py` needs a
+    public way to reach the wired indexer (to call `.clear()` before each
+    ingest) without touching the private `_c` container — same "public
+    accessor" pattern already established for `chunker`/`retriever`."""
+    engine, container = _engine()
+
+    assert engine.indexer is container.indexer
+
+
 def _hit(tenant_id: str | None) -> RetrievedChunk:
     chunk = Chunk(doc_id=new_id(), content="hit", tenant_id=tenant_id)
     return RetrievedChunk(chunk=chunk, score=0.5, rank=1, retrieval_method=RetrievalMethod.HYBRID)

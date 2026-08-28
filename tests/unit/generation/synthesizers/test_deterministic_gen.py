@@ -153,3 +153,22 @@ def test_agenerate_matches_generate():
 
 def test_name_is_stable_identifier():
     assert DeterministicGenerator().name() == "deterministic"
+
+
+def test_answer_records_a_real_measured_zero_cost():
+    """Codex review (pass 1, HIGH-003): this generator never calls an LLM,
+    so cost_usd=0.0 is a real, confident measurement -- recorded explicitly
+    so a benchmark reading Answer.metadata.get("cost_usd") sees a genuine
+    measurement, not an indistinguishable-from-unmeasured None."""
+    _, _, answer = _generate(DeterministicGenerator(), ["some context"])
+
+    assert answer.metadata.get("cost_usd") == 0.0
+
+
+def test_refusal_answer_still_records_the_measured_zero_cost():
+    """The refusal path rebuilds the Answer via model_copy(update={...}) --
+    confirm metadata (set before the refusal check) survives that copy."""
+    _, _, answer = _generate(DeterministicGenerator(), [])
+
+    assert answer.text == "I don't know based on the provided context."
+    assert answer.metadata.get("cost_usd") == 0.0

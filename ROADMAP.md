@@ -90,9 +90,10 @@ without requiring external services for those two categories.
 - ✅ End-to-end RAG pipeline implemented and unit/contract-tested; the same pipeline now runs
   nightly against a real LLM + Qdrant (see above) — no longer an unconfirmed live-run gap
 - ✅ Security guards pass tests
-- ⬜ Hybrid retrieval F1 > 0.75 on golden set — cannot be claimed yet: no populated golden set
-  exists (`eval/datasets/` is empty, see V1.1 below); the retrieval code itself does now run
-  against a live Qdrant in CI, but without a golden set there is nothing to score F1 against
+- ⬜ Hybrid retrieval F1 > 0.75 on golden set — still not measured against real production
+  traffic; a small, synthetic golden set now exists and runs in CI (`eval/datasets/core_v1.yaml`,
+  Batch 13, see V1.1 below), but its 6-passage corpus is a benchmark fixture, not a
+  representative production sample F1 > 0.75 could be claimed against
 
 ---
 
@@ -103,28 +104,47 @@ without requiring external services for those two categories.
 **Status: partially built.** The original detailed module list below (`eval/metrics/`,
 `eval/golden_sets/`, `eval/regression_dashboard/`) described files that were never actually
 created — corrected 2026-08-07 (Étape 9) to describe the real, simpler implementation instead.
+Batch 13 (external plan — "Offline benchmark"; not this repo's own `docs/refactoring-plan.md`
+Lot numbering) then industrialized it — see
+[docs/guides/offline-evaluation.md](docs/guides/offline-evaluation.md).
 
 **What actually exists:**
 - `contracts/evaluation.py`: `Evaluator` Protocol (`evaluate(query, answer, expected, context) ->
   Metrics`) — consumed by offline evaluation runners and contract-tested
   (`tests/contract/test_eval_conformance.py`)
 - `eval/scorers/exact_match.py`: `ExactMatchEvaluator` — built-in offline answer scorer
-- `eval/scorers/retrieval_metrics.py`: `recall_at_k`, `precision_at_k`, `mrr` — no NDCG yet
+- `eval/scorers/retrieval_metrics.py`: `recall_at_k`, `precision_at_k`, `mrr`, `ndcg_at_k`
+  (binary-relevance NDCG@k, Batch 13)
+- `eval/scorers/faithfulness.py`/`answer_correctness.py` (Batch 13): deterministic lexical-proxy
+  scorers for two of the three DIGEST-evaluation.md pairwise generation targets — explicitly not
+  LLM-judge (RAGAS/ARES/TRACe-style) scoring, which would need a non-deterministic paid LLM call
 - `eval/runners/benchmark.py`: `BenchmarkRunner`/`GoldenSet`/`BenchmarkCase`/`BenchmarkReport` —
-  the golden-set infrastructure exists as classes; `eval/datasets/` (populated per-domain YAML
-  files) is still empty, so no actual golden set is shipped yet
+  now also classifies failures by `error_stage` (retrieval/generation/security/infra) and scores
+  safety-probe cases (`case_type: safety`) separately from QA cases (Batch 13)
+- `eval/datasets/core_v1.yaml` + `eval/datasets/loader.py` (Batch 13): one populated,
+  synthetic, `default`-domain golden set (13 cases: 9 QA + 4 safety probes) — the first real
+  golden set shipped, not yet a *per-domain* catalogue (finance/healthcare/manufacturing golden
+  sets remain future work)
+- `eval/reporting.py` (Batch 13): JSON + Markdown report writer enabling commit-to-commit
+  comparison — a lightweight report, not a live regression-dashboard UI
 - `eval/quality_gate.py`: `QualityGate` — compares offline benchmark metrics against a baseline,
-  in `report_only` or `blocking` mode; not part of runtime pipeline manifests (ADR-0008)
+  in `report_only` or `blocking` mode; now supports `lower_is_better` metrics (cost/latency,
+  Batch 13); not part of runtime pipeline manifests (ADR-0008)
+- `scripts/run_benchmark.py` + `.github/workflows/ci.yml`'s `benchmark-gate` job (Batch 13): a
+  significant regression past `eval/reports/baseline.json` blocks CI
 
-**Not built:** semantic-similarity/factuality/RAGAS-style scorers, per-domain golden-set YAML
-files, a regression dashboard/detector.
+**Not built:** semantic-similarity/factuality/RAGAS-style (LLM-judge) scorers, per-stratum/
+per-cluster golden-set coverage analysis ([2604.20763], DIGEST-evaluation.md #2), and additional
+per-domain golden-set YAML files beyond the one `default`-domain set.
 
 **Success criteria:**
 - ✅ `Evaluator` Protocol contract-enforced and usable by offline evaluation runners
-- ✅ Retrieval metrics (recall/precision/MRR) computed
-- ⬜ NDCG@k
-- ⬜ Populated per-domain golden sets (`eval/datasets/` is currently empty)
-- ⬜ Regression dashboard/auto-detection
+- ✅ Retrieval metrics (recall/precision/MRR/NDCG) computed
+- ✅ NDCG@k
+- 🟡 Populated golden sets — one synthetic `default`-domain set ships (Batch 13); per-domain
+  (finance/healthcare/manufacturing) sets remain future work
+- 🟡 Regression comparison — a JSON+Markdown report + CI-blocking quality gate exist (Batch 13);
+  a live dashboard UI does not
 
 ---
 
@@ -462,7 +482,7 @@ version becomes "demonstrable" rather than "under construction".
 | Version | Target | Key Success Metrics |
 |---|---|---|
 | **v1.0** | Q2 2026 | ✅ Done — Hybrid RAG working, F1 > 0.75, examples running |
-| **v1.1** | Q2 2026 | 🟡 Partial — recall/precision/MRR + `Evaluator` contract shipped; NDCG, populated golden sets, regression dashboard not built |
+| **v1.1** | Q2 2026 | 🟡 Partial — recall/precision/MRR/NDCG + `Evaluator` contract + one CI-gated golden set shipped (Batch 13); LLM-judge scoring and additional per-domain golden sets not built |
 | **v1.2** | Q3 2026 | 🟡 Partial — structured audit events + manifest-activatable sinks shipped; formatted GDPR/CCPA/HIPAA reports not built |
 | **v2.0** | Q3 2026 | ✅ Done — `PolicyEngine`/`TenantIsolationPolicy`/`HumanReviewGate` manifest-wired (multi-agent runtime ⚙️ delegated, see v2.1) |
 | **v2.1** ⚙️ | Q4 2026 | Delegated target; the current LangGraph adapter proves selection but not multi-agent behaviour |
@@ -481,7 +501,7 @@ version becomes "demonstrable" rather than "under construction".
 
 | Feature | LangChain | Haystack | **This Framework** |
 |---|---|---|---|
-| Evaluation | External (Ragas) | Built-in | ✅ **Contract-enforced, native** — `Evaluator` Protocol + recall/precision/MRR shipped; golden sets and NDCG still open (V1.1) |
+| Evaluation | External (Ragas) | Built-in | ✅ **Contract-enforced, native** — `Evaluator` Protocol + recall/precision/MRR/NDCG + a CI-gated golden-set benchmark shipped (V1.1, Batch 13); LLM-judge scoring and additional per-domain golden sets still open |
 | Audit Trail | Manual | Limited | 🟡 **Primitives shipped, native** — structured, append-only audit events (in-memory or Postgres); no formatted GDPR/CCPA/HIPAA report generator yet (V1.2) |
 | Policies | None | Limited | ✅ **Policy-as-Code, native** — `PolicyEngine`/`TenantIsolationPolicy` manifest-wired and fail-closed |
 | Multi-Agent | Bolted-on | Limited | ⚙️ **Delegated target via `DocumentEngine`**; not implemented by the current fixed LangGraph graph |

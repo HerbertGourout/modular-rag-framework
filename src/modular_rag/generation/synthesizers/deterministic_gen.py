@@ -78,7 +78,23 @@ class DeterministicGenerator:
                 metadata={"context_chunks": len(context)},
             )
         )
-        answer = Answer(query_id=query.id, text=text, citations=citations, model="deterministic")
+        # Codex review (pass 1, HIGH-003): `Answer.metadata["cost_usd"]` was
+        # previously never set here at all, so a benchmark reading it back
+        # (eval/runners/benchmark.py::_score_qa) saw `None` for every case
+        # and reported an *unmeasured* cost that happened to average to the
+        # same 0.0 a real, deliberate zero would — indistinguishable from a
+        # genuine measurement gone unnoticed for a non-deterministic
+        # generator. This adapter never calls an LLM, so 0.0 is a real,
+        # confident measurement, not a fabricated default — recording it
+        # explicitly closes that ambiguity for the only generator this
+        # benchmark's own manifest ever wires.
+        answer = Answer(
+            query_id=query.id,
+            text=text,
+            citations=citations,
+            model="deterministic",
+            metadata={"cost_usd": 0.0},
+        )
         if self._groundedness.should_refuse(answer, context):
             return self._groundedness.refusal_answer(answer)
         return answer

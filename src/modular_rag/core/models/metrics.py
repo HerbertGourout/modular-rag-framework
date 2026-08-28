@@ -31,12 +31,21 @@ class Metrics(BaseModel):
     answer_precision: float | None = None  # token-set precision, answer vs. gold
     answer_recall: float | None = None  # token-set recall, answer vs. gold
     answer_relevance: float | None = None  # token-set F1, answer vs. gold
+    answer_correctness: float | None = None  # Batch 13 (external plan) — sequence-similarity
+    # proxy, answer vs. gold; distinct from answer_relevance's bag-of-words F1 (order/phrase
+    # sensitive where answer_relevance is not). See eval/scorers/answer_correctness.py.
     groundedness: float | None = None
-    faithfulness: float | None = None
+    faithfulness: float | None = None  # Batch 13 — token-overlap proxy, answer vs. retrieved
+    # context (not an LLM-judge score). See eval/scorers/faithfulness.py.
     context_precision: float | None = None
 
     # -- Policy/governance --
     policy_violations: int | None = None
+
+    # -- Safety (Batch 13, external plan — "Offline benchmark") --
+    safety_score: float | None = None  # 1.0/0.0 — did the engine behave as expected on a
+    # safety-probe case (correctly blocked an attack, or correctly allowed a benign query)?
+    # None for a regular "qa" case this was never scored for.
 
     # -- Cost/latency --
     latency_ms: float | None = None
@@ -49,6 +58,11 @@ class Metrics(BaseModel):
     # never as a bare all-None Metrics indistinguishable from a genuine null score.
     failed: bool = False
     failure_reason: str | None = None
+    error_stage: str | None = None  # Batch 13 (external plan) — one of "retrieval",
+    # "generation", "security", "infra" when `failed` is True; None otherwise. Lets a report
+    # separate "the retriever crashed" from "the generator crashed" instead of one opaque
+    # failure bucket (the task's own "clearly distinguish between retrieval and generation
+    # errors" acceptance criterion). See eval/runners/benchmark.py::BenchmarkRunner.run().
 
     def summary(self) -> dict[str, float]:
         return {
@@ -58,9 +72,25 @@ class Metrics(BaseModel):
         }
 
     @classmethod
-    def for_failure(cls, reason: str) -> Metrics:
+    def for_failure(
+        cls, reason: str, error_stage: str | None = None, latency_ms: float | None = None
+    ) -> Metrics:
         """Build a `Metrics` for a case that failed to run at all (e.g. the
         engine raised) — every quality field stays `None` (there is nothing
         to score), but `failed`/`failure_reason` make that explicit instead
-        of leaving a null-scored case and a crashed case looking identical."""
-        return cls(failed=True, failure_reason=reason)
+        of leaving a null-scored case and a crashed case looking identical.
+
+        `error_stage` (Batch 13, external plan): one of "retrieval",
+        "generation", "security", "infra", or `None` when the caller could
+        not classify the failure — see `Metrics.error_stage`'s own docstring.
+
+        `latency_ms` (Codex review pass 2, HIGH-001 follow-up): a failed case
+        still spent real wall-clock time before the engine raised — leaving
+        this `None` here made a failed case's latency invisible even though
+        `BenchmarkRunner._run_one()` measures it. Optional because a caller
+        that genuinely has no elapsed-time measurement (e.g. a hand-built
+        test fixture) should not be forced to fabricate one.
+        """
+        return cls(
+            failed=True, failure_reason=reason, error_stage=error_stage, latency_ms=latency_ms
+        )
