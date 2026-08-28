@@ -1,7 +1,8 @@
 # Refactoring Programme — Reading Guide
 
-This is the index for the 18-lot engine-agnostic control-plane refactoring programme
-(`docs/refactoring-plan.md`), executed 2026-08-03 through 2026-08-05. It answers: **what
+This is the index for the original 18-lot engine-agnostic control-plane refactoring programme
+and its follow-on lots (`docs/refactoring-plan.md`). Lots 0-18 were executed 2026-08-03 through
+2026-08-05; Lot 19 followed, and Lot 20 is planned. It answers: **what
 happened, in what order, why, and where's the proof** — for anyone reading this repository
 after the fact, whether that's a new team member, a reviewer, or a future Claude Code session
 picking the work back up.
@@ -20,8 +21,11 @@ builds natively versus delegates to a selected external engine: it owns governan
 evaluation, config/manifests, tenant isolation, and portability, and delegates generic
 multi-agent orchestration and GraphRAG traversal to that engine (LangGraph,
 [ADR-0006](../adr/0006-external-engine-selection.md)) via a vendor-neutral `DocumentEngine`
-port. The 18 lots below are the execution of that pivot — from "accept the ADR" through
-"validate the port against a second real engine and close the programme."
+port.
+
+The original 18 lots executed that pivot — from "accept the ADR" through
+"validate the port against a second real engine and close the programme" — and follow-on lots
+record material boundaries found after that closure.
 
 **If you read nothing else, read `docs/refactoring-plan.md` §1** (Product boundary and target
 architecture) and **ADR-0005** — everything else is downstream of that one decision.
@@ -139,6 +143,7 @@ comparison that found a *second* governance-parity bug the per-lot tests had mis
 | 17 | Removed the dead agent/routing/planning prototype cluster | [lot-17-prototype-retirement.md](lot-17-prototype-retirement.md) |
 | 18 | Pilot comparison, CI hardening, programme closure | [lot-18-pilot-and-closure.md](lot-18-pilot-and-closure.md) |
 | 19 | Layer-boundary correction (`Container`/factories moved, facade enforced) and control-plane manifest activation (ADR-0007) | [lot-19-layer-boundary-stabilization.md](lot-19-layer-boundary-stabilization.md) |
+| 20 | **Planned:** fail-closed data classification and LLM/embedding egress control | [authoritative scope and acceptance criteria](../refactoring-plan.md#phase-e--data-protection-and-controlled-model-egress-lot-20) |
 
 A follow-on audit after Lot 18's closure found two structural gaps Lots 0-18 hadn't
 caught: the published dependency direction didn't match the real one (`orchestration/`
@@ -146,6 +151,10 @@ imported `app.Container`), and several owned governance/audit/quality capabiliti
 implemented and tested but not reachable through any manifest. Lot 19
 ([ADR-0007](../adr/0007-layer-boundaries-and-control-plane-activation.md)) is the
 correction — engineering-complete as of 2026-08-07, same sign-off caveat as Lots 0-18.
+
+Lot 20 is a new, unimplemented security lot. It closes the separate outbound-data gap where
+post-generation redaction cannot prevent raw query/context or embedding input from reaching an
+external provider. It is intentionally local-first and provider-neutral.
 
 ---
 

@@ -27,7 +27,7 @@ Avoid these tasks unless explicitly asked:
 
 ## Operating Model
 
-Use one writer and one or more reviewers:
+Use one writer and one reviewer at a time:
 
 1. Claude Code builds the change using `CLAUDE.md` and `.claude/skills/`.
 2. Claude Code runs `/qa-v1` when the local environment is ready.
@@ -39,6 +39,17 @@ Use one writer and one or more reviewers:
 Codex may implement targeted fixes only after the review findings are accepted or
 the user asks Codex to continue as the writer.
 
+The Codex loop is bounded to two passes:
+
+1. **Pass 1 — discovery:** review the complete task diff and report all material
+   findings in one report.
+2. **Pass 2 — closure:** verify accepted findings and regressions introduced by
+   their fixes. This is not a new open-ended review.
+
+After pass 2, stop and request a human decision. Do not perform a third general
+review. A third pass is allowed only when a human explicitly names a newly
+introduced critical risk and limits the review to that risk.
+
 ## Review Handoff
 
 When a review is requested, Codex reviews the current Git diff against the
@@ -47,9 +58,30 @@ appropriate base and does not modify application files. Write the final review t
 and report only the material findings defined above. A targeted diff review must
 not expand into a repository-wide audit unless explicitly requested.
 
+When `scripts/run_codex_review.ps1` invokes Codex in a read-only sandbox, return
+the complete review document as the final response instead of attempting a file
+write. The CLI's `--output-last-message` mechanism writes that response to
+`.review/codex-review.md` outside the agent sandbox.
+
+Read `.review/handoff.md` when present. It defines the task, immutable Git base,
+acceptance criteria, review pass, validations, known limitations, accepted risks,
+and out-of-scope work. Missing information may be reported as a review limitation,
+but must not silently expand the task.
+
+On pass 1, review the complete task diff and aim for finding completeness. On pass
+2, read the previous review and the finding-resolution table. Re-open an existing
+finding only when its acceptance criterion is still unmet. Create a new finding
+only when evidence shows it was introduced by the corrective diff. Do not turn
+pre-existing debt, an accepted risk, a deferred finding, or unrelated improvement
+into a new pass-2 finding.
+
 Set `Status` to `CHANGES_REQUIRED` while any `BLOCKER` or `HIGH` finding remains;
 otherwise set it to `READY_FOR_FINAL_VALIDATION`. `MEDIUM` and `LOW` findings do
 not block a release automatically.
+
+`READY_FOR_FINAL_VALIDATION` is a stop condition for Codex review. Continue with
+deterministic validation and the human merge/release decision; do not request
+another general review merely because `MEDIUM`, `LOW`, or residual risks remain.
 
 ## Review Prompt
 
@@ -61,6 +93,15 @@ Prioritize bugs, regressions, security issues, contract breaks, manifest wiring
 issues, tests missing for changed behavior, and layering violations.
 Ignore cosmetic style unless it causes a defect.
 Do not modify files unless explicitly asked.
+```
+
+For pass 2, replace the default stance with:
+
+```text
+This is review pass 2 of 2. Read the previous review and the finding-resolution
+table. Verify only closure of accepted findings, preservation of the original
+acceptance criteria, and regressions directly introduced by the corrective diff.
+Do not perform a new open-ended review or report pre-existing/deferred issues.
 ```
 
 ## Implementation Rules

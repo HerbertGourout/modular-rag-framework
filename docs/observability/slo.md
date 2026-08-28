@@ -38,8 +38,9 @@ second, measured over a rolling 7-day window.
 - **Metric:** `histogram_quantile(0.95, sum(rate(mrag_request_duration_ms_bucket[7d])) by (le, operation))`.
 - **Why `/answer` and `/retrieve` get different targets:** `/answer` includes a real LLM generation
   call (typically the dominant latency term); `/retrieve` never does.
-- **Alert:** `MRAGHighP95Latency` (`alerts.yaml`), a faster 5-minute/10-minute window for
-  acute-incident detection, same relationship as the availability SLO/alert pair above.
+- **Alert:** `MRAGHighP95LatencyAnswer` and `MRAGHighP95LatencyRetrieve` (`alerts.yaml`), using
+  the respective 5-second and 1-second thresholds over a faster 5-minute/10-minute window for
+  acute-incident detection, the same relationship as the availability SLO/alert pair above.
 - **Known gap:** no per-stage latency SLO exists yet (retrieval-only vs. generation-only p95
   within an `/answer` call) — the per-stage `TraceStep.latency_ms` data already exists (ADR-0012)
   but isn't yet exported as its own histogram metric; a natural follow-up, not built in this Lot.
@@ -78,7 +79,8 @@ zero tolerance (page immediately) for any `UNREADY` state.
 **Objective (placeholder — replace with your organization's actual approved budget):** Daily
 generation cost under $100/day, projected from a rolling 1-hour rate.
 
-- **Metric:** `sum(rate(mrag_generation_cost_usd_total[1h])) * 24`.
+- **Metric:** `sum(rate(mrag_generation_cost_usd_total[1h])) * 86400` (PromQL `rate()` is per
+  second, so a daily projection multiplies by the number of seconds per day).
 - **Caveat:** `core/pricing.py`'s price table is a static, manually-refreshed approximation (see
   its own module docstring); this SLO is only as accurate as that table. Treat cost figures as
   directional, not invoice-grade, until a real billing reconciliation process exists.

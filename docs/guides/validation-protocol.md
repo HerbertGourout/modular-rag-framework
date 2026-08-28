@@ -33,6 +33,25 @@ pip install -e ".[v1,dev]"
 pip install -e ".[all]"
 ```
 
+Install the versioned pre-push documentation gate once for this clone:
+
+```powershell
+# Windows
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\install_git_hooks.ps1
+```
+
+```bash
+# Linux/macOS
+sh scripts/install_git_hooks.sh
+```
+
+The installer sets the repository-local Git configuration `core.hooksPath=.githooks`. Before
+each push, `.githooks/pre-push` runs `scripts/check_docs.py` and refuses the push on detected
+documentation drift. It does not edit files: generated facts may be automated, but narrative
+documentation and design intent still require an explicit author decision. CI runs the same
+check, so `git push --no-verify` does not bypass CI; configure the `lint` job as a required branch
+check to prevent merging a failed documentation validation.
+
 ---
 
 ## 01 — Validation Tiers
@@ -157,6 +176,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\check.ps1 all
 | **Lint** | `ruff check .` | Syntax, imports, undefined | ~15s | E,F,I errors | Nothing |
 | **Compile** | `python -m compileall src/modular_rag scripts examples docker` | Byte-compilation | ~5s | Syntax errors | Nothing |
 | **Layering** | `python scripts/check_layering.py --strict` | Hexagonal import boundaries | ~5s | Any non-baselined violation | Nothing |
+| **Documentation** | `python scripts/check_docs.py` | Links, retired APIs, blueprints, alert/SLO/runbook consistency | ~2s | Any active documentation inconsistency | PyYAML (core dependency) |
 | **Type** | `mypy src/modular_rag/` | Type hints, ratcheted | ~30s | Count above baseline | Python 3.11+ |
 | **Unit** | `pytest tests/unit/ -v` | No ext services | ~5-7s | Failed tests | pytest |
 | **Contract** | `pytest tests/contract/ -v` | Protocol conformance | ~1s | Failed tests | pytest |
@@ -174,6 +194,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\check.ps1 all
 ./scripts/check.sh all      # Pre-release
 ```
 
+With the versioned hooks installed, `git push` additionally runs the documentation check before
+contacting the remote. This fast local gate complements `check.sh full`; it does not replace the
+unit, contract, layering, or task-specific validation required before delivery.
+
 ### CI/CD: `.github/workflows/ci.yml` — the real, current 10-job pipeline
 
 All 10 jobs below are wired into the real workflow today (not illustrative). Corrected here —
@@ -183,7 +207,7 @@ Batch 10 (an external plan; not this file's own Lot sequence) added `test-integr
 
 | Job | What it runs | Needs |
 |---|---|---|
-| `lint` | ruff, compileall, layering audit, ratcheted mypy, runnable-manifest check | — |
+| `lint` | ruff, compileall, layering and documentation audits, ratcheted mypy, runnable-manifest check | — |
 | `test-unit` | `pytest tests/unit/` — installs `.[v1,langgraph,dev]` (`langgraph` is required here, not optional: `tests/unit/adapters/llms/test_langgraph_engine.py` really calls the LangGraph adapter) | `lint`... no, runs independently |
 | `test-contract` | `pytest tests/contract/` | — |
 | `test-integration` | `pytest tests/integration/ -m integration` against real `qdrant`/`postgres` GitHub Actions `services:` containers | — |
@@ -203,11 +227,12 @@ unset.
 
 **⚠️ Acceptance criterion NOT yet met: "integration and E2E tests block PRs."** Adding jobs to a
 `pull_request`-triggered workflow makes them *run and report status* on every PR — it does not by
-itself make them *required* to merge (Codex review, Batch 10, HIGH-002). As of this writing that
-status list has not been configured, so a maintainer can currently merge a PR despite a red
-`test-integration`/`e2e-deterministic`/`compose-smoke`. This repo has no `gh` CLI available in the
-environment this batch was implemented in, so the step below was written but not executed — do
-not treat this criterion as satisfied until a repo admin has actually done it:
+itself make them *required* to merge (Codex review, Batch 10, HIGH-002).
+
+As of this writing that status list has not been configured, so a maintainer can currently merge
+a PR despite a red `test-integration`/`e2e-deterministic`/`compose-smoke`. This repo has no `gh`
+CLI available in the environment this batch was implemented in, so the step below was written but
+not executed. Do not treat this criterion as satisfied until a repo admin has actually done it:
 
 1. GitHub → this repository → **Settings → Branches** (or **Rules → Rulesets** on repos using the
    newer rulesets UI) → edit (or create) the protection rule for `main`.

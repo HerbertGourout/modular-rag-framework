@@ -1,361 +1,336 @@
 # AI Engineering Workflow
 
-This repository uses a two-provider workflow:
+This guide defines the current Claude Chat to Codex Chat delivery workflow for
+this repository. It is the operational reference for implementing and reviewing
+one bounded task without using Codex CLI.
 
-- Claude Code is optimized as the primary builder.
-- Codex is optimized as the independent challenger and reviewer.
+## Workflow at a Glance
 
-The goal is not to make agents compete. The goal is to create separation of
-duties, reduce blind spots, and keep expensive reasoning focused where it matters.
+- Claude Chat is the sole writer of implementation files.
+- Codex Chat is the independent reviewer and writes only the review report.
+- The chats exchange task state through `.review/handoff.md` and
+  `.review/codex-review.md`.
+- The normal path uses two human messages: one to Claude, then one to Codex.
+- If Codex reports a blocking finding, one correction cycle adds two messages.
+- The loop therefore uses two messages normally and four messages at most.
+- Codex performs one discovery review and, when needed, one closure review.
+- `READY_FOR_FINAL_VALIDATION` or completion of pass 2 ends the review loop.
 
-## Core Operating Principle
-
-Use one writer at a time.
-
-Multiple agents can review, but only one agent should edit a given file set during
-a task. This keeps diffs readable and prevents conflicting design decisions.
-
-## Standard Workflow
+No third general review is allowed. After pass 2, a human decides whether to
+validate, defer, accept the remaining risk, or return the task to development.
 
 ```mermaid
 %%{init: {"theme": "base"}}%%
-sequenceDiagram
-    participant H as Human
-    participant CC as Claude Code
-    participant CX as Codex
-    participant R as .review/codex-review.md
-
-    H->>CC: 1. Define the goal and risk level
-    CC->>CC: 2. Read CLAUDE.md, implement the smallest safe change
-    CC->>CC: 3. Run targeted deterministic validation
-    CC->>CX: Hand off the diff
-    CX->>CX: 4. Read AGENTS.md, CLAUDE.md, and the Git diff
-    CX->>R: 5. Write material findings (no implementation edits)
-    H->>R: 6. Review and accept or reject findings
-    H->>CC: 7. Request accepted fixes
-    CC->>R: 8. Read and independently verify every finding
-    CC->>CC: 9. Apply targeted fixes and rerun validation
-    CC->>H: 10. /qa-v1 or /release result, ready for PR
+flowchart TD
+    A[Message 1: Claude implements] --> B[Message 2: Codex discovery review]
+    B --> C{Codex status}
+    C -->|READY_FOR_FINAL_VALIDATION| F[Human delivery decision]
+    C -->|CHANGES_REQUIRED| D[Message 3: Claude corrects]
+    D --> E[Message 4: Codex closure review]
+    E --> G{Pass 2 result}
+    G -->|Ready| F
+    G -->|Blocking risk remains| H[Stop: human decision]
+    F --> I[Commit, push, or release when authorized]
 ```
 
-1. Human defines the goal and risk level.
-2. Claude Code reads `CLAUDE.md` and implements the smallest safe change.
-3. Claude Code runs the smallest relevant deterministic validation.
-4. Codex reads `AGENTS.md`, `CLAUDE.md`, and the Git diff.
-5. Codex reviews without editing implementation files and writes the result to
-   `.review/codex-review.md`.
-6. Human accepts or rejects findings; Claude Code reads the complete review and
-   independently verifies accepted findings before changing code.
-7. Claude Code applies targeted fixes and reruns the appropriate validations.
-8. A second Codex pass may be requested when needed; after two passes, prefer human
-   intervention over an automated review loop.
-9. Run `/qa-v1` or the appropriate `/release` workflow before the GitHub PR or release.
+## Before Starting
 
-## Practical Handoff Example
+Use a dedicated Claude Chat and Codex Chat that both have access to the same
+repository and working tree. Do not let both assistants edit implementation
+files concurrently.
 
-Assume the task is: "add `--tenant-id` to `mrag ingest`."
-
-### 1. Ask Claude Code to implement
+Define one task with the following payload. Replace every placeholder before
+sending Message 1.
 
 ```text
-Read CLAUDE.md.
-Add --tenant-id to mrag ingest, keep the change narrow, update the relevant
-tests and documentation, and run the targeted validations. Do not commit or push.
+TASK <identifier> - <title>
+
+Objective:
+<one observable outcome>
+
+Exact scope:
+- <file, module, or behavior in scope>
+
+Out of scope:
+- <explicitly excluded work>
+
+Expected work:
+- <implementation requirement>
+- <test or documentation requirement>
+
+Acceptance criteria:
+- <observable and verifiable result>
+- <regression that must remain impossible>
+
+Specialized reviewers, analysis only:
+- <agent name or "none">
+
+Available external services and credentials:
+- <service>: <available, unavailable, or not required>
+
+Required validations:
+- <targeted tests or repository gate>
+
+Additional constraints:
+- <security, compatibility, migration, or operational constraint>
 ```
 
-Claude Code implements the change and leaves the working tree ready for review.
+## Complete Message Sequence
 
-### 2. Ask Codex to review
+### Message 1 of 2 - Ask Claude Chat to Implement
+
+Send the following message to Claude Chat, followed by the completed task payload.
 
 ```text
-Review the current Git diff as an independent staff engineer.
-Follow AGENTS.md and CLAUDE.md. Review only this task and its diff.
-Do not modify implementation files. Write the complete final review to
-.review/codex-review.md and report only material findings.
+Read CLAUDE.md completely before making any modification and treat it as the
+source of truth. Read the applicable path rules, ADRs, and research digests.
+
+Act as the sole implementation writer for exactly the task supplied below. Do
+not start another task or expand the scope into unrelated improvements. Preserve
+existing unrelated changes.
+
+Inspect the current implementation, tests, contracts, manifests, documentation,
+and validation scripts before editing. Keep the change narrow and compliant with
+the hexagonal architecture. If the task fixes a bug, write a regression test
+before the correction. Any contract change requires a contract-conformance test.
+
+Specialized agents may analyze or review only. They must not edit the same files
+in parallel with the primary writer.
+
+Use existing repository tooling first. Do not add or replace dependencies,
+scanners, build tools, or CI services unless the task explicitly requires and
+authorizes it.
+
+At the end:
+1. self-review the complete task diff;
+2. run targeted tests and the required task validations;
+3. run /qa-v1;
+4. run scripts/check_layering.py when architecture-sensitive files changed;
+5. update documentation affected by the implemented behavior;
+6. record every unavailable validation and its release consequence;
+7. prepare .review/handoff.md from .review/handoff.example.md for review pass
+   1/2 in DISCOVERY mode.
+
+The handoff must identify the task, risk level, immutable base commit, current
+HEAD and working-tree inventory, exact scope, acceptance criteria, design
+decisions, executed validations, limitations, known risks, and out-of-scope
+work. An implementation checkpoint is optional and requires my authorization;
+the current working tree may be reviewed without creating a commit.
+
+Do not invoke Codex CLI. Do not edit .review/codex-review.md. Do not commit or
+push without explicit authorization. Stop when the implementation and handoff
+are ready for independent review.
+
+<PASTE THE COMPLETED TASK PAYLOAD HERE>
 ```
 
-Codex replaces the local review file with one of these final statuses:
+Expected result: Claude implements only the defined task and prepares
+`.review/handoff.md`. Check that the handoff says `Review pass: 1/2` and
+`Review mode: DISCOVERY` before continuing.
 
-- `CHANGES_REQUIRED` when a `BLOCKER` or `HIGH` finding remains.
-- `READY_FOR_FINAL_VALIDATION` when no `BLOCKER` or `HIGH` finding remains.
+### Message 2 of 2 - Ask Codex Chat to Review the Complete Diff
 
-The review file is local and ignored by Git. Its versioned reference format is
-`.review/codex-review.example.md`.
-
-### 3. Ask Claude Code to process accepted findings
+Send this message to Codex Chat:
 
 ```text
-Read .review/codex-review.md completely. Verify every finding independently.
-Fix valid BLOCKER and HIGH findings, evaluate MEDIUM findings against the task
-scope, and avoid unrelated LOW-priority refactoring. Run the appropriate
-validations. Do not commit or push.
+This is review pass 1 of 2 in DISCOVERY mode.
+
+Read AGENTS.md, CLAUDE.md, and .review/handoff.md completely. Review only the
+complete task diff identified by the handoff against its immutable base and
+acceptance criteria.
+
+Act as an independent staff engineer. Report all material bugs, regressions,
+security risks, contract breaks, manifest or wiring issues, missing tests, and
+architecture violations in this single discovery pass. Ignore cosmetic style
+unless it causes a defect. Do not expand the review into unrelated repository
+debt and do not modify implementation files.
+
+Write the complete final review to .review/codex-review.md using
+.review/codex-review.example.md. Set Status to CHANGES_REQUIRED while any
+BLOCKER or HIGH finding remains; otherwise set it to
+READY_FOR_FINAL_VALIDATION. Report only significant findings.
 ```
 
-Claude Code must not apply a recommendation blindly. The human still decides which
-findings are accepted, and deterministic tests remain the final authority.
+Read the `Status` in `.review/codex-review.md`:
 
-### 4. Finish the task
+- `READY_FOR_FINAL_VALIDATION`: stop the Codex loop and follow
+  [Delivery decision](#delivery-decision).
+- `CHANGES_REQUIRED`: continue once with Messages 3 and 4 below.
 
-Request one more Codex pass if a material correction needs independent verification.
-Do not exceed two Codex passes without human intervention. Once the review status is
-`READY_FOR_FINAL_VALIDATION`, run `/qa-v1`; use `/release` only for a release and when
-its required services and credentials are available.
+`MEDIUM` and `LOW` findings do not automatically require another review pass.
+They must be recorded as fixed, deferred, accepted risk, or rejected according
+to the task scope and the human decision.
 
-## Provider Responsibilities
+### Message 3 of 4 - Ask Claude Chat to Apply Accepted Corrections
 
-| Responsibility | Claude Code | Codex |
-|---|---|---|
-| Implementation | Primary | Secondary, only when asked |
-| Repo workflow skills | Primary | Reads and respects |
-| Diff review | Secondary | Primary |
-| Architecture challenge | Secondary | Primary |
-| Security challenge | Shared | Strong independent reviewer |
-| Documentation drafting | Shared | Shared |
-| Release gate review | Shared | Independent reviewer |
-
-## Enterprise Patterns
-
-### 1. Provider Separation
-
-Claude Code produces the change. Codex reviews it independently. This avoids the
-same model validating its own blind spots.
-
-### 2. Model Tiering
-
-Use three tiers:
-
-- Tier 1: small/fast model for docs, summaries, triage, and boilerplate.
-- Tier 2: mid-tier model for normal code, tests, and focused debugging.
-- Tier 3: premium model for architecture, security, contracts, and critical review.
-
-### 3. Role-Based Agents
-
-Use explicit roles:
-
-- `builder`
-- `reviewer`
-- `architect`
-- `security-reviewer`
-- `test-engineer`
-- `doc-writer`
-- `migration-planner`
-
-### 4. Diff-First Review
-
-The reviewer starts from:
-
-- `git diff`
-- touched tests
-- touched contracts
-- impacted docs
-- manifest changes
-- regression risk
-
-Do not make the reviewer reread the whole repository unless the diff suggests a
-systemic risk.
-
-### 5. No Shared Write Zone
-
-Two agents must not edit the same files concurrently. One writer, many reviewers.
-
-### 6. Escalation Policy
-
-Use fast models for simple work. Escalate to premium for doubt, architectural
-conflict, subtle bugs, security, client data, or regulated behavior. Use human
-approval for irreversible changes.
-
-### 7. Contract-First Development
-
-Before implementation, check:
-
-- `contracts/`
-- `core/models/`
-- manifests
-- `scripts/check_layering.py`
-
-### 8. Architecture Gates
-
-Automate:
-
-- `scripts/check_layering.py`
-- unit tests
-- contract tests
-- lint
-- manifest validation
-
-### 9. Minimal Agent Memory
-
-Keep only durable non-negotiables in `CLAUDE.md` and `AGENTS.md`: rules,
-commands, architecture, conventions. Put detailed playbooks in `docs/guides/`.
-
-### 10. Golden Prompts
-
-Keep reusable prompts for:
-
-- staff-engineer diff review
-- bug-only review
-- simpler alternative proposal
-- security review
-- docs/code consistency review
-
-### 11. Human Approval Gates
-
-Human approval is required for file deletion, data migration, auth/security
-changes, external dependencies, public API refactors, and contract changes.
-
-### 12. Cost Observability
-
-Every premium usage should include a reason, for example:
+Use this message only after pass 1 returns `CHANGES_REQUIRED`:
 
 ```text
-premium_reason: architecture
-premium_reason: security
-premium_reason: high-risk refactor
+Read CLAUDE.md, .review/handoff.md, and .review/codex-review.md completely.
+Independently verify every pass-1 finding against the code, task scope, and
+acceptance criteria.
+
+Fix every valid BLOCKER and HIGH finding. Evaluate MEDIUM findings against the
+task scope and avoid unrelated LOW-priority refactoring. If a finding requires a
+scope expansion, destructive action, public contract decision, security-policy
+decision, or risk acceptance that I have not authorized, stop and ask me for the
+specific decision.
+
+Apply all accepted corrections as one batch. Add regression or conformance tests
+where required, self-review the corrective diff, and rerun the targeted and task
+validations. Run /qa-v1 and run scripts/check_layering.py when architecture-
+sensitive files changed.
+
+Update .review/handoff.md for review pass 2/2 in CLOSURE_ONLY mode. Complete the
+finding-resolution table with one decision for every pass-1 finding: FIXED,
+DEFERRED, ACCEPTED_RISK, or REJECTED. For every decision, record the change and
+test or evidence. Record the corrective base so Codex can isolate regressions
+introduced by the corrections.
+
+A local correction checkpoint is optional and requires my authorization. Do not
+invoke Codex CLI, do not edit .review/codex-review.md, and do not push. Stop when
+the correction batch, validation evidence, and closure handoff are ready.
 ```
 
-## Review Modes
+Expected result: `.review/handoff.md` says `Review pass: 2/2`, `Review mode:
+CLOSURE_ONLY`, identifies the corrective base, and contains a complete resolution
+row for every pass-1 finding.
 
-### Bug Review
+### Message 4 of 4 - Ask Codex Chat to Verify Closure
 
-Use for normal diffs:
+Send this final review message to Codex Chat:
 
 ```text
-Review only for bugs, regressions, missing tests, security issues, and layering
-violations. Ignore style unless it changes behavior.
+This is review pass 2 of 2 in CLOSURE_ONLY mode.
+
+Read AGENTS.md, CLAUDE.md, the previous review, and .review/handoff.md completely.
+Verify only:
+1. closure of the accepted pass-1 findings;
+2. preservation of the original acceptance criteria;
+3. regressions directly introduced by the corrective diff.
+
+Do not perform a new open-ended review. Do not report pre-existing debt, deferred
+findings, accepted risks, rejected findings without new evidence, or unrelated
+improvements. A new finding is valid only when the corrective diff directly
+introduced it; record that causal evidence explicitly.
+
+Do not modify implementation files. Update .review/codex-review.md using the
+repository template, including the finding-closure table and final status.
+
 ```
 
-### Architecture Review
+Pass 2 is the unconditional end of the Codex review loop:
 
-Use when `contracts/`, `orchestration/`, manifests, or domain boundaries change:
+- If the result is `READY_FOR_FINAL_VALIDATION`, proceed to the delivery decision.
+- If a `BLOCKER` or `HIGH` remains, do not request a third general review. Stop
+  and make a human decision about further development, deferral, or risk.
+- A narrow third verification is allowed only when a human explicitly names a
+  newly introduced critical risk and limits the review to that risk.
 
-```text
-Challenge the design. Compare it against CLAUDE.md layering rules, manifest-first
-wiring, contract-first development, and ADR requirements. Do not edit files.
-```
+## Delivery Decision
 
-### Security Review
+No additional chat message is required when Codex returns
+`READY_FOR_FINAL_VALIDATION`. Claude already ran the deterministic gates in
+Message 1 or, after corrections, Message 3. Codex changes only the review report,
+so those results remain valid while the implementation diff is unchanged.
 
-Use for `security/`, PII, policies, prompt injection, tenancy, auth, or external
-tool use:
+Before authorizing a commit, push, merge, or release, the human checks the final
+status, validation evidence, unavailable checks, and accepted or deferred risks.
+Rerun the affected validation only if an implementation, test, manifest,
+dependency, or deployment file changed after Claude recorded the last result.
+Such a code change starts a new bounded development decision; it must not be
+hidden inside an extra Codex review pass.
 
-```text
-Review as a security engineer. Look for data leakage, policy bypass, unsafe tool
-use, weak validation, missing tests, and audit gaps.
-```
+Tests and deterministic gates are the final authority. The human owns the commit,
+push, merge, and release decision.
 
-### Release Review
+## Review Artifacts
 
-Use before a tagged release or major MR:
+### `.review/handoff.md`
 
-```text
-Review release readiness. Check docs/code consistency, test gaps, known stubs,
-roadmap claims, manifest presets, and migration risk.
-```
+Claude owns this file. It records:
 
-## Human Approval Gates
+- task identity, risk, scope, and acceptance criteria;
+- immutable Git base and working-tree inventory;
+- design decisions and validation evidence;
+- limitations, accepted risks, and out-of-scope work;
+- the pass-2 finding-resolution table and corrective base.
 
-Require explicit human approval for:
+Create it from `.review/handoff.example.md`. Do not invent a reduced format.
 
-- Deleting files or generated assets.
-- Changing public contracts.
-- Changing security policy behavior.
-- Adding new dependencies.
-- Changing manifests used in production-like presets.
-- Running e2e tests that call paid LLM APIs.
-- Touching secrets, local credentials, or deployment settings.
+### `.review/codex-review.md`
 
-## Prompt Library
+Codex owns this file during review. It records:
 
-### Claude Code Builder
+- review identity, mode, base, and acceptance criteria checked;
+- material findings with evidence and severity;
+- pass-2 closure results;
+- validation performed, remaining risks, and final status.
 
-```text
-Read CLAUDE.md and docs/guides/model-routing.md.
-Implement the requested change only.
-Respect the hexagonal layering rules.
-Add or update tests when behavior changes.
-Run the smallest relevant checks and report anything unavailable.
-```
+Create it from `.review/codex-review.example.md`. Claude reads it but does not
+edit it.
 
-### Codex Reviewer
+## Roles and Decision Boundaries
 
-```text
-Read AGENTS.md and CLAUDE.md.
-Review the current Git diff only.
-Do not edit implementation files.
-Write the final review to .review/codex-review.md.
-Prioritize bugs, regressions, security issues, missing tests, manifest problems,
-and layering violations.
-```
+| Responsibility | Claude Chat | Codex Chat | Human |
+|---|---|---|---|
+| Define scope and acceptance criteria | Supports | Challenges | Owns |
+| Modify implementation files | Sole writer | Never during review | Authorizes |
+| Prepare handoff | Owns | Reads | Verifies readiness |
+| Discover material findings | Self-review | Owns in pass 1 | Arbitrates |
+| Apply accepted corrections | Owns | Never during review | Authorizes decisions |
+| Verify correction closure | Supports with evidence | Owns in pass 2 | Arbitrates |
+| Commit, push, merge, or release | Only when asked | Never during review | Owns |
 
-### Premium Architecture Session
+Human approval is required for destructive actions, public contract changes,
+security-policy changes, new dependencies, production manifest changes, paid
+external calls, secrets, data migrations, and explicit risk acceptance.
 
-```text
-This task touches architecture and justifies a premium model.
-Compare options, identify risks, recommend one approach, then implement only the
-smallest safe slice if asked.
-```
+## Review Scope and Model Routing
 
-### Alternative Architecture
+Codex starts from the immutable base, Git diff, changed tests, contracts,
+manifests, documentation, and acceptance criteria. It does not perform a
+repository-wide audit unless the task explicitly requests one or the diff proves
+a systemic impact.
 
-```text
-Compare two approaches.
-Evaluate impact on contracts, manifests, orchestration, tests, security, and docs.
-Recommend one option clearly.
-Do not code unless explicitly asked.
-```
+Use the smallest model tier appropriate to the risk:
 
-### Docs/Code Consistency
+- small or fast: documentation, summaries, boilerplate, and obvious tests;
+- mid-tier: normal implementation, focused fixes, and routine tests;
+- premium: contracts, orchestration, security, architecture, migrations,
+  multi-module refactors, and independent review of high-risk diffs.
 
-```text
-Check whether documentation claims match the current code.
-Report stale docs, overstated capabilities, missing commands, and incorrect paths.
-Do not rewrite broad docs unless asked.
-```
+Record the reason when a premium model is used.
 
-## Governance Checklist
+## Optional Automation
 
-Before opening a GitHub PR:
+The repository retains `/delivery-loop`, `scripts/prepare_review.ps1`, and
+`scripts/run_codex_review.ps1` for optional future automation. They are not part
+of the current default workflow. Do not run `codex exec` or attempt device
+authentication when workspace policy blocks Codex CLI. The four-message maximum
+chat workflow above is the supported fallback.
 
-- One writer owns the final diff.
-- Codex has reviewed high-risk changes.
-- `/qa-v1` or equivalent local checks have run.
-- `scripts/check_layering.py` passes.
-- Contract changes have conformance tests.
-- Docs reflect the actual behavior.
-- Premium model usage, if any, has a reason.
+## Pull Request Readiness Checklist
 
-## Enterprise Controls
+Before asking for a commit, push, pull request, or release, verify that:
 
-Large teams should also keep these controls outside the prompt layer:
+- one writer owns the final implementation diff;
+- `.review/handoff.md` identifies the immutable base, scope, and acceptance
+  criteria;
+- pass 1 reviewed the complete task diff;
+- accepted blocking findings were processed as one correction batch;
+- pass 2, when required, stayed in closure-only mode;
+- the Codex loop stopped at `READY_FOR_FINAL_VALIDATION` or after pass 2;
+- `/qa-v1` and task-specific deterministic checks ran;
+- `scripts/check_layering.py` passed when required;
+- contract changes have conformance tests;
+- documentation matches the implemented behavior;
+- unavailable checks and remaining risks are explicit;
+- commit and push still require human authorization.
 
-- Versioned repository rules.
-- Strict permissions and sandbox defaults.
-- Logs or traces of agent actions.
-- Required human review.
-- CI gates.
-- Secret scanning.
-- Dependency scanning.
-- Repository-level policies.
-- Cost and quality metrics.
-- Model-routing matrices.
-- Premium models limited to justified tasks.
-- Validated prompt templates.
-- Writer/reviewer separation.
-- Explicit approval for destructive changes.
+## Metrics for Improving the Workflow
 
-## Metrics To Track
-
-Large teams usually track:
-
-- Time saved per task type.
-- Review findings by provider.
-- Defects caught before MR.
-- Defects escaped after MR.
-- Premium model usage reason.
-- Cost by workflow category.
-- Test pass rate after agent changes.
-- Percentage of generated changes requiring human rewrite.
-
-These metrics should guide model routing. If a small model repeatedly creates
-review churn for a task type, promote that task to mid-tier. If premium models are
-used without materially better outcomes, demote that task type.
+Track review-cycle duration, findings by severity, defects escaping review,
+validation failures after agent changes, human rework, premium-model usage, and
+the percentage of tasks requiring pass 2. Any task exceeding the two-pass cap is
+a process signal that requires human analysis, not another automatic review.
