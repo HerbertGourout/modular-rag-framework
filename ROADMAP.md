@@ -319,30 +319,49 @@ a custom manifest.
 **Purpose:** Collect user feedback, detect quality drift, and trigger an external fine-tuning
 process when detected — engine-agnostic evaluation, not an in-house training pipeline.
 
-**Implementation:**
-- `eval/feedback_collection/`: Gather user signals
-  - Thumbs up/down on answers
-  - Manual corrections (user provides better answer)
-- `eval/drift_detection.py`: Monitor performance over time
-  - F1 on validation set vs today
-  - Alert if degrading > 2%
+**Implementation (Batch 14, external plan — "Feedback, drift, and human review"; ADR-0014):**
+- `contracts/feedback.py` + `POST /feedback`: gather user signals (thumbs up/down, a
+  human-provided correction) durably (`security/feedback/store.py`'s in-memory reference
+  implementation, `adapters/feedback/postgres_sink.py`'s durable backend).
+- `eval/drift_detection.py`: pure, offline computation over stored feedback, document freshness
+  (`LifecycleLedger`), and human-review escalation counts — `compute_drift()` flags a metric that
+  degraded past a threshold (`0.02` default, matching this section's own "alert if degrading >
+  2%" wording below) and sets an advisory `should_trigger_retraining` flag. Never manifest-
+  activated (ADR-0008); a companion script, `scripts/run_drift_check.py`, does the actual
+  wire-a-manifest-and-compare work.
 
 **Modules:**
 ```
-eval/
-├── feedback_collection/
-│   ├── thumbs_up_down.py
-│   └── correction_capture.py
-└── drift_detection.py           (performance monitoring, triggers external retraining)
+contracts/feedback.py                    Feedback, FeedbackSink (real, shipped)
+security/feedback/store.py               InMemoryFeedbackSink
+adapters/feedback/postgres_sink.py       PostgresFeedbackSink (durable, retention/purge)
+adapters/review/postgres_queue.py        PostgresReviewQueue (durable ReviewQueue backend)
+eval/drift_detection.py                  pure drift computation (real, shipped)
+scripts/run_drift_check.py               offline orchestration script
 ```
 
-**Status: not yet built** — neither `eval/feedback_collection/` nor `eval/drift_detection.py`
-exist on disk. The bullets below are target criteria, not achieved results.
+**Status: implemented, not yet calibrated against real production traffic.** Feedback collection,
+durable storage/retention, and human-review durability all ship and are unit-tested. Drift
+computation is real and pure, but has no historical baseline from real traffic yet — the "alert
+if degrading > 2%" threshold is this section's own original target number, not a value tuned
+against measured data. See [docs/guides/feedback-and-drift.md](docs/guides/feedback-and-drift.md).
 
-**Success criteria (target, not yet met):**
-- ⬜ Feedback collection > 80% of queries
-- ⬜ Drift detection works (alerts on degradation)
-- ⬜ Alert triggers a defined external retraining workflow (not run in-house)
+**Explicitly not done** (see ADR-0014's own "Explicitly out of scope" section): automated
+re-scoring of feedback carrying a correction (`select_feedback_for_reevaluation()` only selects
+candidates — the original answer's full text/citations are not durably persisted anywhere in this
+codebase today, so there is nothing yet to re-score against), a reversible pseudonymizer for
+feedback free text (destructive redaction via the existing `PatternRedactor` is the shipped
+policy), and any actual triggering of an external retraining workflow (the flag is advisory only
+— per ADR-0005 §5.2, this framework decides *when*, never runs the retraining itself).
+
+**Success criteria:**
+- 🟡 Feedback collection is real and durable; "> 80% of queries" is not measured against any real
+  deployment yet.
+- ✅ Drift detection computes and flags degradation (`compute_drift()`, unit-tested against
+  synthetic snapshots) — not yet run against a real historical baseline.
+- 🟡 `should_trigger_retraining` is a real, computed flag; nothing consumes it to actually start
+  an external retraining workflow — that integration remains undone by design (delegated,
+  ADR-0005 §5.2), not merely unbuilt.
 
 ---
 

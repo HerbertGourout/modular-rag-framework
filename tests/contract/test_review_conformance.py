@@ -1,6 +1,13 @@
 """Semantic conformance tests for the ReviewQueue port (contracts/review.py).
 Lot 11c, docs/refactoring-plan.md — "support human review for high-risk
-outcomes". Parametrized over `HumanReviewGate`, the only implementation.
+outcomes". Behavioral tests are parametrized over `HumanReviewGate`
+(in-memory, no external service). `PostgresReviewQueue` (Batch 14,
+ADR-0014) is covered by a separate, unparametrized Protocol-only check
+below — unlike behavior (`enqueue`/`resolve`/`pending`), which needs a real
+database (see `tests/unit/adapters/review/test_postgres_queue.py` for
+mocked-pool coverage and a future `tests/integration/
+test_postgres_review_queue.py`), `isinstance(obj, ReviewQueue)` is free:
+`PostgresReviewQueue.__init__` takes a DSN and opens no connection.
 """
 from __future__ import annotations
 
@@ -12,6 +19,12 @@ from modular_rag.core.models.answer import Answer
 from modular_rag.security.policies.human_review import HumanReviewGate
 
 QUEUES = [HumanReviewGate]
+
+
+def test_postgres_review_queue_satisfies_the_protocol() -> None:
+    from modular_rag.adapters.review.postgres_queue import PostgresReviewQueue
+
+    assert isinstance(PostgresReviewQueue(dsn="postgresql://unused/unused"), ReviewQueue)
 
 
 @pytest.mark.parametrize("queue_factory", QUEUES)

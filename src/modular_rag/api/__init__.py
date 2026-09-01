@@ -18,6 +18,7 @@ from modular_rag.api.middleware import (
 from modular_rag.app.public import (
     AuthenticationError,
     ConfigurationError,
+    FeedbackRating,
     ReadinessState,
     TenantContext,
     TokenVerifier,
@@ -47,6 +48,26 @@ class AnswerResponse(BaseModel):
     text: str
     citations: list[dict[str, object]]
     trace_id: str | None = None
+
+
+class FeedbackRequest(BaseModel):
+    """ADR-0014 (Batch 14). `trace_id` is required — the only identifier
+    this API returns to a caller (`AnswerResponse.trace_id`), so it is the
+    only way to link feedback back to an answer. `idempotency_key` is
+    required: a retried submission with the same key is a silent no-op, not
+    an error — clients should generate one per logical feedback action
+    (e.g. once per thumbs-up click), not per HTTP retry attempt."""
+
+    trace_id: str
+    rating: FeedbackRating | None = None
+    correction_text: str | None = None
+    citation_count: int | None = None
+    idempotency_key: str
+    is_test: bool = False
+
+
+class FeedbackResponse(BaseModel):
+    id: str
 
 
 class RetrieveResponse(BaseModel):
@@ -233,6 +254,35 @@ def create_app(
             citations=[c.model_dump() for c in ans.citations],
             trace_id=ans.trace_id,
         )
+
+    @api.post("/feedback", response_model=FeedbackResponse)
+    def feedback(
+        req: FeedbackRequest,
+        identity: TenantContext | None = Depends(_authenticate),  # noqa: B008
+    ) -> FeedbackResponse:
+        """Record user feedback on a previously returned answer (Batch 14,
+        ADR-0014). Requires the same authentication as `/answer`/`/retrieve`
+        when a `token_verifier` is configured. `Feedback.correction_text` is
+        rejected with a mapped error unless the wired pipeline has a
+        `governance.redactor` configured (the explicit sensitive-content
+        policy `RAGEngine.record_feedback()` enforces) — see
+        `docs/guides/feedback-and-drift.md`.
+        """
+        try:
+            result = pipeline.record_feedback(
+                req.trace_id,
+                tenant_id=identity.tenant_id if identity else None,
+                user_id=identity.user_id if identity else None,
+                roles=identity.roles if identity else frozenset(),
+                rating=req.rating,
+                correction_text=req.correction_text,
+                citation_count=req.citation_count,
+                idempotency_key=req.idempotency_key,
+                is_test=req.is_test,
+            )
+        except Exception as exc:
+            raise to_http_exception(exc) from exc
+        return FeedbackResponse(id=result.id)
 
     @api.get("/retrieve", response_model=RetrieveResponse)
     def retrieve(

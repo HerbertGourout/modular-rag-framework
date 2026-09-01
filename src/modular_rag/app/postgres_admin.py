@@ -63,3 +63,78 @@ def purge_expired_audit_events(dsn: str) -> int:
         return sink.purge_expired()
     finally:
         sink.close()
+
+
+def count_expired_feedback(dsn: str) -> int:
+    """`mrag feedback count-expired` (ADR-0014). See
+    `adapters.feedback.postgres_sink.PostgresFeedbackSink.count_expired()`."""
+    from modular_rag.adapters.feedback.postgres_sink import PostgresFeedbackSink
+
+    sink = PostgresFeedbackSink(dsn=dsn)
+    try:
+        return sink.count_expired()
+    finally:
+        sink.close()
+
+
+def purge_expired_feedback(dsn: str) -> int:
+    """`mrag feedback purge` (ADR-0014). Same `--dsn` convention as
+    `purge_expired_audit_events()` — the dedicated retention-job role, never
+    the manifest's own application DSN."""
+    from modular_rag.adapters.feedback.postgres_sink import PostgresFeedbackSink
+
+    sink = PostgresFeedbackSink(dsn=dsn, allow_purge=True)
+    try:
+        return sink.purge_expired()
+    finally:
+        sink.close()
+
+
+def list_pending_review_items(dsn: str) -> list[dict[str, object]]:
+    """`mrag review list-pending` (ADR-0014). Returns plain dicts, not
+    `ReviewItem` objects — `cli/` must not import `contracts/` models it
+    only needs to print (matches this file's existing "app/ is the
+    composition root; cli/ stays thin" convention)."""
+    from modular_rag.adapters.review.postgres_queue import PostgresReviewQueue
+
+    queue = PostgresReviewQueue(dsn=dsn)
+    try:
+        return [item.model_dump(mode="json") for item in queue.pending]
+    finally:
+        queue.close()
+
+
+def resolve_review_item(dsn: str, item_id: str, *, approved: bool, reviewer: str) -> None:
+    """`mrag review resolve` (ADR-0014). See
+    `adapters.review.postgres_queue.PostgresReviewQueue.resolve()` —
+    raises `ModularRAGError` if `item_id` does not exist."""
+    from modular_rag.adapters.review.postgres_queue import PostgresReviewQueue
+
+    queue = PostgresReviewQueue(dsn=dsn)
+    try:
+        queue.resolve(item_id, approved=approved, reviewer=reviewer)
+    finally:
+        queue.close()
+
+
+def count_expired_review_items(dsn: str) -> int:
+    """`mrag review count-expired` (ADR-0014)."""
+    from modular_rag.adapters.review.postgres_queue import PostgresReviewQueue
+
+    queue = PostgresReviewQueue(dsn=dsn)
+    try:
+        return queue.count_expired()
+    finally:
+        queue.close()
+
+
+def purge_expired_review_items(dsn: str) -> int:
+    """`mrag review purge` (ADR-0014). Same `--dsn`/`allow_purge` convention
+    as `purge_expired_audit_events()`."""
+    from modular_rag.adapters.review.postgres_queue import PostgresReviewQueue
+
+    queue = PostgresReviewQueue(dsn=dsn, allow_purge=True)
+    try:
+        return queue.purge_expired()
+    finally:
+        queue.close()

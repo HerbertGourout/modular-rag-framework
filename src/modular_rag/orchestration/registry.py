@@ -87,6 +87,11 @@ def runtime_manifest_errors(manifest: PipelineManifest) -> list[str]:
             "governance.policy_engine": governance.policy_engine if governance else None,
             "governance.review_queue": governance.review_queue if governance else None,
             "governance.audit_sink": governance.audit_sink if governance else None,
+            # ADR-0014 (Batch 14): read only from RAGEngine.record_feedback(),
+            # which — like review_queue/audit_sink — LangGraphEngineAdapter
+            # never reaches (it never calls into RAGEngine at all). Same
+            # ADR-0008 boundary, same treatment.
+            "governance.feedback_sink": governance.feedback_sink if governance else None,
             "observability.telemetry": (
                 manifest.observability.telemetry if manifest.observability else None
             ),
@@ -138,6 +143,7 @@ class ComponentRegistry:
             "redactor": {},
             "review_queue": {},
             "audit_sink": {},
+            "feedback_sink": {},
             "telemetry": {},
             "tracer": {},
             "meter": {},
@@ -190,6 +196,7 @@ class ComponentRegistry:
                 ("redactor", governance.redactor),
                 ("review_queue", governance.review_queue),
                 ("audit_sink", governance.audit_sink),
+                ("feedback_sink", governance.feedback_sink),
             ):
                 if cfg:
                     container.register(role, self._build(role, cfg))

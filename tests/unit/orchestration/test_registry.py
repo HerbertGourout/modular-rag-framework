@@ -145,8 +145,11 @@ def test_default_registry_has_the_documented_builtin_type_names() -> None:
     assert set(reg._factories["tenant_policy"]) == {"tenant-isolation"}
     assert set(reg._factories["policy_engine"]) == {"inline"}
     assert set(reg._factories["redactor"]) == {"patterns"}
-    assert set(reg._factories["review_queue"]) == {"human-review"}
+    assert set(reg._factories["review_queue"]) == {"human-review", "postgres-human-review"}
     assert set(reg._factories["audit_sink"]) == {"in-memory", "postgres"}
+    # ADR-0014 (Batch 14): new optional governance role, same in-memory/postgres
+    # shape as audit_sink.
+    assert set(reg._factories["feedback_sink"]) == {"in-memory", "postgres"}
     assert set(reg._factories["telemetry"]) == {"structlog", "null"}
     assert set(reg._factories["tracer"]) == {"otel", "null"}
     assert set(reg._factories["lifecycle_ledger"]) == {"in-memory", "postgres"}
@@ -171,6 +174,21 @@ def test_wire_rejects_langgraph_control_plane_components_it_does_not_consume() -
     )
 
     with pytest.raises(RegistryError, match="governance.audit_sink"):
+        reg.wire(manifest)
+
+
+def test_wire_rejects_feedback_sink_under_langgraph() -> None:
+    """ADR-0014 (Batch 14): feedback_sink is read only from
+    RAGEngine.record_feedback(), which — like review_queue/audit_sink —
+    LangGraphEngineAdapter never reaches. Same ADR-0008 boundary as the
+    audit_sink case above."""
+    reg = _fake_registry()
+    manifest = _minimal_manifest(
+        engine=EngineSelection(adapter="langgraph"),
+        governance=GovernanceSection(feedback_sink=ComponentConfig(type="fake-feedback")),
+    )
+
+    with pytest.raises(RegistryError, match="governance.feedback_sink"):
         reg.wire(manifest)
 
 

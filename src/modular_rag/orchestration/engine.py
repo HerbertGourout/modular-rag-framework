@@ -4,19 +4,20 @@ import hashlib
 import time
 from contextlib import AbstractContextManager, nullcontext
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 import structlog
 
 from modular_rag.contracts.audit import AuditEvent, AuditEventType
 from modular_rag.contracts.chunking import Chunker
 from modular_rag.contracts.erasure import ErasureProof
+from modular_rag.contracts.feedback import Feedback, FeedbackSink
 from modular_rag.contracts.indexing import Indexer
-from modular_rag.contracts.lifecycle import DocumentStatus
+from modular_rag.contracts.lifecycle import DocumentStatus, LifecycleLedger
 from modular_rag.contracts.meter import Meter
 from modular_rag.contracts.reconciliation import ReconciliationReport, RepairResult
 from modular_rag.contracts.retrieval import Retriever
-from modular_rag.contracts.review import ReviewItem
+from modular_rag.contracts.review import ReviewItem, ReviewQueue
 from modular_rag.contracts.tracing import Span, Tracer
 from modular_rag.core.document_identity import content_hash, document_key
 from modular_rag.core.errors import ConfigurationError, SecurityError
@@ -136,6 +137,91 @@ class RAGEngine:
         collection before each ingest for a reproducible run, without
         reaching into `pipeline._c.indexer` directly."""
         return self._c.indexer
+
+    @property
+    def feedback_sink(self) -> FeedbackSink | None:
+        """Public accessor, same pattern as `indexer` above. Added for
+        `scripts/run_drift_check.py` (Batch 14), which needs to read back
+        stored feedback via `FeedbackSink.list_since()` (a concrete-only
+        extra, not part of the Protocol) without reaching into
+        `pipeline._c.feedback_sink` directly.
+
+        Intended for read-only use (`list_since()`, `count_expired()`).
+        `record()` on the returned sink performs no redaction — that policy
+        lives in `record_feedback()` above, not the sink — so calling
+        `record()` directly on this accessor bypasses it. Use
+        `record_feedback()` to write."""
+        return self._c.feedback_sink
+
+    @property
+    def review_queue(self) -> ReviewQueue | None:
+        """Public accessor, same pattern as `indexer` above. Added for
+        `scripts/run_drift_check.py` (Batch 14). Intended for read-only use
+        (`pending`, `count_resolved()`) — write operations go through
+        `mrag review resolve`, not this accessor."""
+        return self._c.review_queue
+
+    @property
+    def lifecycle_ledger(self) -> LifecycleLedger | None:
+        """Public accessor, same pattern as `indexer` above. Added for
+        `scripts/run_drift_check.py` (Batch 14), which reads
+        `LifecycleLedger.export_all()` for document-freshness metrics."""
+        return self._c.lifecycle_ledger
+
+    def record_feedback(self, feedback: Feedback) -> Feedback:
+        """Durably store one user-submitted `Feedback` record (Batch 14,
+        ADR-0014). Called from `app/application.py::ApplicationService.
+        record_feedback()`, which owns the tester-role check —
+        this method owns the sensitive-content policy check only.
+
+        Raises `ConfigurationError` if no `feedback_sink` is configured, or
+        if `feedback.correction_text` is set but no `redactor` is configured
+        — wiring a redactor *is* the explicit policy this framework requires
+        before any free-text feedback content is stored (ADR-0014 decision
+        5; `docs/research/DIGEST-security.md`'s M0 mitigation). When a
+        redactor is configured, `correction_text` is redacted before this
+        method ever constructs the `Feedback` object it hands to the sink —
+        no `FeedbackSink` implementation performs redaction itself.
+
+        Returns the record actually stored (redacted, if applicable) — a
+        caller must not assume the argument it passed in reflects what
+        ended up in the sink (Batch 14 pass 1 security review finding: the
+        caller-side object still carries the raw `correction_text`).
+
+        On an idempotent retry (an already-seen `(tenant_id,
+        idempotency_key)`), returns the *originally* stored record, not the
+        freshly-constructed retry object — the latter would carry a
+        different `id` that was never actually persisted, breaking
+        `POST /feedback`'s response contract for normal client retries
+        (Codex review pass 1, MEDIUM-001). Looked up via each sink's
+        concrete-only `get()` extra (not part of `FeedbackSink`'s Protocol,
+        mirroring `list_since()`'s existing pattern), duck-typed so a
+        third-party `FeedbackSink` without `get()` degrades gracefully to
+        the pre-fix behavior instead of crashing the request.
+        """
+        if self._c.feedback_sink is None:
+            raise ConfigurationError(
+                "No feedback_sink configured for this pipeline — cannot record feedback."
+            )
+        if feedback.correction_text:
+            if self._c.redactor is None:
+                raise ConfigurationError(
+                    "Feedback.correction_text was provided, but no redactor is configured "
+                    "for this pipeline — recording free-text feedback content requires an "
+                    "explicit governance.redactor policy (ADR-0014)."
+                )
+            feedback = feedback.model_copy(
+                update={"correction_text": self._c.redactor.redact(feedback.correction_text)}
+            )
+        self._c.feedback_sink.record(feedback)
+        getter = getattr(self._c.feedback_sink, "get", None)
+        if getter is not None:
+            stored = cast(
+                "Feedback | None", getter(feedback.tenant_id, feedback.idempotency_key)
+            )
+            if stored is not None:
+                return stored
+        return feedback
 
     def ingest(self, documents: list[Document]) -> int:
         """Chunk and index a list of documents. Returns the number of chunks indexed.

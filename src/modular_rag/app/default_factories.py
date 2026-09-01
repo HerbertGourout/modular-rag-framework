@@ -7,8 +7,10 @@ from modular_rag.orchestration.registry import ComponentRegistry
 
 if TYPE_CHECKING:
     from modular_rag.adapters.audit.postgres_sink import PostgresAuditSink
+    from modular_rag.adapters.feedback.postgres_sink import PostgresFeedbackSink
     from modular_rag.adapters.observability.otel_meter import OtelMeter
     from modular_rag.adapters.observability.otel_tracing import OtelTracer
+    from modular_rag.adapters.review.postgres_queue import PostgresReviewQueue
     from modular_rag.contracts.manifests import ComponentConfig
     from modular_rag.retrieval.retrievers.hybrid import HybridRetriever
     from modular_rag.retrieval.retrievers.sparse import PersistentSparseRetriever
@@ -128,6 +130,26 @@ def _build_postgres_audit_sink(cfg: ComponentConfig) -> PostgresAuditSink:
     return PostgresAuditSink(**config)
 
 
+def _build_postgres_feedback_sink(cfg: ComponentConfig) -> PostgresFeedbackSink:
+    """ADR-0014 — same `allow_purge` pop as `_build_postgres_audit_sink`
+    above: the manifest-wired instance must never be able to purge, only a
+    CLI-constructed one (`mrag feedback purge --dsn ...`)."""
+    from modular_rag.adapters.feedback.postgres_sink import PostgresFeedbackSink
+
+    config = dict(cfg.config)
+    config.pop("allow_purge", None)
+    return PostgresFeedbackSink(**config)
+
+
+def _build_postgres_review_queue(cfg: ComponentConfig) -> PostgresReviewQueue:
+    """ADR-0014 — same `allow_purge` pop as `_build_postgres_audit_sink`."""
+    from modular_rag.adapters.review.postgres_queue import PostgresReviewQueue
+
+    config = dict(cfg.config)
+    config.pop("allow_purge", None)
+    return PostgresReviewQueue(**config)
+
+
 def register_defaults(reg: ComponentRegistry) -> None:
     from modular_rag.adapters.embeddings.deterministic_embedder import DeterministicEmbedder
     from modular_rag.adapters.embeddings.hf_embedder import HuggingFaceEmbedder
@@ -150,6 +172,7 @@ def register_defaults(reg: ComponentRegistry) -> None:
     from modular_rag.retrieval.rerankers.cross_encoder import CrossEncoderReranker
     from modular_rag.retrieval.retrievers.vector import VectorRetriever
     from modular_rag.security.audit.store import InMemoryAuditSink
+    from modular_rag.security.feedback.store import InMemoryFeedbackSink
     from modular_rag.security.filters.basic_guard import BasicSecurityGuard
     from modular_rag.security.policies.human_review import HumanReviewGate
     from modular_rag.security.policies.policy_engine import PolicyEngine
@@ -180,8 +203,11 @@ def register_defaults(reg: ComponentRegistry) -> None:
     )
     reg.register("redactor", "patterns", lambda cfg: PatternRedactor())
     reg.register("review_queue", "human-review", lambda cfg: HumanReviewGate(**cfg.config))
+    reg.register("review_queue", "postgres-human-review", _build_postgres_review_queue)
     reg.register("audit_sink", "in-memory", lambda cfg: InMemoryAuditSink())
     reg.register("audit_sink", "postgres", _build_postgres_audit_sink)
+    reg.register("feedback_sink", "in-memory", lambda cfg: InMemoryFeedbackSink())
+    reg.register("feedback_sink", "postgres", _build_postgres_feedback_sink)
     reg.register("telemetry", "structlog", lambda cfg: StructlogTelemetry())
     reg.register("telemetry", "null", lambda cfg: NullTelemetry())
     reg.register("tracer", "otel", _build_otel_tracer)
