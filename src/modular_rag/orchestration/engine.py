@@ -80,7 +80,9 @@ class RAGEngine:
         without reaching into the private `_c` container."""
         return self._c.meter
 
-    def _span(self, name: str, attributes: dict[str, Any] | None = None) -> AbstractContextManager[Span | None]:
+    def _span(
+        self, name: str, attributes: dict[str, Any] | None = None
+    ) -> AbstractContextManager[Span | None]:
         """Start a span if a tracer is configured (ADR-0012), otherwise a
         no-op context manager yielding `None` — every call site must guard
         `if span is not None:` before calling a `Span` method, matching this
@@ -464,7 +466,9 @@ class RAGEngine:
                     error=str(exc),
                 )
                 if self._c.meter:
-                    self._c.meter.counter("mrag.ingest.errors", attributes={"error_type": type(exc).__name__})
+                    self._c.meter.counter(
+                        "mrag.ingest.errors", attributes={"error_type": type(exc).__name__}
+                    )
                 raise
         if self._c.meter:
             self._c.meter.counter("mrag.ingest.chunks", len(chunks))
@@ -541,7 +545,9 @@ class RAGEngine:
                 span.set_attribute("rag.trace_id", trace.id)
             if self._c.meter:
                 if not chunks:
-                    self._c.meter.counter("mrag.retrieve.empty", attributes={"operation": "retrieve"})
+                    self._c.meter.counter(
+                        "mrag.retrieve.empty", attributes={"operation": "retrieve"}
+                    )
                 degraded_sources = getattr(self._c.retriever, "last_degraded_sources", None)
                 for source in degraded_sources or []:
                     self._c.meter.counter("mrag.retrieve.degraded", attributes={"source": source})

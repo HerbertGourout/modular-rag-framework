@@ -70,7 +70,9 @@ class NullTracer:
     def name(self) -> str:
         return "null"
 
-    def start_span(self, name: str, attributes: dict[str, AttributeValue] | None = None) -> NullSpan:
+    def start_span(
+        self, name: str, attributes: dict[str, AttributeValue] | None = None
+    ) -> NullSpan:
         return NullSpan()
 
 
@@ -92,7 +94,9 @@ class NullMeter:
     ) -> None:
         pass
 
-    def gauge(self, name: str, value: float, attributes: dict[str, AttributeValue] | None = None) -> None:
+    def gauge(
+        self, name: str, value: float, attributes: dict[str, AttributeValue] | None = None
+    ) -> None:
         pass
 
 

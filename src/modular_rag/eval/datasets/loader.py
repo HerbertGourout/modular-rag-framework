@@ -1,7 +1,7 @@
 """Golden-set YAML loader (Batch 13, external plan — "Offline benchmark").
 
 `GoldenSet`'s data (`eval/datasets/core_v1.yaml`) declares its corpus as
-`Chunk`s with fixed, author-chosen `chunk_id`/`doc_id` values rather than
+`Chunk`s with fixed, author-chosen `chunk_id`/`doc_id` slugs rather than
 `Document`s to be chunked at load time. `Chunk.id`/`Document.id` both
 default to a fresh random `new_id()` (`core/ids.py`) generated at
 construction — a chunking pass over golden-set `Document`s would produce a
@@ -11,9 +11,25 @@ already-chunked `Chunk` objects directly, with explicit ids, sidesteps that
 entirely and is what actually makes "reproducible benchmark" (this task's
 own acceptance criterion) possible — the same YAML always ingests to the
 exact same chunk ids, on any machine, forever.
+
+CI review finding: a human-readable slug like `chunk_id: refund-policy-1`
+was previously passed straight through as `Chunk.id` — Qdrant's point-id
+format only accepts an unsigned integer or a UUID, so `QdrantStore.index()`
+rejected every golden-set chunk during `benchmark-gate`
+("value refund-policy-1 is not a valid point ID"). No unit test ever
+exercised a live indexer, so this regressed silently. Fixed here, not in
+the YAML: `chunk_id`/`doc_id` slugs stay the readable, hand-editable
+identifiers a human cross-references in `relevant_chunk_ids`; this loader
+deterministically derives a UUID5 from `(golden_set_name, slug)` for the
+real `Chunk.id`/`doc_id` used everywhere downstream (indexing, retrieval,
+scoring) — same slug, same golden set, same UUID, every run, on any
+machine, exactly preserving the reproducibility guarantee above while
+actually satisfying Qdrant's id format. The original slug is kept on
+`Chunk.metadata["golden_set_alias"]` for readability in reports/logs.
 """
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +44,18 @@ from modular_rag.eval.runners.benchmark import GOLDEN_SET_SCHEMA_VERSION, Benchm
 # docstring) — anything else silently fell through as an implicit "qa" case,
 # with no error, before this loader validated it.
 _VALID_CASE_TYPES = frozenset({"qa", "safety"})
+
+# Fixed, arbitrary namespace for uuid.uuid5() — any constant UUID works here;
+# what matters is that it never changes, so (golden_set_name, slug) always
+# derives the same id on every machine, forever.
+_ID_NAMESPACE = uuid.UUID("6f6b1a2e-6e2b-4f9b-9a1e-8f5c2a2d5b7e")
+
+
+def _derive_id(golden_set_name: str, slug: str) -> str:
+    """Deterministic UUID5 derived from the golden set's name and a
+    human-readable slug — valid as a Qdrant point id, unlike the slug
+    itself. See this module's own docstring for the CI failure this fixes."""
+    return str(uuid.uuid5(_ID_NAMESPACE, f"{golden_set_name}:{slug}"))
 
 
 def load_golden_set(path: str | Path) -> GoldenSet:
@@ -58,14 +86,23 @@ def load_golden_set(path: str | Path) -> GoldenSet:
             f"but this loader only understands {GOLDEN_SET_SCHEMA_VERSION!r}."
         )
 
-    corpus = [_parse_chunk(item, file_path) for item in raw.get("corpus", [])]
-    corpus_ids = {chunk.id for chunk in corpus}
-    cases = [_parse_case(item, file_path, corpus_ids) for item in raw.get("cases", [])]
+    name = raw.get("name", file_path.stem)
+    raw_corpus = raw.get("corpus", [])
+    corpus = [_parse_chunk(item, file_path, name) for item in raw_corpus]
+    # Maps each author-chosen slug to the derived id actually stored on the
+    # corresponding Chunk — used below to translate `relevant_chunk_ids`
+    # (still written as slugs in the YAML) to the same derived ids that a
+    # real retriever will return, while keeping "unknown id" error messages
+    # readable (reporting the original slug, not an opaque UUID).
+    slug_to_id = {
+        item["chunk_id"]: chunk.id for item, chunk in zip(raw_corpus, corpus, strict=True)
+    }
+    cases = [_parse_case(item, file_path, slug_to_id) for item in raw.get("cases", [])]
     if not cases:
         raise EvaluationError(f"Golden set {file_path} declares zero cases.")
 
     return GoldenSet(
-        name=raw.get("name", file_path.stem),
+        name=name,
         cases=cases,
         schema_version=schema_version,
         domain=raw.get("domain", "default"),
@@ -73,16 +110,26 @@ def load_golden_set(path: str | Path) -> GoldenSet:
     )
 
 
-def _parse_chunk(item: dict[str, Any], file_path: Path) -> Chunk:
+def _parse_chunk(item: dict[str, Any], file_path: Path, golden_set_name: str) -> Chunk:
     try:
-        return Chunk(id=item["chunk_id"], doc_id=item["doc_id"], content=item["content"])
+        chunk_slug = item["chunk_id"]
+        doc_slug = item["doc_id"]
+        content = item["content"]
     except KeyError as exc:
         raise EvaluationError(
             f"Golden set {file_path}: corpus entry missing required field {exc}."
         ) from exc
+    return Chunk(
+        id=_derive_id(golden_set_name, chunk_slug),
+        doc_id=_derive_id(golden_set_name, doc_slug),
+        content=content,
+        metadata={"golden_set_alias": chunk_slug},
+    )
 
 
-def _parse_case(item: dict[str, Any], file_path: Path, corpus_ids: set[str]) -> BenchmarkCase:
+def _parse_case(
+    item: dict[str, Any], file_path: Path, slug_to_id: dict[str, str]
+) -> BenchmarkCase:
     """Codex review (pass 1, MEDIUM-001): this used to copy `case_type`/
     `expect_block`/`relevant_chunk_ids` without validating their shape. A
     typo like `case_type: saftey` silently fell through as an ordinary "qa"
@@ -114,16 +161,16 @@ def _parse_case(item: dict[str, Any], file_path: Path, corpus_ids: set[str]) -> 
             f"expect_block={expect_block!r}."
         )
 
-    relevant_chunk_ids = item.get("relevant_chunk_ids", [])
-    if not isinstance(relevant_chunk_ids, list) or not all(
-        isinstance(cid, str) for cid in relevant_chunk_ids
+    relevant_chunk_slugs = item.get("relevant_chunk_ids", [])
+    if not isinstance(relevant_chunk_slugs, list) or not all(
+        isinstance(cid, str) for cid in relevant_chunk_slugs
     ):
         raise EvaluationError(
             f"Golden set {file_path}: case {question!r} has a malformed "
             f"relevant_chunk_ids (expected a list of strings, got "
-            f"{relevant_chunk_ids!r})."
+            f"{relevant_chunk_slugs!r})."
         )
-    unknown_ids = [cid for cid in relevant_chunk_ids if cid not in corpus_ids]
+    unknown_ids = [cid for cid in relevant_chunk_slugs if cid not in slug_to_id]
     if unknown_ids:
         raise EvaluationError(
             f"Golden set {file_path}: case {question!r} declares "
@@ -133,7 +180,7 @@ def _parse_case(item: dict[str, Any], file_path: Path, corpus_ids: set[str]) -> 
     return BenchmarkCase(
         question=question,
         expected_answer=item.get("expected_answer", ""),
-        relevant_chunk_ids=relevant_chunk_ids,
+        relevant_chunk_ids=[slug_to_id[slug] for slug in relevant_chunk_slugs],
         case_type=case_type,
         expect_block=expect_block,
     )

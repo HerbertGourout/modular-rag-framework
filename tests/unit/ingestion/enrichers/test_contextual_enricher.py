@@ -7,7 +7,9 @@ from modular_rag.ingestion.enrichers.contextual_enricher import ContextualEnrich
 
 
 def test_enrich_prefixes_embedding_text_with_the_document_filename() -> None:
-    document = Document(source="reports/q3.pdf", content="irrelevant", metadata={"filename": "q3.pdf"})
+    document = Document(
+        source="reports/q3.pdf", content="irrelevant", metadata={"filename": "q3.pdf"}
+    )
     chunk = Chunk(doc_id=document.id, content="Revenue grew 12% year over year.")
 
     [enriched] = ContextualEnricher().enrich(document, [chunk])

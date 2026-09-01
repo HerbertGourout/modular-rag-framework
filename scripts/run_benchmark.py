@@ -207,13 +207,19 @@ def main() -> int:
     except QualityGateError as exc:
         print("Quality gate FAILED (blocking mode):")
         for violation in exc.result.violations:
-            print(f"  - {violation.metric}: baseline={violation.baseline} actual={violation.actual}")
+            print(
+                f"  - {violation.metric}: "
+                f"baseline={violation.baseline} actual={violation.actual}"
+            )
         return 1
 
     if not result.passed:
         print("Quality gate reported violations (report-only mode, not blocking):")
         for violation in result.violations:
-            print(f"  - {violation.metric}: baseline={violation.baseline} actual={violation.actual}")
+            print(
+                f"  - {violation.metric}: "
+                f"baseline={violation.baseline} actual={violation.actual}"
+            )
     else:
         print("Quality gate passed: no regression past baseline.")
     return 0

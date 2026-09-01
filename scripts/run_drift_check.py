@@ -36,7 +36,8 @@ one, with no diagnostic and no non-zero exit code.
 
 Usage:
     python scripts/run_drift_check.py --manifest <path>
-    python scripts/run_drift_check.py --manifest <path> --update-baseline --baseline drift-baseline.json
+    python scripts/run_drift_check.py --manifest <path> --update-baseline \
+        --baseline drift-baseline.json
     python scripts/run_drift_check.py --manifest <path> --baseline drift-baseline.json
 """
 from __future__ import annotations

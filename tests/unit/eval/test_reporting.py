@@ -75,7 +75,10 @@ def test_render_markdown_report_with_a_baseline_shows_a_delta() -> None:
     payload = build_report_payload(
         _report(), dataset_name="core-v1", dataset_schema_version="1.0", manifest_path="m.yaml"
     )
-    baseline = {"quality": {**payload["quality"], "avg_answer_relevance": 0.5}, "cost": payload["cost"]}
+    baseline = {
+        "quality": {**payload["quality"], "avg_answer_relevance": 0.5},
+        "cost": payload["cost"],
+    }
 
     markdown = render_markdown_report(payload, baseline=baseline)
 

@@ -319,7 +319,9 @@ class TestDockerignoreAndCopy:
         assert any("dockerignore excludes" in p for p in problems)
 
     def test_reports_missing_copy_instruction(self) -> None:
-        dockerfile = DOCKERFILE_OK.replace("COPY requirements-lock.txt /tmp/requirements-lock.txt\n", "")
+        dockerfile = DOCKERFILE_OK.replace(
+            "COPY requirements-lock.txt /tmp/requirements-lock.txt\n", ""
+        )
         problems = check_dockerignore_and_copy(dockerfile, DOCKERIGNORE_OK)
         assert any("does not COPY" in p for p in problems)
 

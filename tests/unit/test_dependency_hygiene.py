@@ -21,7 +21,10 @@ def _load_pyproject() -> dict:
 
 
 def _names(requirement_strings: list[str]) -> set[str]:
-    return {req.split(">=")[0].split("[")[0].split("==")[0].strip().lower() for req in requirement_strings}
+    return {
+        req.split(">=")[0].split("[")[0].split("==")[0].strip().lower()
+        for req in requirement_strings
+    }
 
 
 def test_dead_dependencies_are_absent_from_base_dependencies() -> None:
