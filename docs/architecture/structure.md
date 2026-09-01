@@ -949,7 +949,7 @@ their shared fixture/replay helper modules.
 
 ```
 docs/
-├── adr/                          ← 13 ADRs (0001–0013) plus an _index.md
+├── adr/                          ← 14 ADRs (0001–0014) plus an _index.md
 ├── api/
 │   └── rest.md                   ← REST reference (endpoints, schemas, error codes)
 ├── architecture/

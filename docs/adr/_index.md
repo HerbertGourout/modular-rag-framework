@@ -227,6 +227,29 @@ not only in documentation.
 
 ---
 
+### [ADR-0014: Feedback Contract, Durable Human Review, and Offline Drift Detection](0014-feedback-drift-and-human-review.md)
+
+**Status:** Accepted
+**Date:** 2026-08-28
+
+Adds a new, additive `Feedback`/`FeedbackSink` contract (`contracts/feedback.py`) and an
+authenticated `POST /feedback` endpoint; durable PostgreSQL backends for feedback and human
+review (`PostgresFeedbackSink`, `PostgresReviewQueue`) mirroring `PostgresAuditSink`'s
+pool/circuit-breaker/retention pattern; a redactor-gated sensitive-content policy
+(`RAGEngine.record_feedback()` refuses free-text `correction_text` without a wired
+`governance.redactor`); a `"tester"`-role gate on synthetic/QA feedback (`Feedback.is_test`); and
+a pure, offline `eval/drift_detection.py` module (feedback-driven quality drift, document
+freshness, escalation rate) with an advisory `should_trigger_retraining` flag, script-driven only
+per ADR-0008 — never a runtime pipeline component.
+
+**Key insight:** feedback *storage* is a legitimate online governance component (like
+`audit_sink`); drift *computation* must stay offline. Scoping `Feedback.idempotency_key`
+uniqueness per tenant (`COALESCE(tenant_id, '')` + key), not globally, was a pass-1 self-review
+correction — a bare global unique constraint on a client-supplied key would let one tenant
+pre-claim another tenant's key.
+
+---
+
 ## Decision Making Process
 
 1. **Identification**: Problem identified in sprint planning, client feedback, or architecture review.
@@ -282,8 +305,9 @@ not only in documentation.
 - **ADR-0011**: PostgreSQL migrations, connection pooling, and audit retention. Accepted.
 - **ADR-0012**: OpenTelemetry tracing via a new `Tracer` port. Accepted.
 - **ADR-0013**: Operational metrics via a new `Meter` port. Accepted.
+- **ADR-0014**: Feedback contract, durable human review, and offline drift detection. Accepted.
 
-All thirteen ADRs are Accepted as of this writing — none are in Proposed status. Future ADRs will be
+All fourteen ADRs are Accepted as of this writing — none are in Proposed status. Future ADRs will be
 added as new major decisions arise; per this project's own rule
 ([CLAUDE.md §07](../../CLAUDE.md#07--security-rules)), any new top-level module, layer boundary,
 or contract modification requires one.
