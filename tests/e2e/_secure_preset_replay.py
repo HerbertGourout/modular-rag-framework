@@ -76,6 +76,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import structlog
+
 # Script-relative import — this file's own directory is on sys.path[0] when
 # run directly (`python tests/e2e/_secure_preset_replay.py`), which is the
 # only supported way to run it (see this module's docstring).
@@ -89,6 +91,19 @@ from _secure_preset_fixtures import (
 
 from modular_rag.app.public import load_application
 from modular_rag.core.models.document import Document
+
+# CI review finding: `structlog`'s default `logger_factory` is
+# `PrintLoggerFactory`, which writes every `log.info()`/`log.warning()` call
+# straight to stdout via `print()` unless configured otherwise. This
+# script's entire contract is "prints exactly one JSON object to stdout"
+# (see the module docstring) — any library log call reachable from
+# `app.answer()`/`app.close()` (e.g. a Postgres/Qdrant adapter's own
+# structured logging) would otherwise interleave with the `json.dump()`
+# output below, and the parent test's `json.loads(result.stdout)` fails
+# with "Extra data" as soon as anything logs. Redirect structlog's output
+# to stderr here, before `main()` does any real work, so stdout stays
+# reserved for the JSON payload alone.
+structlog.configure(logger_factory=structlog.PrintLoggerFactory(file=sys.stderr))
 
 QDRANT_URL = os.environ.get("MRAG_TEST_QDRANT_URL", "http://localhost:6333")
 POSTGRES_DSN = os.environ.get(
