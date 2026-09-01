@@ -8,6 +8,8 @@ from contextlib import AbstractContextManager, nullcontext
 from typing import TYPE_CHECKING
 
 from modular_rag.contracts.engine import EngineRequest, ExecutionContext
+from modular_rag.contracts.feedback import Feedback, FeedbackRating
+from modular_rag.core.errors import SecurityError
 from modular_rag.core.models.answer import Answer
 from modular_rag.core.models.query import Query
 from modular_rag.orchestration.engine import RAGEngine
@@ -15,9 +17,12 @@ from modular_rag.orchestration.engine import RAGEngine
 if TYPE_CHECKING:
     from modular_rag.contracts.chunking import Chunker
     from modular_rag.contracts.engine import DocumentEngine
+    from modular_rag.contracts.feedback import FeedbackSink
     from modular_rag.contracts.indexing import Indexer
+    from modular_rag.contracts.lifecycle import LifecycleLedger
     from modular_rag.contracts.meter import Meter
     from modular_rag.contracts.reconciliation import ReconciliationReport, RepairResult
+    from modular_rag.contracts.review import ReviewQueue
     from modular_rag.contracts.tracing import Span, Tracer
     from modular_rag.core.models.chunk import Chunk
     from modular_rag.core.models.health import ReadinessReport
@@ -51,6 +56,24 @@ class ApplicationService:
         MEDIUM-002) to clear the benchmark's own dedicated collection before
         each ingest, for a reproducible run."""
         return self._native.indexer
+
+    @property
+    def feedback_sink(self) -> FeedbackSink | None:
+        """Public accessor, same pattern as `indexer` above. Added for
+        `scripts/run_drift_check.py` (Batch 14)."""
+        return self._native.feedback_sink
+
+    @property
+    def review_queue(self) -> ReviewQueue | None:
+        """Public accessor, same pattern as `indexer` above. Added for
+        `scripts/run_drift_check.py` (Batch 14)."""
+        return self._native.review_queue
+
+    @property
+    def lifecycle_ledger(self) -> LifecycleLedger | None:
+        """Public accessor, same pattern as `indexer` above. Added for
+        `scripts/run_drift_check.py` (Batch 14)."""
+        return self._native.lifecycle_ledger
 
     @property
     def tracer(self) -> Tracer | None:
@@ -149,6 +172,70 @@ class ApplicationService:
             trace_id=answer_trace_id,
             metadata={"engine": self._selected.name(), **result.metadata},
         )
+
+    def record_feedback(
+        self,
+        trace_id: str,
+        *,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
+        roles: frozenset[str] = frozenset(),
+        rating: FeedbackRating | None = None,
+        correction_text: str | None = None,
+        citation_count: int | None = None,
+        idempotency_key: str,
+        is_test: bool = False,
+    ) -> Feedback:
+        """Record one user-submitted `Feedback` (Batch 14, ADR-0014).
+
+        `trace_id` is required — the only identifier this framework returns
+        to a caller today (`Answer.trace_id`), so it is the only usable link
+        back to the answer this feedback concerns. `idempotency_key` is
+        required and is the sink's dedup key: a retried call with the same
+        key is a no-op, not an error.
+
+        `is_test=True` requires `"tester"` in `roles` (ADR-0014 decision 6)
+        — raises `SecurityError` otherwise (mapped to HTTP 403 by
+        `api/errors.py::to_http_exception`), so QA/synthetic feedback can
+        never silently masquerade as real traffic in `eval.drift_detection`'s
+        aggregation. The sensitive-content (redactor-required) policy check
+        lives in `RAGEngine.record_feedback()`, not here.
+
+        Returns the record actually stored — `RAGEngine.record_feedback()`
+        may redact `correction_text` before persisting it, so the returned
+        `Feedback` can differ from what this method would otherwise have
+        constructed locally (Batch 14 pass 1 security review finding).
+        """
+        if is_test and "tester" not in roles:
+            raise SecurityError(
+                "is_test=True requires the 'tester' role on the caller's verified identity."
+            )
+        feedback = Feedback(
+            trace_id=trace_id,
+            tenant_id=tenant_id,
+            rating=rating,
+            correction_text=correction_text,
+            citation_count=citation_count,
+            idempotency_key=idempotency_key,
+            submitted_by=user_id,
+            is_test=is_test,
+        )
+        request_id = str(uuid.uuid4())
+        correlation_id = str(uuid.uuid4())
+        t0 = time.perf_counter()
+        with self._request_span("feedback", correlation_id, request_id) as span:
+            try:
+                feedback = self._native.record_feedback(feedback)
+            except Exception as exc:
+                if span is not None:
+                    span.record_error(type(exc).__name__)
+                self._record_request_metrics("feedback", "native", t0, error=exc)
+                raise
+            if span is not None:
+                span.set_attribute("app.trace_id", trace_id)
+                span.set_attribute("status", "ok")
+            self._record_request_metrics("feedback", "native", t0, error=None)
+        return feedback
 
     def retrieve(
         self, question: str, k: int = 10, tenant_id: str | None = None

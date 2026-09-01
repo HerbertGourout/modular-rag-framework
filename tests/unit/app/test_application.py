@@ -1,7 +1,11 @@
 from typing import Any
 
+import pytest
+
 from modular_rag.app.application import ApplicationService
 from modular_rag.contracts.engine import EngineRequest, EngineResult, ExecutionContext
+from modular_rag.contracts.feedback import FeedbackRating
+from modular_rag.core.errors import ConfigurationError, SecurityError
 from modular_rag.core.ids import new_id
 from modular_rag.core.models.chunk import Chunk
 from modular_rag.core.models.retrieval_result import RetrievalResult
@@ -18,17 +22,32 @@ class _Native:
         tracer: Any | None = None,
         meter: Any | None = None,
         indexer: Any | None = None,
+        feedback_sink: Any | None = None,
+        review_queue: Any | None = None,
+        lifecycle_ledger: Any | None = None,
+        record_feedback_error: Exception | None = None,
     ) -> None:
         self.closed = False
         self.tenant_policy_active = tenant_policy_active
         self.tracer = tracer
         self.meter = meter
         self.indexer = indexer
+        self.feedback_sink = feedback_sink
+        self.review_queue = review_queue
+        self.lifecycle_ledger = lifecycle_ledger
         self.last_retrieve_question: str | None = None
         self.retrieve_error: Exception | None = None
+        self.recorded_feedback: list[Any] = []
+        self._record_feedback_error = record_feedback_error
 
     def close(self) -> None:
         self.closed = True
+
+    def record_feedback(self, feedback: Any) -> Any:
+        if self._record_feedback_error is not None:
+            raise self._record_feedback_error
+        self.recorded_feedback.append(feedback)
+        return feedback
 
     def retrieve(
         self, question: str, k: int = 10, tenant_id: str | None = None
@@ -98,6 +117,97 @@ def test_indexer_property_delegates_to_native() -> None:
     service = ApplicationService(_Native(indexer=indexer), _Selected())  # type: ignore[arg-type]
 
     assert service.indexer is indexer
+
+
+def test_feedback_sink_review_queue_and_lifecycle_ledger_properties_delegate_to_native() -> None:
+    """Same "public accessor" pattern as `indexer` above, added for
+    `scripts/run_drift_check.py` (Batch 14)."""
+    feedback_sink, review_queue, lifecycle_ledger = object(), object(), object()
+    service = ApplicationService(
+        _Native(
+            feedback_sink=feedback_sink,
+            review_queue=review_queue,
+            lifecycle_ledger=lifecycle_ledger,
+        ),
+        _Selected(),  # type: ignore[arg-type]
+    )
+
+    assert service.feedback_sink is feedback_sink
+    assert service.review_queue is review_queue
+    assert service.lifecycle_ledger is lifecycle_ledger
+
+
+# ---------------------------------------------------------------------------
+# Batch 14 (ADR-0014): ApplicationService.record_feedback().
+# ---------------------------------------------------------------------------
+
+
+def test_record_feedback_delegates_to_native_and_returns_the_feedback() -> None:
+    native = _Native()
+    service = ApplicationService(native, _Selected())  # type: ignore[arg-type]
+
+    result = service.record_feedback(
+        "trace-1", idempotency_key="k1", rating=FeedbackRating.THUMBS_UP
+    )
+
+    assert len(native.recorded_feedback) == 1
+    assert native.recorded_feedback[0] is result
+    assert result.trace_id == "trace-1"
+    assert result.idempotency_key == "k1"
+    assert result.rating == FeedbackRating.THUMBS_UP
+
+
+def test_record_feedback_returns_what_native_actually_stored_not_the_local_object() -> None:
+    """`RAGEngine.record_feedback()` may redact `correction_text` before
+    storing — `ApplicationService.record_feedback()` must return that
+    stored record, not the pre-redaction object it built locally (pass 1
+    security review finding)."""
+    native = _Native()
+    service = ApplicationService(native, _Selected())  # type: ignore[arg-type]
+
+    def _redact_and_store(feedback: Any) -> Any:
+        redacted = feedback.model_copy(update={"correction_text": "[REDACTED]"})
+        native.recorded_feedback.append(redacted)
+        return redacted
+
+    native.record_feedback = _redact_and_store  # type: ignore[method-assign]
+
+    result = service.record_feedback(
+        "trace-1", idempotency_key="k1", correction_text="alice@example.com"
+    )
+
+    assert result.correction_text == "[REDACTED]"
+
+
+def test_record_feedback_propagates_a_configuration_error_from_native() -> None:
+    native = _Native(record_feedback_error=ConfigurationError("no feedback_sink"))
+    service = ApplicationService(native, _Selected())  # type: ignore[arg-type]
+
+    with pytest.raises(ConfigurationError):
+        service.record_feedback("trace-1", idempotency_key="k1")
+
+
+def test_record_feedback_rejects_is_test_without_the_tester_role() -> None:
+    native = _Native()
+    service = ApplicationService(native, _Selected())  # type: ignore[arg-type]
+
+    with pytest.raises(SecurityError, match="tester"):
+        service.record_feedback(
+            "trace-1", idempotency_key="k1", is_test=True, roles=frozenset()
+        )
+    assert native.recorded_feedback == []  # never reached the native engine
+
+
+def test_record_feedback_allows_is_test_with_the_tester_role() -> None:
+    native = _Native()
+    service = ApplicationService(native, _Selected())  # type: ignore[arg-type]
+
+    result = service.record_feedback(
+        "trace-1", idempotency_key="k1", is_test=True, roles=frozenset({"tester"})
+    )
+
+    assert result.is_test is True
+    assert len(native.recorded_feedback) == 1
 
 
 def test_application_closes_native_container_resources() -> None:

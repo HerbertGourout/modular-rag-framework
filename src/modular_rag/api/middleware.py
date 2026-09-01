@@ -147,11 +147,11 @@ class ConcurrencyLimitMiddleware(BaseHTTPMiddleware):
 
 
 class TracingMiddleware(BaseHTTPMiddleware):
-    """ADR-0012 — wraps `/answer`/`/retrieve` in an `"api.answer"`/
-    `"api.retrieve"` span covering the *entire* routed request, including
-    FastAPI's own dependency resolution (`Depends(_authenticate)`) and
-    request-body validation, both of which run before a route function's
-    body starts.
+    """ADR-0012 — wraps `/answer`/`/retrieve`/`/feedback` in an `"api.answer"`/
+    `"api.retrieve"`/`"api.feedback"` span covering the *entire* routed
+    request, including FastAPI's own dependency resolution
+    (`Depends(_authenticate)`) and request-body validation, both of which
+    run before a route function's body starts.
 
     Codex review pass 1 (MEDIUM-001): an earlier version created this span
     only inside the route function body (`api/__init__.py`'s own
@@ -167,7 +167,11 @@ class TracingMiddleware(BaseHTTPMiddleware):
     task instruments.
     """
 
-    _TRACED_PATHS = {"/answer": "api.answer", "/retrieve": "api.retrieve"}
+    _TRACED_PATHS = {
+        "/answer": "api.answer",
+        "/retrieve": "api.retrieve",
+        "/feedback": "api.feedback",
+    }
 
     def __init__(self, app: ASGIApp, tracer: Tracer | None) -> None:
         super().__init__(app)

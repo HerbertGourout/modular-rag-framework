@@ -57,5 +57,25 @@ def test_resolve_raises_for_unknown_item_id():
         gate.resolve("does-not-exist", approved=True, reviewer="alice")
 
 
+def test_resolve_rejects_a_second_resolution_of_the_same_item():
+    """Codex review pass 1, HIGH-002: a terminal transition — resolving an
+    already-resolved item must not silently overwrite the first decision's
+    `approved`/`reviewer`, matching `PostgresReviewQueue.resolve()`'s
+    identical compare-and-set behavior."""
+    gate = HumanReviewGate()
+    item = ReviewItem(answer_id="a1", query_id="q1", reason="low confidence")
+    gate.enqueue(item)
+    gate.resolve(item.id, approved=True, reviewer="alice")
+
+    with pytest.raises(ModularRAGError, match="No pending review item"):
+        gate.resolve(item.id, approved=False, reviewer="bob")
+
+    # The first decision survives untouched (accessing the internal dict
+    # directly since `pending` only exposes unresolved items).
+    resolved = gate._items[item.id]
+    assert resolved.approved is True
+    assert resolved.reviewer == "alice"
+
+
 def test_name_reports_human_review_gate():
     assert HumanReviewGate().name() == "human-review-gate"

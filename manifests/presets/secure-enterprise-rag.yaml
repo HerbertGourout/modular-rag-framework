@@ -104,6 +104,22 @@ governance:
     type: postgres
     config:
       dsn: "secret://AUDIT_DATABASE_URL"
+  # ADR-0014 (Batch 14): durable feedback storage and human review, sharing
+  # the same PostgreSQL database as audit_sink above (a separate DSN/role is
+  # also fine — see docs/guides/postgres-permissions.md). `allow_purge` is
+  # never set here on purpose: the manifest-wired instance the live
+  # application uses must never be able to purge — only a CLI-constructed
+  # one (`mrag feedback purge`/`mrag review purge --dsn <retention-role-dsn>`)
+  # can, per app/default_factories.py's own allow_purge-popping factories.
+  feedback_sink:
+    type: postgres
+    config:
+      dsn: "secret://AUDIT_DATABASE_URL"
+  review_queue:
+    type: postgres-human-review
+    config:
+      dsn: "secret://AUDIT_DATABASE_URL"
+      threshold: 0.7
 
 observability:
   telemetry:

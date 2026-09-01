@@ -159,10 +159,11 @@ request produces one correctly-nested, exportable OpenTelemetry trace.
 Only in `orchestration/engine.py`, `app/application.py`, and `api/__init__.py` — never inside
 `ingestion/`, `retrieval/`, `generation/`, or `security/` (domain modules never import
 OpenTelemetry, directly or indirectly). `app/application.py`'s `"app.request"` span is shared by
-both `ApplicationService.answer()` and `.retrieve()` (an `operation` attribute — `"answer"` or
-`"retrieve"` — distinguishes the two in a trace viewer), but they nest very differently below
-it — corrected here after Codex review pass 1 (HIGH-002) found the previous single-diagram
-version implied `/retrieve` also flowed through `rag.answer`, which it never does:
+`ApplicationService.answer()`, `.retrieve()`, and `.record_feedback()` (Batch 14, ADR-0014) — an
+`operation` attribute — `"answer"`, `"retrieve"`, or `"feedback"` — distinguishes them in a trace
+viewer), but they nest very differently below it — corrected here after Codex review pass 1
+(HIGH-002) found the previous single-diagram version implied `/retrieve` also flowed through
+`rag.answer`, which it never does:
 
 ```mermaid
 %%{init: {"theme": "base"}}%%
@@ -178,11 +179,15 @@ flowchart TB
 
     A2["api.retrieve\n(api/__init__.py)"] --> B2["app.request\n(operation=retrieve — correlation_id, request_id, app.trace_id)"]
     B2 --> J["rag.retrieve\n(RAGEngine.retrieve() — a separate, leaf span; no rag.answer parent)"]
+
+    A3["api.feedback\n(api/__init__.py)"] --> B3["app.request\n(operation=feedback — correlation_id, request_id, app.trace_id)"]
+    B3 --> K["RAGEngine.record_feedback() — no rag.* child span; a single\nsink write, not a multi-stage pipeline"]
 ```
 
-Both `"app.request"` spans carry `app.trace_id` — a real, minimal `Trace` built specifically for
-that call (`Trace(query_id=..., pipeline_id=...)`, with one `TraceStep` for the retrieval itself
-on the `retrieve()` path).
+All three `"app.request"` spans carry `app.trace_id` — a real, minimal `Trace` built specifically
+for that call (`Trace(query_id=..., pipeline_id=...)` for `answer()`/`retrieve()`; the
+caller-supplied `Feedback.trace_id` itself for `record_feedback()`, since feedback has no `Trace`
+of its own — it references one already recorded by an earlier `answer()` call).
 
 This was corrected during Lot 11's own review cycle (Codex pass 2 HIGH-002). An earlier version
 omitted `app.trace_id` for `retrieve()` on the reasoning that `RAGEngine.retrieve()` built no
@@ -321,7 +326,7 @@ spans, never inside `ingestion/`, `retrieval/`, `generation/`, or `security/`.
 
 | Metric | Type | Labels | Where |
 |---|---|---|---|
-| `mrag.request.duration_ms` | histogram | `operation`, `engine`, `status` | `ApplicationService.answer()`/`.retrieve()` — **not** also inside `RAGEngine`, to avoid double-counting. HTTP requests rejected earlier by authentication, body-size, validation, rate-limit or concurrency middleware are outside this denominator. |
+| `mrag.request.duration_ms` | histogram | `operation`, `engine`, `status` | `ApplicationService.answer()`/`.retrieve()`/`.record_feedback()` (Batch 14, `operation="feedback"`) — **not** also inside `RAGEngine`, to avoid double-counting. HTTP requests rejected earlier by authentication, body-size, validation, rate-limit or concurrency middleware are outside this denominator. |
 | `mrag.request.errors` | counter | `operation`, `engine`, `error_type` | same scope: exceptions raised after entering `ApplicationService`, not all HTTP error responses |
 | `mrag.ingest.documents` | counter | — | `RAGEngine.ingest()` |
 | `mrag.ingest.chunks` | counter | — | `RAGEngine.ingest_chunks()` (covers both entry points — `ingest()` calls this internally per document) |

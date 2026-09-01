@@ -21,8 +21,8 @@ reimplemented as framework code" precedent already used for `pg_dump`/
 
 | Role | Used by | Privileges | Never has |
 |---|---|---|---|
-| `app_role` | The running application (`PostgresLifecycleLedger`/`PostgresAuditSink` as wired through a manifest's `audit_sink:`/`lifecycle_ledger:` block) | `INSERT`, `SELECT` on `audit_events`; `INSERT`, `SELECT`, `UPDATE` on `document_lifecycle` (the ledger is intentionally mutable — see its own module docstring) | `DELETE` on `audit_events`. No `CREATE`/DDL privilege on either table — schema ownership belongs to `migration_role` (see below) |
-| `retention_role` | Only the retention-purge CLI invocation (`mrag audit purge --dsn ...`), run by an operator or a scheduled job — a **different DSN** than the application's own | `DELETE` on `audit_events` (in addition to `SELECT`, for `count_expired()`) | Write access to `document_lifecycle` — this role's only job is auditrow retention |
+| `app_role` | The running application (`PostgresLifecycleLedger`/`PostgresAuditSink`/`PostgresFeedbackSink`/`PostgresReviewQueue` as wired through a manifest's `audit_sink:`/`lifecycle_ledger:`/`feedback_sink:`/`review_queue:` block) | `INSERT`, `SELECT` on `audit_events` and `feedback`; `INSERT`, `SELECT`, `UPDATE` on `document_lifecycle` and `review_items` (both are intentionally mutable — see each's own module docstring) | `DELETE` on `audit_events`/`feedback`/`review_items`. No `CREATE`/DDL privilege on any table — schema ownership belongs to `migration_role` (see below) |
+| `retention_role` | Only the retention-purge CLI invocations (`mrag audit purge`/`mrag feedback purge`/`mrag review purge --dsn ...`), run by an operator or a scheduled job — a **different DSN** than the application's own | `DELETE` on `audit_events`, `feedback`, and `review_items` (in addition to `SELECT`, for each's `count_expired()`) | Write access to `document_lifecycle` — this role's only job is retention across the three append-or-mutate-but-never-delete tables above |
 
 A third role, `migration_role`, owns the schema itself (`CREATE`/`ALTER`/
 `DROP` on both tables) and is the one `mrag db migrate` / `auto_migrate=True`
@@ -45,20 +45,28 @@ CREATE ROLE retention_role LOGIN PASSWORD '...';
 -- adapter with auto_migrate=True) using this role's DSN.
 GRANT CREATE ON SCHEMA public TO migration_role;
 
--- After migrations have run at least once (document_lifecycle and
--- audit_events exist):
+-- After migrations have run at least once (document_lifecycle, audit_events,
+-- feedback, and review_items all exist):
 
 GRANT SELECT, INSERT, UPDATE ON document_lifecycle TO app_role;
 GRANT SELECT, INSERT ON audit_events TO app_role;
--- Deliberately no UPDATE/DELETE grant on audit_events for app_role.
+GRANT SELECT, INSERT ON feedback TO app_role;
+GRANT SELECT, INSERT, UPDATE ON review_items TO app_role;
+-- Deliberately no DELETE grant on audit_events/feedback/review_items for
+-- app_role. review_items gets UPDATE (PostgresReviewQueue.resolve()'s own
+-- resolution write) but never DELETE, same as document_lifecycle.
 
 GRANT SELECT, DELETE ON audit_events TO retention_role;
+GRANT SELECT, DELETE ON feedback TO retention_role;
+GRANT SELECT, DELETE ON review_items TO retention_role;
 -- Deliberately no INSERT/UPDATE grant for retention_role — it can remove
 -- expired rows, nothing else.
 
 -- If migrations add new tables in the future, re-run the two GRANT
 -- statements above for the new table names — table-level grants are not
--- retroactive to tables that did not exist yet when the GRANT ran.
+-- retroactive to tables that did not exist yet when the GRANT ran. (ADR-0014
+-- is the most recent example: adapters/postgres/sql/0005_feedback.up.sql and
+-- 0006_review_items.up.sql added the two tables the grants above cover.)
 ```
 
 ## Why not just trust the Python-level `allow_purge` gate?
@@ -82,24 +90,28 @@ reaching `purge_expired()`; the DB-role separation stops the *credentials*
   database-level mechanism PostgreSQL does not provide natively (append-only
   tables via `pg_audit`-style extensions are a partial mitigation, not
   covered here).
-- **Retention is currently global, not per-tenant.** `AuditEvent.retention_days`
-  defaults to `365` and nothing in this codebase today sets it to anything
+- **Retention is currently global, not per-tenant.** `AuditEvent.retention_days`,
+  `Feedback.retention_days`, and `ReviewItem.retention_days` all default to
+  `365`, and nothing in this codebase today sets any of them to anything
   else — a tenant-specific retention policy would need that field actually
-  varied at write time, which is out of this lot's scope.
+  varied at write time, which is out of scope here.
 - **Backups outlive purges.** `pg_dump` snapshots (see
   [backup-restore.md](backup-restore.md)) captured before a `purge_expired()`
   run still contain the purged rows. A backup-rotation policy shorter than
   the shortest configured `retention_days` is required to make retention
   meaningful end-to-end; this guide does not set one.
-- **No per-subject erasure path.** `audit_events.actor` can be personal data;
-  neither `RAGEngine.erase_document()` nor anything else in this codebase
-  removes a specific person's audit rows on request. If a legal erasure
-  obligation applies to audit records specifically (as opposed to indexed
-  document content, which `erase_document()` does cover), that is a
-  deliberate, documented gap, not an oversight.
-- **Purge events are logged, not self-audited.** `purge_expired()` does not
-  write its own `AuditEvent` recording that a purge happened — adding that
-  would mean defining a new `AuditEventType` and payload-allowlist entry
-  (`contracts/audit.py`), which is a contract change out of this lot's
-  narrow scope. A structured log line is emitted instead; operators wanting
+- **No per-subject erasure path.** `audit_events.actor`, `feedback.submitted_by`,
+  and `feedback.correction_text` (post-redaction) can all be or reference
+  personal data; neither `RAGEngine.erase_document()` nor anything else in
+  this codebase removes a specific person's rows from any of the three
+  governance tables on request. If a legal erasure obligation applies to
+  these records specifically (as opposed to indexed document content, which
+  `erase_document()` does cover), that is a deliberate, documented gap, not
+  an oversight.
+- **Purge events are logged, not self-audited.** `purge_expired()` on any of
+  the three sinks (`PostgresAuditSink`/`PostgresFeedbackSink`/
+  `PostgresReviewQueue`) does not write its own `AuditEvent` recording that a
+  purge happened — adding that would mean defining a new `AuditEventType`
+  and payload-allowlist entry (`contracts/audit.py`), a contract change out
+  of scope here. A structured log line is emitted instead; operators wanting
   a permanent record of purge runs should capture that log stream durably.

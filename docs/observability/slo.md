@@ -19,7 +19,7 @@ bigger risk than an honestly-approximate starting point.
 **Objective:** 99.5% of `answer` and `retrieve` operations that enter `ApplicationService`
 complete without an exception, measured over a rolling 30-day window.
 
-- **Metric:** `1 - (sum(rate(mrag_request_errors_total[30d])) / sum(rate(mrag_request_duration_ms_count[30d])))`, per `operation`.
+- **Metric:** `1 - (sum(rate(mrag_request_errors_total{operation=~"answer|retrieve"}[30d])) / sum(rate(mrag_request_duration_ms_count{operation=~"answer|retrieve"}[30d])))`, per `operation`.
 - **Error budget:** 0.5% of requests over 30 days (~216 minutes of full-outage-equivalent budget,
   spread across however many partial-degradation minutes actually occur).
 - **Alert:** `MRAGHighErrorRate` (`alerts.yaml`) is the fast-burn signal (5% over 5 minutes) — a
@@ -29,6 +29,11 @@ complete without an exception, measured over a rolling 30-day window.
   request-validation 422, rate-limit 429 and concurrency-limit 503 responses. Security or policy
   exceptions raised inside the service are counted and can be separated with `error_type`; guard
   rejections that return a blocked answer are tracked by `mrag.guard.rejections` instead.
+- **`feedback` (Batch 14, ADR-0014) is a third `operation` on the same two metrics as of this
+  guide's last update, deliberately excluded from this SLO's scope** — the `operation=~"answer|
+  retrieve"` filter above is explicit, not incidental, so `POST /feedback` reliability neither
+  dilutes nor is silently folded into this objective. No separate feedback-availability SLO is
+  defined yet; that is an open follow-up, not an oversight.
 
 ## 2. Request latency
 
