@@ -146,7 +146,9 @@ class OtelTracer:
         self._provider = provider
         return provider.get_tracer(self.service_name)
 
-    def start_span(self, name: str, attributes: dict[str, AttributeValue] | None = None) -> _OtelSpan:
+    def start_span(
+        self, name: str, attributes: dict[str, AttributeValue] | None = None
+    ) -> _OtelSpan:
         tracer = self._get_tracer()
         # `record_exception`/`set_status_on_exception` default to True in the
         # OpenTelemetry SDK, which would embed the raw exception object

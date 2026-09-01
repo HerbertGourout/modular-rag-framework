@@ -299,7 +299,11 @@ class ApplicationService:
         if error is not None:
             meter.counter(
                 "mrag.request.errors",
-                attributes={"operation": operation, "engine": engine, "error_type": type(error).__name__},
+                attributes={
+                    "operation": operation,
+                    "engine": engine,
+                    "error_type": type(error).__name__,
+                },
             )
 
     def _request_span(

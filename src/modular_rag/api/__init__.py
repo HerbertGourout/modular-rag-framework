@@ -228,7 +228,9 @@ def create_app(
         if report.status == ReadinessState.UNREADY:
             response.status_code = 503
         if pipeline.meter is not None:
-            pipeline.meter.gauge("mrag.readiness.state", 1, attributes={"state": report.status.value})
+            pipeline.meter.gauge(
+                "mrag.readiness.state", 1, attributes={"state": report.status.value}
+            )
         return {
             "status": report.status.value,
             "pipeline": pipeline.manifest_id,

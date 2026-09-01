@@ -43,7 +43,9 @@ audit_app = typer.Typer(name="audit", help="PostgreSQL audit-retention commands 
 # choice as `audit`/`db` above — feedback retention and review resolution
 # both need roles the application's own runtime DSN should never hold
 # (docs/guides/postgres-permissions.md).
-feedback_app = typer.Typer(name="feedback", help="PostgreSQL feedback-retention commands (ADR-0014)")
+feedback_app = typer.Typer(
+    name="feedback", help="PostgreSQL feedback-retention commands (ADR-0014)"
+)
 review_app = typer.Typer(name="review", help="PostgreSQL human-review commands (ADR-0014)")
 app.add_typer(db_app, name="db")
 app.add_typer(audit_app, name="audit")

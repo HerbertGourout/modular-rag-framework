@@ -121,7 +121,15 @@ def test_repeated_calls_reuse_the_same_cached_instrument() -> None:
 
 @pytest.mark.parametrize(
     "unlisted_key",
-    ["correlation_id", "request_id", "trace_id", "query_id", "chunk_id", "doc_id", "CORRELATION_ID"],
+    [
+        "correlation_id",
+        "request_id",
+        "trace_id",
+        "query_id",
+        "chunk_id",
+        "doc_id",
+        "CORRELATION_ID",
+    ],
 )
 def test_previously_forbidden_keys_are_still_dropped(unlisted_key: str) -> None:
     meter, reader = OtelMeter.for_testing()
@@ -165,7 +173,10 @@ def test_uuid_shaped_values_are_dropped_even_under_an_unlisted_key() -> None:
 
     meter.counter(
         "mrag.request.errors",
-        attributes={"some_future_field": "550e8400-e29b-41d4-a716-446655440000", "operation": "answer"},
+        attributes={
+            "some_future_field": "550e8400-e29b-41d4-a716-446655440000",
+            "operation": "answer",
+        },
     )
 
     metrics = _metrics_by_name(reader)

@@ -2,6 +2,7 @@
 "Offline benchmark")."""
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,12 @@ def _write(tmp_path: Path, content: str) -> Path:
 
 
 def test_loads_corpus_with_fixed_chunk_and_doc_ids(tmp_path: Path) -> None:
+    """CI review finding: `chunk_id`/`doc_id` slugs (`c1`/`d1`) are no
+    longer used verbatim as `Chunk.id`/`doc_id` — Qdrant rejects any point
+    id that isn't an unsigned integer or a UUID. The slugs stay the
+    readable, hand-editable identifiers in the YAML (and in
+    `relevant_chunk_ids`); the loader deterministically derives a UUID5
+    from them instead."""
     path = _write(
         tmp_path,
         """
@@ -37,9 +44,17 @@ def test_loads_corpus_with_fixed_chunk_and_doc_ids(tmp_path: Path) -> None:
 
     assert golden.name == "sample"
     assert len(golden.corpus) == 1
-    assert golden.corpus[0].id == "c1"
-    assert golden.corpus[0].doc_id == "d1"
-    assert golden.corpus[0].content == "hello world"
+    chunk = golden.corpus[0]
+    uuid.UUID(chunk.id)  # valid Qdrant point id, not the raw slug "c1"
+    uuid.UUID(chunk.doc_id)
+    assert chunk.content == "hello world"
+    assert chunk.metadata["golden_set_alias"] == "c1"
+    # relevant_chunk_ids must reference the same derived id, not the slug —
+    # otherwise scoring would never match a real retriever's results.
+    assert golden.cases[0].relevant_chunk_ids == [chunk.id]
+
+    # Deterministic: reloading the identical file yields the identical id.
+    assert load_golden_set(path).corpus[0].id == chunk.id
 
 
 def test_loads_case_type_and_expect_block_with_defaults(tmp_path: Path) -> None:
@@ -257,3 +272,10 @@ def test_the_real_shipped_core_v1_dataset_loads_successfully() -> None:
     assert len(golden.cases) > 0
     assert any(c.case_type == "safety" for c in golden.cases)
     assert any(c.case_type == "qa" for c in golden.cases)
+    # CI regression guard: every corpus chunk/doc id must be a valid Qdrant
+    # point id (unsigned int or UUID) — a hand-written slug such as
+    # "refund-policy-1" is rejected by Qdrant during ingestion
+    # (benchmark-gate's own failure this guards against).
+    for chunk in golden.corpus:
+        uuid.UUID(chunk.id)
+        uuid.UUID(chunk.doc_id)

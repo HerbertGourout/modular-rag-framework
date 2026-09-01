@@ -159,7 +159,10 @@ def test_resolve_rejects_a_second_resolution_of_the_same_item():
 
 
 def test_pending_reconstructs_review_items():
-    row = ("id-1", "a1", "q1", None, "low confidence", 0.3, datetime.now(UTC), False, None, None, 365)
+    row = (
+        "id-1", "a1", "q1", None, "low confidence", 0.3, datetime.now(UTC),
+        False, None, None, 365,
+    )
     pool = _FakePool([_FakeConn(executor=lambda sql, params: _FakeCursor(rows=[row]))])
     queue = PostgresReviewQueue(dsn="postgresql://unused/unused", pool=pool)
 

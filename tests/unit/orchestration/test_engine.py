@@ -1099,7 +1099,7 @@ def test_retrieve_trace_step_omits_degraded_sources_when_none_reported() -> None
     assert "degraded_sources" not in retrieve_step.metadata
 
 
-def test_retrieve_trace_step_omits_degraded_sources_when_the_retriever_does_not_report_them() -> None:
+def test_retrieve_trace_step_omits_degraded_sources_when_the_retriever_does_not_report_them():
     """Plain _FakeRetriever (used throughout this file) has no
     last_degraded_sources attribute at all — getattr() must not raise."""
     telemetry = _FakeTelemetry()
@@ -1550,7 +1550,9 @@ def test_answer_emits_generation_token_counters_with_model_label() -> None:
 
 def test_answer_emits_generation_cost_counter_when_generator_sets_it() -> None:
     meter = _RecordingMeter()
-    generator = _FakeGenerator(input_tokens=100, output_tokens=50, model="gpt-4o-mini", cost_usd=0.00125)
+    generator = _FakeGenerator(
+        input_tokens=100, output_tokens=50, model="gpt-4o-mini", cost_usd=0.00125
+    )
     engine, _ = _engine(generator=generator, meter=meter)
 
     engine.answer("What is RAG?")

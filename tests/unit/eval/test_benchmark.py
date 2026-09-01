@@ -220,7 +220,9 @@ def test_unexpected_security_block_on_a_qa_case_is_classified_as_error_stage_sec
 
 
 def test_unclassified_exception_is_error_stage_infra():
-    runner = BenchmarkRunner(engine=_RaisingEngine(RuntimeError("boom")), evaluator=_FakeEvaluator())
+    runner = BenchmarkRunner(
+        engine=_RaisingEngine(RuntimeError("boom")), evaluator=_FakeEvaluator()
+    )
 
     report = runner.run([BenchmarkCase(question="q", expected_answer="a")])
 

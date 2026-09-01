@@ -263,8 +263,12 @@ def app_and_chunks(manifest_path):
 
     application = load_application(str(manifest_path))
 
-    doc_a = Document(source="tenant-a-quarterly-report.txt", content=TENANT_A_CONTENT, tenant_id=TENANT_A)
-    doc_b = Document(source="tenant-b-quarterly-report.txt", content=TENANT_B_CONTENT, tenant_id=TENANT_B)
+    doc_a = Document(
+        source="tenant-a-quarterly-report.txt", content=TENANT_A_CONTENT, tenant_id=TENANT_A
+    )
+    doc_b = Document(
+        source="tenant-b-quarterly-report.txt", content=TENANT_B_CONTENT, tenant_id=TENANT_B
+    )
     chunks_a = application.chunker.chunk(doc_a)
     chunks_b = application.chunker.chunk(doc_b)
     assert chunks_a and chunks_b, "chunker produced no chunks — check TENANT_*_CONTENT/chunk_size"

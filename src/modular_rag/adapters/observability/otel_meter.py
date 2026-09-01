@@ -73,7 +73,9 @@ def _sanitize_attributes(
     safe: dict[str, AttributeValue] = {}
     for key, value in attributes.items():
         if key.lower() not in _ALLOWED_LABEL_KEYS:
-            log.warning("meter.dropped_high_cardinality_label", key=key, reason="key_not_allowlisted")
+            log.warning(
+                "meter.dropped_high_cardinality_label", key=key, reason="key_not_allowlisted"
+            )
             continue
         if isinstance(value, str) and (_UUID_RE.match(value) or _ULID_RE.match(value)):
             log.warning("meter.dropped_high_cardinality_label", key=key, reason="id_shaped_value")
@@ -203,21 +205,27 @@ class OtelMeter:
         self, name: str, value: int | float = 1, attributes: dict[str, AttributeValue] | None = None
     ) -> None:
         safe_attributes = _sanitize_attributes(attributes)
-        self._emit("counter", name, lambda instrument: instrument.add(value, attributes=safe_attributes))
+        self._emit(
+            "counter", name, lambda instrument: instrument.add(value, attributes=safe_attributes)
+        )
 
     def histogram(
         self, name: str, value: float, attributes: dict[str, AttributeValue] | None = None
     ) -> None:
         safe_attributes = _sanitize_attributes(attributes)
         self._emit(
-            "histogram", name, lambda instrument: instrument.record(value, attributes=safe_attributes)
+            "histogram",
+            name,
+            lambda instrument: instrument.record(value, attributes=safe_attributes),
         )
 
     def gauge(
         self, name: str, value: float, attributes: dict[str, AttributeValue] | None = None
     ) -> None:
         safe_attributes = _sanitize_attributes(attributes)
-        self._emit("gauge", name, lambda instrument: instrument.set(value, attributes=safe_attributes))
+        self._emit(
+            "gauge", name, lambda instrument: instrument.set(value, attributes=safe_attributes)
+        )
 
     def _emit(self, kind: str, name: str, record: Callable[[Any], None]) -> None:
         """Shared never-raise emission path (Codex review pass 1, HIGH-002):

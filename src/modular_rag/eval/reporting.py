@@ -96,12 +96,22 @@ def render_markdown_report(
     baseline_quality = baseline["quality"] if baseline else {}
     baseline_cost = baseline["cost"] if baseline else {}
 
-    lines += ["## Quality (higher is better)", "", "| Metric | Value | Baseline | Delta |", "|---|---|---|---|"]
+    lines += [
+        "## Quality (higher is better)",
+        "",
+        "| Metric | Value | Baseline | Delta |",
+        "|---|---|---|---|",
+    ]
     for name, value in sorted(payload["quality"].items()):
         lines.append(_metric_row(name, value, baseline_quality.get(name)))
     lines.append("")
 
-    lines += ["## Cost / latency (lower is better)", "", "| Metric | Value | Baseline | Delta |", "|---|---|---|---|"]
+    lines += [
+        "## Cost / latency (lower is better)",
+        "",
+        "| Metric | Value | Baseline | Delta |",
+        "|---|---|---|---|",
+    ]
     for name, value in sorted(payload["cost"].items()):
         lines.append(_metric_row(name, value, baseline_cost.get(name)))
     lines.append("")

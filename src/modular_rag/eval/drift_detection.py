@@ -164,9 +164,13 @@ def compute_drift(
     tooling this framework never invokes."""
     alerts: list[DriftAlert] = []
 
-    def _check(name: str, baseline_value: float, current_value: float, *, lower_is_better: bool) -> None:
+    def _check(
+        name: str, baseline_value: float, current_value: float, *, lower_is_better: bool
+    ) -> None:
         delta = current_value - baseline_value
-        degraded = delta > degradation_threshold if lower_is_better else delta < -degradation_threshold
+        degraded = (
+            delta > degradation_threshold if lower_is_better else delta < -degradation_threshold
+        )
         if degraded:
             alerts.append(
                 DriftAlert(metric=name, baseline=baseline_value, current=current_value, delta=delta)
@@ -208,7 +212,9 @@ def compute_drift(
     )
 
     should_trigger_retraining = any(a.metric == "thumbs_down_rate" for a in alerts)
-    return DriftReport(snapshot=current, alerts=alerts, should_trigger_retraining=should_trigger_retraining)
+    return DriftReport(
+        snapshot=current, alerts=alerts, should_trigger_retraining=should_trigger_retraining
+    )
 
 
 def select_feedback_for_reevaluation(records: list[Feedback]) -> list[Feedback]:

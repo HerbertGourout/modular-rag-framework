@@ -57,7 +57,9 @@ class Meter(Protocol):
     container = create_default_registry().wire(manifest)
     if container.meter:
         container.meter.counter("mrag.request.errors", attributes={"operation": "answer"})
-        container.meter.histogram("mrag.request.duration_ms", 42.5, attributes={"operation": "answer"})
+        container.meter.histogram(
+            "mrag.request.duration_ms", 42.5, attributes={"operation": "answer"}
+        )
         container.meter.gauge("mrag.review.pending", 3.0)
     ```
 

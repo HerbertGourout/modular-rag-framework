@@ -75,7 +75,9 @@ def check_non_root_user(dockerfile_text: str) -> list[str]:
 
     username = user.split(":", 1)[0]
     if username.isdigit():
-        return [f"the final build stage's USER is numeric uid {username}."] if int(username) == 0 else []
+        if int(username) == 0:
+            return [f"the final build stage's USER is numeric uid {username}."]
+        return []
     if username == "root":
         return ["the final build stage's USER is 'root'."]
 
