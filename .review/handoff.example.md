@@ -80,6 +80,22 @@ Populate with `scripts/prepare_review.ps1` or equivalent Git commands.
 All `BLOCKER` and `HIGH` findings must be fixed or explicitly escalated to the
 human decision-maker. Apply accepted corrections as one batch before pass 2.
 
+## Final Claude remediation (only after pass 2 returns `CHANGES_REQUIRED`)
+
+- Codex pass-2 status:
+
+| Pass-2 finding | Final change made | Files changed | Test/evidence |
+|---|---|---|---|
+| | | | |
+
+### Final validation unavailable or remaining risk
+
+- Check or risk:
+  Evidence or release consequence:
+
+This section records post-review writer evidence. It does not alter the pass-2
+Codex status or claim independent verification of the final changes.
+
 ## Reviewer instructions
 
 For pass 1, review the complete task diff and report all material findings in one

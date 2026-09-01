@@ -46,9 +46,12 @@ The Codex loop is bounded to two passes:
 2. **Pass 2 — closure:** verify accepted findings and regressions introduced by
    their fixes. This is not a new open-ended review.
 
-After pass 2, stop and request a human decision. Do not perform a third general
-review. A third pass is allowed only when a human explicitly names a newly
-introduced critical risk and limits the review to that risk.
+After pass 2, Codex stops. If an accepted `BLOCKER` or `HIGH` remains, Claude may
+perform the single bounded final remediation defined in
+`docs/guides/ai-engineering-workflow.md`, followed by deterministic validation and
+a human decision. Do not perform a third general review. A third pass is allowed
+only when a human explicitly names a newly introduced critical risk and limits
+the review to that risk.
 
 ## Review Handoff
 
