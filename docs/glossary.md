@@ -12,6 +12,12 @@ implements a `contracts/` Protocol. Adapters live under `adapters/` specifically
 domain modules don't need the heavy external dependency installed to be unit-tested. See
 [module-model.md](architecture/module-model.md).
 
+### Assurance level (proposed)
+Accepted ADR-0015 defines three planned compatibility profiles: L0 (opaque input/output boundary), L1
+(normalized evidence such as citations can be checked), and L2 (sensitive execution stages expose
+enforceable hooks). These levels are not implemented today. They are intended to prevent a
+limited external adapter from being described as having native-equivalent guarantees.
+
 ### Agent
 Historically, a specialized reasoning unit in a planned native multi-agent runtime
 (coordinator, planner, retriever, extractor, synthesizer, validator). Per
@@ -74,12 +80,18 @@ built), not a capability implementation of its own. See
 [module-model.md](architecture/module-model.md).
 
 ### EvoRAG
-The feedback mechanism (V3) that strengthens or weakens edges in the knowledge graph based
-on whether answers derived from them turned out to be correct. Its implementation
+Historical name for a removed prototype that strengthened or weakened knowledge-graph edges
+based on answer outcomes. Its implementation
 (`GraphVersionManager.reinforce()`/`weaken()`/`prune()`, `memory/versioning/`) was removed in
 Lot 17 (`docs/refactoring-plan.md`) — zero test coverage, zero consumers, and squarely in the
 delegated fine-tuning-execution territory ADR-0005 §5.2 assigns to the external engine. The
-concept remains a real V3 design reference; there is no code behind it today.
+name is retained only for historical traceability; it is not a current roadmap capability.
+
+### Feedback
+A caller-provided post-answer signal (`thumbs_up`, `thumbs_down`, optional redacted correction)
+linked to `Answer.trace_id`. `Feedback` is distinct from an immutable `AuditEvent` and from a
+pipeline-created `ReviewItem`. It is stored idempotently per tenant/key and consumed by offline
+drift analysis. See [feedback-and-drift.md](guides/feedback-and-drift.md).
 
 ### Groundedness
 A measure of how well an answer's claims are supported by the retrieved context, typically
@@ -103,8 +115,9 @@ generation (`check_answer()`) for injection attempts, blocked terms, excessive l
 policy violations. See [security.md](architecture/security.md).
 
 ### Hexagonal architecture
-The layering discipline this framework enforces: dependencies flow in one direction only
-(`core/` → `contracts/` → domain modules → `orchestration/` → `app/` → `cli/`/`api/`), so
+The layering discipline this framework enforces: outer layers depend inward
+(`cli`/`api` → `app` → `orchestration` → contracts/core, with domains and adapters implementing
+or consuming inward contracts), so
 any component can be swapped by implementing its Protocol, without the rest of the system
 needing to change. See [ADR-0001](adr/0001-modular-architecture.md).
 
@@ -140,10 +153,16 @@ per-list weights. It is chosen because it is
 robust to the two lists having incomparable raw score scales. See
 [overview.md](architecture/overview.md), section 11.
 
+### Provider egress
+Any transmission of query text, retrieved context, documents, embeddings, files, tool arguments,
+or related customer data to a remote provider. Post-generation redaction does not protect this
+boundary. Lot 20 plans classification-aware, deny-by-default checks before every owned or
+delegated outbound call; it is not implemented today.
+
 ### Retriever
 A component implementing `contracts/retrieval.py`'s `Retriever` Protocol —
 `retrieve(query, k) → list[RetrievedChunk]`. Built-in implementations: `BM25Retriever`,
-`VectorRetriever`, `BM25Retriever`, `PersistentSparseRetriever`, and `HybridRetriever` (which
+`VectorRetriever`, `PersistentSparseRetriever`, and `HybridRetriever` (which
 fuses dense and lexical legs via RRF).
 
 ### Trace / TraceStep

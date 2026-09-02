@@ -389,7 +389,7 @@ field's *meaning* changes (e.g. a metric's formula) — not for a purely additiv
 | `schema_version` | `str` | — | `METRICS_SCHEMA_VERSION`; excluded from `summary()`'s output regardless of value (see below) |
 | `recall_at_k` | `float \| None` | Retrieval | Fraction of relevant chunks retrieved in top-k, over retrieved chunks vs. a relevant-chunk-id set |
 | `precision_at_k` | `float \| None` | Retrieval | Fraction of retrieved chunks that are relevant |
-| `ndcg` | `float \| None` | Retrieval | Normalised Discounted Cumulative Gain — **field exists in the schema, but no shipped evaluator computes it yet** (`ROADMAP.md` V1.1 — "NDCG@k" is explicitly tracked as not-yet-built) |
+| `ndcg` | `float \| None` | Retrieval | Binary-relevance NDCG@k, computed by `eval/scorers/retrieval_metrics.py::ndcg_at_k()` and populated by the shipped offline benchmark |
 | `mrr` | `float \| None` | Retrieval | Mean Reciprocal Rank |
 | `exact_match` | `float \| None` | Answer | `1.0`/`0.0` — genuine normalized string equality, answer vs. gold (`ExactMatchEvaluator`) |
 | `answer_precision` | `float \| None` | Answer | Token-set precision, answer vs. gold |
@@ -449,7 +449,30 @@ print(failure.summary())
 
 ---
 
-## 9. Object lifecycle — Document to Answer
+## 9. Feedback and review records
+
+These are contract-layer governance records introduced or completed by ADR-0014. They are not
+embedded inside `Answer` and they answer different questions:
+
+- `Feedback` (`contracts/feedback.py`) records what a caller thought after receiving an answer.
+  It links by required `trace_id`, deduplicates by `(tenant_id, idempotency_key)`, optionally holds
+  `thumbs_up`/`thumbs_down`, redacted correction text and caller-reported citation count, marks
+  authorized test traffic with `is_test`, and carries a retention window.
+- `ReviewItem` (`contracts/review.py`) is a mutable work item raised by the pipeline for a human.
+  It records answer/query/tenant identifiers, reason, confidence, resolution, reviewer, approval,
+  timestamps, and retention.
+
+`AuditEvent` remains the immutable record of what the pipeline did. A feedback record is not an
+audit event, and a review item is not user feedback. PostgreSQL adapters persist all three through
+separate contracts/tables. Free-text feedback must be redacted before it reaches a sink;
+`FeedbackSink` does not redact on its own.
+
+Drift reports are derived offline from feedback, document lifecycle, and review counts. They are
+not runtime manifest components and do not modify these records.
+
+---
+
+## 10. Object lifecycle — Document to Answer
 
 This section traces the data transformation path through a V1 pipeline:
 

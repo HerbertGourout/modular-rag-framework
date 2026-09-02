@@ -10,6 +10,11 @@
 > under those four items were removed (see
 > [Lot 17](docs/refactoring/lot-17-prototype-retirement.md) for the prototype code that
 > corresponded to them, where any existed) rather than kept "for historical reference."
+>
+> **[ADR-0015](docs/adr/0015-portable-assurance-and-external-application-boundary.md) is
+> Accepted.** It establishes the next product direction: explicit L0/L1/L2 assurance
+> levels and support for wrapping an existing external application without rebuilding its graph.
+> Items derived from it are labelled proposed and must not be presented as shipped commitments.
 
 ## Version Progression Overview
 
@@ -19,21 +24,26 @@ V1: Core RAG Base                              (Q2 2026)
 ├─ V1.1: Evaluation-as-Contract               (NEW)
 └─ V1.2: Compliance audit trail               (NEW)
 
-V2: Agentic + Governance                      (Q3 2026)
+V2: Engine Boundary + Governance              (Q3 2026)
 ├─ V2.0: Policy engine                        (UPDATED — multi-agent runtime delegated, see V2.1)
 └─ V2.1: Multi-agent orchestration            (⚙️ delegated — DocumentEngine port)
 
-V3: Graph Memory + Intelligence                (Q4 2026)
+V3: Delegated Intelligence + Native Evidence   (Q4 2026)
 ├─ V3.0: GraphRAG + knowledge graphs          (⚙️ delegated — traversal only; data model TBD)
 ├─ V3.1: Cost/latency evidence + reporting    (native — routing logic itself is delegated)
 └─ V3.2: Drift detection + eval trigger       (native — fine-tuning execution is ⚙️ delegated)
 
-V4: Multi-Language Governance                  (Q1 2027)
+V4: Enterprise + Multilingual Governance       (Q1 2027)
 ├─ V4.0: Multi-tenant policies + environments
-└─ V4.1: Multi-language + cultural reasoning  (NEW)
+└─ V4.1: Multilingual quality + jurisdiction-aware governance (planned)
 
-V5: Multimodal Intelligence                    (Q2 2027)
-└─ V5.0: Parsing/citation enrichment (native, pending evidence) — VLM execution ⚙️ delegated
+V5: Multimodal Evidence                         (Q2 2027)
+└─ V5.0: Provenance/citation enrichment (native candidate) — VLM execution ⚙️ delegated
+
+Next assurance programme (proposed; no committed date)
+├─ Lot 20: Classification + fail-closed provider egress
+├─ Lot 21: Engine-independent assurance contract and conformance report
+└─ Lot 22: Existing-application adapters and cross-engine conformance
 ```
 
 ---
@@ -389,107 +399,53 @@ risk profiles or formatted compliance reporting — as complete.
 
 ---
 
-### V4.1 — Multi-Language + Cultural Reasoning `[NEW — 4 months]`
+### V4.1 — Multilingual Quality + Jurisdiction-Aware Governance `[PLANNED]`
 
-**Purpose:** RAG that understands 20+ languages natively; Publicis global clients.
+**Purpose:** preserve retrieval quality, citations, safety, and user-language fidelity across the
+languages required by a deployment without inferring legal or cultural context from language.
 
-**Implementation:**
-- `adapters/nlp/`: Language-aware processing
-  - `tokenizers/`: Language-specific tokenization (Arabic, Chinese, French, German, Spanish, etc.)
-  - `language_detector.py`: Auto-detect query language
-  - `script_handler.py`: Handle mixed scripts (Arabic + French, etc.)
-- `ingestion/chunkers/`: Language-aware chunking
-  - Respect sentence boundaries per language
-  - Don't split on punctuation that's mid-sentence in that language
-  - Handle right-to-left scripts (Arabic, Hebrew)
-- `adapters/embeddings/`: Multilingual embedders
-  - mxbai-embed-large (50+ languages)
-  - e5-multilingual (100+ languages)
-  - Keep separate embeddings per language group for quality
-- `generation/`: Cultural context in generation
-  - Query language → generation language (don't force translation)
-  - Cultural context injection (why this question matters in this culture)
-- `security/cultural_policies/`: Language + regulatory
-  - GDPR (EU countries) vs CCPA (US) vs CNIL (France only)
-  - Right to be forgotten language handling
-  - Cultural sensitivity rules per language/region
+**Planned scope:**
 
-**Modules:**
-```
-adapters/nlp/
-├── tokenizers/
-│   ├── arabic_tokenizer.py
-│   ├── chinese_tokenizer.py
-│   ├── german_tokenizer.py
-│   └── universal_tokenizer.py
-├── language_detector.py         (detect query language)
-└── script_handler.py            (mixed scripts)
+- language/script detection as processing metadata, including mixed-script and low-confidence
+  results;
+- language-aware parsing and chunking where generic segmentation is measurably inadequate;
+- multilingual embedding/generation adapters selected through existing contracts and manifests;
+- per-language or per-script evaluation slices in versioned golden sets;
+- preservation of the user's requested output language, with explicit translation when used;
+- locale-aware presentation only when locale is supplied by trusted deployment/user context;
+- jurisdiction and regulatory policy supplied explicitly by deployment configuration, tenant
+  policy, contractual context, residency, or verified identity attributes.
 
-ingestion/chunkers/
-└── multilingual_chunker.py      (language-aware splitting)
+**Safety boundary:** query language, detected locale, IP address, and model inference must not
+select a legal regime by themselves. A French query does not prove French residency or CNIL
+jurisdiction; an English query does not distinguish the UK, US, or another jurisdiction. Missing
+trusted jurisdiction context must follow the configured fail-closed or human-review policy.
 
-adapters/embeddings/
-├── multilingual_embeddings.py   (mxbai, e5)
-└── language_group_embedder.py   (separate per group)
+**Status: not yet built.** No `adapters/nlp/` package or multilingual conformance profile exists.
+Specific model names and “20+ language” targets must be selected from measured project needs, not
+hard-coded into architecture before evaluation.
 
-generation/
-└── multilingual_generator.py    (preserve language)
+**Success criteria (target, to baseline per deployment):**
 
-security/
-├── cultural_policies/
-│   ├── gdpr_policy.yaml         (EU/France)
-│   ├── ccpa_policy.yaml         (USA)
-│   ├── cultural_sensitivity.yaml (language/region-specific)
-│   └── regulatory_router.py     (route by locale)
-└── language_awareness/
-    └── language_specific_guards.py
-```
-
-**Example workflow:**
-```
-Query: "Quelle est la meilleure gare pour voyager?" (French)
-
-1. Language detection: French
-2. Query routing: SNCF (French railway) context
-3. Chunking: Respect French sentence structure
-4. Embedding: mxbai-embed-large (French specialized)
-5. Retrieval: Filter to French-language documents
-6. Regulation check: CNIL compliance (France-specific)
-7. Generation: Claude in French (not translate + generate)
-8. Cultural context: Explain why "gare" in French context
-9. Output: answer delivered in French with cultural context
-
-vs English query:
-Query: "What's the best station to travel from?"
-
-1. Language detection: English
-2. Query routing: UK/US transport context
-3. Generation: English language
-4. Regulation: GDPR (UK) or CCPA (US)
-5. Output: Answer in English
-```
-
-**Status: not yet built** — none of the modules listed above exist on disk yet.
-
-**Success criteria (target, not yet met):**
-- ⬜ Language detection > 99% accuracy
-- ⬜ Support 20+ languages natively
-- ⬜ F1 in non-English languages > 0.80
-- ⬜ Mixed-script queries handled correctly
-- ⬜ Regulatory routing works per country
+- ⬜ Required-language matrix and golden-set slices approved for the deployment.
+- ⬜ Retrieval and answer-quality floors pass for every supported language/script slice.
+- ⬜ Mixed-script and wrong-language-output regressions are covered by tests.
+- ⬜ Citations remain traceable to the source language and any translation step is evidenced.
+- ⬜ Jurisdiction is derived only from trusted policy context, never query language alone.
 
 ---
 
-## V5 — Multimodal Intelligence `[Q2 2027]`
+## V5 — Multimodal Evidence `[Q2 2027]`
 
-### V5.0 — Images, Audio, Video, Tables + VLMs
+### V5.0 — Images, Audio, Video, and Table Provenance
 
 > **Delegated per [ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md) §5.2.** VLM
 > execution (image/table/audio/video model inference, modality-specialized agents) is delegated
 > to a selected external engine via the `DocumentEngine` port; this repository does not
-> implement it natively. Multimodal *parsing and citation enrichment* (extracting images/tables
-> from a document, attaching a timecode or image reference to a citation) may remain owned if
-> Lot 6/15 evidence supports it — undecided, not settled by this note.
+> implement it natively. The owned candidate is multimodal *evidence*: parsing and stable
+> provenance for images, regions, tables, pages, audio timecodes, and video segments, plus data
+> classification and egress decisions before those assets reach a VLM. Ownership remains subject
+> to an ADR and adapter evidence; no native multimodal implementation exists today.
 
 ---
 
@@ -507,35 +463,34 @@ version becomes "demonstrable" rather than "under construction".
 | **v2.1** ⚙️ | Q4 2026 | Delegated target; the current LangGraph adapter proves selection but not multi-agent behaviour |
 | **v3.0** ⚙️ | Q4 2026 | Delegated (traversal) — see V3.0 note above |
 | **v3.1** | Q1 2027 | 🟡 Partial — aggregate OTel latency/token/cost signals and reference dashboard ship; per-query/user/month reporting and anomaly detection do not |
-| **v3.2** | Q1 2027 | ⬜ Not built — `eval/drift_detection.py` doesn't exist yet (fine-tuning execution ⚙️ delegated) |
+| **v3.2** | Q1 2027 | 🟡 Implemented but uncalibrated — feedback, durable storage/review, and offline `eval/drift_detection.py` ship; production thresholds and external trigger integration remain |
 | **v4.0** | Q1 2027 | 🟡 Core policies/tenant/audit/review primitives shipped; OPA, environments, risk profiles and reporting remain |
-| **v4.1** | Q2 2027 | 20+ languages, cultural reasoning |
-| **v5.0** ⚙️ | Q2 2027 | Delegated (VLM execution) — see V5.0 note above |
+| **v4.1** | Q2 2027 | Planned multilingual quality profiles; jurisdiction must come from trusted policy context, not language |
+| **v5.0** ⚙️ | Q2 2027 | VLM execution delegated; native provenance/classification/citation enrichment is an unapproved candidate |
 
 ⚙️ = delegated to a selected external engine per [ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md), not a native build target for this framework.
 
 ---
 
-## Key Differentiators vs Market
+## Differentiation Hypothesis
 
-| Feature | LangChain | Haystack | **This Framework** |
-|---|---|---|---|
-| Evaluation | External (Ragas) | Built-in | ✅ **Contract-enforced, native** — `Evaluator` Protocol + recall/precision/MRR/NDCG + a CI-gated golden-set benchmark shipped (V1.1, Batch 13); LLM-judge scoring and additional per-domain golden sets still open |
-| Audit Trail | Manual | Limited | 🟡 **Primitives shipped, native** — structured, append-only audit events (in-memory or Postgres); no formatted GDPR/CCPA/HIPAA report generator yet (V1.2) |
-| Policies | None | Limited | ✅ **Policy-as-Code, native** — `PolicyEngine`/`TenantIsolationPolicy` manifest-wired and fail-closed |
-| Multi-Agent | Bolted-on | Limited | ⚙️ **Delegated target via `DocumentEngine`**; not implemented by the current fixed LangGraph graph |
-| Cost Evidence | None | None | 🟡 **Partially built** — aggregate OTel latency/token/estimated-cost metrics and a reference dashboard ship; attribution and anomaly detection remain (routing itself ⚙️ delegated) |
-| Fine-Tuning | None | None | ⬜ **Not yet built** — `eval/drift_detection.py` doesn't exist; scoped as native detection once built, execution itself ⚙️ delegated (V3.2) |
-| Graph Memory | External | External | ⚙️ **Delegated traversal**; the native data model was evaluated and removed (Étape 8, zero consumers) — no native graph capability today |
-| Multi-Language | English-first | Limited | ⬜ **Not yet built** — no `adapters/nlp/` module exists (V4.1) |
-| Multimodal | Partial | Partial | ⚙️ **Delegated VLM execution**; parsing/citation enrichment status still open |
+LangChain/LangGraph, LlamaIndex, Haystack, MLflow, LangSmith, and cloud platforms already provide
+substantial orchestration, evaluation, tracing, and governance capabilities. This roadmap does
+not treat their absence as the opportunity. The proposed value is the combination of portable
+controls, normalized evidence, explicit capability gaps, and shared conformance across engines.
 
-⚙️ = delegated per [ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md) — the
-differentiator is owning governance/audit/eval/portability *around* whichever engine is
-selected, not reimplementing the engine's own mechanics. This table intentionally avoids
-compliance claims like "GDPR compliant" — what's shipped are the *primitives* (audit events,
-tenant isolation, policy enforcement) a deployer assembles into a compliant deployment, not a
-turnkey certification.
+| Capability | Current state | Strategic treatment |
+|---|---|---|
+| Native reference RAG | Operational | Keep inspectable and local-first; do not chase orchestration breadth. |
+| Evaluation and drift | Operational offline, production calibration incomplete | Retain as portable evidence and release gates. |
+| Tenant/policy/audit/review | Broadest on native; partial on LangGraph | Move toward explicit assurance levels instead of claiming uniformity. |
+| Multi-agent and GraphRAG | Not provided by current fixed adapter | Delegate to external applications/engines. |
+| Data classification and provider egress | Lot 20 not started | Treat as a P0 assurance boundary. |
+| Existing-application wrapping | Not built | Proposed Lot 22 after the assurance contract. |
+| Multilingual/multimodal | Not built | Focus owned work on quality, provenance, citations, classification, and policy evidence. |
+
+The product thesis remains subject to measured pilots. Shipped controls can support a compliant
+deployment, but the framework does not provide turnkey regulatory certification.
 
 ---
 
@@ -547,3 +502,4 @@ turnkey certification.
 - **ADR-0004**: Strategic Features (V1→V5) — superseded (partial) by ADR-0005
 - **ADR-0005**: Document-AI control plane product boundary (owned vs. delegated capabilities, accepted 2026-08-04)
 - **ADR-0006**: External engine selection — LangGraph (accepted 2026-08-04)
+- **ADR-0015**: Portable assurance and external-application boundary (accepted 2026-09-02)

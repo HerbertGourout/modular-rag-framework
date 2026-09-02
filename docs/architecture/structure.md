@@ -161,6 +161,10 @@ repository at any version — this document previously described those as native
 ("V2.0 → V2 complete (agents, adaptive routing)"), which no longer matches either ADR-0005's
 decision or the actual code.
 
+The roadmap also records Lot 20 (planned provider-egress control) and planned Lots 21–22
+(assurance contract and existing-application pilot). Those entries are future scope, not
+directories or APIs that exist in the current structure.
+
 ---
 
 ### `CHANGELOG.md`
@@ -334,11 +338,12 @@ Protocols — conformance is structural (duck typing verified at runtime via
 | `reconciliation.py` | `DocumentDivergence`, `ReconciliationReport`, `RepairResult` | Vector/lexical index-divergence detection and repair (Lot 12b), implemented by `orchestration/reconciliation.py`'s `IndexReconciler` |
 | `erasure.py` | `ErasureProof` | Right-to-erasure evidence returned by `RAGEngine.erase_document()` |
 | `review.py` | `ReviewItem`, `ReviewQueue` | Human-in-the-loop review queue contract, implemented by `security/policies/human_review.py`'s `HumanReviewGate` |
+| `feedback.py` | `Feedback`, `FeedbackRating`, `FeedbackSink` | ADR-0014 post-answer feedback contract; in-memory and PostgreSQL sinks, idempotent per tenant/key |
 | `secrets.py` | `SecretResolver` | `resolve(reference) → str`; implemented by `app/config_resolution.py`'s `EnvSecretResolver`, resolving `secret://VAR_NAME` references in a manifest |
 | `parsing.py` | `Parser` | `supports(path) → bool`, `parse(path) → Document` |
 
 **`PipelineManifest`** is the complete schema of a YAML manifest — a `ComponentConfig` per role
-(chunker, embedder, indexer, retriever, reranker, generator, guard, evaluator, telemetry, plus
+(chunker, embedder, indexer, retriever, reranker, generator, guard, evaluator, plus
 `governance.*` and `quality.*` sub-sections) and an optional `engine: EngineSelection` field that
 picks the `DocumentEngine` adapter (native by default, `langgraph` when set). `planning.py`
 (`Planner`/`ExecutionPlan`/`ExecutionStep`) and `agents.py` (`Agent`/`AgentTask`/`AgentResult`) —
@@ -672,7 +677,7 @@ and `memory/versioning/` are `.gitkeep`-only today.
 - **`eval/scorers/exact_match.py` → `ExactMatchEvaluator`**: implements `Evaluator`.
   Precision/Recall/F1 over token sets, case-insensitive. `expected=None` → all-`None` `Metrics`.
 - **`eval/scorers/retrieval_metrics.py`**: pure functions `recall_at_k()`, `precision_at_k()`,
-  `mrr()`; `compute_retrieval_metrics()` aggregates them into a `Metrics`.
+  `mrr()`, `ndcg_at_k()`; `compute_retrieval_metrics()` aggregates them into a `Metrics`.
 - **`eval/runners/benchmark.py` → `BenchmarkCase` + `BenchmarkReport` + `BenchmarkRunner`**: walks
   a list of question/expected-answer/relevant-chunk-id cases through `engine.answer()`, computing
   metrics and aggregate averages.
@@ -681,6 +686,10 @@ and `memory/versioning/` are `.gitkeep`-only today.
   thresholds and raises/reports a violation on drop, the mechanism `docs/refactoring-plan.md`
   refers to as preventing merges on an F1 regression. Not present in a previous version of this
   document.
+- **`eval/datasets/core_v1.yaml` + `loader.py`**: populated synthetic golden set and strict loader.
+- **`eval/reporting.py`**: deterministic JSON/Markdown benchmark report output.
+- **`eval/drift_detection.py`**: pure offline feedback/freshness/review drift computation;
+  orchestrated by `scripts/run_drift_check.py`, never a runtime manifest component.
 
 ---
 

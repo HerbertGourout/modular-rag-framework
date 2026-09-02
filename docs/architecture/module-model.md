@@ -200,18 +200,20 @@ src/modular_rag/
 │   │   ├── tenant_isolation.py    TenantIsolationPolicy (fail-closed; enforce_query/enforce_ingest/
 │   │   │                          filter_chunks — Lot 11b)
 │   │   └── human_review.py        HumanReviewGate (implements ReviewQueue; Lot 11c)
-│   └── audit/
-│       └── store.py           InMemoryAuditSink (the local/dev AuditSink; PostgresAuditSink,
-│                              the durable one, lives under adapters/audit/ above — it needs a
-│                              real external dependency, in-memory doesn't)
+│   ├── audit/
+│   │   └── store.py           InMemoryAuditSink (the local/dev AuditSink; durable backend under adapters/)
+│   └── feedback/
+│       └── store.py           InMemoryFeedbackSink (ADR-0014; durable backend under adapters/feedback/)
 │
 ├── eval/               ← Domain module: Answer × ground truth → Metrics. Public exports via
 │                          eval/__init__.py: BenchmarkCase, BenchmarkReport, BenchmarkRunner,
 │                          ExactMatchEvaluator, compute_retrieval_metrics.
 │   ├── scorers/
 │   │   ├── exact_match.py         ExactMatchEvaluator (token-level P/R)
-│   │   └── retrieval_metrics.py   compute_retrieval_metrics() — recall@k, precision@k, MRR (no
-│   │                              NDCG yet — see ROADMAP.md V1.1)
+│   │   └── retrieval_metrics.py   compute_retrieval_metrics() — recall@k, precision@k, MRR, NDCG@k
+│   ├── datasets/                   populated core_v1.yaml golden set + loader
+│   ├── drift_detection.py          pure offline feedback/freshness/review drift computation
+│   ├── reporting.py                deterministic JSON and Markdown benchmark reports
 │   ├── runners/
 │   │   └── benchmark.py           BenchmarkRunner, BenchmarkCase, BenchmarkReport, GoldenSet
 │   └── quality_gate.py            QualityGate — offline-only; not part of any runtime pipeline
@@ -383,7 +385,7 @@ What each package's `__init__.py` actually exports (verified directly, not infer
 
 | Package | Public exports |
 |---|---|
-| `contracts/` | `Chunker`, `Embedder`, `Indexer`, `VectorIndexer`, `Retriever`, `Reranker`, `Generator`, `SecurityGuard`, `Redactor`, `TenantPolicy`, `GuardResult`, `Evaluator`, `AnswerEngine`, `Telemetry`, `Storage`, `Parser`, `TenantContext`, `TokenVerifier`, `SecretResolver`, `ReviewItem`, `ReviewQueue`, `AuditEvent`, `AuditEventType`, `AuditSink`, `DocumentRecord`, `DocumentStatus`, `LifecycleLedger`, `ErasureProof`, `DocumentDivergence`, `ReconciliationReport`, `RepairResult`, `ManifestLoader`, `PipelineManifest`, `ComponentConfig`, `EngineSelection`, `GovernanceSection`, `ObservabilitySection`, `QualitySection`, `DocumentEngine`, `EngineCapability`, `EngineRequest`, `EngineResult`, `EngineStep`, `ExecutionContext`, `CancellationToken`, `GovernanceHook`, `GovernanceDecision`, `AttributeValue`, `Span`, `Tracer` (ADR-0012), `Meter` (ADR-0013) |
+| `contracts/` | Contract exports for retrieval/generation/security, `Feedback`/`FeedbackRating`/`FeedbackSink`, `ReviewItem`/`ReviewQueue`, audit/lifecycle/reconciliation, manifests, `DocumentEngine`, tracing, and metrics. Verify the exact current export list in `contracts/__init__.py`; the assurance types planned by accepted ADR-0015 do not exist yet. |
 | `core/` | The four *submodules* `enums`, `errors`, `ids`, `models` — not individual names (see the module tree note above) |
 | `core/models/` | `Document`, `Chunk`, `Query`, `RetrievedChunk`, `RetrievalResult`, `Citation`, `Answer`, `TraceStep`, `Trace`, `PolicyRule`, `Policy`, `Metrics` |
 | `core/enums` | `Modality`, `RetrievalMethod`, `PolicyAction`, `DataClassification`, `PIICategory` |
@@ -392,7 +394,7 @@ What each package's `__init__.py` actually exports (verified directly, not infer
 | `retrieval/` | `BM25Retriever`, `VectorRetriever`, `HybridRetriever` |
 | `generation/` | `OpenAIGenerator`, `AnthropicGenerator` (`DeterministicGenerator` is not re-exported here — import it directly from `generation.synthesizers.deterministic_gen`) |
 | `security/` | `InMemoryAuditSink`, `BasicSecurityGuard`, `HumanReviewGate`, `TenantIsolationPolicy`, `PatternRedactor` |
-| `eval/` | `BenchmarkCase`, `BenchmarkReport`, `BenchmarkRunner`, `ExactMatchEvaluator`, `compute_retrieval_metrics` |
+| `eval/` | Benchmark/golden-set loaders and runners, exact-match/retrieval scorers including `ndcg_at_k`, quality gates/reporting, and offline drift helpers (see `eval/__init__.py` for the exact list) |
 | `memory/` | `InMemoryStorage` (no graph submodule — see the module tree above) |
 | `observability/` | `StructlogTelemetry`, `NullTelemetry`, `NullSpan`, `NullTracer`, `NullMeter` |
 | `orchestration/` | *(no `__init__.py` re-exports — import concrete classes directly from their submodule, e.g. `from modular_rag.orchestration.engine import RAGEngine`, `from modular_rag.orchestration.container import Container`)* |

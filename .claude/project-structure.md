@@ -6,15 +6,15 @@ src/modular_rag/
   ingestion/      → text/PDF/DOCX/HTML parsers, normalization, enrichment, chunking, lifecycle
   retrieval/      → in-memory BM25, Qdrant dense/sparse retrieval, hybrid RRF, reranking
   generation/     → OpenAI, Anthropic and deterministic generators, citations, groundedness
-  security/       → guard, adversarial detection, redaction, policy, tenant isolation, audit/review
+  security/       → guard, adversarial detection, redaction, policy, tenant isolation, audit/feedback
   agents/         → namespace only; no native multi-agent runtime
   memory/         → key/value storage only; no knowledge-graph implementation
-  eval/           → exact match, recall/precision/MRR, benchmark runner, quality gate
+  eval/           → exact match, recall/precision/MRR/NDCG, golden-set benchmark/reporting/gate, drift
   observability/  → Structlog/Null telemetry plus NullTracer/NullMeter
   orchestration/  → RAGEngine, registry/container, native adapter, state machine, reconciliation
   app/            → bootstrap, public application service, configuration and admin facades
-  cli/            → ask, ingest, validate, reconcile, db, audit, schema and version commands
-  api/            → FastAPI /health, /ready, /answer and /retrieve
+  cli/            → ask, ingest, validate, reconcile, db, audit, feedback, review, schema and version
+  api/            → FastAPI /health, /ready, /answer, /feedback and /retrieve
 
 manifests/presets/     → three runnable manifests: local, secure-enterprise and LangGraph
 manifests/blueprints/  → non-loadable GraphRAG and multimodal design sketches
@@ -29,6 +29,10 @@ The selected engine boundary is real: `NativeEngineAdapter` wraps `RAGEngine`, w
 `LangGraphEngineAdapter` runs a fixed route → retrieve → guard → generate `StateGraph`. The latter
 does not currently implement planning, tool use, query decomposition or collaborative agents;
 those behaviours remain delegated targets under ADR-0005.
+
+It does not wrap an existing LangChain/LangGraph application. Accepted ADR-0015 defines that
+boundary and L0/L1/L2 assurance direction; both remain unimplemented pending Lots 21–22. Lot 20
+provider-egress enforcement is also planned, not current.
 
 `adapters/auth/` contains the real `KeycloakTokenVerifier`. `adapters/graphstores/` and
 `adapters/search/` remain empty extension targets.

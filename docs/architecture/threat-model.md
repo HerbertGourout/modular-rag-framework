@@ -7,7 +7,8 @@ originally listed as open (Lots 11b, 11c, 12a, 12b, 16a, 16b, 16c) has since shi
 see each STRIDE row below for what changed and what, concretely, remains open today. Extends
 [security.md](security.md)'s attack-surface table with assets, trust boundaries, actors, and a
 STRIDE pass, and cross-references each threat to its current mitigation (if any) or the lot that
-owns closing it. Read alongside
+owns closing it. Lot 20 now owns the still-open classification-aware provider-egress boundary;
+ADR-0015 is accepted, but planned Lots 21–22 do not yet mitigate threats. Read alongside
 [data-classification-policy.md](data-classification-policy.md), which this model assumes as the
 sensitivity vocabulary for "what's at risk." If you're reading this to judge whether a specific
 control is real, don't trust the prose alone — the file paths and function names cited in each row
@@ -23,6 +24,7 @@ not in the code.
 | Generated answers + citations | Returned to caller; recorded in `Trace` (Lot 10) | Inherits from source chunks used |
 | Trace/telemetry data | Wherever `Telemetry.record_trace()` is configured to sink (in-memory by default) | `internal` — performance data, not by itself confidentiality-bearing, but can leak query/answer content via `TraceStep.metadata` if a caller isn't careful |
 | Compliance audit events | `InMemoryAuditSink` / `PostgresAuditSink` (Lot 10) | `internal` — allowlist-enforced payload (`contracts/audit.py`) specifically to keep this asset itself from becoming a `restricted`-data leak vector |
+| Feedback and review records | In-memory or PostgreSQL feedback/review stores (ADR-0014) | `internal` by default; correction text may be `restricted` and is refused unless redaction is configured |
 | Manifest configuration (incl. resolved secrets) | YAML on disk, resolved via `app/config_resolution.py` (Lot 9) | `restricted` if it contains resolved `secret://` values in memory; the YAML file itself should contain only references, never raw secrets (`.claude/rules/security-layers.md` Layer 05) |
 | LLM/embedding provider API keys | Environment variables, resolved via `EnvSecretResolver`/future OpenBao backend | `restricted` |
 | Policy definitions (`security/policies/`) | YAML files loaded by `PolicyEngine` | `internal` — not sensitive data, but a tampering target (see T3 below) |
@@ -80,6 +82,12 @@ TLS/mTLS *policy* is defined or enforced for the calls themselves, though — `d
 deployment.md`'s own examples use `https://` endpoint URLs for Keycloak/Qdrant, which is a
 convention shown in an example, not a check this codebase performs or requires. Still a real,
 open gap — see §5 below.
+
+More importantly, current output redaction occurs after model generation. It cannot prevent raw
+query/context or embedding input from crossing Boundary 3. Lot 20 plans a deny-by-default,
+classification-aware decision before every owned remote adapter and delegated-engine handoff.
+Until then, restricted data must remain local or be protected by deployment/provider controls
+outside this framework.
 
 ## 3. Threat actors
 

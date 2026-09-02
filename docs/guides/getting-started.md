@@ -122,8 +122,11 @@ authoritative classification and runtime prerequisites.
 | Preset | Status | Use case |
 |---|---|---|
 | `local-hybrid-rag.yaml` | **Runnable** | Local development, no auth, GPT-4o-mini — the reference starting point |
-| `secure-enterprise-rag.yaml` | **Runnable** (V2) | Enterprise deployment — tenant isolation, PII redaction, inline policy engine, durable Postgres audit trail and telemetry. Offline regression gates run separately. Needs `QDRANT_URL`/`QDRANT_API_KEY`/`AUDIT_DATABASE_URL` set. |
+| `secure-enterprise-rag.yaml` | **Runnable** (V2, native) | Tenant isolation, PII redaction, inline policy engine, durable Postgres audit/feedback/human-review storage, persistent sparse retrieval, and telemetry. Offline regression/drift jobs run separately. Needs `QDRANT_URL`/`QDRANT_API_KEY`/`AUDIT_DATABASE_URL`, reachable Qdrant/Postgres, and API token verification for HTTP use. This does not yet enforce Lot 20 provider-egress policy. |
 | `langgraph-rag.yaml` | **Runnable** (V2) | Questions routed through a real but fixed route → retrieve → guard → generate `LangGraphEngineAdapter`. It does not currently provide planning, tools, decomposition or collaborating agents. |
+
+The LangGraph preset is not a wrapper for an existing LangChain/LangGraph application. That
+bring-your-own-application path is planned by accepted ADR-0015 and has no runnable manifest today.
 | `manifests/blueprints/graph-memory-rag.yaml` | Blueprint | Entity-relationship reasoning — GraphRAG traversal is delegated per ADR-0005/0006 and not provided by the selected engine yet |
 | `manifests/blueprints/multimodal-rag.yaml` | Blueprint | PDF with charts, images, tables — `embedder.type: multimodal` isn't a registered factory; VLM execution is delegated |
 

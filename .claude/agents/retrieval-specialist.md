@@ -82,7 +82,7 @@ Expert agent specializing in retrieval systems, vector search optimization, rank
    - Fallback mechanisms
 
 4. **Verify Architecture Compliance**
-   - Check RetrieverProtocol implementation
+   - Check `Retriever` conformance
    - Verify no cross-domain imports
    - Ensure lazy imports on external libraries
    - Validate test coverage
@@ -120,7 +120,7 @@ You: "Add a BM25 retriever to the framework"
 
 Retrieval Specialist:
 1. Analyzes existing retrievers (VectorRetriever pattern)
-2. Verifies BM25 fits RetrieverProtocol
+2. Verifies BM25 fits the `Retriever` Protocol
 3. Generates implementation with lazy rank-bm25 import
 4. Creates unit tests for BM25-specific behavior
 5. Creates contract conformance test
@@ -176,15 +176,15 @@ Retrieval Specialist:
 
 ## Integration Points
 
-- **Contracts**: `contracts/retrieval.py` (RetrieverProtocol)
+- **Contracts**: `contracts/retrieval.py` (`Retriever`)
 - **Adapters**: `adapters/vectorstores/`, `adapters/embeddings/`
-- **Orchestration**: `orchestration/registry.py` (retriever registration)
+- **Composition**: `app/default_factories.py` (retriever registration)
 - **Evaluation**: `eval/metrics/` (retrieval quality metrics)
 - **Tests**: `tests/unit/retrieval/`, `tests/contract/`
 
 ## Success Criteria
 
-✅ RetrieverProtocol fully implemented
+✅ `Retriever` Protocol fully implemented
 ✅ All methods have type hints
 ✅ Lazy imports for external libraries
 ✅ TraceStep emission for observability

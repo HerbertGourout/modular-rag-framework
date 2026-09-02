@@ -16,10 +16,10 @@
 >   push/PR, and the same pipeline `examples/simple_qa/` uses runs nightly against real Qdrant
 >   and a real LLM key (Batch 10, `.github/workflows/ci.yml` and `nightly.yml`) — no longer an
 >   open validation gap.
-> - **V1.1** (evaluation) and **V1.2** (compliance audit) are different: `ROADMAP.md` marks both
->   "partially built" with genuine, named implementation gaps, not just pending validation — NDCG,
->   populated golden sets, and a regression dashboard for V1.1; formatted GDPR/CCPA/HIPAA report
->   generation, an explicit data-lineage artifact, and an access-control log for V1.2.
+> - **V1.1** evaluation now includes NDCG@k, a populated `core-v1` golden set, deterministic
+>   benchmark reporting, a baseline, and a blocking offline quality gate. A hosted regression
+>   dashboard is still not part of the package. **V1.2** still lacks formatted regulatory report
+>   generation and a complete lineage/access-control reporting product.
 >
 > So "V1 is complete" is not the claim made anywhere in this document, in either sense — only
 > "V1.0 is implemented and live-validated" is.
@@ -32,11 +32,10 @@
 > business-level claim, and the technical sections below as precise about which specific
 > sub-version each claim actually covers.
 
-A **reusable delivery accelerator** built at Publicis Sapient for production-grade RAG
-and agentic systems: declarative orchestration, composable retrieval, structured memory,
-native enterprise governance, and progressive multimodal support.
-Built once, deployed across client projects — every adapter, manifest, and governance
-policy is an asset that compounds over time.
+A **portable assurance and delivery framework for Document AI solutions**: declarative
+configuration, engine-neutral contracts, governance evidence, and a native reference RAG engine.
+The project is designed to complement existing orchestration frameworks and cloud platforms, not
+replace their agent, graph, connector, or model-serving ecosystems.
 
 ---
 
@@ -61,13 +60,12 @@ policy is an asset that compounds over time.
 
 ## Why this framework?
 
-**Context.** Publicis Sapient's AI practice repeatedly builds RAG systems for enterprise
-clients — each time re-solving the same problems: governance, multi-tenant data isolation,
-vendor lock-in, auditability, security. This framework is the answer: a proprietary control plane
-that wraps the best available OSS components (sentence-transformers, Qdrant, rank-bm25, OpenAI,
-Anthropic…) behind stable contracts, so that what one project builds, every subsequent project
-inherits. The result is faster delivery, higher margins, and a demonstrable technical
-differentiator on regulated-industry pitches.
+**Context.** Enterprise teams repeatedly solve the same cross-cutting problems around RAG and
+Document AI applications: governance, multi-tenant data isolation, provider egress, auditability,
+quality evidence, and portability. This Apache-2.0 project puts those concerns behind stable
+contracts and manifests so policies, adapters, and conformance tests can be reused across
+projects. Faster delivery and commercial differentiation are hypotheses to validate in pilots,
+not guarantees made by the package.
 
 **Why this matters concretely.** Without a shared framework, every client engagement
 independently reinvents:
@@ -78,25 +76,22 @@ independently reinvents:
 - How to demonstrate to a regulated-industry client (finance, healthcare, public sector) that the
   system fails closed rather than open when something goes wrong.
 
-Each of those is a multi-week engineering effort if built from scratch on a single engagement, and
-a sunk cost that the next engagement cannot reuse if it was built directly against LangChain's or
-Haystack's primitives instead of behind this framework's own contracts. This framework exists
-specifically so that cost is paid once.
+These concerns are often implemented differently in each engagement. The framework exists to
+test whether a shared assurance contract can reduce that repeated qualification work while still
+allowing teams to keep the execution engine that fits their application.
 
 → [Full business case](docs/business-case.md) · [Onboarding by role — developer, tech lead, delivery, functional, security](docs/onboarding.md)
 
 ---
 
-Most RAG stacks today force you to choose between:
+This framework sits alongside—not above—mature ecosystems:
 
-| | LangChain / LlamaIndex | Haystack | This framework |
-|---|---|---|---|
-| **Composition style** | Imperative chains | Pipelines + nodes | **Declarative manifests** (knowledge architecture as code) |
-| **Agents** | Bolted on | Limited | **Delegated via adapter** to LangGraph behind `DocumentEngine`; guard, tenant isolation and redaction are enforced today, while unsupported audit/policy/review/telemetry declarations fail startup |
-| **Graph memory** | External plugins | External | **Delegated** GraphRAG traversal (V3); the native graph data model was evaluated and removed (Étape 8, [ADR-0007](docs/adr/0007-layer-boundaries-and-control-plane-activation.md) — resolved, not left undecided: zero consumers, restorable via git history if a real need emerges) |
-| **Governance** | Manual | Limited | **Policy-as-code**, owned and current (V2.0), not deferred |
-| **Multimodal** | Partial | Partial | **Delegated** VLM execution (V5); parsing/citation enrichment may stay native |
-| **Evaluation** | External (Ragas, etc.) | Built-in | **Built-in & contract-enforced** |
+| Existing choice | Existing strength | Intended contribution of this framework |
+|---|---|---|
+| LangChain / LangGraph | Chains, agents, tools, graph execution, tracing and evaluation ecosystem | Portable policy/evidence boundary around a supported application; the current adapter is only a fixed graph and does not yet wrap an arbitrary existing app. |
+| LlamaIndex / Haystack | Document/retrieval pipelines, connectors, evaluation and orchestration primitives | Cross-project manifests, evidence normalization, and conformance where the adapter exposes sufficient hooks. |
+| Cloud AI platforms | Managed identity, networking, model access, observability and platform governance | Cloud-neutral acceptance contracts that integrate with, rather than replace, platform controls. |
+| Native engine | Inspectable sequential RAG with the repository's fullest current governance path | Reference implementation and local-first option. |
 
 Per [ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md) (accepted 2026-08-04), the
 goal is **not** to compete on building a bigger agent/graph runtime than the frameworks above —
@@ -107,10 +102,11 @@ prototype to a multi-tenant enterprise deployment without rewriting the core.
 **When should you reach for this framework instead of LangChain/Haystack directly?**
 
 Reach for it when your project's hard requirements include: provable per-tenant data isolation,
-an audit trail a compliance officer can query without reading logs, the ability to swap the
-underlying LLM or vector store per client without touching application code, or evaluation gates
-that block a regression before it reaches production. This framework's opinions pay for
-themselves quickly there.
+a queryable audit trail, controlled provider egress, or offline evaluation gates that block a
+measured regression before release. The accepted assurance-level direction for external applications
+is documented in
+[ADR-0015](docs/adr/0015-portable-assurance-and-external-application-boundary.md) and is not yet
+implemented.
 
 Skip it, or defer adopting it, when your project is a single-tenant prototype with no compliance
 requirement and no plan to reuse the pipeline across engagements. The overhead of learning the
@@ -354,15 +350,16 @@ someone hoped would run.
   and was it allowed" without reading application logs.
 
 **Why this is "owned," not delegated, per ADR-0005.** Multi-agent orchestration and GraphRAG
-traversal are explicitly delegated to LangGraph because dozens of other well-maintained projects
-already solve those problems well, and re-solving them natively would not differentiate this
-framework from its competitors.
+traversal are delegated because mature frameworks already specialize in those mechanics.
+Governance, tracing, evaluation, and guardrails also exist in those ecosystems and in cloud
+platforms; this project does not claim otherwise. Its proposed differentiator is the portable
+combination of policy, evidence, and conformance across engines.
 
-Governance is the opposite case: it is the thing enterprise clients actually pay for and the
-thing generic orchestration frameworks do *not* solve well out of the box (see the comparison
-table above — "Manual" and "Limited" in the Governance row for LangChain and Haystack
-respectively). Owning it natively, and enforcing it identically regardless of which execution
-engine answers a query, is the framework's stated differentiator.
+That uniformity is a target, not the current state. The native path consumes the broadest control
+set; the shipped LangGraph adapter currently consumes guard, tenant isolation, and redaction and
+rejects unsupported policy/audit/review/telemetry combinations at startup. ADR-0015 plans
+explicit assurance levels so this difference becomes a testable contract rather than a marketing
+generalization.
 
 ### How a request actually flows — a concrete walk-through
 
@@ -394,13 +391,15 @@ when its component is not wired, so a minimal `local-hybrid-rag.yaml` manifest w
 
 ## Vision
 
-- Build **modular RAG pipelines** (chunking, retrieval, generation, validation) — V1 ✅.
-- Own governance, audit, evaluation, and tenant isolation natively; delegate generic
-  multi-agent orchestration to a selected external engine (LangGraph, ADR-0006) via the
-  `DocumentEngine` port — V2 (Policy Engine native and current; agent orchestration delegated).
-- Extend **cost evidence, governance, language support, and multimodality** progressively without
-  rewriting the core — V3 → V5, per the same owned-vs-delegated split. Core governance primitives
-  already exist; GraphRAG traversal and VLM execution remain delegated and unavailable today.
+- Provide a **native reference RAG engine** with inspectable, local-first semantics — current.
+- Own portable policy, evidence, evaluation, tenant, feedback, and review contracts while
+  delegating generic orchestration to the selected engine — partially implemented.
+- Support both framework-built pipelines and existing external applications through explicit
+  L0/L1/L2 assurance levels — accepted direction in ADR-0015, planned but not implemented.
+- Make data classification and deny-by-default provider egress part of the assurance boundary —
+  planned as Lot 20.
+- Extend provenance to multilingual and multimodal evidence without building a competing VLM or
+  agent runtime — planned.
 
 Runtime components (chunker, retriever, generator, guard, governance adapters, etc.) are wired
 through stable contracts and selected via YAML manifests. Offline evaluation helpers are the
@@ -620,13 +619,14 @@ app = create_app("manifests/presets/local-hybrid-rag.yaml")
 uvicorn server:app --reload
 ```
 
-Four routes exist today:
+Five routes exist today:
 
 | Route | Method | Auth | Purpose |
 |---|---|---|---|
 | `/health` | GET | Never required | Liveness probe — process is up and the pipeline finished wiring. |
 | `/ready` | GET | Never required | Readiness probe (Lot 6) — probes every wired component that implements `HealthCheckable` (Qdrant, PostgreSQL, and the configured LLM generator via a real, cached, non-generative authenticated call) and returns `healthy`/`degraded` (HTTP 200) or `unready` (HTTP 503); see [docs/api/rest.md](docs/api/rest.md#get-ready) for the full status/criticality contract. |
 | `/answer` | POST | Required only if `create_app(token_verifier=...)` was given a verifier (mandatory when the manifest wires `governance.tenant_policy`) | `{"question": "..."}` → `{"text": ..., "citations": [...], "trace_id": ...}` |
+| `/feedback` | POST | Same as `/answer` | Records idempotent feedback linked by `trace_id`; free-text corrections require a configured redactor and `is_test` requires the verified `tester` role. |
 | `/retrieve` | GET | Same as `/answer` | `?q=...&k=10` → `{"chunks": [...], "trace_id": "..."}` with scored chunks and no generation |
 
 ```bash
@@ -696,8 +696,9 @@ pytest tests/e2e/ -v -m e2e
   rankings without needing the two scores to be on the same scale.
 - **Security built-in**: prompt injection guard, PII redaction, policy enforcement — see
   [Core Concepts §6](#6-the-governance-stack--tenant-isolation-audit-redaction-policy-as-code).
-- **Built-in evaluation**: exact match plus recall/precision/MRR and a programmatic benchmark
-  runner/quality gate; NDCG, populated golden datasets, and a dashboard remain open.
+- **Built-in offline evaluation**: exact match, recall/precision/MRR/NDCG, a populated synthetic
+  golden set, deterministic reports, and a CI-blocking quality gate. LLM-judge scoring,
+  additional domain sets, production-calibrated thresholds, and a hosted dashboard remain open.
 - **Three complementary observability signals**: query guard, retrieval, optional reranking, and generation emit
   `TraceStep` records. Tenant/policy checks, post-generation guard checks, redaction, and human
   review do not yet have distinct steps. A `telemetry` component (`type: structlog` or
@@ -733,9 +734,9 @@ test. A separate scheduled/manual workflow runs the paid, LLM-backed end-to-end 
 | Deterministic embedder/generator (no external key, e2e/local use) | ✅ |
 | Security (guard + PII redactor) | ✅ |
 | Governance (tenant isolation, policy engine, durable audit sink) | 🟡 The mechanisms are implemented and unit/contract-tested (tenant isolation, policy-as-code, Postgres-backed append-only audit events, PII redaction). Per [`ROADMAP.md`](ROADMAP.md) V1.2, **not yet built**: a formatted GDPR/CCPA/HIPAA report generator (today, turning captured audit events into a compliance report is a manual query), an explicit data-lineage-tracking artifact, and an access-control log. |
-| Evaluation (exact-match, benchmarks) | 🟡 `Evaluator` Protocol, exact-match scoring, and recall/precision/MRR are implemented and contract-tested. Per [`ROADMAP.md`](ROADMAP.md) V1.1, **not yet built**: NDCG@k, populated per-domain golden sets (`eval/datasets/` is currently empty), and a regression dashboard. Naming/failure-masking caveats also apply — see [refactoring plan](docs/refactoring-plan.md) §2. |
+| Evaluation (offline benchmark and gates) | 🟡 Exact match, recall/precision/MRR/NDCG, a populated synthetic `core-v1` golden set, deterministic JSON/Markdown reports, a baseline, and a CI-blocking gate are implemented. Still open: LLM-judge scoring, additional per-domain sets, production calibration, and a hosted dashboard. |
 | CLI | ✅ |
-| REST API | ✅ `/health`, `/ready`, `/retrieve`, `/answer` all work — the `/answer` 422 routing bug once present in an early build was fixed (see [`CHANGELOG.md`](CHANGELOG.md)) and is covered by a regression test |
+| REST API | ✅ `/health`, `/ready`, `/retrieve`, `/answer`, and authenticated `/feedback` work; see [`docs/api/rest.md`](docs/api/rest.md) for feedback redaction/role constraints |
 | YAML manifest wiring | ✅ for all three `manifests/presets/*.yaml` (local-hybrid-rag, secure-enterprise-rag, langgraph-rag); `manifests/blueprints/` holds design sketches (GraphRAG, multimodal) that don't load — see [manifests/README.md](manifests/README.md) |
 | Unit + contract tests | ✅ passing — run `./scripts/check.sh full` for the current count (changes too often for a static number to stay accurate). This suite requires no external services and is the one category in this table verified on every change. |
 | Integration tests (Qdrant + PostgreSQL for the full directory) | ✅ Implemented and marked `@pytest.mark.integration`, and **now run in CI** (`.github/workflows/ci.yml`'s `test-integration` job, against real Qdrant/PostgreSQL service containers). Qdrant covers vector-store/retrieval tests; PostgreSQL covers audit/lifecycle adapters. Provision both locally to run the full directory yourself. |

@@ -45,7 +45,11 @@ the two in the same file.
 - Detecting security threats (detectors)
 - Enforcing access policies (policies)
 - Reducing hallucinations and toxic content
-- Compliance with regulations
+- Adding a documented content-safety or policy control
+
+Do not use a new guard as a substitute for provider-egress authorization. Guards inspect content;
+Lot 20's planned classification-aware egress decision is a separate boundary. A guard also does
+not, by itself, establish regulatory compliance.
 
 ## Guard Types
 
@@ -251,10 +255,11 @@ you need one, write it explicitly and add it under `security/filters/`, iteratin
 ✅ `SecurityGuard` protocol fully implemented (`check_query`, `check_answer`, `name`)
 ✅ `risk_score` follows the 0.9/0.8/0.5/0.0 scale
 ✅ Patterns tested for accuracy and false positives
-✅ Unit test coverage > 85%
+✅ Unit tests cover allow, deny, boundary, and representative false-positive cases
 ✅ Contract conformance test passing
 ✅ Edge cases handled
 ✅ Registered in `app/default_factories.py`
+✅ Manifest and engine-capability validation updated when the control is selectable
 
 ## Time Estimate
 

@@ -67,7 +67,7 @@ Expert agent specializing in LLM integration, prompt engineering, answer generat
 
 1. **Design LLM Integration**
    - Analyze requirements and recommend model
-   - Generate GeneratorProtocol implementations
+   - Implement the `Generator` Protocol
    - Implement multi-model support
    - Handle API errors and rate limiting gracefully
 
@@ -84,7 +84,7 @@ Expert agent specializing in LLM integration, prompt engineering, answer generat
    - Quality assurance steps
 
 4. **Verify Quality & Compliance**
-   - Check GeneratorProtocol implementation
+   - Check `Generator` conformance
    - Ensure lazy imports for LLM libraries
    - Validate trace emission
    - Test cost efficiency
@@ -122,7 +122,7 @@ You: "Add GPT-4 generator with custom prompts"
 
 Generation Specialist:
 1. Analyzes requirements (reasoning vs. speed)
-2. Generates GeneratorProtocol implementation
+2. Implements the current `Generator` contract
 3. Creates system prompt template
 4. Implements token budgeting
 5. Adds error handling and retries
@@ -191,15 +191,15 @@ Answer: [Final response]
 
 ## Integration Points
 
-- **Contracts**: `contracts/generation.py` (GeneratorProtocol)
+- **Contracts**: `contracts/generation.py` (`Generator`)
 - **Adapters**: LLM API clients (openai, anthropic, cohere)
-- **Orchestration**: `orchestration/registry.py` (generator registration)
+- **Composition**: `app/default_factories.py` (generator registration)
 - **Evaluation**: Quality metrics (relevance, factuality, cost)
 - **Tests**: `tests/unit/generation/`, `tests/contract/`
 
 ## Success Criteria
 
-✅ GeneratorProtocol fully implemented
+✅ `Generator` Protocol fully implemented
 ✅ Multi-model support working
 ✅ Lazy imports for LLM libraries
 ✅ TraceStep emission for observability

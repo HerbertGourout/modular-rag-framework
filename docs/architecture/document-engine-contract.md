@@ -5,6 +5,11 @@
 (what's delegated), [ADR-0006](../adr/0006-external-engine-selection.md) (LangGraph selected)
 **Established:** Lot 7, `docs/refactoring-plan.md`
 
+> **Current limit:** this contract normalizes execution, results, steps, errors, and a small set of
+> generic capabilities. It is not an assurance certification, and the current LangGraph adapter
+> builds a fixed graph rather than wrapping an existing client application. ADR-0015 plans a
+> future extension; nothing in this document should be read as if that proposal already shipped.
+
 ## What this contract is for
 
 `DocumentEngine` is the one place vendor types are allowed to leak in — and only inside an
@@ -101,6 +106,18 @@ generic mechanism any `DocumentEngine` caller can rely on regardless of which ad
 `NativeEngineAdapter` has no `GovernanceHook`-equivalent wiring to stay parallel with — its own
 governance path is `RAGEngine`'s direct calls into `Container.guard`/`policy_engine`/
 `tenant_policy`, which predate the `DocumentEngine` port entirely.
+
+## Planned assurance evolution (ADR-0015)
+
+Under accepted ADR-0015, Lot 21 must define a separate, versioned assurance schema that says which
+facts are merely supplied by an engine, which the framework can verify independently, and which
+stages it can block. Candidate evidence includes citations/retrieval, tenant filtering, provider
+egress, audit completion, usage/cost, feedback/review routing, and streaming prevalidation.
+
+The intended profiles are L0 (opaque request/response), L1 (evidence-aware), and L2 (governed
+stages). Exact types and enum values are deliberately absent here: adding them requires the
+contract ADR, compatibility analysis, and conformance tests described in Lot 21. Existing
+`EngineCapability` flags must not be relabelled as these assurance levels without that work.
 
 ## Cancellation, concretely
 
