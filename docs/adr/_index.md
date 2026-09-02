@@ -250,6 +250,21 @@ pre-claim another tenant's key.
 
 ---
 
+### [ADR-0015: Portable Assurance Layer and External Application Boundary](0015-portable-assurance-and-external-application-boundary.md)
+
+**Status:** Accepted
+**Date:** 2026-09-01; accepted 2026-09-02
+
+Defines explicit L0/L1/L2 assurance levels and two adoption paths: framework-built solutions and
+existing external applications wrapped without rebuilding their internal workflow. The native
+engine remains the reference implementation; portable policy, evidence, egress, and conformance
+contracts become the intended product surface.
+
+**Key insight:** compatibility is not a binary label. Each adapter must state what it can observe
+and enforce, and mandatory unsupported controls must fail before traffic is served.
+
+---
+
 ## Decision Making Process
 
 1. **Identification**: Problem identified in sprint planning, client feedback, or architecture review.
@@ -306,9 +321,10 @@ pre-claim another tenant's key.
 - **ADR-0012**: OpenTelemetry tracing via a new `Tracer` port. Accepted.
 - **ADR-0013**: Operational metrics via a new `Meter` port. Accepted.
 - **ADR-0014**: Feedback contract, durable human review, and offline drift detection. Accepted.
+- **ADR-0015**: Portable assurance levels and external-application boundary. Accepted.
 
-All fourteen ADRs are Accepted as of this writing — none are in Proposed status. Future ADRs will be
-added as new major decisions arise; per this project's own rule
+Fifteen ADRs are Accepted as of this writing. Future ADRs will be added
+as new major decisions arise; per this project's own rule
 ([CLAUDE.md §07](../../CLAUDE.md#07--security-rules)), any new top-level module, layer boundary,
 or contract modification requires one.
 

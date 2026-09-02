@@ -13,8 +13,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 01 — Project purpose
 
-Production-grade modular RAG framework for Publicis enterprise use cases, built around three
-things:
+Pre-alpha portable assurance and delivery framework for Document AI use cases, built around
+three current elements and one proposed direction:
 - A **bounded native engine** (hybrid retrieval, generation, security — the V1 pipeline,
   `NativeEngineAdapter`).
 - An **owned control plane** (governance, audit, offline evaluation, config/manifests, tenant
@@ -22,6 +22,9 @@ things:
 - **Delegated external engines** for generic multi-agent orchestration and GraphRAG traversal
   (LangGraph today, selected via [ADR-0006](docs/adr/0006-external-engine-selection.md), reached
   through the `DocumentEngine` port).
+- An **accepted portable assurance direction** (ADR-0015): explicit L0/L1/L2 guarantees and an
+  adapter path for existing applications. This is not implemented or authorized while the ADR is
+  Proposed; never invent its contracts ahead of the decision/Lot 21.
 
 The historical "V1 Core RAG → V2 Agentic → V3 Graph Memory → V4 Governance → V5 Multimodal"
 progression in block 09 still organizes the detailed roadmap, but per
@@ -31,7 +34,10 @@ plus [ADR-0008](docs/adr/0008-offline-evaluation-and-engine-activation.md), most
 no longer map to "built natively in that version" — see block 09 for the current owned/delegated
 split, which is reconciled with the ADRs, not an interim marker awaiting a future rewrite.
 
-**Non-negotiable priority**: preserve the V1 end-to-end path before adding V3+ features. New graph, governance, or multimodal work must not break `examples/simple_qa/`, unit tests, contract tests, or the local layering audit.
+**Non-negotiable priority**: preserve the native end-to-end reference path and existing public
+contracts. Lot 20 provider-egress protection precedes proposed assurance/external-application
+work. New graph, governance, or multimodal work must not break `examples/simple_qa/`, unit tests,
+contract tests, or the layering audit.
 
 ---
 
@@ -259,8 +265,14 @@ A change to a contract (`contracts/`) requires updating the matching `tests/cont
 > Loop — except its drift-detection/evaluation trigger, which stays native), and V5.0
 > (multimodal execution)** are delegated to a selected external engine via the `DocumentEngine`
 > port ([ADR-0006](docs/adr/0006-external-engine-selection.md), LangGraph), not built natively.
+>
+> **ADR-0015 is Accepted:** the L0/L1/L2 direction and existing-application path are approved.
+> Do not invent their public types before Lot 20 and the focused contract ADR/work in Lots 21–22.
+> Documentation must still describe these capabilities as planned until they are implemented.
 
-Strategic roadmap integrating **8 high-value features** that make this framework incontournable (irreplaceable).
+Strategic roadmap for a native reference engine plus portable control/evidence capabilities. Its
+commercial value is a hypothesis to validate through measured pilots, not an irreplaceability
+claim.
 See [ROADMAP.md](ROADMAP.md) for complete timeline and success criteria per version.
 
 ---
@@ -328,11 +340,10 @@ See [ROADMAP.md](ROADMAP.md) for complete timeline and success criteria per vers
 
 **V2.0 — Policy-as-Code** `[UPDATED — P0 priority]`
 - `security/policies/`: Policy-as-Code framework
-  - Define policies in YAML (who can access what)
-  - PolicyEngine evaluates queries vs policies before execution
-  - Role-based access control (analyst vs director)
-  - Data classification (public, internal, confidential, restricted)
-  - Multi-tenant isolation (tenant A cannot see tenant B)
+  - Inline manifest rules evaluated before execution: shipped
+  - Multi-tenant isolation (tenant A cannot see tenant B): shipped
+  - Caller roles propagated but RBAC decisions (analyst vs director): not implemented
+  - Classification vocabulary exists but runtime/egress enforcement: Lot 20, not implemented
 - **Key difference vs V1**: Governance is now proactive (prevent bad queries) not just reactive
 - **Success**: Policies enforced, multi-tenant isolation works, violations logged
 
@@ -377,7 +388,7 @@ native is deciding *when* retraining is needed.
 
 ---
 
-### V4 — Multi-Language + Governance `[Q1 2027]`
+### V4 — Enterprise + Multilingual Governance `[Q1 2027]`
 
 **V4.0 — Multi-Tenant Policies + Multi-Environment**
 - Policy-as-code enhancements (OPA integration)
@@ -389,23 +400,24 @@ native is deciding *when* retraining is needed.
 - Risk profiles per pipeline
 - **Success**: Prod policies enforced, escalation queue works
 
-**V4.1 — Multi-Language + Cultural Reasoning** `[NEW — 4 months after V4.0]`
-- `adapters/nlp/`: Language-specific tokenizers (Arabic, Chinese, French, German, etc.)
-- `ingestion/chunkers/multilingual_chunker.py`: Respect sentence boundaries per language
-- `adapters/embeddings/multilingual_embeddings.py`: mxbai-embed-large (50+ languages)
-- `generation/`: Language-aware generation (preserve language, no forced translation)
-- `security/cultural_policies/`: Regulatory routing (GDPR EU, CCPA US, CNIL France)
-- **Key difference**: Global-by-default (not English-first); cultural context in answers
-- **Success**: 20+ languages native, F1 in non-English > 0.80, regulatory routing works
+**V4.1 — Multilingual Quality + Jurisdiction-Aware Governance** `[PLANNED]`
+- Detect language/script as processing metadata; support mixed-script and low-confidence cases.
+- Add language-aware parsing/chunking or multilingual adapters only where golden-set slices prove
+  the current path inadequate.
+- Preserve requested output language and evidence any translation step.
+- Derive jurisdiction only from trusted deployment, tenant, residency, contractual, identity, or
+  legal context—never from query language alone.
+- Success criteria are per-deployment quality/citation floors, not a predeclared “20+ languages.”
 
 ---
 
-### V5 — Multimodal Intelligence `[Q2 2027]`
+### V5 — Multimodal Evidence `[Q2 2027]`
 
 **V5.0 — Multimodal Intelligence** — VLM execution delegated per
 [ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md) §5.2 to a selected external
-engine via the `DocumentEngine` port. Parsing/citation enrichment (extracting images/tables,
-attaching timecodes) may remain native if Lot 6/15 evidence supports it — undecided.
+engine via the `DocumentEngine` port. Native ownership may cover provenance/citation enrichment
+(page regions, table cells, image references, timecodes), classification, and egress evidence if
+a future ADR supports it. No multimodal execution is implemented today.
 
 ---
 
@@ -449,9 +461,7 @@ engine or a specific vendor SDK.
 
 ---
 
-### Implementation Order (Do NOT Skip Versions)
-
-**CRITICAL**: Versions are sequential. Do not implement V3 features in V1.
+### Implementation Order (Respect Accepted Decisions and Lot Gates)
 
 > This sequence still governs **native, owned** work (V1.1, V1.2, V2.0, and the parts of V3+ that
 > stay native per the ADR-0005 note above). It does **not** gate the engine-delegation lots
@@ -464,6 +474,8 @@ V2 — V2.0 (V2.1 delegated, not built — see above)
 V3 — V3.0 (delegated) → V3.1 → V3.2 (native reporting/drift-detection portions)
 V4 — V4.0 → V4.1 (complete V4 before V5)
 V5 — V5.0 (delegated — see above)
+Next — Lot 20 egress → Lot 21 contract ADR and assurance contract → Lot 22
+existing-application pilot
 ```
 
 Why sequences matter:
@@ -473,6 +485,8 @@ Why sequences matter:
 - V3.1's cost/latency reporting and V3.2's drift detection don't depend on V3.0's (delegated)
   GraphRAG — they're independent native features that happen to share a version number
 - V4.1 (Multi-Lang) depends on V4.0 (governance framework)
+- Planned Lot 21 cannot start before Lot 20 and its focused contract ADR; Lot 22 cannot start
+  before Lot 21 conformance evidence. ADR-0015 acceptance does not pre-approve public schemas.
 
 ---
 
@@ -487,10 +501,12 @@ Why sequences matter:
 ### Questions?
 
 **"When do I implement Policy Engine?"**
-→ V2.0 (not V1). It requires agent orchestration context. See [ADR-0003](docs/adr/0003-security-and-governance.md).
+→ The inline `PolicyEngine` and tenant isolation already ship. Extend them only through an
+accepted lot/ADR; RBAC and classification-aware egress do not yet ship.
 
 **"Do I need multi-language in V1?"**
-→ No. V1 is English. V4.1 adds 20+ languages. For now, use mxbai-embed-large (which handles multiple languages by default, but don't expect perfect quality in V1).
+→ No blanket language count is promised. Define the deployment's required-language matrix and
+golden-set slices first. Language never selects jurisdiction on its own.
 
 **"Can I do fine-tuning in V2?"**
 → Not recommended. V3.2 is the target, and even there only the drift-detection/evaluation
@@ -498,15 +514,15 @@ trigger is native — the actual fine-tuning execution is delegated per ADR-0005
 external MLOps tooling, not built in this repo at any version.
 
 **"What if client asks for V5 features in V1?"**
-→ Explain the strategy honestly: V1.0 is implemented but still awaits the live checks recorded
-in `ROADMAP.md`; native governance, audit, and offline evaluation are partially built, with their
-remaining gaps listed there. Multi-agent orchestration (V2.1), GraphRAG traversal (V3.0), fine-tuning
+→ Explain the strategy honestly: V1.0 is implemented and the main CI includes live service
+checks; native governance, audit, feedback/drift, and offline evaluation have specific remaining
+gaps listed in `ROADMAP.md`. Multi-agent orchestration (V2.1), GraphRAG traversal (V3.0), fine-tuning
 execution (V3.2), and multimodal execution (V5.0) are delegated to a selected external engine
-per ADR-0005 — this framework's differentiator is owning governance/audit/eval/portability
-*around* that engine, not building those four capabilities in-house.
+per ADR-0005. ADR-0015 plans portable assurance around external applications; it is not built.
 
 **"What about benchmarks?"**
-→ V3+. V1-V2 use golden sets (eval). V3 adds performance benchmarks and tracking.
+→ The offline golden-set benchmark and CI quality gate already ship. Production calibration,
+additional domain sets, LLM-judge scoring, and per-query/user cost attribution remain open.
 
 ---
 

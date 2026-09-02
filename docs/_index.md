@@ -16,7 +16,7 @@ full V1 → V5 journey in plain language.
 | You want to... | Go to |
 |---|---|
 | Understand what the framework can do, without technical jargon | [onboarding.md](onboarding.md), section 3 |
-| Understand why this framework exists, to convince a client or a manager | [business-case.md](business-case.md) |
+| Evaluate the product hypothesis and evidence needed before commercial claims | [business-case.md](business-case.md) |
 | See what's delivered vs. planned, version by version | [../ROADMAP.md](../ROADMAP.md) |
 | Track the engine-agnostic refactoring programme | [refactoring-plan.md](refactoring-plan.md) |
 | Run the framework for the first time | [guides/getting-started.md](guides/getting-started.md) |
@@ -28,6 +28,8 @@ full V1 → V5 journey in plain language.
 | Read or wire up trace telemetry, live spans or operational metrics | [guides/observability.md](guides/observability.md) |
 | Adapt the reference dashboard, alerts, SLOs and runbooks | [observability/README.md](observability/README.md) |
 | Use the REST API | [api/_index.md](api/_index.md) |
+| Record feedback or run offline drift analysis | [guides/feedback-and-drift.md](guides/feedback-and-drift.md) |
+| Understand the accepted L0/L1/L2 assurance direction | [adr/0015-portable-assurance-and-external-application-boundary.md](adr/0015-portable-assurance-and-external-application-boundary.md) |
 | Choose a manifest or create a new one | [../manifests/_index.md](../manifests/_index.md) |
 | Contribute code (setup, rules, MR checklist) | [../CONTRIBUTING.md](../CONTRIBUTING.md) |
 | Look up a term (RRF, ULID, groundedness, EvoRAG...) | [glossary.md](glossary.md) |
@@ -39,7 +41,7 @@ full V1 → V5 journey in plain language.
 docs/
 ├── onboarding.md       ← Entry point: functional profiles + full journey
 ├── business-case.md    ← Business case (management, delivery, commercial)
-├── adr/                ← Settled architecture decisions, with context and consequences
+├── adr/                ← Accepted and proposed architecture decisions, with status and consequences
 ├── api/                ← REST API reference
 ├── architecture/        ← Complete technical specification (layers, models, flows, security)
 ├── guides/              ← Practical, task-oriented guides (installation, deployment, plugins...)

@@ -107,7 +107,7 @@ class ComponentRegistry:
 
 Roles pre-declared in `__init__`: `chunker`, `embedder`, `indexer`, `retriever`, `reranker`,
 `generator`, `guard`, `tenant_policy`, `policy_engine`, `redactor`, `review_queue`, `audit_sink`,
-`telemetry`, `tracer`, `meter`, `lifecycle_ledger`. `tracer` (ADR-0012) creates live spans and
+`feedback_sink`, `telemetry`, `tracer`, `meter`, `lifecycle_ledger`. `tracer` (ADR-0012) creates live spans and
 `meter` (ADR-0013) operational metrics — both separate from `telemetry`'s post-hoc trace recording.
 **Unlike `telemetry`**, `observability.tracer` and `observability.meter` are permitted under
 `engine.adapter='langgraph'`
@@ -163,7 +163,8 @@ class RAGEngine:
     def ingest(self, documents: list[Document]) -> int: ...
     def ingest_chunks(self, chunks: list[Chunk]) -> int: ...
     def answer(self, question: str, **query_kwargs: object) -> Answer: ...
-    def retrieve(self, question: str, k: int = 10, tenant_id: str | None = None) -> list[RetrievedChunk]: ...
+    def retrieve(self, question: str, k: int = 10, tenant_id: str | None = None) -> RetrievalResult: ...
+    def record_feedback(self, feedback: Feedback) -> Feedback: ...
     def delete_document(self, document_key: str) -> None: ...
     def rebuild_document(self, ...) -> None: ...
     def erase_document(self, document_key: str) -> ErasureProof: ...
@@ -173,18 +174,25 @@ class RAGEngine:
 whether the matching optional component is configured on the `Container`:
 
 1. Tenant-isolation identity check (`Container.tenant_policy.enforce_query()`, fail-closed, Lot 11b)
-2. Query guard (`Container.guard.check_query()`)
-3. Retrieval (`Container.retriever.retrieve()`)
-4. Tenant chunk filtering (`Container.tenant_policy.filter_chunks()`)
-5. Reranking (`Container.reranker.rerank()`, if configured)
-6. Generation (`Container.generator.generate()`)
-7. Answer guard (`Container.guard.check_answer()`)
-8. Redaction (`Container.redactor.redact()`, if configured)
-9. Human-review flagging (`Container.review_queue`, if configured)
+2. Policy enforcement (`Container.policy_engine.enforce_query()`, if configured)
+3. Query guard (`Container.guard.check_query()`)
+4. Retrieval (`Container.retriever.retrieve()`)
+5. Tenant chunk filtering (`Container.tenant_policy.filter_chunks()`)
+6. Reranking (`Container.reranker.rerank()`, if configured)
+7. Generation (`Container.generator.generate()`)
+8. Answer guard (`Container.guard.check_answer()`)
+9. Redaction (`Container.redactor.redact()`, if configured)
+10. Human-review flagging (`Container.review_queue`, if configured)
 
 There is no dynamic routing between strategies — every request runs this same sequence. Query
 classification/strategy selection was `QueryRouter`'s job; it was removed in Lot 17 because
 nothing ever called `.route()` on it (see the file header).
+
+`retrieve()` is a narrower path: it enforces tenant identity, retrieves and tenant-filters chunks,
+then returns `RetrievalResult(chunks=..., trace_id=...)`; it does not emit the full answer-path
+telemetry or audit sequence. `record_feedback()` is a separate native operation. It requires a
+configured `feedback_sink` and requires a configured redactor before storing non-empty correction
+text. Neither operation is an implicit stage of `answer()`.
 
 ### TraceStep Emissions (MANDATORY)
 
@@ -240,16 +248,19 @@ current one.
 
 ## Rule 5: DocumentEngine adapters route through this module's wiring
 
-`NativeEngineAdapter` (`native_engine.py`, Lot 8) wraps a `RAGEngine` instance behind the
-vendor-neutral `DocumentEngine` port (`contracts/engine.py`, Lot 7) — an empty, honest
-capability set (no streaming/cancellation/governance-hook support). `LangGraphEngineAdapter`
-(`adapters/llms/langgraph_engine.py`, Lot 15) is the second implementation, running the same
-wired `Container` components through a real LangGraph `StateGraph` instead — it declares
-`STREAMING`/`GOVERNANCE_INTERCEPT`/`CANCELLATION`. `app/bootstrap.py`'s `load_engine()` selects
-between them from a manifest's `engine.adapter` field (`"native"` default, or `"langgraph"`).
-Both must pass the same governance/tenant-isolation tests — see
-`docs/refactoring/lot-15-langgraph-adapter.md` and `lot-18-pilot-and-closure.md` for two real
-parity bugs found and fixed between them.
+`NativeEngineAdapter` (`native_engine.py`, Lot 8) wraps `RAGEngine` behind the vendor-neutral
+`DocumentEngine` port. Its capability set is intentionally empty: it does not claim streaming,
+cancellation, or governance-hook support. `LangGraphEngineAdapter`
+(`adapters/llms/langgraph_engine.py`, Lot 15) is a second implementation that runs a supported
+subset of the same wired components through a LangGraph `StateGraph`; it declares
+`STREAMING`/`GOVERNANCE_INTERCEPT`/`CANCELLATION`. `app/bootstrap.py` selects the adapter from
+`engine.adapter` (`native` by default, or `langgraph`).
+
+Parity currently covers tenant isolation, `SecurityGuard`, and redaction. Native-only controls
+(`policy_engine`, `review_queue`, `audit_sink`, `feedback_sink`, and post-hoc `telemetry`) are
+rejected during LangGraph manifest validation rather than silently ignored. Do not claim full
+governance parity or bypass that fail-fast validation. See
+`docs/refactoring/lot-15-langgraph-adapter.md` and `docs/architecture/document-engine-contract.md`.
 
 ---
 
@@ -268,11 +279,12 @@ query-time routing; this runs as an operational/maintenance task, not part of `a
       name in a manifest — never instantiate directly.
 - [ ] Am I changing `RAGEngine`'s flow? Emit a `TraceStep` for the new step; update
       `PipelineStateMachine`'s transition matrix if it adds/removes a state.
-- [ ] Am I touching `LangGraphEngineAdapter`? Any governance/tenant-isolation change here needs
-      the identical change there too (Lot 15/18's own parity-bug history is the reason this
-      rule exists).
+- [ ] Am I touching `LangGraphEngineAdapter`? Any control change needs explicit parity for its
+      supported subset, or fail-fast capability validation for an unsupported control.
 - [ ] Does this change wire components in Python? (❌ NO — use the manifest + registry)
 - [ ] Does this expose secrets or raw PII in a `TraceStep`'s metadata? (❌ NO)
+- [ ] Does provider-bound content need a declared classification/egress decision? Lot 20 is not
+      implemented yet; do not imply that current orchestration enforces one.
 
 ---
 

@@ -207,15 +207,16 @@ switch handles it:
 1. **Configure `create_app(..., token_verifier=...)`** (Lot 16a).
    - `adapters/auth/keycloak_verifier.py`'s `KeycloakTokenVerifier` is the reference
      `TokenVerifier` implementation.
-   - Without one, `/answer` and `/retrieve` are unauthenticated *if* the manifest has no
+   - Without one, `/answer`, `/feedback`, and `/retrieve` are unauthenticated *if* the manifest has no
      `governance.tenant_policy` wired.
    - `secure-enterprise-rag.yaml` (step 2 below) does wire one, so for it this is not optional:
      `create_app()` refuses to start without a `token_verifier` at all (Lot 1, tenant
      fail-closed). Configure OIDC issuer/audience before first launch, not after a failed one.
    - See [rest.md](../api/rest.md#authentication).
 2. **Start from `secure-enterprise-rag.yaml`**, or explicitly enable `BasicSecurityGuard`,
-   `PatternRedactor`, an audit sink, and `TenantIsolationPolicy`. The tenant policy denies
-   requests without an authenticated tenant identity.
+   `PatternRedactor`, audit/feedback/review sinks as required, and `TenantIsolationPolicy`. The
+   tenant policy denies requests without an authenticated tenant identity. Free-text feedback is
+   refused unless a redactor is wired.
 3. **Tune `create_app(..., rate_limit_per_minute=..., max_body_bytes=...)`** (Lot 16a) for your
    expected load — see
    [backup-restore.md](backup-restore.md#overload--soak-evidence-deferred-from-lot-14) for a
@@ -227,6 +228,17 @@ switch handles it:
    defense-in-depth on top of, not instead of, #1.
 6. **Configure `structlog`/stdlib logging** in the deployment entrypoint or platform. There is no
    framework-wide `MRAG_LOG_LEVEL` setting.
+7. **Treat outbound model data as unprotected until Lot 20 ships.** Current output redaction occurs
+   after generation; it cannot prevent the raw query, retrieved chunks, or embedding input from
+   reaching OpenAI, Anthropic, or another remote service. Until classification-aware fail-closed
+   egress exists, use deployment-level allowlists/gateways and private networking, minimize
+   context, select provider retention/residency terms explicitly, or implement a contract-
+   conformant local generator/embedder. Do not send `restricted` data remotely based only on this
+   framework's current controls.
+
+Cloud IAM, network isolation, encryption/key management, model gateways, DLP, and legal/DPA
+approval remain deployment responsibilities. The framework is portable container software; it
+does not make a deployment compliant merely by selecting the secure preset.
 
 ## Authenticated container deployment
 

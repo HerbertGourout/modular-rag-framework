@@ -14,7 +14,11 @@ processes every field the manifest declares.
 | Preset | Notes |
 |---|---|
 | `local-hybrid-rag.yaml` | V1, native engine. Only V1 components; every type is registered and every field is wired. Validated in CI (`scripts/check.sh full`). Used by `examples/simple_qa/`. |
-| `secure-enterprise-rag.yaml` | V2, native engine. Governance (`tenant_enforcement`, `redactor`, inline `policy_engine`, Postgres `audit_sink`) plus telemetry; `${QDRANT_URL}`/`secret://QDRANT_API_KEY`/`secret://AUDIT_DATABASE_URL` resolve via `app/config_resolution.py`. Offline golden-set gates are intentionally not runtime fields (ADR-0008). `retriever.config.lexical: sparse-qdrant` selects a *second*, dedicated Qdrant collection (`sparse_collection: enterprise_docs_sparse`) for a persistent lexical index — durable/multi-worker alternative to the local preset's in-memory BM25 default; requires Qdrant client/server 1.10+. Requires those env vars and reachable Postgres/Qdrant to run. |
+| `secure-enterprise-rag.yaml` | V2, native engine. Governance (`tenant_enforcement`, `redactor`, inline `policy_engine`, Postgres `audit_sink`, `feedback_sink`, `review_queue`) plus telemetry; `${QDRANT_URL}`/`secret://QDRANT_API_KEY`/`secret://AUDIT_DATABASE_URL` resolve via `app/config_resolution.py`. Offline golden-set/drift jobs are intentionally not runtime fields (ADR-0008/0014). `retriever.config.lexical: sparse-qdrant` selects a second dedicated Qdrant collection for durable/multi-worker lexical retrieval. Requires the env vars and reachable PostgreSQL/Qdrant. Lot 20 classification-aware provider egress is not implemented. |
+
+No manifest currently wraps an arbitrary existing LangChain/LangGraph application. The shipped
+`langgraph-rag.yaml` builds the repository's fixed graph; accepted ADR-0015 plans a different
+existing-application adapter for Lot 22, which is not implemented.
 | `langgraph-rag.yaml` | V2, `engine.adapter: langgraph`. Renamed from `agentic-rag.yaml` — the old `planner`/`agents` fields described a native multi-agent runtime that was never built (removed as dead code in Lot 17). The current adapter is a fixed route → retrieve → guard → generate graph; planning, tool use, decomposition and collaborating agents remain delegated targets, not current behaviour. |
 
 None of the three shipped presets enables `observability.tracer` or `observability.meter`. Both

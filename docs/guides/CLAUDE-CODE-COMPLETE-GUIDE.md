@@ -17,7 +17,7 @@ version predates ADR-0005 and a documentation-audit correction pass, both reflec
 4. [7-Layer Security Strategy](#7-layer-security-strategy)
 5. [4 Platform Mechanisms](#4-platform-mechanisms)
 6. [Configuration Files Reference](#configuration-files-reference)
-   - **[→ Complete Development Guide (2,500 lines)](./claude-code-complete-development-guide.md)** — End-to-end workflow ⭐
+   - **[→ Development Guide](./claude-code-complete-development-guide.md)** — Current repository workflow ⭐
    - **[→ Settings Reference (1,500 lines)](./claude-code-settings-reference.md)** — All 100+ settings
    - **[→ MCP Setup (1,000 lines)](./claude-code-mcp-setup.md)** — Model Context Protocol
    - **[→ Plugins & Marketplaces (1,000 lines)](./claude-code-plugins-marketplaces.md)** — Team plugins
@@ -500,7 +500,7 @@ well past the real file size; see `docs/archive/documentation-audit-2026-08.md`.
 
 | Guide | Size | Coverage | Audience |
 |-------|------|----------|----------|
-| **[claude-code-complete-development-guide.md](./claude-code-complete-development-guide.md)** | 1,511 lines | **COMPLETE WORKFLOW** from problem to commit, code-heavy — uses the same 5-step names as [below](#the-5-step-workflow) | All developers |
+| **[claude-code-complete-development-guide.md](./claude-code-complete-development-guide.md)** | Concise | **CURRENT WORKFLOW** from scope to validation, linked to authoritative contracts and module guides | All developers |
 | ↳ 5-minute quick start | 5 min | Prerequisites, rules, commands | All |
 | ↳ 5-step workflow | 30 min | EXPLORE → PLAN → IMPLEMENT → VERIFY → DELIVER | All |
 | ↳ Architecture rules | 20 min | Hexagonal layering, imports, wiring, observability | All |
@@ -540,19 +540,11 @@ well past the real file size; see `docs/archive/documentation-audit-2026-08.md`.
 **Universal workflow** that applies regardless of task type (feature, bugfix, refactor). This is
 the canonical scheme — the single source of truth for step names and ordering in this project.
 
-> **Merged 2026-08-06** (documentation-utility pass, replacing the 2026-08-06 reconciliation
-> note that only pointed out the mismatch instead of resolving it): this file previously had a
-> **6-step** scheme (EXPLORE → PLAN → VALIDATE → IMPLEMENT → VERIFY → DELIVER) while
-> `claude-code-complete-development-guide.md` had an independently-written **5-phase** scheme
-> (EXPLORE → DESIGN → IMPLEMENT → VALIDATE → REVIEW) — same underlying process, two different
-> step counts and a genuinely colliding term: "VALIDATE" meant a *pre-coding plan-approval gate*
-> here and *post-implementation testing* there. Resolved by collapsing to **5 canonical steps**
-> below; `claude-code-complete-development-guide.md`'s phase headers now use these same five
-> names (see the note at the top of its "Complete Workflow" section). The old standalone
-> plan-approval step didn't disappear — it's folded into step 2 (PLAN) as a conditional
-> sub-step, because this project currently has [sole decision authority](../../CLAUDE.md) (one
-> active contributor), so a separate multi-person sign-off gate doesn't apply today. Re-promote
-> it to its own step if the team grows and a real approval workflow is needed.
+The steps below are a general task-planning aid. The authoritative repository workflow, including
+the bounded Claude/Codex review sequence, lives in
+[`claude-code-complete-development-guide.md`](claude-code-complete-development-guide.md) and
+[`ai-engineering-workflow.md`](ai-engineering-workflow.md). If this longer configuration guide
+conflicts with either, follow those current operational references and root `CLAUDE.md`.
 
 ### Step 1️⃣: EXPLORE (Understand Before Acting)
 

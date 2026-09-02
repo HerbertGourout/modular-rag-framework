@@ -1,189 +1,150 @@
-# Business case — Modular RAG Framework
+# Business case — Portable Document AI Assurance Framework
 
-> Internal Publicis Sapient document. Audience: management, technical leads, client project stakeholders.
-
----
+**Status:** Working hypothesis, not a validated sales claim
+**Last reviewed:** 2026-09-01
 
 ## Executive summary
 
-This framework is a **proprietary delivery accelerator** developed in-house by Publicis Sapient. It provides an orchestration, governance, and security layer on top of the best available open-source RAG tools — something no generic OSS framework offers for an enterprise context. Every client project that uses it saves 4 to 8 weeks of setup. At 5 projects per year, the full V1–V4 development pays for itself.
+The framework should be evaluated as a reusable assurance and delivery layer for Document AI
+solutions, not as another competitor to LangChain, LangGraph, LlamaIndex, Haystack, or cloud AI
+platforms. Its proposed value is to make governance requirements portable and testable across
+those runtimes while providing a native reference RAG engine for local-first delivery and
+conformance.
 
----
+The current repository already demonstrates useful foundations: contract-driven adapters,
+manifest validation, tenant isolation, policy enforcement, redaction, durable audit, offline
+evaluation, feedback, human review, drift signals, and engine selection. It does **not** yet prove
+that all controls work uniformly around an existing third-party application. That remaining gap
+is central to the next product phase.
 
-## 1. Reusable commercial asset
+No delivery-time saving, margin improvement, or break-even point is asserted here as fact. Those
+outcomes must be measured in pilots against a comparable baseline.
 
-This framework is proprietary IP that stays with Publicis Sapient at the end of every project, unlike a bespoke LangChain implementation delivered to the client.
+## 1. Customer problem
 
-```mermaid
-%%{init: {"theme": "base"}}%%
-flowchart LR
-    P1["Client Project 1\nbuilds an adapter,\na manifest, a policy"] -->|"absorbed into"| FW[("Framework\n(shared IP)")]
-    FW -->|"4-8 weeks saved\non setup"| P2["Client Project 2\nstarts from a\nricher base"]
-    P2 -->|"adds its own\nadapter/manifest/policy"| FW
-    FW -->|"even faster\nstart"| P3["Client Project 3\n..."]
-    P3 -->|"compounds\nfurther"| FW
-```
+Enterprise teams increasingly operate more than one Document AI stack: bespoke Python services,
+LangChain/LangGraph applications, cloud-managed retrieval services, and platform-specific model
+gateways. Each stack may expose its own tracing or evaluation tools, but delivery teams still
+need consistent answers to cross-cutting questions:
 
-Each delivery makes the next one faster and the asset more valuable — the loop never resets
-to zero the way a client-owned, one-off LangChain build does.
+- Which identity and tenant were allowed to access which evidence?
+- Which data was permitted to leave the deployment boundary and for which provider?
+- Which citations, policy decisions, and model-usage facts support an answer?
+- Which checks are enforced, merely observed, or unavailable for this engine?
+- Can the same acceptance suite be run before switching engine or cloud platform?
+- Can feedback, review, and drift evidence be compared across projects?
 
-- **Savings per project**: 4 to 8 weeks of setup, security, observability, and governance are no longer rebuilt from scratch.
-- **Margin uplift**: the weeks saved on infrastructure are not lost — they are reallocated to billable business value.
-- **Premium pricing**: a proprietary framework justifies higher day rates than "we use LangChain like everyone else".
-- **Compounding**: every adapter, manifest, or policy built on one project accumulates in the framework. The asset appreciates with every delivery.
+The commercial problem is therefore fragmentation of assurance and delivery practice, not lack
+of an orchestration library.
 
----
+## 2. Proposed value proposition
 
-## 2. Delivery accelerator
+> Apply a portable, evidence-backed assurance contract to Document AI solutions, whether they use
+> the native reference engine or an existing external application.
 
-The YAML manifest is the key: configuring a complete RAG pipeline — chunker, embedder, hybrid retriever, reranker, LLM, security — takes hours, not weeks.
+The useful combination is:
 
-- **Demonstrable prototype in 1 day**: for an RFP or a discovery, showing a working pipeline on the client's documents within 24 hours is an immediate selling point.
-- **Faster onboarding**: a new consultant on the project understands the architecture in half a day — no need to decode an unstructured LangChain codebase.
-- **Flexible staffing**: the standardized hexagonal architecture lets teams rotate between projects without a long ramp-up period.
-- **No-code configuration**: a lead or a PM can read and modify a YAML manifest without opening Python.
+1. declarative solution and policy configuration;
+2. fail-closed capability negotiation;
+3. identity, tenant, redaction, and provider-egress controls;
+4. normalized audit, provenance, quality, cost, feedback, and review evidence;
+5. conformance suites that state the achieved assurance level;
+6. a native reference implementation that can run independently of a cloud platform.
 
----
+None of these individual features is unique. The hypothesis is that packaging them as a portable
+delivery standard, with honest cross-engine guarantees, reduces repeated integration and
+qualification work.
 
-## 3. Competitive differentiation
+## 3. Where it complements existing platforms
 
-Competitors (Accenture, Capgemini, Deloitte Digital) use LangChain, LlamaIndex, or proprietary cloud solutions. Publicis Sapient can position itself differently.
+| Existing choice | What it already does well | Proposed role of this framework |
+|---|---|---|
+| LangChain / LangGraph | Application composition, agents, tools, durable graph workflows, ecosystem integrations | Wrap an existing application; add portable policy/evidence contracts and cross-project conformance without replacing its graph. |
+| LlamaIndex / Haystack | Retrieval and Document AI composition, connectors, evaluation or pipeline primitives | Normalize assurance evidence and delivery controls where the adapter can observe or intercept them. |
+| Cloud AI platforms | Managed identity, networking, model access, observability, evaluation, and platform-native governance | Integrate with—not replace—those controls; provide a cloud-neutral contract and comparable acceptance evidence. |
+| Native framework engine | Inspectable sequential RAG, local composition, reference semantics | Serve as the reference implementation and local/offline-first option, not the only supported runtime. |
 
-- **"We have our own enterprise RAG framework"**: a pitch hook few consultancies can deliver credibly and demonstrably.
-- **Governance by design**: fail-closed tenant isolation, a real Keycloak-backed identity
-  verifier, and a structured audit trail (`AuditEvent`, PII/secret payload allowlist) are
-  already shipped — not a V4-future promise (per
-  [ADR-0005](adr/0005-document-ai-control-plane-boundary.md), accepted 2026-08-04, this is owned
-  and current, V2.0 scope). This exists in no comparable OSS framework at this maturity and is a
-  decisive argument in regulated RFPs today, not "once V4 ships."
-- **Demonstrable architecture**: the ADRs, the Pydantic contracts, and the hexagonal structure are proof of technical maturity that can be shown to a CIO or a CISO during an audit.
-- **Vendor independence**: the adapter pattern proves that Publicis Sapient is not simply reselling OpenAI or AWS — it brings its own value layer, neutral and durable.
+The framework is unnecessary when one platform's native controls fully satisfy the organization,
+portability is not required, and no reusable cross-project standard is desired.
 
----
+## 4. Target users and engagements
 
-## 4. Coverage of regulated industries
+The strongest initial users are:
 
-Publicis Sapient works with banks, insurers, pharmaceutical players, and utilities — all subject to strict regulations (GDPR, DORA, NIS2, sector-specific). This framework addresses these constraints directly.
+- platform teams standardizing multiple RAG or Document AI applications;
+- security and governance teams that need explicit evidence boundaries;
+- delivery teams reusing policies, manifests, tests, and adapters across clients;
+- regulated or multi-tenant projects where unsupported controls must fail before deployment;
+- organizations that must support local, on-premise, or multiple-cloud execution.
 
-- **Audit trail — primitives shipped, not a turnkey compliance report**: every run captures a
-  structured `AuditEvent` (PII/secret payload allowlist enforced by a validator) to a
-  manifest-configured sink (`governance.audit_sink.type: in-memory` or `postgres` — the Postgres
-  sink is append-only by construction, no UPDATE/DELETE anywhere in the code).
+It is a weaker fit for a short-lived, single-tenant prototype where direct use of an existing
+library is simpler and there is no reuse or assurance requirement.
 
-  What's **not** shipped yet: a formatted GDPR/CCPA/HIPAA report *generator* — turning captured
-  events into a report a DPO can hand to a regulator is still a manual query today. Say "captures
-  a durable, structured audit trail," not "generates compliance reports."
-- **Automatic PII redaction**: emails, phone numbers, IBANs, API keys removed before exposure
-  via a manifest-activatable redactor (`governance.redactor.type: patterns`) — documentable in
-  a DPIA.
-- **Multi-tenant isolation — enforced, gated by an explicit flag**: `governance.tenant_policy`
-  (fail-closed `TenantIsolationPolicy`) filters cross-tenant data and denies requests missing a
-  tenant on query/ingest, real Keycloak-backed identity verification is available for the
-  API. `governance.tenant_enforcement: true` must be set explicitly — it is never silently
-  assumed, and a manifest declaring it without a wired `tenant_policy` now fails validation
-  rather than silently no-op'ing.
-- **Safety vs Security explicitly separated**: a distinction regulators appreciate, and one that proves security is not an afterthought.
+## 5. Product packages to validate
 
-> **Corrected 2026-08-07 (ADR-0007 Étape 10):** the audit-trail and tenant-isolation rows above
-> were rewritten to match the current, verified state — both primitives are now real and
-> manifest-activatable (`secure-enterprise-rag.yaml` is a working example), which supersedes the
-> 2026-08-04 correction that used to sit here (it described an earlier, pre-Lot-11b/pre-Étape-6
-> state). Still be precise in client conversations: "captures/enforces X" is accurate;
-> "is GDPR/HIPAA compliant" is not — compliance is a property of a full deployment plus process,
-> never of a software component alone.
+Potential service offerings, subject to pilot validation:
 
----
+- **Document AI assurance assessment:** map an existing application to L0/L1/L2, identify missing
+  evidence and controls, and produce a remediation plan.
+- **Governed delivery baseline:** deploy the native or an external adapter with approved
+  manifests, tests, audit, and data-egress policy.
+- **Cross-engine qualification:** run the same conformance profile against two execution options
+  before a migration or sourcing decision.
+- **Operational assurance:** connect feedback, review, drift, quality, and cost evidence to the
+  client's operational process.
 
-## 5. Resilience against AI market evolution
+These are service hypotheses, not commitments that the current pre-alpha package can deliver
+without deployment-specific engineering.
 
-The LLM market changes every six months. This framework is designed to survive those changes without a rewrite.
+## 6. Evidence required before commercial claims
 
-- **Swap an LLM with one line of YAML**: when GPT-5 ships or a client mandates Mistral on-premise, the change does not touch the pipeline.
-- **Integrate the best OSS tools at any time**: LlamaIndex for semantic chunking, Ragas for evaluation, LiteLLM as a gateway — all wrappable in 50-line adapters. The framework orchestrates, it does not reinvent.
-- **No dependency on an external startup**: LangChain nearly disappeared, LlamaIndex changes its API regularly. Here, Publicis Sapient controls its own contracts.
-- **On-premise deployment possible**: with HuggingFace + Qdrant, the framework runs entirely without calls to external APIs — a frequent requirement in projects with sensitive data.
+Each pilot should record at least:
 
----
+| Measure | Baseline | Framework evidence |
+|---|---|---|
+| Time to first governed deployment | Comparable delivery without the framework | Person-days by activity, including adapter and policy work |
+| Reuse | Components copied or rebuilt between projects | Unchanged manifests, policies, tests, and adapters reused |
+| Control coverage | Required controls and manual checks | Enforced, observed, unsupported, and bypass-tested controls |
+| Portability | Effort to change engine/provider | Code, configuration, test, and operational changes required |
+| Quality regression detection | Existing release process | Regressions caught before release and false-positive rate |
+| Operational burden | Incidents and maintenance effort | Adapter failures, upgrade work, and evidence-store operations |
 
-## 6. Foundation for a structured service offering
+Only measured results should later support statements such as “weeks saved,” margin uplift, or
+break-even after a given number of projects.
 
-This framework can be the foundation of a formalized, repeatable AI practice.
+## 7. Commercial and licensing caveats
 
-- **RAG-as-a-Service**: package the framework + hosting + support as an offering sold to clients who do not want to manage the infrastructure.
-- **Audits of existing RAG systems**: knowledge of the framework makes it possible to audit third-party implementations at clients who started with LangChain.
-- **Internal training**: create a "RAG Engineer PS" curriculum based on this framework — a differentiating skill for recruitment and retention.
-- **Client skills transfer**: in some contexts, deliver the framework as a foundation the client then maintains — a licensing or transfer model.
+The repository is distributed under Apache License 2.0. Whether an organization also owns
+proprietary accelerators, deployment assets, policies, or services built around it depends on
+their actual authorship and distribution model; the open-source package itself should not be
+described generically as proprietary IP.
 
----
+Compliance must also be framed carefully: software can enforce controls and produce evidence,
+but it does not by itself certify GDPR, HIPAA, CCPA, or another regulatory regime. Jurisdiction
+must come from deployment, contractual, residency, identity, and legal context—not inferred from
+the language of a user query.
 
-## 7. Talent attraction and retention
+## 8. Investment priorities
 
-Senior engineers choose their employers partly based on the technical quality of internal projects.
+Before expanding orchestration breadth, investment should prioritize:
 
-- **"At PS we build our own tools"** is a recruiting argument against consultancies that merely assemble SaaS products.
-- A potentially open-sourced framework would generate public visibility, external contributions, and inbound applications.
-- Internal contributors develop RAG architecture expertise that is rare on the market — a skill that adds value on client engagements.
+1. provider data-classification and deny-by-default egress controls (Lot 20);
+2. an engine-independent assurance/capability contract and conformance report;
+3. wrapping an existing LangChain/LangGraph application without rebuilding it;
+4. uniform audit, policy, review, feedback, usage, and provenance evidence where hooks permit;
+5. two or more measured pilots that test reuse and integration cost.
 
----
+The accepted direction is recorded in
+[ADR-0015](adr/0015-portable-assurance-and-external-application-boundary.md). These priorities are
+committed architecture direction but remain unimplemented, dependency-gated roadmap work.
 
-## 8. Capitalizing on accumulated domain knowledge
+## Decision gate
 
-Publicis Sapient accumulates methodological expertise across dozens of projects. This framework is the vehicle for capitalizing on that knowledge.
+Continue investing in the product thesis only if pilots show both:
 
-- Patterns discovered on one project (optimal chunking for legal documents, reranking strategy for product FAQs) are encoded as reusable adapters and manifests.
-- One project's golden-set benchmarks (`eval/runners/benchmark.py`'s `BenchmarkRunner` against
-  `ExactMatchEvaluator`/retrieval metrics — the framework's own built-in scorers, not a Ragas
-  integration, which doesn't exist in this codebase today) feed the next project's regression
-  baselines via `QualityGate`.
-- Graph Memory (V3) could model accumulated sector knowledge as an asset that appreciates over
-  time — GraphRAG traversal itself is delegated to a selected external engine (LangGraph) per
-  [ADR-0005](adr/0005-document-ai-control-plane-boundary.md), not a native build, and the
-  external engine doesn't provide it today. A prior native knowledge-graph *data model* was
-  removed as dead code in 2026-08-07 (zero consumers) — there is no native graph capability of
-  any kind in the codebase right now, only the delegation target.
+- material reuse or assurance value beyond the selected platform's native tooling; and
+- an integration burden low enough that wrapping an existing application is preferable to
+  project-specific governance code.
 
----
-
-## 9. Positioning on high-stakes projects
-
-Some projects require guarantees that OSS frameworks cannot provide.
-
-- **Data sovereignty path**: parsing, HuggingFace embedding, Qdrant retrieval, governance, and
-  audit can run on-premise. The shipped semantic generators are OpenAI/Anthropic adapters; a
-  no-external-API deployment still needs a contract-conformant local-LLM generator adapter.
-- **Explainability**: sourced citations, groundedness scores, and the full trace make it possible to justify every answer — a frequent requirement in decision-support projects.
-- **Definable SLAs**: structured traces cover query guarding, retrieval, reranking, and
-  generation latency, giving a starting point for contractual SLAs.
-
-  Since ADR-0012, a manifest can also opt into live, OTLP-exportable OpenTelemetry spans
-  (`observability.tracer.type: otel`) — the API, ingestion, embedding, retrieval, reranking, and
-  generation stages are instrumented, correlation/request/trace ids propagate through one
-  distributed trace per call, and no query/document/answer/token content is ever attached as a
-  span attribute. This is a first cut (see ADR-0012's own out-of-scope notes — no cross-service
-  `traceparent` propagation yet, and LangGraph-routed requests get engine-neutral API/application
-  spans but no internal graph-step spans).
-
-  ADR-0013 also exposes aggregate request latency, token and static estimated-cost metrics plus
-  reference Grafana/Prometheus material. No shipped preset enables tracer/meter, live backend
-  validation is still required, and readiness/review gauges have documented sampling limits —
-  don't overclaim full cross-service distributed tracing to a client beyond what's actually
-  built.
-- **Large enterprise clients**: CIO and CISO stakeholders at large companies want governance, auditability, and control. This framework speaks directly to them.
-
----
-
-## Summary
-
-| Dimension | Direct benefit |
-|---|---|
-| Reusable IP | Higher margins on every client project |
-| Accelerated delivery | 4–8 weeks saved per project |
-| Differentiation | Winning pitch in regulated RFPs |
-| Governance | Manifest-activatable primitives (tenant isolation, PII redaction, structured audit trail) a client assembles into a compliant deployment |
-| Resilience | Zero vendor lock-in, compatible with any LLM evolution |
-| Service offering | Basis for a formalized enterprise RAG practice |
-| Talent | Recruitment and retention of senior AI profiles |
-| Knowledge | Cross-project capitalization, an appreciating asset |
-| Critical projects | SLAs, sovereignty, explainability for large accounts |
-
-This framework turns every Publicis Sapient RAG project from a cost into an investment. The real question is not "is it worth it" — it is "how many projects does it take to break even". The answer: one or two client projects are enough to pay off the full V1–V4 development.
+If those conditions are not met, keep the native engine as an internal reference accelerator and
+avoid positioning the package as a general cross-platform product.

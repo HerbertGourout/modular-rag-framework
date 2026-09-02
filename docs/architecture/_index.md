@@ -19,6 +19,7 @@ client architect, this is where the answer lives — complemented by the "why" c
 | "What are the assets, trust boundaries, and threats, and which are still open?" | [threat-model.md](threat-model.md) |
 | "How is data classified, and what's the PII/tenant schema?" | [data-classification-policy.md](data-classification-policy.md) |
 | "How does selecting a native vs. an external engine (LangGraph) actually work?" | [document-engine-contract.md](document-engine-contract.md) |
+| "Can it wrap my existing LangChain/LangGraph application, and what can it guarantee?" | [ADR-0015](../adr/0015-portable-assurance-and-external-application-boundary.md) — accepted direction; this path is not implemented today |
 | "I want the exhaustive map of every file in the repo, with its role" | [structure.md](structure.md) |
 | "I want to visualize the roadmap and the flows as diagrams" | [roadmap-mermaid.md](roadmap-mermaid.md) |
 
@@ -39,7 +40,9 @@ validated by service-free, live integration and deterministic end-to-end CI, wit
 LLM-backed scenario scheduled separately; V1.1 and V1.2 are partially built. In parallel,
 a substantial slice of V2 native scope — policy-as-code enforcement, fail-closed tenant isolation,
 compliance audit events, redaction, and human-in-the-loop review — is real, wired, and covered by
-tests today, not merely designed. What remains a target is mostly the *delegated* capabilities
+tests today, not merely designed. Feedback, durable review, and offline drift also ship through
+the native control path (ADR-0014). What remains a target includes provider-egress enforcement
+(Lot 20), the planned assurance/existing-application boundary (ADR-0015/Lots 21–22), and the *delegated* capabilities
 (generic multi-agent orchestration, GraphRAG traversal, multimodal execution — see
 [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md)) and a handful of specific
 native gaps each document calls out explicitly where they exist (e.g. `AdversarialDetector`

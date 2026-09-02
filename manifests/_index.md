@@ -37,7 +37,10 @@ file under `presets/` loads, validates, and wires cleanly — non-executable ske
 | Preset | Version | Use case | Native or delegated (ADR-0005) |
 |---|---|---|---|
 | [`local-hybrid-rag.yaml`](presets/local-hybrid-rag.yaml) | V1 | Local development: no authentication, lightweight models (GPT-4o-mini, bge-small), Qdrant on localhost. Recommended starting point for any new contributor or quick demo. | Native |
-| [`secure-enterprise-rag.yaml`](presets/secure-enterprise-rag.yaml) | V2 | Enterprise deployment: tenant isolation, PII redaction, inline policy engine, durable Postgres audit trail and telemetry. Offline quality gates are run separately. Requires `QDRANT_URL`/`QDRANT_API_KEY`/`AUDIT_DATABASE_URL` and reachable Postgres/Qdrant. | Native |
+| [`secure-enterprise-rag.yaml`](presets/secure-enterprise-rag.yaml) | V2 | Native governed preset: tenant isolation, PII redaction, inline policy engine, persistent sparse retrieval, durable Postgres audit/feedback/review, and telemetry. Offline quality/drift runs separately. Requires `QDRANT_URL`/`QDRANT_API_KEY`/`AUDIT_DATABASE_URL` and reachable Postgres/Qdrant. Lot 20 provider-egress enforcement is not built. | Native |
+
+`langgraph-rag.yaml` proves engine selection through a fixed framework-owned graph. It is not a
+bring-your-own LangChain/LangGraph application adapter; accepted ADR-0015 plans that path for Lot 22.
 | [`langgraph-rag.yaml`](presets/langgraph-rag.yaml) | V2 | Questions routed through `engine.adapter: langgraph` — a real but fixed route → retrieve → guard → generate graph, not a native or external multi-agent workflow. Renamed from `agentic-rag.yaml`; the native five-agent design its old field names implied was removed in Lot 17. | External-engine adapter |
 
 ## `blueprints/` — design sketches, not loadable

@@ -5,6 +5,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Documentation — product and implementation alignment (2026-09-02)
+
+- Reframed the project as a portable Document AI assurance framework with a native reference RAG
+  engine, designed to complement external orchestration frameworks and cloud services rather than
+  replace them.
+- Accepted ADR-0015 for framework-built and bring-your-own-application adoption through explicit
+  L0/L1/L2 assurance levels. No planned contract is presented as shipped.
+- Added planned Lots 21–22 for an engine-independent assurance contract and external-application
+  adapters/conformance, explicitly sequenced after Lot 20 provider-egress protection and ADR
+  approval.
+- Reconciled README, roadmap, business case, architecture, onboarding, API, manifest, deployment,
+  security, evaluation, glossary, and internal AI-development guidance with the current source.
+- Documented shipped feedback, human review, drift detection, NDCG/golden-set evaluation and the
+  `/feedback` API, while narrowing LangGraph claims to its implemented control subset.
+- Made the current data-protection boundary explicit: classification-aware, deny-by-default
+  provider egress is planned, and deployments need external controls or approved local providers
+  until it ships.
+
 ### Added — operational hardening and observability (through 2026-08-26)
 
 - Bounded `/ready` dependency probes for Qdrant, PostgreSQL and configured LLM generators

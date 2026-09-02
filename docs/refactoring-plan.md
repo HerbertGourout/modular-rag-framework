@@ -130,6 +130,11 @@
 > policy enforcement before every owned model/embedding egress and before delegation to an
 > external `DocumentEngine`; local-only routing remains the safe fallback. Scope and acceptance
 > evidence are defined in Phase E below. Status: **NOT STARTED**.
+> **Lots 21–22 (planned, 2026-09-02):** accepted [ADR-0015](adr/0015-portable-assurance-and-external-application-boundary.md)
+> proposes explicit assurance levels, an engine-independent conformance report, and support for
+> wrapping an existing external application without rebuilding its graph. These lots are
+> **PLANNED, dependency-gated implementation**: Lot 21 requires completion of Lot 20 and an
+> accepted focused contract ADR; Lot 22 additionally requires Lot 21 evidence.
 > **Target outcome:** Deploy compliant, measurable document-AI solutions faster, independently
 > of the underlying execution engine.
 > **Migration principle:** Incremental, evidence-based, reversible, and releasable after every
@@ -173,6 +178,7 @@ flowchart TB
     Control --> Engine["DocumentEngine port"]
     Engine --> Native["Native V1 adapter"]
     Engine --> External["Selected external adapter"]
+    Engine --> Existing["Existing application adapter (proposed)"]
     Control --> Infra["Secret / telemetry / audit adapters"]
 ```
 
@@ -181,14 +187,32 @@ and engines implement contracts and never leak vendor types across the public bo
 fine-grained component protocols (`Chunker`, `Retriever`, `Generator`, ...) remain native-adapter
 internals, not the cross-engine abstraction.
 
-### 1.3 Compatibility classes
+The current `LangGraphEngineAdapter` is a fixed graph built from framework components. The
+`Existing application adapter` node is a planned target from ADR-0015, not current capability.
+
+### 1.3 Proposed assurance levels
+
+Under accepted ADR-0015, compatibility must state an assurance level rather than imply uniform
+governance across engines:
+
+| Level | Visibility | Minimum claim |
+|---|---|---|
+| L0 — Opaque output | Request and final response | Boundary checks only; no retrieval-internal guarantee |
+| L1 — Evidence-aware | L0 plus normalized citations/retrieval evidence | Evidence can be validated where independently checkable |
+| L2 — Governed stages | L1 plus enforceable stage hooks | Sensitive stages can be blocked and evidenced |
+
+Observation, independent verification, and enforcement are distinct capabilities. Supplied
+metadata is not automatically verified evidence, and unavailable mandatory controls fail before
+traffic.
+
+### 1.4 Compatibility classes
 
 Every change must classify its impact on: Python imports and callable signatures; REST paths and
 schemas; CLI commands and exit codes; manifest schema; persisted vector/lexical data; trace and
 audit schemas; deployment configuration; and documented behavior. Compatibility is not promised
 until Lot 4 records the current surface and Lot 7 publishes a versioning/deprecation policy.
 
-### 1.4 Programme invariants
+### 1.5 Programme invariants
 
 - The repository remains installable and the accepted offline suite passes after every lot.
 - No planned capability is described as delivered.
@@ -302,6 +326,8 @@ stated otherwise.
 | 18 | Multi-engine pilot, release gates, and programme closure | P1 | M-L (1-2wk) | COMPLETE (engineering scope) — sign-off pending | 17 |
 | 19 | Layer-boundary correction and control-plane activation (ADR-0007) | P0 | L (1.5-2wk) | COMPLETE (engineering scope) — sign-off pending, see [lot-19-layer-boundary-stabilization.md](refactoring/lot-19-layer-boundary-stabilization.md), [ADR-0007](adr/0007-layer-boundaries-and-control-plane-activation.md), and [capability-matrix.md](architecture/capability-matrix.md) | 18 |
 | 20 | Data classification and fail-closed LLM/embedding egress control | P0 | M-L (1-2wk) | NOT STARTED | 11a, 11c, 19; approved ADR before contract/structural changes |
+| 21 | Engine-independent assurance contract, levels, and conformance report | P0 | L (2-3wk; re-estimate after spike) | PLANNED — blocked on Lot 20 and contract ADR | 20; accepted contract ADR |
+| 22 | Existing-application adapter and measured cross-engine pilot | P1 | L-XL (3-5wk, time-boxed) | PLANNED — blocked on Lots 20-21 | 21 |
 
 Ranges (e.g. `8-10`) list the earliest and latest lot whose evidence is required via the
 dependency chain, not necessarily every intermediate lot as a direct predecessor. `16a` and
@@ -490,6 +516,29 @@ general-purpose enterprise DLP platform, or binding the framework to one cloud/p
 
 ---
 
+### Phase F — Portable assurance and existing-application adoption (planned Lots 21–22)
+
+This phase is authorized in direction by ADR-0015 but remains dependency-gated. It must not start
+by changing contracts first: Lot 20 closes the provider-egress boundary, then Lot 21 approves and implements
+the assurance schema, then Lot 22 tests the thesis with an existing application.
+
+**Lot 21: Engine-Independent Assurance Contract and Conformance Report.** Define versioned
+L0/L1/L2 profiles; separate observable, independently verifiable, and enforceable capabilities;
+normalize identity/tenant, provenance, egress, policy, audit, usage, feedback/review, and streaming
+evidence; generate a deterministic conformance report; and apply it to the built-in native and
+LangGraph adapters. Full scope: [lot-21-engine-independent-assurance-contract.md](refactoring/lot-21-engine-independent-assurance-contract.md).
+
+**Lot 22: Existing-Application Adapters and Cross-Engine Conformance.** Wrap one representative
+LangChain/LangGraph application without rebuilding its graph, report the assurance level its hooks
+actually support, test streaming/tools/failure/bypass paths, and measure integration cost against
+the application's native platform tooling. Full scope:
+[lot-22-external-application-adapters-and-conformance.md](refactoring/lot-22-external-application-adapters-and-conformance.md).
+
+The decision gate after Lot 22 is explicit: if the pilot does not show material portable
+assurance or reuse at acceptable cost, do not expand into a broad adapter programme.
+
+---
+
 ## 6. Acceptance criteria by stage
 
 | Stage | Mandatory evidence |
@@ -521,6 +570,8 @@ general-purpose enterprise DLP platform, or binding the framework to one cloud/p
 | Lot 18 | Pilot and rollback exercise pass; mandatory gates green; named owners sign final evidence — **partially met**: the pilot scenario ran for real and found+fixed a genuine tenant-isolation parity bug in the LangGraph adapter; rollback is proven (single manifest field); all local gates are green (`check.sh full`) and a real CI gap (`langgraph` missing from `test-unit`/`coverage`) was found and fixed. **Sign-off is not self-granted** — that is Herbert Gourout's to give per `docs/refactoring/lot-0-baseline.md` §2's sole decision authority, not something this lot can claim on his behalf. |
 | Lot 19 | Strict layering and application facade are enforced; configured governance/audit/quality sections are either activated or rejected before execution. |
 | Lot 20 | An approved ADR defines the egress boundary; every owned generator/embedder and delegated-engine handoff is guarded before transmission; denied or unclassified content produces zero adapter calls; canary PII/secrets are absent from remote-call captures and audit/trace payloads; restricted data completes through the local-only profile or fails closed; incompatible provider profiles are rejected before startup. |
+| Lot 21 (planned) | Accepted contract ADR; versioned L0/L1/L2 profiles; observable/verifiable/enforceable distinctions; deterministic conformance reports for native and LangGraph; overclaim and missing-evidence tests fail closed. |
+| Lot 22 (planned) | An existing application runs without graph reconstruction; declared assurance level passes; egress/tenant/streaming/tool bypass tests pass; measured integration evidence supports a human continue/stop decision. |
 
 ---
 
@@ -587,6 +638,8 @@ record dataset version, engine/model version, configuration, environment, and co
 - [ ] Manifests are strict, versioned, migratable, capability-aware, and secret-safe.
 - [ ] Tenant isolation, policy failures, redaction, and audit are enforced end to end.
 - [ ] Model and embedding egress is deny-by-default, classification-aware, leak-tested, and able to remain fully local.
+- [ ] Each adapter states an assurance level and distinguishes observed, verified, and enforced evidence (accepted ADR-0015; planned Lot 21).
+- [ ] One existing external application is wrapped without graph reconstruction and passes its declared conformance profile (proposed Lot 22).
 - [ ] Document update/deletion and vector/lexical reconciliation are proven.
 - [ ] Index and audit migrations have verified backup, restore, and rollback paths.
 - [ ] Metrics have correct names/formulas and cannot hide infrastructure failures.
@@ -617,7 +670,7 @@ record dataset version, engine/model version, configuration, environment, and co
 | Integration/e2e behavior | Requires confirmed Qdrant, engine services, credentials, and datasets | Lots 15-18 |
 | Provider retention, residency, feature eligibility, DPA, and subprocessor terms | These controls are provider-, account-, endpoint-, and time-dependent; code cannot infer or guarantee the legal posture | Lot 20 provider profiles plus deployment-owner/DPO approval before enabling an external route |
 | Full semantic content of all 56 PDFs | Inventoried/digested, not page-validated | Evidence-catalogue review in Lot 17 |
-| Delivery-pipeline assumption behind the business case | The 4-7 month programme cost (§4) is only justified if the assumed client-project volume is real | Confirm with delivery ownership before Lot 6 |
+| Portable-assurance product thesis | Savings and cross-project value are unmeasured; platform-native tooling may already satisfy some clients | Measure integration effort, control coverage, and reuse in Lot 22 before expanding adapters |
 
 Technology choices for specific lots that are candidates but **not yet committed** (pending
 ADR-0005 sign-off and/or the deployment-topology decision above) are tracked separately in
@@ -689,8 +742,10 @@ scope change, or an approved architecture decision — never as a silent in-plac
 | 2026-08-03 | Added per-lot effort sizing and total-programme estimate; split Lots 11/12/16 into lettered sub-lots | COMPLETE |
 | 2026-08-03 | Selected Keycloak (Lot 11b identity provider) and PostgreSQL (Lot 10 audit store, Lot 12a lifecycle ledger) from an infra-stack compatibility review | COMPLETE |
 | 2026-08-04 | Accepted ADR-0006: LangGraph selected as the external engine, on Herbert Gourout's explicit delegation of the call to the spike evidence | ACCEPTED |
+| 2026-09-02 | Accepted ADR-0015: portable L0/L1/L2 assurance levels and existing-application adoption path | ACCEPTED — direction approved; capability not implemented |
+| 2026-09-02 | Added bounded Lots 21–22 for the assurance contract and measured external-application pilot | PLANNED — gated by Lot 20, the Lot 21 contract ADR, and lot-specific evidence |
 | Pending | Decide final product/package name | Non-blocking |
-| Pending | Confirm delivery-pipeline volume behind the business case | Before Lot 6 |
+| Pending | Validate the business case with measured pilots rather than assumed project volume | Lot 22 decision gate |
 
 ### Change history
 
@@ -718,3 +773,4 @@ scope change, or an approved architecture decision — never as a silent in-plac
 | 2026-08-05 | Lot 18 executed: pilot scenario run for real (found+fixed a LangGraph tenant-isolation parity bug), nine-dimension engine comparison, CI langgraph-install gap found+fixed, zero expired shims, sign-off explicitly deferred to Herbert Gourout. Refactoring programme engineering work complete pending that sign-off. |
 | 2026-08-06 | Documentation audit (`docs/archive/documentation-audit-2026-08.md`, archived 2026-08-07): inventoried all 158 documentation files, then executed all 22 prioritized corrections — full rewrites of `orchestration/CLAUDE.md` and `framework-overview-onboarding.md`, ADR-0004 status fix, `validation.md`/`validation-protocol.md` merge, `.gitlab-ci.yml`/`.gitlab/` removal (finally unblocked via PowerShell), and 30+ other targeted fixes. Closes the residual GitLab-assets item from Lot 17. |
 | 2026-08-27 | Added planned Lot 20, Data Classification and LLM Egress Control: fail-closed pre-generation/pre-embedding enforcement, local-only fallback, provider capability profiles, content-free audit evidence, and negative leakage tests. Clarified that Lot 11c's delivered redaction is post-generation and therefore does not close this outbound-data boundary. |
+| 2026-09-02 | Accepted ADR-0015 and planned Phase F (Lots 21–22): explicit assurance levels/conformance evidence, then a measured pilot wrapping an existing application without rebuilding its graph. Implementation remains gated by Lot 20, the Lot 21 contract ADR, and lot-specific evidence. |

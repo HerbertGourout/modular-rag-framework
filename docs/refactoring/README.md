@@ -2,14 +2,15 @@
 
 This is the index for the original 18-lot engine-agnostic control-plane refactoring programme
 and its follow-on lots (`docs/refactoring-plan.md`). Lots 0-18 were executed 2026-08-03 through
-2026-08-05; Lot 19 followed, and Lot 20 is planned. It answers: **what
+2026-08-05; Lot 19 followed, Lot 20 is planned, and Lots 21–22 are planned by accepted
+ADR-0015. It answers: **what
 happened, in what order, why, and where's the proof** — for anyone reading this repository
 after the fact, whether that's a new team member, a reviewer, or a future Claude Code session
 picking the work back up.
 
 It replaces nothing — `docs/refactoring-plan.md` remains the authoritative plan-and-tracker
 document (scope, gap matrix, decision log, acceptance criteria). This guide is the *entry
-point* into that document and the 20 per-lot evidence files it links to, for someone who
+point* into that document and the per-lot evidence or scope files it links to, for someone who
 doesn't yet know where to start.
 
 ---
@@ -144,6 +145,8 @@ comparison that found a *second* governance-parity bug the per-lot tests had mis
 | 18 | Pilot comparison, CI hardening, programme closure | [lot-18-pilot-and-closure.md](lot-18-pilot-and-closure.md) |
 | 19 | Layer-boundary correction (`Container`/factories moved, facade enforced) and control-plane manifest activation (ADR-0007) | [lot-19-layer-boundary-stabilization.md](lot-19-layer-boundary-stabilization.md) |
 | 20 | **Planned:** fail-closed data classification and LLM/embedding egress control | [authoritative scope and acceptance criteria](../refactoring-plan.md#phase-e--data-protection-and-controlled-model-egress-lot-20) |
+| 21 | **Planned:** engine-independent assurance levels and conformance report | [lot-21-engine-independent-assurance-contract.md](lot-21-engine-independent-assurance-contract.md) |
+| 22 | **Proposed:** wrap and measure an existing external application | [lot-22-external-application-adapters-and-conformance.md](lot-22-external-application-adapters-and-conformance.md) |
 
 A follow-on audit after Lot 18's closure found two structural gaps Lots 0-18 hadn't
 caught: the published dependency direction didn't match the real one (`orchestration/`
@@ -155,6 +158,10 @@ correction — engineering-complete as of 2026-08-07, same sign-off caveat as Lo
 Lot 20 is a new, unimplemented security lot. It closes the separate outbound-data gap where
 post-generation redaction cannot prevent raw query/context or embedding input from reaching an
 external provider. It is intentionally local-first and provider-neutral.
+
+Lots 21–22 are planned scope documents, not implementation evidence. They become actionable only
+after their dependencies are complete: first define honest assurance
+levels and reports, then test them by wrapping an existing application without reconstructing it.
 
 ---
 

@@ -153,7 +153,7 @@ Should I switch to GPT-4? Use few-shot? Add chain-of-thought?
 
 ## 4. security-specialist
 
-**Domain Expertise**: Security guards, PII redaction, injection prevention, compliance
+**Domain Expertise**: Security guards, PII redaction, injection prevention, policy/evidence gaps
 
 ### Capabilities
 
@@ -161,14 +161,15 @@ Should I switch to GPT-4? Use few-shot? Add chain-of-thought?
 ✅ PII pattern recognition (SSN, credit card, email, phone)  
 ✅ Prompt injection detection and prevention  
 ✅ Redaction strategies (masking, replacement, removal)  
-✅ Compliance frameworks (GDPR, CCPA, HIPAA)  
+✅ Technical-control mapping for compliance assessment (not certification)
+✅ Provider-egress boundary analysis (Lot 20 is planned, not shipped)
 ✅ Safety vs Security distinction (filter vs policy)  
 
 ### When to Use
 
 - **Security layer design**: Implementing guards and policies
 - **PII handling**: Building redaction pipelines
-- **Compliance**: Meeting regulatory requirements
+- **Compliance**: Mapping technical evidence and residual gaps for legal/security review
 - **Injection prevention**: Protecting against adversarial inputs
 
 ### Expertise Areas
@@ -197,7 +198,7 @@ from documents before retrieval. What's the best approach?
 
 ### Capabilities
 
-✅ Layering compliance verification (core → contracts → domains → adapters → orchestration)  
+✅ Layering compliance verification (outer layers depend inward on contracts/core; adapters never leak vendor types outward)
 ✅ Cross-domain import detection  
 ✅ Protocol implementation validation  
 ✅ Circular dependency detection  
@@ -274,6 +275,10 @@ Sometimes they pass, sometimes fail. What's causing this?
 ## 7. orchestration-specialist
 
 **Domain Expertise**: Registry patterns, manifest-driven wiring, component composition, lifecycle
+
+The current LangGraph adapter is fixed and is not an existing-application wrapper. ADR-0015
+accepts that direction for planned Lots 21–22; the orchestration specialist must not implement
+their contracts before Lot 20 and the focused contract ADR.
 
 ### Capabilities
 
