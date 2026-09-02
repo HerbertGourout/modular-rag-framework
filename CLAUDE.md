@@ -14,19 +14,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 01 — Project purpose
 
 Production-grade modular RAG framework for Publicis enterprise use cases, built around three
-things: a **bounded native engine** (hybrid retrieval, generation, security — the V1 pipeline,
-`NativeEngineAdapter`), an **owned control plane** (governance, audit, offline evaluation,
-config/manifests, tenant isolation, portability — native, with runtime activation explicitly
-validated per engine), and **delegated external engines** for generic multi-agent orchestration
-and GraphRAG traversal (LangGraph today, selected via [ADR-0006](docs/adr/0006-external-engine-selection.md),
-reached through the `DocumentEngine` port). The historical "V1 Core RAG → V2 Agentic → V3 Graph
-Memory → V4 Governance → V5 Multimodal" progression in block 09 still organizes the detailed
-roadmap, but per [ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md) (accepted
-2026-08-04) and [ADR-0007](docs/adr/0007-layer-boundaries-and-control-plane-activation.md)
-(accepted 2026-08-07), plus [ADR-0008](docs/adr/0008-offline-evaluation-and-engine-activation.md),
-most version numbers no longer map to "built natively in that version" —
-see block 09 for the current owned/delegated split, which is reconciled with the ADRs, not an
-interim marker awaiting a future rewrite.
+things:
+- A **bounded native engine** (hybrid retrieval, generation, security — the V1 pipeline,
+  `NativeEngineAdapter`).
+- An **owned control plane** (governance, audit, offline evaluation, config/manifests, tenant
+  isolation, portability — native, with runtime activation explicitly validated per engine).
+- **Delegated external engines** for generic multi-agent orchestration and GraphRAG traversal
+  (LangGraph today, selected via [ADR-0006](docs/adr/0006-external-engine-selection.md), reached
+  through the `DocumentEngine` port).
+
+The historical "V1 Core RAG → V2 Agentic → V3 Graph Memory → V4 Governance → V5 Multimodal"
+progression in block 09 still organizes the detailed roadmap, but per
+[ADR-0005](docs/adr/0005-document-ai-control-plane-boundary.md) (accepted 2026-08-04) and
+[ADR-0007](docs/adr/0007-layer-boundaries-and-control-plane-activation.md) (accepted 2026-08-07),
+plus [ADR-0008](docs/adr/0008-offline-evaluation-and-engine-activation.md), most version numbers
+no longer map to "built natively in that version" — see block 09 for the current owned/delegated
+split, which is reconciled with the ADRs, not an interim marker awaiting a future rewrite.
 
 **Non-negotiable priority**: preserve the V1 end-to-end path before adding V3+ features. New graph, governance, or multimodal work must not break `examples/simple_qa/`, unit tests, contract tests, or the local layering audit.
 
@@ -137,7 +140,7 @@ Project-level skills live in `.claude/skills/` and are exposed as slash commands
 | `/test-unit` | Validate fast core behavior | `pytest tests/unit` |
 | `/test-contract` | Validate Protocol conformance | `pytest tests/contract` |
 | `/qa-v1` | Run the local V1 gate before an MR | Ruff + unit + contract + layering audit |
-| `/delivery-loop` | Implement, review with Codex, remediate once, and validate | Automated two-pass maximum; never pushes |
+| `/delivery-loop` | Implement, review with Codex, remediate, and validate | Automated two-pass maximum; never pushes |
 | `/check-layering` | Audit hexagonal import boundaries | `python scripts/check_layering.py` |
 | `/run-simple-qa` | Smoke-test the example pipeline | `examples/simple_qa/main.py` ingest + ask |
 | `/quick-check`, `/full-check`, `/release` | Additional validation tiers | see `docs/guides/validation.md` |
@@ -151,9 +154,11 @@ is the independent challenger. See `AGENTS.md`, `docs/guides/ai-engineering-work
 and `docs/guides/model-routing.md`.
 
 For normal delivery, prefer the single `/delivery-loop` skill: it performs the
-handoff, invokes Codex non-interactively, applies at most one correction batch,
-and runs final validation without pushing. The detailed manual steps below remain
-the fallback for troubleshooting.
+handoff, invokes Codex non-interactively, applies the first correction batch, and
+runs final validation without pushing. If pass 2 still returns
+`CHANGES_REQUIRED`, use the bounded final Claude remediation documented in
+`docs/guides/ai-engineering-workflow.md`; it does not trigger a third general
+Codex review. The detailed manual steps remain the fallback for troubleshooting.
 
 Before the first Codex review, Claude Code must leave a complete handoff in
 `.review/handoff.md` using `.review/handoff.example.md`. The handoff records an
@@ -175,10 +180,12 @@ all accepted corrections as one batch and rerun the appropriate validation scope
 The Codex loop has at most two passes: pass 1 is the complete diff review; pass 2
 only verifies finding closure and regressions caused by the corrective diff. After
 pass 2, or as soon as Codex returns `READY_FOR_FINAL_VALIDATION`, stop requesting
-general reviews and proceed to deterministic validation plus human decision. A
-third pass requires an explicitly named, newly introduced critical risk and a
-human-approved narrow scope. Claude Code remains the default sole writer, and
-Codex approval never replaces deterministic validation.
+general reviews. If pass 2 still has an accepted `BLOCKER` or `HIGH`, Claude may
+apply one final bounded remediation, rerun deterministic validation, and record
+the evidence without changing the Codex report. A third pass requires an
+explicitly named, newly introduced critical risk and a human-approved narrow
+scope. Claude Code remains the default sole writer, and Codex approval never
+replaces deterministic validation or the human delivery decision.
 
 **→ Full command reference:** [docs/guides/validation.md](docs/guides/validation.md)
 **→ Validation strategies:** [.claude/settings.json (permissions)](.claude/settings.json)
@@ -281,13 +288,26 @@ See [ROADMAP.md](ROADMAP.md) for complete timeline and success criteria per vers
   docs corpus) now runs nightly against a real LLM + Qdrant (`nightly.yml`, above) — `ROADMAP.md`
   no longer lists this as an unchecked item
 
-**V1.1 — Evaluation-as-Contract** 🟡 (partially built)
-- Implemented: `contracts/evaluation.py::Evaluator`, exact-match scoring, recall/precision/MRR,
-  `BenchmarkRunner`, in-memory `GoldenSet` classes, and a programmatic offline `QualityGate`.
-- Not built: NDCG, semantic/factuality scorers, populated per-domain datasets, a regression
-  dashboard, and a manifest-driven evaluation runner.
-- Per ADR-0008, evaluation and gold-dependent quality gates are offline capabilities, not online
-  runtime pipeline components.
+**V1.1 — Evaluation-as-Contract** 🟡 (partially built; expanded by Batch 13, external plan —
+"Offline benchmark," not this repo's own `docs/refactoring-plan.md` Lot numbering)
+- Implemented: `contracts/evaluation.py::Evaluator`, exact-match scoring, recall/precision/MRR/
+  NDCG (binary-relevance, `eval/scorers/retrieval_metrics.py`), `BenchmarkRunner` (classifies
+  every failure's `error_stage` — retrieval/generation/security/infra — and scores safety-probe
+  cases separately from QA cases), `GoldenSet` with one populated `default`-domain dataset
+  (`eval/datasets/core_v1.yaml`, loaded via `eval/datasets/loader.py`), deterministic lexical-
+  proxy faithfulness/answer-correctness scorers (`eval/scorers/faithfulness.py`,
+  `answer_correctness.py` — explicitly not an LLM-judge), a programmatic offline `QualityGate`
+  (now supports `lower_is_better` metrics, e.g. latency/cost), and a JSON+Markdown report writer
+  (`eval/reporting.py`) enabling commit-to-commit comparison, gated in CI
+  (`scripts/run_benchmark.py`, `.github/workflows/ci.yml`'s `benchmark-gate` job). See
+  [docs/guides/offline-evaluation.md](docs/guides/offline-evaluation.md).
+- Not built: semantic/LLM-judge scorers (RAGAS/ARES/TRACe-style — deferred, would need a
+  non-deterministic paid LLM call this benchmark's own reproducibility requirement rules out),
+  per-stratum/per-cluster golden-set coverage, additional per-domain datasets beyond the one
+  `default`-domain set, and a live regression-dashboard UI (the Markdown/JSON report is the
+  current artifact).
+- Per ADR-0008, evaluation and gold-dependent quality gates remain offline capabilities, not
+  online runtime pipeline components — the benchmark is script-driven, never manifest-activated.
 
 **V1.2 — Compliance Audit Trail** 🟡 (partially built)
 - Implemented: structured `AuditEvent`/`AuditSink`, in-memory and append-only PostgreSQL sinks,
@@ -343,10 +363,17 @@ native is reporting.
 **V3.2 — Drift Detection + Evaluation Trigger** `[NEW — 3 months after V3.0]` — reframed per
 ADR-0005 §5.2: fine-tuning *execution* is delegated to external MLOps tooling; what stays
 native is deciding *when* retraining is needed.
-- `eval/feedback_collection/`: Thumbs up/down, user corrections
-- `eval/drift_detection.py`: Monitor F1 vs baseline, alert on degradation
-- **Success**: Feedback > 80%, drift detected, alert triggers a defined external retraining
-  workflow
+- 🟡 **Implemented (Batch 14, ADR-0014):** `contracts/feedback.py` + `POST /feedback` (thumbs
+  up/down, user corrections, durably stored — `security/feedback/store.py` in-memory,
+  `adapters/feedback/postgres_sink.py` durable); `eval/drift_detection.py` (pure, offline —
+  `compute_drift()` flags a metric degrading past a threshold, matching this section's own
+  "alert on degradation" wording).
+- **Still open:** no historical baseline from real production traffic yet; `should_trigger_
+  retraining` is a real, computed advisory flag that nothing currently wires to an actual
+  external retraining trigger. See [docs/guides/feedback-and-drift.md](docs/guides/feedback-and-drift.md).
+- **Success**: Feedback collection is real and durable ("> 80%" not measured against a real
+  deployment yet); drift detection computes and flags degradation; nothing yet consumes the
+  advisory retraining-trigger flag to start a workflow.
 
 ---
 
@@ -355,7 +382,10 @@ native is deciding *when* retraining is needed.
 **V4.0 — Multi-Tenant Policies + Multi-Environment**
 - Policy-as-code enhancements (OPA integration)
 - Multi-environment manifests (dev/staging/prod)
-- Human-in-the-loop review queue: shipped; production workflow/operational integration remains
+- Human-in-the-loop review queue: shipped, now with a durable PostgreSQL backend
+  (`PostgresReviewQueue`, Batch 14/ADR-0014) plus `mrag review list-pending`/`resolve` CLI
+  operations — a public REST endpoint for reviewing/resolving items remains out of scope
+  (CLI-only, matching `mrag audit`'s own trust model)
 - Risk profiles per pipeline
 - **Success**: Prod policies enforced, escalation queue works
 
@@ -484,12 +514,12 @@ per ADR-0005 — this framework's differentiator is owning governance/audit/eval
 
 | Capability | LangChain | Haystack | **This Framework** |
 |---|---|---|---|
-| Evaluation | External | Built-in | 🟡 **Native offline primitives (V1.1)**; datasets/NDCG/dashboard remain open |
+| Evaluation | External | Built-in | 🟡 **Native offline primitives + NDCG, one golden dataset, CI-gated (V1.1, Batch 13)**; LLM-judge scoring and a dashboard UI remain open |
 | Audit Trail | Manual logs | Limited | 🟡 **Native structured audit (V1.2)**; lineage/compliance reports remain open |
 | Policies | None | Limited | ✅ **Policy-as-Code (V2.0), native** |
 | Multi-Agent | Bolted-on | Limited | ⚙️ **Delegated target via `DocumentEngine`**; the current fixed LangGraph graph is not multi-agent |
 | Cost Evidence | None | None | 🟡 **Aggregate OTel latency/token/estimated-cost metrics + reference dashboard ship**; attribution/anomaly detection remain, routing delegated |
-| Fine-Tuning | None | None | ⚙️ **Drift detection/eval trigger native; fine-tuning execution delegated (V3.2)** |
+| Fine-Tuning | None | None | 🟡 **Feedback collection + drift detection native and shipped (Batch 14, V3.2); no historical baseline yet; fine-tuning execution delegated** |
 | Graph Memory | External | External | ⚙️ **Delegated GraphRAG traversal (V3.0)**; the native graph data model was evaluated and removed (Étape 8, [ADR-0007](docs/adr/0007-layer-boundaries-and-control-plane-activation.md) — resolved: zero consumers, restorable via git history if a real, wired need emerges) — no native graph capability exists today |
 | Multi-Language | English-first | Limited | ⬜ **20+ languages (V4.1) — not yet built**; no `adapters/nlp/` module exists |
 | Multimodal | Partial | Partial | ⚙️ **Delegated VLM execution (V5.0)**; parsing/citation enrichment may stay native |

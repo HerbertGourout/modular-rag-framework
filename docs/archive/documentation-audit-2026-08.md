@@ -1,8 +1,11 @@
 # Audit documentaire complet — Modular RAG Framework
 
 **Date** : 2026-08-06
+
 **Périmètre** : 158 fichiers Markdown réels du dépôt (221 trouvés par le glob, 62 exclus car ce sont des `README.md` de dépendances tierces sous `.venv/`).
+
 **Méthode** : inventaire par répertoire, puis lecture intégrale de chaque fichier (5 lots parallélisés) avec vérification croisée contre le code réel (`src/modular_rag/`, `.claude/settings.json`, `pyproject.toml`, `manifests/`) — pas une estimation, chaque « obsolète » listé ci-dessous a été confirmé par grep/lecture directe du code au moment de l'audit.
+
 **Contexte structurant** : le dépôt vient de terminer un programme de refactoring en 18 lots (2026-08-03 → 2026-08-06) qui a accepté l'[ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) — l'orchestration multi-agents générique et la traversée GraphRAG sont désormais **déléguées** à un moteur externe (LangGraph, ADR-0006), plus construites nativement. La quasi-totalité des obsolescences trouvées ci-dessous sont des reliquats de cette bascule que la passe de réalignement du Lot 2 (2026-08-04) n'a couverte que partiellement.
 
 ---

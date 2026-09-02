@@ -10,11 +10,14 @@ candidate below still makes sense (nothing gone stale, nothing superseded), then
 decision directly into the lot's description in `docs/refactoring-plan.md` §5 and delete the row
 here. This file is never itself a source of truth once that happens.
 
-**Two things currently gate most of these:**
-1. [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) is still `Proposed`, not
-   `Accepted`.
-2. Target deployment platform and topology is an explicitly open question
-   (`docs/refactoring-plan.md` §10) — several rows below depend on it.
+**Two things originally gated most of these; one has since resolved:**
+1. [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) was `Proposed` when this list was
+   first compiled; it has since been `Accepted` (2026-08-04). Rows whose `Gated on` column names
+   this ADR are no longer blocked by it on that account alone — but per this file's own promotion
+   rule above, acceptance doesn't auto-promote a row; the target lot's owner still re-confirms it
+   and writes the decision into the plan directly.
+2. Target deployment platform and topology remains an explicitly open question
+   (`docs/refactoring-plan.md` §10) — several rows below still depend on it.
 
 ---
 

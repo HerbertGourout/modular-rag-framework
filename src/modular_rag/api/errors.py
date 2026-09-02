@@ -5,7 +5,7 @@ HTTPException(status_code=500, detail=str(exc))` returned raw Python
 exception text -- stack-trace fragments, file paths, connection strings --
 to any caller on any failure.
 
-Two error families are treated as genuinely caller-facing, because their
+Three error families are treated as genuinely caller-facing, because their
 message already *is* the safe explanation a caller needs (this is the
 existing convention elsewhere in the codebase: `SecurityGuard.check_query()`
 returns a human-readable `reason` precisely so it can be shown to the
@@ -14,6 +14,12 @@ caller, not logged and hidden):
 - `AuthenticationError` -- invalid/expired/missing token, wrong audience.
 - `SecurityError` (covers `PolicyViolationError`) -- a governance/policy
   denial the caller needs to see to understand why the request failed.
+- `pydantic.ValidationError` -- a domain model (e.g. `contracts.feedback.
+  Feedback`) rejected caller-supplied field values (Codex review pass 1,
+  MEDIUM-002); the message only describes which field/constraint failed and
+  the given value, never server-side internals -- mapped to 422, matching
+  FastAPI's own convention for request validation failures raised earlier
+  in the same pipeline (missing/mistyped fields on the request body itself).
 
 Everything else -- `ConfigurationError` (may contain server-side manifest
 paths), any other `ModularRAGError` (retrieval/generation/ingestion/storage
@@ -27,6 +33,7 @@ import uuid
 
 import structlog
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from modular_rag.app.public import AuthenticationError, ModularRAGError, SecurityError
 
@@ -49,6 +56,8 @@ def to_http_exception(exc: Exception) -> HTTPException:
         return HTTPException(status_code=401, detail=str(exc))
     if isinstance(exc, SecurityError):  # PolicyViolationError included
         return HTTPException(status_code=403, detail=str(exc))
+    if isinstance(exc, ValidationError):
+        return HTTPException(status_code=422, detail=str(exc))
     if isinstance(exc, ModularRAGError):
         return HTTPException(
             status_code=502, detail=f"Request failed (reference: {correlation_id})."

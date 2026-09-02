@@ -348,7 +348,11 @@ def check_dockerignore_and_copy(dockerfile_text: str, dockerignore_text: str) ->
 
 
 def run_static_checks(
-    dockerfile_text: str, lock_text: str, pyproject: dict, pyproject_text: str, dockerignore_text: str
+    dockerfile_text: str,
+    lock_text: str,
+    pyproject: dict,
+    pyproject_text: str,
+    dockerignore_text: str,
 ) -> tuple[list[str], list[str] | None]:
     """Returns (problems, extras). extras is None when extras extraction
     itself failed (already recorded in problems) -- callers must not

@@ -1,0 +1,59 @@
+# Batch 13 (external plan — "Offline benchmark") — the manifest
+# scripts/run_benchmark.py wires by default. Deliberately outside
+# manifests/presets/ (that directory is documented as "three runnable
+# manifests: local, secure-enterprise and LangGraph" — this one is not a
+# deployment preset, it exists only to give the offline benchmark a fast,
+# dependency-free, deterministic pipeline, the same role
+# tests/e2e/manifests/secure-deterministic-rag.yaml plays for the e2e suite).
+#
+# No LLM API key, no sentence-transformers model download, no reranker model
+# download -- `embedder`/`generator` are the same zero-network,
+# zero-dependency adapters the deterministic e2e scenario uses
+# (adapters.embeddings.deterministic_embedder / generation.synthesizers.
+# deterministic_gen), so this benchmark can run in CI with only a Qdrant
+# service container (already used elsewhere in .github/workflows/ci.yml —
+# not a new CI service).
+#
+# `security: {type: basic}` is required, not optional, here: the golden
+# set's `case_type: safety` cases exist specifically to exercise
+# BasicSecurityGuard's deterministic regex patterns
+# (security/filters/basic_guard.py) — without a guard wired, every safety
+# case would silently fall through as an ordinary (and wrongly-scored) QA
+# case instead of being blocked.
+version: "1.0"
+id: eval-benchmark-deterministic
+description: "Offline-benchmark pipeline (Batch 13) — deterministic embedder/generator, no LLM key, no model downloads."
+tenant: default
+environment: dev
+
+chunker:
+  type: fixed
+  config:
+    chunk_size: 512
+    chunk_overlap: 0
+
+embedder:
+  type: deterministic
+
+indexer:
+  type: qdrant
+  config:
+    collection: eval-benchmark-core-v1
+    url: "http://localhost:6333"
+
+retriever:
+  type: hybrid
+  config:
+    vector_weight: 0.5
+    bm25_weight: 0.5
+    k: 5
+    # lexical omitted -> "bm25-memory" (in-memory, no extra service) — see
+    # manifests/presets/local-hybrid-rag.yaml's own comment on this default.
+
+generator:
+  type: deterministic
+  config:
+    max_chunks: 3
+
+security:
+  type: basic

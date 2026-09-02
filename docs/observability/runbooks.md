@@ -46,7 +46,8 @@ this metric's whole purpose is catching exactly this class of regression.
 
 ## mrag-high-latency
 
-**Alert:** `MRAGHighP95Latency` — p95 latency for one `operation` exceeds 5 seconds for 10 minutes.
+**Alert:** `MRAGHighP95LatencyAnswer` and `MRAGHighP95LatencyRetrieve` — p95 latency exceeds
+5 seconds for `answer` or 1 second for `retrieve`, respectively, for 10 minutes.
 
 **What it means:** Requests are slow, not necessarily failing outright.
 

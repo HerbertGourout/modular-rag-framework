@@ -164,33 +164,37 @@ and **limits/constraints** (what it deliberately does not do today).
   `Retriever`, `Reranker`.
 - **Dependencies.** `adapters/` (owns the only permitted imports of `qdrant-client`, lazily) +
   `retrieval/` (pure fusion/orchestration logic, no external library imports of its own).
-- **Lifecycle.** The lexical/BM25 leg's persistence is now selectable, not fixed — `HybridRetriever`'s
-  `retriever.config.lexical` manifest key picks between two backends:
-  `"bm25-memory"` (the default — `BM25Retriever`, an **in-memory Python object** whose index is
-  rebuilt from nothing every time a new process starts, lost when the process exits — the local
-  development preset's choice) and `"sparse-qdrant"` (`PersistentSparseRetriever`, backed by a
-  dedicated Qdrant sparse-vector collection via `adapters/vectorstores/qdrant_sparse_store.py`'s
-  `QdrantSparseStore` — a real, persistent server, same durability property as `QdrantStore`'s
-  dense collection; the enterprise/secure preset's choice). `HybridRetriever` silently degrades to
-  vector-only results when its lexical leg returns nothing (see `HybridRetriever.retrieve()`'s
-  `if not lexical_hits:` branch) and now also records *why* via `last_degraded_sources` (a genuine
-  backend failure vs. a legitimate empty result) — this is why a fresh `mrag ask` CLI invocation
-  after a separate `mrag ingest` process, on the `bm25-memory` default, gets vector-only results
-  rather than an error: the degradation is deliberate and documented, not a bug. A manifest that
-  needs the lexical leg to survive process boundaries should set
-  `lexical: sparse-qdrant` instead of working around the in-memory default.
+- **Lifecycle.** The lexical/BM25 leg's persistence is now selectable, not fixed —
+  `HybridRetriever`'s `retriever.config.lexical` manifest key picks between two backends:
+  - `"bm25-memory"` (the default) — `BM25Retriever`, an **in-memory Python object** whose index
+    is rebuilt from nothing every time a new process starts, lost when the process exits. The
+    local development preset's choice.
+  - `"sparse-qdrant"` — `PersistentSparseRetriever`, backed by a dedicated Qdrant sparse-vector
+    collection via `adapters/vectorstores/qdrant_sparse_store.py`'s `QdrantSparseStore`. A real,
+    persistent server, same durability property as `QdrantStore`'s dense collection. The
+    enterprise/secure preset's choice.
+
+  `HybridRetriever` silently degrades to vector-only results when its lexical leg returns nothing
+  (see `HybridRetriever.retrieve()`'s `if not lexical_hits:` branch), and now also records *why*
+  via `last_degraded_sources` (a genuine backend failure vs. a legitimate empty result). This is
+  why a fresh `mrag ask` CLI invocation after a separate `mrag ingest` process, on the
+  `bm25-memory` default, gets vector-only results rather than an error: the degradation is
+  deliberate and documented, not a bug. A manifest that needs the lexical leg to survive process
+  boundaries should set `lexical: sparse-qdrant` instead of working around the in-memory default.
 - **Extension points.** A new vector store implements `VectorIndexer` (see
   [ADR-0009](../adr/0009-vector-indexer-dimension-reconciliation.md) for the exact contract a
   dimension-aware store must satisfy). A new reranking strategy implements `Reranker`.
-- **Limits.** `bm25-memory` (still the default, for zero-infrastructure local development) does not
-  survive process restarts or share state across workers — that limitation is inherent to it, not
-  a missing feature. A deployment that needs the lexical leg to survive those should select
+- **Limits.** `bm25-memory` (still the default, for zero-infrastructure local development) does
+  not survive process restarts or share state across workers — that limitation is inherent to it,
+  not a missing feature. A deployment that needs the lexical leg to survive those should select
   `lexical: sparse-qdrant` (`manifests/presets/secure-enterprise-rag.yaml` does this) rather than
   supplying its own external backend, which is no longer the only option. `sparse-qdrant` itself
   requires Qdrant client and server **1.10+** (`Modifier.IDF`/`query_points()` are not present in
-  1.9). Not yet proven by this repo's own tests: persistence across an actual Qdrant server
-  restart and consistency across a real multi-node replica set (the existing tests use multiple
-  client connections against one single-node server, not a real restart/cluster).
+  1.9).
+
+  Not yet proven by this repo's own tests: persistence across an actual Qdrant server restart and
+  consistency across a real multi-node replica set (the existing tests use multiple client
+  connections against one single-node server, not a real restart/cluster).
 
 ### Reasoning plane
 
@@ -471,17 +475,18 @@ The domain models are defined in `src/modular_rag/core/models/`. They are Pydant
 **Key invariants:**
 - `Document` and `Query` are immutable (`frozen=True`). Any modification produces a new instance
   (`model_copy(update={...})`). Why immutability specifically for these two: both flow through
-  multiple pipeline stages that must never accidentally mutate the caller's original object —
+  multiple pipeline stages that must never accidentally mutate the caller's original object.
   `ingestion/normalizers/` produces a *new* `Document` rather than editing the parsed one in
   place, so a bug in a normalizer cannot corrupt data a different, earlier stage already read.
 - `Chunk.token_estimate` is a computed property (`len(content.split())`), not stored — a
-  deliberately crude word-count approximation, not a real tokenizer count; do not use it for
-  anything that needs to match an LLM provider's actual token accounting (context-window budgeting,
-  cost calculation).
-- `Trace.add_step()` is the only way to add a step — it atomically updates the `total_latency_ms`,
-  `total_input_tokens`, and `total_output_tokens` totals, which is why every pipeline component
-  must call it rather than appending to `Trace.steps` directly (appending directly would silently
-  desynchronize the totals from the step list — always go through `add_step()`).
+  deliberately crude word-count approximation, not a real tokenizer count. Do not use it for
+  anything that needs to match an LLM provider's actual token accounting (context-window
+  budgeting, cost calculation).
+- `Trace.add_step()` is the only way to add a step. It atomically updates the
+  `total_latency_ms`, `total_input_tokens`, and `total_output_tokens` totals, which is why every
+  pipeline component must call it rather than appending to `Trace.steps` directly — appending
+  directly would silently desynchronize the totals from the step list; always go through
+  `add_step()`.
 - `Policy.sorted_rules()` returns the rules sorted by decreasing priority.
 - `Metrics.summary()` returns only the non-None fields.
 
@@ -516,12 +521,14 @@ To wire a new component:
 3. Reference the type in the manifest YAML: `chunker: {type: my_chunker, config: {...}}`.
 
 **Why the registry and the manifest are separate files/mechanisms**, rather than, say, a manifest
-that directly names a Python import path to instantiate: decoupling "which type names exist"
-(the registry) from "which type name a given deployment picked" (the manifest) means a manifest
-author never needs to know or write a Python import path — they select from a closed, reviewable
-vocabulary of registered type names, and a typo (`type: qdrnat`) fails fast and clearly
-(`RegistryError: No factory for role='indexer' type='qdrnat'. Available: ['qdrant']`) rather than
-as an opaque `ImportError` on a malformed dotted path.
+that directly names a Python import path to instantiate: decoupling "which type names exist" (the
+registry) from "which type name a given deployment picked" (the manifest) means a manifest author
+never needs to know or write a Python import path — they select from a closed, reviewable
+vocabulary of registered type names.
+
+A typo (`type: qdrnat`) fails fast and clearly (`RegistryError: No factory for role='indexer'
+type='qdrnat'. Available: ['qdrant']`) rather than as an opaque `ImportError` on a malformed
+dotted path.
 
 ---
 
@@ -548,17 +555,20 @@ shape and not the actual code in `orchestration/engine.py::ingest_chunks()`:**
 1. **Embedding happens one chunk at a time, not batched.** `RAGEngine.ingest_chunks()` loops over
    chunks and calls `self._c.embedder.embed([chunk.content])[0]` inside the loop — a separate
    `embed()` call per chunk, only for chunks that don't already carry an embedding (`if
-   chunk.embedding is None`). This matters operationally: ingesting a large document with an
-   API-backed embedder (e.g. `OpenAIEmbedder`) makes as many API calls as there are chunks, not
-   one batched call for the whole document — a real cost/latency consideration for large corpora
-   that the diagram's single "Embed" box could otherwise hide.
+   chunk.embedding is None`).
+
+   This matters operationally: ingesting a large document with an API-backed embedder (e.g.
+   `OpenAIEmbedder`) makes as many API calls as there are chunks, not one batched call for the
+   whole document — a real cost/latency consideration for large corpora that the diagram's single
+   "Embed" box could otherwise hide.
 2. **Tenant-isolation enforcement happens before embedding, not after.** When a `tenant_policy` is
    configured, every chunk's `tenant_id` is checked (`enforce_ingest`) before any embedding or
    indexing work starts — a chunk with no tenant identity is rejected outright, not embedded and
-   then discarded. This ordering is deliberate: it means an ingestion run against a
-   tenant-isolated pipeline either succeeds completely with every chunk properly attributed, or
-   fails before any (possibly costly) embedding API calls are made for content that would have
-   been rejected anyway.
+   then discarded.
+
+   This ordering is deliberate: it means an ingestion run against a tenant-isolated pipeline
+   either succeeds completely with every chunk properly attributed, or fails before any (possibly
+   costly) embedding API calls are made for content that would have been rejected anyway.
 
 Note: Embedding and indexing happen in `RAGEngine.ingest()`/`ingest_chunks()`, not in
 `ingest_path()`/`ingest_directory()` (in `ingestion/pipelines/default.py`). The separation is
@@ -597,21 +607,24 @@ After fusion, chunks are re-ranked by decreasing `RRF_score`. A cross-encoder re
 
 **Why RRF instead of a weighted linear combination of raw scores.** Vector cosine similarity and
 BM25's score are not on comparable scales — a cosine similarity of 0.8 and a BM25 score of 12.3
-cannot be meaningfully averaged without an arbitrary normalization step that itself needs
-tuning per corpus. RRF sidesteps this entirely by fusing on **rank position**, not raw score
-magnitude, which is scale-invariant by construction: it only asks "was this document 1st, 2nd,
-3rd… in each list," never "how much better was it." This is why `rrf_k = 60` (a smoothing
-constant controlling how much low ranks are discounted) is the only tunable hyperparameter here,
-rather than a per-source score-normalization scheme.
+cannot be meaningfully averaged without an arbitrary normalization step that itself needs tuning
+per corpus.
+
+RRF sidesteps this entirely by fusing on **rank position**, not raw score magnitude, which is
+scale-invariant by construction: it only asks "was this document 1st, 2nd, 3rd… in each list,"
+never "how much better was it." This is why `rrf_k = 60` (a smoothing constant controlling how
+much low ranks are discounted) is the only tunable hyperparameter here, rather than a per-source
+score-normalization scheme.
 
 **What happens when one of the two retrieval sources returns nothing.**
 `HybridRetriever.retrieve()` handles this explicitly rather than feeding an empty list into the
 fusion formula: if BM25 returns no hits, the result is the vector list alone (re-ranked and
 labeled `RetrievalMethod.VECTOR`, not `HYBRID`); symmetrically for an empty vector list. Fusion
-(and the `HYBRID` label) only happens when both sources contributed at least one hit. This is the
-precise mechanism behind the BM25-persistence caveat described in §3 (Knowledge plane) and the
-root README's FAQ: a fresh process with an empty BM25 index does not error, it silently returns
-`RetrievalMethod.VECTOR`-labeled results instead of `HYBRID`-labeled ones.
+(and the `HYBRID` label) only happens when both sources contributed at least one hit.
+
+This is the precise mechanism behind the BM25-persistence caveat described in §3 (Knowledge
+plane) and the root README's FAQ: a fresh process with an empty BM25 index does not error, it
+silently returns `RetrievalMethod.VECTOR`-labeled results instead of `HYBRID`-labeled ones.
 
 ---
 
@@ -676,27 +689,30 @@ through exactly four stages:
    naturally expressed as manifest config (e.g. `VectorRetriever` needs the wired `Embedder`
    instance itself, not just embedder configuration). `ComponentRegistry.wire()` performs this
    injection immediately after construction, via a small set of documented private-attribute or
-   protocol-method hand-offs — see `CLAUDE.md`'s "Wiring Notes" section and
+   protocol-method hand-offs. See `CLAUDE.md`'s "Wiring Notes" section and
    [ADR-0009](../adr/0009-vector-indexer-dimension-reconciliation.md) for the two concrete
-   examples that exist today (`VectorRetriever._embedder`/`_store`, and `VectorIndexer.bind_embedder()`).
+   examples that exist today (`VectorRetriever._embedder`/`_store`, and
+   `VectorIndexer.bind_embedder()`).
 3. **Use** — the component's contract methods are called by `RAGEngine`/`ApplicationService` for
    the lifetime of the process. Most components are stateless across calls (ingestion plane,
    safety plane, reasoning plane); a few accumulate real state (`BM25Retriever`'s in-memory index,
    `QdrantStore`'s/`PostgresAuditSink`'s lazily-opened network client — see §3 and §12 above for
    where this matters).
 4. **Teardown** — `Container.close()` (called from `RAGEngine.close()` /
-   `ApplicationService.close()`, itself invoked from the CLI's command teardown and the REST
-   API's lifespan handler) calls `.close()` on every wired component that defines one, in a
-   best-effort loop that logs and continues past a failure rather than aborting the rest of
-   teardown. `Container.close()`'s `getattr(component, "close", None)` check treats a missing
-   `close()` as "nothing to release," not a failure — a new adapter that opens a real network
-   connection or file handle should still define `close()` to be a good citizen of this teardown
-   loop; nothing enforces that at the Protocol level. `QdrantStore`, `PostgresAuditSink`, and
-   `PostgresLifecycleLedger` all define an idempotent `close()` that releases their lazily-opened
-   connection (Codex review, MED-003 — the latter two were a real, confirmed gap until this pass:
-   `Container.close()`'s discovery mechanism silently found nothing to call, leaking the
-   connection on every `app.close()`, contrary to what this document and `README.md` both already
-   claimed at the time).
+   `ApplicationService.close()`, itself invoked from the CLI's command teardown and the REST API's
+   lifespan handler) calls `.close()` on every wired component that defines one, in a best-effort
+   loop that logs and continues past a failure rather than aborting the rest of teardown.
+
+   `Container.close()`'s `getattr(component, "close", None)` check treats a missing `close()` as
+   "nothing to release," not a failure — a new adapter that opens a real network connection or
+   file handle should still define `close()` to be a good citizen of this teardown loop; nothing
+   enforces that at the Protocol level.
+
+   `QdrantStore`, `PostgresAuditSink`, and `PostgresLifecycleLedger` all define an idempotent
+   `close()` that releases their lazily-opened connection (Codex review, MED-003 — the latter two
+   were a real, confirmed gap until this pass: `Container.close()`'s discovery mechanism silently
+   found nothing to call, leaking the connection on every `app.close()`, contrary to what this
+   document and `README.md` both already claimed at the time).
 
 ---
 

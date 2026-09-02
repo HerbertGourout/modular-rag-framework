@@ -8,7 +8,9 @@ lastUpdated: "2026-08-07"
 
 # Règles — édition du module orchestration
 
-The orchestration layer is responsible for component wiring, execution flow, and state management. This is where the RAG pipeline comes together. Per [ADR-0005](../../docs/adr/0005-document-ai-control-plane-boundary.md) §5.2, query routing and flow compilation are delegated to a selected external engine (§3 below) — this file no longer documents a native design for either.
+The orchestration layer is responsible for component wiring, execution flow, and state management. This is where the RAG pipeline comes together.
+
+Per [ADR-0005](../../docs/adr/0005-document-ai-control-plane-boundary.md) §5.2, query routing and flow compilation are delegated to a selected external engine (§3 below) — this file no longer documents a native design for either.
 
 ---
 

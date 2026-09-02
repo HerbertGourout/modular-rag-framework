@@ -263,8 +263,12 @@ def app_and_chunks(manifest_path):
 
     application = load_application(str(manifest_path))
 
-    doc_a = Document(source="tenant-a-quarterly-report.txt", content=TENANT_A_CONTENT, tenant_id=TENANT_A)
-    doc_b = Document(source="tenant-b-quarterly-report.txt", content=TENANT_B_CONTENT, tenant_id=TENANT_B)
+    doc_a = Document(
+        source="tenant-a-quarterly-report.txt", content=TENANT_A_CONTENT, tenant_id=TENANT_A
+    )
+    doc_b = Document(
+        source="tenant-b-quarterly-report.txt", content=TENANT_B_CONTENT, tenant_id=TENANT_B
+    )
     chunks_a = application.chunker.chunk(doc_a)
     chunks_b = application.chunker.chunk(doc_b)
     assert chunks_a and chunks_b, "chunker produced no chunks — check TENANT_*_CONTENT/chunk_size"
@@ -453,7 +457,12 @@ def test_bm25_index_is_empty_immediately_after_a_fresh_load(app_and_chunks, mani
 
     fresh = load_application(str(manifest_path))
     try:
-        bm25_ids = fresh._native.retriever._bm25.list_ids()
+        # `HybridRetriever` renamed its private lexical-backend attribute
+        # from `_bm25` to `_lexical` (Lot 5) and gained a public `list_ids()`
+        # that delegates to it — use that instead of reaching into a private,
+        # now-nonexistent attribute directly (CI review finding: this test
+        # still referenced `._bm25`, raising AttributeError).
+        bm25_ids = fresh._native.retriever.list_ids()
         assert bm25_ids == []
     finally:
         fresh.close()

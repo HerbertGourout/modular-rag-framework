@@ -25,6 +25,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import modular_rag.api as api_module
+from modular_rag.contracts.feedback import Feedback
 from modular_rag.contracts.identity import TenantContext
 from modular_rag.core.enums import ReadinessState
 from modular_rag.core.errors import AuthenticationError, ConfigurationError
@@ -66,6 +67,7 @@ class _FakePipeline:
         readiness_report: ReadinessReport | None = None,
         tracer: object | None = None,
         meter: object | None = None,
+        record_feedback_error: Exception | None = None,
     ) -> None:
         self.manifest_id = "fake-pipeline"
         self.closed = False
@@ -80,6 +82,8 @@ class _FakePipeline:
         self.last_answer_user_id: str | None = "unset"
         self.last_answer_roles: frozenset[str] = frozenset()
         self.last_retrieve_tenant_id: str | None = "unset"
+        self.last_feedback_kwargs: dict[str, object] | None = None
+        self._record_feedback_error = record_feedback_error
 
     def close(self) -> None:
         self.closed = True
@@ -108,6 +112,17 @@ class _FakePipeline:
         chunk = Chunk(doc_id=new_id(), content="x" * 500)
         return RetrievalResult(
             chunks=[RetrievedChunk(chunk=chunk, score=0.9, rank=1)], trace_id="retrieve-trace-456"
+        )
+
+    def record_feedback(self, trace_id: str, **kwargs: object) -> Feedback:
+        self.last_feedback_kwargs = {"trace_id": trace_id, **kwargs}
+        if self._record_feedback_error is not None:
+            raise self._record_feedback_error
+        return Feedback(
+            trace_id=trace_id,
+            idempotency_key=kwargs.get("idempotency_key", "k"),  # type: ignore[arg-type]
+            rating=kwargs.get("rating"),  # type: ignore[arg-type]
+            citation_count=kwargs.get("citation_count"),  # type: ignore[arg-type]
         )
 
 
@@ -251,6 +266,112 @@ def test_answer_maps_security_error_to_403_with_its_own_safe_message(
 
     assert response.status_code == 403
     assert response.json()["detail"] == "blocked: looks like an injection"
+
+
+# ---------------------------------------------------------------------------
+# Batch 14 (ADR-0014): POST /feedback.
+# ---------------------------------------------------------------------------
+
+
+def test_feedback_accepts_the_documented_json_body_and_returns_200(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pipeline = _FakePipeline()
+    client = _client(pipeline, monkeypatch)
+
+    response = client.post(
+        "/feedback",
+        json={
+            "trace_id": "trace-123",
+            "rating": "thumbs_up",
+            "idempotency_key": "feedback-key-1",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"]
+    assert pipeline.last_feedback_kwargs["trace_id"] == "trace-123"
+    assert pipeline.last_feedback_kwargs["idempotency_key"] == "feedback-key-1"
+
+
+def test_feedback_maps_a_security_error_to_403(monkeypatch: pytest.MonkeyPatch) -> None:
+    from modular_rag.core.errors import SecurityError
+
+    client = _client(
+        _FakePipeline(record_feedback_error=SecurityError("tester role required")), monkeypatch
+    )
+
+    response = client.post(
+        "/feedback",
+        json={"trace_id": "t1", "idempotency_key": "k1", "is_test": True},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "tester role required"
+
+
+def test_feedback_does_not_leak_raw_exception_text_on_configuration_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from modular_rag.core.errors import ConfigurationError
+
+    client = _client(
+        _FakePipeline(record_feedback_error=ConfigurationError("dsn=postgresql://secret")),
+        monkeypatch,
+    )
+
+    response = client.post("/feedback", json={"trace_id": "t1", "idempotency_key": "k1"})
+
+    assert response.status_code == 502
+    assert "secret" not in response.json()["detail"]
+
+
+def test_feedback_maps_invalid_citation_count_to_422(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Codex review pass 1, MEDIUM-002: `Feedback`'s `citation_count >= 0`
+    constraint raises `pydantic.ValidationError` on construction — mapped
+    to 422, not left to fall through `to_http_exception()`'s generic-500
+    branch."""
+    client = _client(_FakePipeline(), monkeypatch)
+
+    response = client.post(
+        "/feedback",
+        json={"trace_id": "t1", "idempotency_key": "k1", "citation_count": -1},
+    )
+
+    assert response.status_code == 422
+
+
+def test_feedback_requires_a_bearer_token_when_a_verifier_is_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _client(
+        _FakePipeline(), monkeypatch, token_verifier=_FakeTokenVerifier({})
+    )
+
+    response = client.post("/feedback", json={"trace_id": "t1", "idempotency_key": "k1"})
+
+    assert response.status_code == 401
+
+
+def test_feedback_threads_the_authenticated_tenant_user_and_roles_through(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    identity = TenantContext(tenant_id="tenant-a", user_id="user-1", roles=frozenset({"tester"}))
+    pipeline = _FakePipeline()
+    client = _client(
+        pipeline, monkeypatch, token_verifier=_FakeTokenVerifier({"tok": identity})
+    )
+
+    response = client.post(
+        "/feedback",
+        json={"trace_id": "t1", "idempotency_key": "k1", "is_test": True},
+        headers={"Authorization": "Bearer tok"},
+    )
+
+    assert response.status_code == 200
+    assert pipeline.last_feedback_kwargs["tenant_id"] == "tenant-a"
+    assert pipeline.last_feedback_kwargs["user_id"] == "user-1"
+    assert pipeline.last_feedback_kwargs["roles"] == frozenset({"tester"})
 
 
 def test_retrieve_truncates_chunk_content_to_300_chars(

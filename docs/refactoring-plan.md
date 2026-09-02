@@ -1,7 +1,7 @@
 # Refactoring Plan — Engine-Agnostic Control Plane
 
 > **New to this programme? Start at [docs/refactoring/README.md](refactoring/README.md)** —
-> a reading guide to all 18 lots, organized by why you're here, plus the honest "what's still
+> a reading guide to the original 18 lots and follow-on lots, organized by why you're here, plus the honest "what's still
 > open" list. This document remains the authoritative plan/tracker (scope, gap matrix,
 > decision log); the guide is the entry point into it.
 
@@ -124,6 +124,12 @@
 > evidence in [lot-19-layer-boundary-stabilization.md](refactoring/lot-19-layer-boundary-stabilization.md)
 > and [capability-matrix.md](architecture/capability-matrix.md); same sign-off caveat as Lots 0-18
 > above applies.
+> **Lot 20 (planned, 2026-08-27):** Data Classification and LLM Egress Control closes the
+> remaining boundary where raw query text, retrieved context, or embedding input can reach an
+> external model provider before output redaction runs. It adds vendor-neutral, fail-closed
+> policy enforcement before every owned model/embedding egress and before delegation to an
+> external `DocumentEngine`; local-only routing remains the safe fallback. Scope and acceptance
+> evidence are defined in Phase E below. Status: **NOT STARTED**.
 > **Target outcome:** Deploy compliant, measurable document-AI solutions faster, independently
 > of the underlying execution engine.
 > **Migration principle:** Incremental, evidence-based, reversible, and releasable after every
@@ -146,7 +152,7 @@ Status values used throughout are `NOT STARTED`, `IN PROGRESS`, `BLOCKED`, `COMP
 ### 1.1 Owned vs. delegated
 
 The package owns engine-independent solution manifests, execution context, policy enforcement,
-tenant isolation, redaction boundaries, provenance, audit schemas, quality profiles, regression
+tenant isolation, redaction and outbound-data boundaries, provenance, audit schemas, quality profiles, regression
 gates, cost/latency evidence, engine capability discovery, and normalized results/errors.
 
 It delegates generic orchestration, durable workflows, generic GraphRAG and agent memory,
@@ -295,6 +301,7 @@ stated otherwise.
 | 17 | Prototype retirement and final docs/Claude/research consolidation | P1 | M (1wk) | COMPLETE (one sub-item blocked by the permission system) | 16a-16c |
 | 18 | Multi-engine pilot, release gates, and programme closure | P1 | M-L (1-2wk) | COMPLETE (engineering scope) — sign-off pending | 17 |
 | 19 | Layer-boundary correction and control-plane activation (ADR-0007) | P0 | L (1.5-2wk) | COMPLETE (engineering scope) — sign-off pending, see [lot-19-layer-boundary-stabilization.md](refactoring/lot-19-layer-boundary-stabilization.md), [ADR-0007](adr/0007-layer-boundaries-and-control-plane-activation.md), and [capability-matrix.md](architecture/capability-matrix.md) | 18 |
+| 20 | Data classification and fail-closed LLM/embedding egress control | P0 | M-L (1-2wk) | NOT STARTED | 11a, 11c, 19; approved ADR before contract/structural changes |
 
 Ranges (e.g. `8-10`) list the earliest and latest lot whose evidence is required via the
 dependency chain, not necessarily every intermediate lot as a direct predecessor. `16a` and
@@ -309,6 +316,7 @@ realistic current-state estimate, not just a lower bound: there is no second per
 any of the parallel lots. Calendar duration depends entirely on how much of Herbert Gourout's
 time is actually allocated to this programme alongside other responsibilities; the original
 "4-7 months for a team of 4" framing no longer applies until additional people are confirmed.
+
 Before committing past Lot 5, confirm the delivery-pipeline assumption the business case rests
 on (see §3, last risk row) — if fewer client engagements are actually in scope than assumed, cut
 Phase D scope rather than compress the estimate without compressing the work.
@@ -384,9 +392,11 @@ policy-engine failure paths (deny-by-default on policy-engine error, not allow-b
 Target identity provider: **Keycloak** (OIDC) — resolves the previously open question on which
 auth adapter and claims mapping to build against.
 
-**Lot 11c:** Apply configured redaction before storage, logging, and external calls; emit audit
-evidence for every governed execution; support human review for high-risk outcomes. Depends on
-11b's identity/tenant context to know what to redact and for whom.
+**Lot 11c:** Apply configured redaction to returned output and audit payloads; emit audit evidence
+for every governed execution; support human review for high-risk outcomes. Depends on 11b's
+identity/tenant context to know what to redact and for whom. Its delivered output redaction runs
+after generation, so it does not protect raw model or embedding inputs; Lot 20 owns that outbound
+data boundary explicitly.
 
 **Lot 12a:** Define document identity, idempotent ingestion, update, deletion, and tombstone
 semantics. This is the domain-level lifecycle contract, independent of any specific index
@@ -441,6 +451,45 @@ legal, and business-quality sign-off.
 
 ---
 
+### Phase E — Data protection and controlled model egress (Lot 20)
+
+**Lot 20: Data Classification and LLM Egress Control.** Approve an ADR for the outbound-data
+boundary, then add a vendor-neutral policy decision before customer content reaches any owned
+remote generator, remote embedder, reranker/tool adapter that transmits content, or external
+`DocumentEngine`. The decision consumes tenant identity, data classification, provider profile,
+and operation type; it may allow minimized content, pseudonymize it, route it to an approved
+local adapter, or deny it. Missing classification, policy failure, unknown provider capability,
+and unavailable local fallback must fail closed rather than silently use a remote provider.
+
+Required scope:
+
+- Classify documents/chunks and queries as `public`, `internal`, `confidential`, or `restricted`,
+  reusing the Lot 11a vocabulary and carrying the classification through execution context and
+  manifest configuration.
+- Enforce a deny-by-default egress matrix before generation and embedding. `restricted` content
+  is local-only; other external routes require an explicit policy rule.
+- Pseudonymize configured PII/secrets locally before transmission and keep any reversible token
+  mapping local, encrypted, short-lived, and absent from trace/audit payloads.
+- Minimize outbound context (only required chunks and metadata) and apply the same protection to
+  embeddings, caches, files, tools, rerankers, and delegated-engine handoffs—not only chat text.
+- Represent provider retention/residency/feature constraints as validated, versioned capability
+  profiles rather than hard-coding OpenAI or Anthropic semantics into core contracts. Reject an
+  incompatible manifest before startup; do not treat `store=false`, “no training”, or a provider
+  label as proof of zero retention.
+- Preserve a fully local profile with no model-data network egress and retain adapter portability;
+  cloud-specific private networking and provider contracts are deployment concerns, not core
+  dependencies.
+- Emit content-free audit evidence for the policy decision (classification, rule, provider,
+  action, correlation id), never the raw prompt, chunks, response, or pseudonym map.
+- Add unit, contract, manifest, native/external-engine parity, and negative leakage tests using
+  canary PII/secrets. Prove that denied data never reaches the fake network adapter and that
+  policy/classifier failure cannot fall through to an external call.
+
+Non-goals: claiming turnkey GDPR/HIPAA compliance, replacing legal/DPA review, implementing a
+general-purpose enterprise DLP platform, or binding the framework to one cloud/provider.
+
+---
+
 ## 6. Acceptance criteria by stage
 
 | Stage | Mandatory evidence |
@@ -470,6 +519,8 @@ legal, and business-quality sign-off.
 | Lot 16c | Deploy, backup, restore, and rollback commands are each executed at least once, not just documented — **not fully met**: this sandboxed environment has no `docker`/`psql`/`pg_dump`/reachable Qdrant/Postgres, so every command in `docs/guides/backup-restore.md` is correct-as-written against each system's own documented tooling but unexecuted here; the CI `container-build` job (Lot 16b) is the one piece that *is* actually executed, on every push. Closing this bar for real requires running the runbook against live infrastructure. |
 | Lot 17 | Each removal has impact evidence, deprecation or non-use proof, and restoration path |
 | Lot 18 | Pilot and rollback exercise pass; mandatory gates green; named owners sign final evidence — **partially met**: the pilot scenario ran for real and found+fixed a genuine tenant-isolation parity bug in the LangGraph adapter; rollback is proven (single manifest field); all local gates are green (`check.sh full`) and a real CI gap (`langgraph` missing from `test-unit`/`coverage`) was found and fixed. **Sign-off is not self-granted** — that is Herbert Gourout's to give per `docs/refactoring/lot-0-baseline.md` §2's sole decision authority, not something this lot can claim on his behalf. |
+| Lot 19 | Strict layering and application facade are enforced; configured governance/audit/quality sections are either activated or rejected before execution. |
+| Lot 20 | An approved ADR defines the egress boundary; every owned generator/embedder and delegated-engine handoff is guarded before transmission; denied or unclassified content produces zero adapter calls; canary PII/secrets are absent from remote-call captures and audit/trace payloads; restricted data completes through the local-only profile or fails closed; incompatible provider profiles are rejected before startup. |
 
 ---
 
@@ -535,6 +586,7 @@ record dataset version, engine/model version, configuration, environment, and co
 - [ ] Engine switches do not rewrite governance or quality profiles.
 - [ ] Manifests are strict, versioned, migratable, capability-aware, and secret-safe.
 - [ ] Tenant isolation, policy failures, redaction, and audit are enforced end to end.
+- [ ] Model and embedding egress is deny-by-default, classification-aware, leak-tested, and able to remain fully local.
 - [ ] Document update/deletion and vector/lexical reconciliation are proven.
 - [ ] Index and audit migrations have verified backup, restore, and rollback paths.
 - [ ] Metrics have correct names/formulas and cannot hide infrastructure failures.
@@ -563,6 +615,7 @@ record dataset version, engine/model version, configuration, environment, and co
 | Research PDF and dependency/model redistribution rights | Release contents may need quarantine or replacement | Before Lot 16b/17 |
 | Dynamic current test results | Runtime baseline is unverified | Lot 3; dependencies unavailable in the current environment |
 | Integration/e2e behavior | Requires confirmed Qdrant, engine services, credentials, and datasets | Lots 15-18 |
+| Provider retention, residency, feature eligibility, DPA, and subprocessor terms | These controls are provider-, account-, endpoint-, and time-dependent; code cannot infer or guarantee the legal posture | Lot 20 provider profiles plus deployment-owner/DPO approval before enabling an external route |
 | Full semantic content of all 56 PDFs | Inventoried/digested, not page-validated | Evidence-catalogue review in Lot 17 |
 | Delivery-pipeline assumption behind the business case | The 4-7 month programme cost (§4) is only justified if the assumed client-project volume is real | Confirm with delivery ownership before Lot 6 |
 
@@ -579,6 +632,7 @@ configuration, and research digests. Static Python compilation and strict layeri
 pass. The 56 source PDFs are inventoried and their repository digests reviewed, but not all pages
 have been manually validated. Empty placeholder files are classified but contain no analyzable
 behavior. Personal `.claude/settings.local.json` is deliberately excluded from all of the above.
+
 Dynamic unit, contract, integration, e2e, performance, and security suites are **not** currently
 verified as passing — establishing that reproducibly is Lot 3's deliverable, not an assumption
 this plan makes going in.
@@ -663,3 +717,4 @@ scope change, or an approved architecture decision — never as a silent in-plac
 | 2026-08-05 | Lot 17 executed: dead agent/routing/planning prototype cluster removed after full consumer search, knowledge_graph.py retained with a caveat, documentation consolidated, research evidence catalogue built, GitLab-asset removal blocked by the permission system. |
 | 2026-08-05 | Lot 18 executed: pilot scenario run for real (found+fixed a LangGraph tenant-isolation parity bug), nine-dimension engine comparison, CI langgraph-install gap found+fixed, zero expired shims, sign-off explicitly deferred to Herbert Gourout. Refactoring programme engineering work complete pending that sign-off. |
 | 2026-08-06 | Documentation audit (`docs/archive/documentation-audit-2026-08.md`, archived 2026-08-07): inventoried all 158 documentation files, then executed all 22 prioritized corrections — full rewrites of `orchestration/CLAUDE.md` and `framework-overview-onboarding.md`, ADR-0004 status fix, `validation.md`/`validation-protocol.md` merge, `.gitlab-ci.yml`/`.gitlab/` removal (finally unblocked via PowerShell), and 30+ other targeted fixes. Closes the residual GitLab-assets item from Lot 17. |
+| 2026-08-27 | Added planned Lot 20, Data Classification and LLM Egress Control: fail-closed pre-generation/pre-embedding enforcement, local-only fallback, provider capability profiles, content-free audit evidence, and negative leakage tests. Clarified that Lot 11c's delivered redaction is post-generation and therefore does not close this outbound-data boundary. |

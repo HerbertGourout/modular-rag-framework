@@ -47,6 +47,9 @@ class GovernanceSection(BaseModel):
     redactor: ComponentConfig | None = None
     review_queue: ComponentConfig | None = None
     audit_sink: ComponentConfig | None = None
+    # ADR-0014 (Batch 14): additive, mirrors audit_sink/review_queue's own
+    # optionality exactly.
+    feedback_sink: ComponentConfig | None = None
 
 
 class QualitySection(BaseModel):

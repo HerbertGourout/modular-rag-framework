@@ -128,7 +128,9 @@ def test_close_is_a_no_op_when_no_span_was_ever_created() -> None:
     OtelTracer().close()  # must not raise -- provider was never built
 
 
-def test_missing_opentelemetry_sdk_raises_a_clear_configuration_error(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_missing_opentelemetry_sdk_raises_a_clear_configuration_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """`OtelTracer` itself never fails to construct (imports are lazy); only
     the first `start_span()` call triggers the real import, and a genuinely
     missing SDK must raise `ConfigurationError`, not a bare `ImportError`

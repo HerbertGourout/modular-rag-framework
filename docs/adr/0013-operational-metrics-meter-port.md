@@ -75,6 +75,7 @@ community practice, not a project-internal research citation.
    attaches a `PeriodicExportingMetricReader(OTLPMetricExporter(...))`, which exports
    asynchronously on its own schedule and swallows/logs export failures internally — this, not any
    code in this adapter, is what satisfies "no functional impact if the exporter is unavailable."
+
    `OtelMeter.for_testing()` wires an in-process `InMemoryMetricReader` — the "test using an
    in-memory exporter" requirement, mirroring `OtelTracer.for_testing()`'s `InMemorySpanExporter`.
 
@@ -84,7 +85,9 @@ community practice, not a project-internal research citation.
    `_get_meter()` acquires the *same* lock internally. `threading.Lock` is not reentrant, so the
    very first `counter()`/`histogram()`/`gauge()` call against a freshly-constructed `OtelMeter()`
    (not `.for_testing()`, which pre-populates `_meter` and never takes this path) deadlocked
-   permanently. Caught by this ADR's own test suite hanging (`test_disabled_export_still_creates_
+   permanently.
+
+   Caught by this ADR's own test suite hanging (`test_disabled_export_still_creates_
    instruments_but_transmits_nothing`), not by a review round — fixed by calling `_get_meter()`
    *before* acquiring `_build_lock`, never from within it. Recorded here as the Lot 12 analog of
    ADR-0012's own MEDIUM-002 (a similar double-checked-locking race in `OtelTracer`), but caught
@@ -132,7 +135,9 @@ community practice, not a project-internal research citation.
    a single failed request through the standard path would have incremented the counter *twice* —
    once at each layer — while a direct, ApplicationService-bypassing caller of `RAGEngine.
    retrieve()` would only increment it once, silently skewing the metric's meaning depending on
-   which entry point a caller happened to use. Caught by writing `tests/unit/orchestration/
+   which entry point a caller happened to use.
+
+   Caught by writing `tests/unit/orchestration/
    test_engine.py::test_retrieve_does_not_emit_request_errors_counter_on_failure` while
    self-reviewing the corrective diff (this project's task-standard "self-review the complete task
    diff" step, applied literally), not by a review round. Fixed by removing the emission from
@@ -163,7 +168,9 @@ community practice, not a project-internal research citation.
 
    Two whole-process/per-request signal pairs are **deliberately two separate metrics, not one**:
    `mrag.readiness.state` (sampled once per `/ready` poll) is intended to answer whole-process
-   health, while `mrag.retrieve.degraded` answers whether a request lost a retrieval leg. Current
+   health, while `mrag.retrieve.degraded` answers whether a request lost a retrieval leg.
+
+   Current
    readiness emission sets only the observed labelled state to `1` and does not reset the others,
    so an old state can remain visible after recovery. The metric is diagnostic until that emission
    semantic is corrected; it cannot yet safely answer "healthy right now" by itself.
@@ -172,12 +179,16 @@ community practice, not a project-internal research citation.
    provider pricing-API lookup (would add network I/O and a new external dependency to the
    generation hot path, contradicting this codebase's lazy-import/cheap-instrumentation posture) —
    `Metrics.cost_usd` (the evaluation-quality field) has existed as a schema field since early on
-   but was never once computed anywhere before this ADR; confirmed by grep before starting. The
+   but was never once computed anywhere before this ADR; confirmed by grep before starting.
+
+   The
    table's model coverage was checked directly against `generation/synthesizers/openai_gen.py`'s/
    `anthropic_gen.py`'s own default `model` values and every `model:` reference across
    `manifests/presets/`/`manifests/blueprints/`, rather than assumed — `tests/unit/core/
    test_pricing.py` cross-checks this so the table can't silently drift out of sync with what
-   production traffic actually asks it to price. `estimate_cost_usd()` returns `None` (never a
+   production traffic actually asks it to price.
+
+   `estimate_cost_usd()` returns `None` (never a
    fabricated `0.0`) for a model outside the table; the two generators only attach `cost_usd` to
    their `TraceStep` metadata when it is not `None`, and `RAGEngine` only emits the
    `mrag.generation.cost_usd` counter when that key is present — an unpriced model still gets

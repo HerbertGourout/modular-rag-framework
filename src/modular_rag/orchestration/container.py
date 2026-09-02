@@ -7,6 +7,7 @@ import structlog
 from modular_rag.contracts.audit import AuditSink
 from modular_rag.contracts.chunking import Chunker
 from modular_rag.contracts.embeddings import Embedder
+from modular_rag.contracts.feedback import FeedbackSink
 from modular_rag.contracts.generation import Generator
 from modular_rag.contracts.indexing import Indexer
 from modular_rag.contracts.lifecycle import LifecycleLedger
@@ -271,6 +272,15 @@ class Container:
     @property
     def review_queue(self) -> ReviewQueue | None:
         return self._store.get("review_queue")
+
+    @property
+    def feedback_sink(self) -> FeedbackSink | None:
+        """ADR-0014 (Batch 14) — same `.get()`-based optional-role pattern as
+        `audit_sink`/`review_queue` above. Not in `_CRITICAL_ROLES`:
+        `RAGEngine.record_feedback()` is reached from a dedicated endpoint,
+        never from `answer()`/`retrieve()`'s own hot path, so a down
+        feedback sink cannot make the pipeline UNREADY for those."""
+        return self._store.get("feedback_sink")
 
     @property
     def lifecycle_ledger(self) -> LifecycleLedger | None:

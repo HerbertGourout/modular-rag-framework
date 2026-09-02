@@ -434,7 +434,16 @@ Uses configured formatters to reformat code automatically.
 
 ### Creating an Agent Plugin
 
-> **Correction (2026-06-22, revised)**: there's no `instructions:` frontmatter field — put the instructions in the markdown body, as below (see claude-code-advanced-config.md "Creating a Subagent" for the full real field list — `name`/`description` are required; `tools`, `model`, `permissionMode`, `memory`, and others are real optional fields). `claude-opus-4-6` is a real model ID (just not the current latest, `claude-opus-4-8` — an earlier revision of this note wrongly called it fake). There's also no `/agent <name> <args>` slash command, but `claude --agent <name>` and the `agent` settings.json key (to set a default) **are** real — see the correction in claude-code-advanced-config.md "Using a Subagent".
+> **Correction (2026-06-22, revised)**:
+> - There's no `instructions:` frontmatter field — put the instructions in the markdown body, as
+>   below (see claude-code-advanced-config.md "Creating a Subagent" for the full real field
+>   list — `name`/`description` are required; `tools`, `model`, `permissionMode`, `memory`, and
+>   others are real optional fields).
+> - `claude-opus-4-6` is a real model ID (just not the current latest, `claude-opus-4-8` — an
+>   earlier revision of this note wrongly called it fake).
+> - There's also no `/agent <name> <args>` slash command, but `claude --agent <name>` and the
+>   `agent` settings.json key (to set a default) **are** real — see the correction in
+>   claude-code-advanced-config.md "Using a Subagent".
 
 **agents/code-reviewer.md**:
 ```markdown

@@ -48,7 +48,9 @@ inside `check_health()` multiplies a slow dependency's real latency by the retry
 A cold, never-connected store must probe without ever triggering the side effects its real
 connect path would (e.g. `QdrantStore`'s cold probe uses a bare, throwaway client instead of the
 real `_get_client()`/`_ensure_collection()` path, specifically to avoid `create_collection()`
-running as a probe side effect). Any throwaway client/connection opened for the probe must be
+running as a probe side effect).
+
+Any throwaway client/connection opened for the probe must be
 closed on every exit path (`finally`, or a context manager) — never left for the garbage
 collector, and never the real, shared, long-lived client the rest of the component uses.
 
@@ -59,7 +61,9 @@ value normally requires loading a model to compute (e.g. `HuggingFaceEmbedder.di
 back to `_get_model()` for a model name outside its static table), do not call that path from a
 probe. Instead, add a cheap-only, optional, duck-typed sibling method that returns `None` when the
 answer isn't free to compute, and have the probe fall back to a static/configured value in that
-case (`known_dimensions()` is the precedent — see `adapters/embeddings/hf_embedder.py`). A "cached
+case (`known_dimensions()` is the precedent — see `adapters/embeddings/hf_embedder.py`).
+
+A "cached
 afterward" real load is still a real, unbounded first hit — not an acceptable trade for a probe
 that an unauthenticated, rate-limit-exempt caller can trigger at will.
 
@@ -68,7 +72,9 @@ that an unauthenticated, rate-limit-exempt caller can trigger at will.
 Never inherit a timeout or retry policy sized for real traffic. A probe's timeout is a distinct
 constant (e.g. `_HEALTH_CHECK_TIMEOUT`), and for SDKs that support a per-call override
 (`client.with_options(timeout=..., max_retries=0)` for both the OpenAI and Anthropic Python SDKs),
-use it rather than mutating the shared production client. `connect_timeout` alone only bounds
+use it rather than mutating the shared production client.
+
+`connect_timeout` alone only bounds
 establishing a connection — a query or call that hangs *after* connecting needs its own bound too
 (a real server-side `statement_timeout` for PostgreSQL, a client-side per-call timeout for an SDK
 call).
@@ -76,14 +82,18 @@ call).
 ### 5. Never mutate state a real request path depends on
 
 The strongest form of this rule: **give the probe its own dedicated, throwaway resource instead
-of touching a shared one at all**, whenever that's possible. This was the size of the fix that
+of touching a shared one at all**, whenever that's possible.
+
+This was the size of the fix that
 finally closed HIGH-001 (Lot 6, fifth pass) for the Postgres adapters — earlier versions reused
 the shared, cached connection under `self._lock` on a "warm" path, temporarily changing its
 session-level `statement_timeout` and restoring it afterward; every version of that approach
 carried a residual risk (an unprotected window before the bound took effect, a restore that could
 itself fail and leave the connection's state ambiguous). The version that actually closed it
 opens a fresh, dedicated connection per probe, with the timeout baked in at connect time via
-`options=`, and never touches the shared connection or its lock at all. Where a dedicated resource
+`options=`, and never touches the shared connection or its lock at all.
+
+Where a dedicated resource
 per probe is genuinely impractical, second-best is a *bounded* wait for the shared resource (see
 next rule) — never an indefinite one.
 
@@ -118,7 +128,9 @@ bootstrap only, never recurring.)
 `GET /ready` is deliberately unauthenticated and exempt from rate-limiting and the concurrency
 limiter — reachable by anyone who can route to the process. A raw exception (which can embed
 hostnames, DSNs, collection names, or a third-party SDK's own message content) must never reach
-the HTTP response. Route every failure through `core.resilience.unhealthy_dependency()` from
+the HTTP response.
+
+Route every failure through `core.resilience.unhealthy_dependency()` from
 `adapters/` (which may import `core/`), or an equivalent private, file-local `_unhealthy()` from a
 domain module (`generation/`, `retrieval/`, etc. — which per `CLAUDE.md` §02 may import only
 `contracts/` + `core/models/`, not `core.resilience` itself). Both classify to a small set of

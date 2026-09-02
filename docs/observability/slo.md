@@ -19,7 +19,7 @@ bigger risk than an honestly-approximate starting point.
 **Objective:** 99.5% of `answer` and `retrieve` operations that enter `ApplicationService`
 complete without an exception, measured over a rolling 30-day window.
 
-- **Metric:** `1 - (sum(rate(mrag_request_errors_total[30d])) / sum(rate(mrag_request_duration_ms_count[30d])))`, per `operation`.
+- **Metric:** `1 - (sum(rate(mrag_request_errors_total{operation=~"answer|retrieve"}[30d])) / sum(rate(mrag_request_duration_ms_count{operation=~"answer|retrieve"}[30d])))`, per `operation`.
 - **Error budget:** 0.5% of requests over 30 days (~216 minutes of full-outage-equivalent budget,
   spread across however many partial-degradation minutes actually occur).
 - **Alert:** `MRAGHighErrorRate` (`alerts.yaml`) is the fast-burn signal (5% over 5 minutes) — a
@@ -29,6 +29,11 @@ complete without an exception, measured over a rolling 30-day window.
   request-validation 422, rate-limit 429 and concurrency-limit 503 responses. Security or policy
   exceptions raised inside the service are counted and can be separated with `error_type`; guard
   rejections that return a blocked answer are tracked by `mrag.guard.rejections` instead.
+- **`feedback` (Batch 14, ADR-0014) is a third `operation` on the same two metrics as of this
+  guide's last update, deliberately excluded from this SLO's scope** — the `operation=~"answer|
+  retrieve"` filter above is explicit, not incidental, so `POST /feedback` reliability neither
+  dilutes nor is silently folded into this objective. No separate feedback-availability SLO is
+  defined yet; that is an open follow-up, not an oversight.
 
 ## 2. Request latency
 
@@ -38,8 +43,9 @@ second, measured over a rolling 7-day window.
 - **Metric:** `histogram_quantile(0.95, sum(rate(mrag_request_duration_ms_bucket[7d])) by (le, operation))`.
 - **Why `/answer` and `/retrieve` get different targets:** `/answer` includes a real LLM generation
   call (typically the dominant latency term); `/retrieve` never does.
-- **Alert:** `MRAGHighP95Latency` (`alerts.yaml`), a faster 5-minute/10-minute window for
-  acute-incident detection, same relationship as the availability SLO/alert pair above.
+- **Alert:** `MRAGHighP95LatencyAnswer` and `MRAGHighP95LatencyRetrieve` (`alerts.yaml`), using
+  the respective 5-second and 1-second thresholds over a faster 5-minute/10-minute window for
+  acute-incident detection, the same relationship as the availability SLO/alert pair above.
 - **Known gap:** no per-stage latency SLO exists yet (retrieval-only vs. generation-only p95
   within an `/answer` call) — the per-stage `TraceStep.latency_ms` data already exists (ADR-0012)
   but isn't yet exported as its own histogram metric; a natural follow-up, not built in this Lot.
@@ -78,7 +84,8 @@ zero tolerance (page immediately) for any `UNREADY` state.
 **Objective (placeholder — replace with your organization's actual approved budget):** Daily
 generation cost under $100/day, projected from a rolling 1-hour rate.
 
-- **Metric:** `sum(rate(mrag_generation_cost_usd_total[1h])) * 24`.
+- **Metric:** `sum(rate(mrag_generation_cost_usd_total[1h])) * 86400` (PromQL `rate()` is per
+  second, so a daily projection multiplies by the number of seconds per day).
 - **Caveat:** `core/pricing.py`'s price table is a static, manually-refreshed approximation (see
   its own module docstring); this SLO is only as accurate as that table. Treat cost figures as
   directional, not invoice-grade, until a real billing reconciliation process exists.

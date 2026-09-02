@@ -53,29 +53,36 @@ bytes served under it are the ones actually published.
 **This is not paired with hash *enforcement*, and every install command referencing this file
 needs `--no-require-hashes` because of it.** pip enters hash-checking mode automatically the
 instant it sees any requirement with a hash attached — not only when `--require-hashes` is passed
-explicitly. Confirmed directly, twice: (1) `pip install -c requirements-lock.txt -e ".[...]"`
-failed outright ("cannot be installed when requiring hashes, because there is no single file to
-hash") because an editable/local source directory has no single artifact to hash; (2) after
-actually building this project's real wheel and running `pip install -c requirements-lock.txt
-<wheel>[...]` against it, pip still failed — this time demanding a hash for the *wheel itself*,
-which it cannot have: a freshly-built wheel is not byte-reproducible build to build, so pinning its
-hash the same way a downloaded PyPI package's hash is pinned isn't meaningful today (it would need
-the wheel build itself to be byte-for-byte deterministic first — a materially larger undertaking,
-tracked as an open follow-up, not silently dropped). Both the Dockerfile's runtime-stage install
-and CI's `supply-chain` job now pass `--no-require-hashes` (available from pip 26.2, matching the
-pin used) specifically to opt back out of this automatic behavior while still using every version
-pin in the lock. The hashes remain present and useful regardless: `scripts/check_lock_sync.py`
-strips them for its own internal dry-run checks (same reason), but a hash-aware installer or a
-future, fully-enforced install path can still verify against this same file at any time.
+explicitly.
+
+Confirmed directly, twice:
+1. `pip install -c requirements-lock.txt -e ".[...]"` failed outright ("cannot be installed when
+   requiring hashes, because there is no single file to hash"), because an editable/local source
+   directory has no single artifact to hash.
+2. After actually building this project's real wheel and running `pip install -c
+   requirements-lock.txt <wheel>[...]` against it, pip still failed — this time demanding a hash
+   for the *wheel itself*, which it cannot have. A freshly-built wheel is not byte-reproducible
+   build to build, so pinning its hash the same way a downloaded PyPI package's hash is pinned
+   isn't meaningful today. It would need the wheel build itself to be byte-for-byte deterministic
+   first — a materially larger undertaking, tracked as an open follow-up, not silently dropped.
+
+Both the Dockerfile's runtime-stage install and CI's `supply-chain` job now pass
+`--no-require-hashes` (available from pip 26.2, matching the pin used), specifically to opt back
+out of this automatic behavior while still using every version pin in the lock.
+
+The hashes remain present and useful regardless: `scripts/check_lock_sync.py` strips them for its
+own internal dry-run checks (same reason), but a hash-aware installer or a future, fully-enforced
+install path can still verify against this same file at any time.
 
 **`--python-platform linux --python-version 3.12` is not optional.** `uv pip compile` resolves
-for whatever platform you tell it to target — omit these flags and running the command on macOS
+for whatever platform you tell it to target. Omit these flags and running the command on macOS
 or Windows silently produces a lock missing Linux-only transitive packages the image actually
 needs (confirmed directly while writing this: re-running the command without `--python-platform
 linux` on a Windows machine dropped `uvloop`, a Linux-only transitive dependency of
-`uvicorn[standard]`, entirely). The Dockerfile always targets `python:3.12-slim`
-(Debian/Linux) regardless of which OS you run this command from — the lock must match the
-*target*, not your workstation.
+`uvicorn[standard]`, entirely).
+
+The Dockerfile always targets `python:3.12-slim` (Debian/Linux) regardless of which OS you run
+this command from — the lock must match the *target*, not your workstation.
 
 ## Extras covered, and when to widen the list
 
@@ -109,22 +116,27 @@ the diff:
 Run, in order, and do not proceed past a failure:
 
 1. `python scripts/check_lock_sync.py` — the deterministic gate (also run in CI's `lint` job).
-   Direct-dependency coverage (base `dependencies` and each Dockerfile extra), strict lock-line
-   syntax (bare or `--generate-hashes`-annotated), the Dockerfile/`.dockerignore` wiring, the
-   build-backend pin match between `pyproject.toml` and the Dockerfile's builder stage, **and** a
-   real `pip install --dry-run --report` resolution proving every *transitive* package the exact
-   Dockerfile extras need is present in the lock, not just the direct ones (Codex review
-   HIGH-003 — a lock naming only `pydantic`/`uvicorn` and omitting every one of
-   `uvicorn[standard]`'s own transitives passed the direct-only version of this check). That last
-   part is **only authoritative when run on Linux** (pip evaluates dependency markers against the
-   host interpreter, not an overridable target) — it self-detects and prints a clear skip message
-   on other platforms rather than reporting Windows-only conditional packages as false gaps, or
-   silently claiming coverage it did not verify. Treat a local, non-Linux run's `OK` as
-   provisional; CI's `lint` job (`ubuntu-latest`) is what actually proves this. **On Linux, by
-   contrast, this sub-check fails closed**: a timeout, a resolver conflict, or any other inability
-   to complete the resolution there is itself a hard failure (Codex review HIGH-003, round 2 — the
-   first version treated every one of those the same as the legitimate non-Linux skip, so a CI run
-   where pip couldn't even produce an answer still printed `OK` and exited 0).
+   Checks:
+   - Direct-dependency coverage (base `dependencies` and each Dockerfile extra).
+   - Strict lock-line syntax (bare or `--generate-hashes`-annotated).
+   - The Dockerfile/`.dockerignore` wiring.
+   - The build-backend pin match between `pyproject.toml` and the Dockerfile's builder stage.
+   - A real `pip install --dry-run --report` resolution proving every *transitive* package the
+     exact Dockerfile extras need is present in the lock, not just the direct ones (Codex review
+     HIGH-003 — a lock naming only `pydantic`/`uvicorn` and omitting every one of
+     `uvicorn[standard]`'s own transitives passed the direct-only version of this check).
+
+   That last check is **only authoritative when run on Linux** (pip evaluates dependency markers
+   against the host interpreter, not an overridable target). It self-detects and prints a clear
+   skip message on other platforms rather than reporting Windows-only conditional packages as
+   false gaps, or silently claiming coverage it did not verify. Treat a local, non-Linux run's
+   `OK` as provisional; CI's `lint` job (`ubuntu-latest`) is what actually proves this.
+
+   **On Linux, by contrast, this sub-check fails closed**: a timeout, a resolver conflict, or any
+   other inability to complete the resolution there is itself a hard failure (Codex review
+   HIGH-003, round 2 — the first version treated every one of those the same as the legitimate
+   non-Linux skip, so a CI run where pip couldn't even produce an answer still printed `OK` and
+   exited 0).
 2. `python scripts/check_dockerfile_permissions.py` — unaffected by a lock-only change, but cheap
    to confirm nothing about the Dockerfile itself regressed in the same pass.
 3. `pip-audit -r requirements-lock.txt` (needs `pip-audit` installed — `pip install

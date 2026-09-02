@@ -12,17 +12,20 @@ The trace records each pipeline step with:
 
 The `Trace` accumulates totals: `total_input_tokens`, `total_output_tokens`, `total_latency_ms`.
 
-Step names are confirmed directly from `orchestration/engine.py`'s `_run_steps()`: `guard_query`
-(tenant/policy checks raise before this step even runs, so a denial produces *no* trace steps —
-see [threat-model.md](../architecture/threat-model.md) for what a denial produces instead),
-`retrieve`, `rerank` (only if a reranker is configured), then `generate` — the generator
-self-instruments its own `TraceStep` rather than the engine wrapping it in a second one (Lot 10
-fixed a real double-counting bug here; don't reintroduce an outer "generate" step if you're
-reading this as a guide for writing a similar component). There is no `guard_answer` step name in
-the current source — the post-generation guard check and the optional redaction/human-review
-steps that follow it do not currently emit their own named `TraceStep`s; their only visible trace
-signal today is a missing early-return (the run completed normally) or a `GUARD_DECISION` audit
-event if an `audit_sink` is configured — see below.
+Step names are confirmed directly from `orchestration/engine.py`'s `_run_steps()`:
+- `guard_query` — tenant/policy checks raise before this step even runs, so a denial produces
+  *no* trace steps (see [threat-model.md](../architecture/threat-model.md) for what a denial
+  produces instead).
+- `retrieve`.
+- `rerank` — only if a reranker is configured.
+- `generate` — the generator self-instruments its own `TraceStep` rather than the engine wrapping
+  it in a second one. Lot 10 fixed a real double-counting bug here; don't reintroduce an outer
+  "generate" step if you're reading this as a guide for writing a similar component.
+
+There is no `guard_answer` step name in the current source. The post-generation guard check and
+the optional redaction/human-review steps that follow it do not currently emit their own named
+`TraceStep`s — their only visible trace signal today is a missing early-return (the run completed
+normally) or a `GUARD_DECISION` audit event if an `audit_sink` is configured (see below).
 
 ```mermaid
 %%{init: {"theme": "base"}}%%
@@ -156,10 +159,11 @@ request produces one correctly-nested, exportable OpenTelemetry trace.
 Only in `orchestration/engine.py`, `app/application.py`, and `api/__init__.py` — never inside
 `ingestion/`, `retrieval/`, `generation/`, or `security/` (domain modules never import
 OpenTelemetry, directly or indirectly). `app/application.py`'s `"app.request"` span is shared by
-both `ApplicationService.answer()` and `.retrieve()` (an `operation` attribute — `"answer"` or
-`"retrieve"` — distinguishes the two in a trace viewer), but they nest very differently below
-it — corrected here after Codex review pass 1 (HIGH-002) found the previous single-diagram
-version implied `/retrieve` also flowed through `rag.answer`, which it never does:
+`ApplicationService.answer()`, `.retrieve()`, and `.record_feedback()` (Batch 14, ADR-0014) — an
+`operation` attribute — `"answer"`, `"retrieve"`, or `"feedback"` — distinguishes them in a trace
+viewer), but they nest very differently below it — corrected here after Codex review pass 1
+(HIGH-002) found the previous single-diagram version implied `/retrieve` also flowed through
+`rag.answer`, which it never does:
 
 ```mermaid
 %%{init: {"theme": "base"}}%%
@@ -175,21 +179,31 @@ flowchart TB
 
     A2["api.retrieve\n(api/__init__.py)"] --> B2["app.request\n(operation=retrieve — correlation_id, request_id, app.trace_id)"]
     B2 --> J["rag.retrieve\n(RAGEngine.retrieve() — a separate, leaf span; no rag.answer parent)"]
+
+    A3["api.feedback\n(api/__init__.py)"] --> B3["app.request\n(operation=feedback — correlation_id, request_id, app.trace_id)"]
+    B3 --> K["RAGEngine.record_feedback() — no rag.* child span; a single\nsink write, not a multi-stage pipeline"]
 ```
 
-Both `"app.request"` spans carry `app.trace_id` — a real, minimal `Trace` built specifically for
-that call (`Trace(query_id=..., pipeline_id=...)`, with one `TraceStep` for the retrieval itself
-on the `retrieve()` path). This was corrected during Lot 11's own review cycle (Codex pass 2
-HIGH-002): an earlier version omitted `app.trace_id` for `retrieve()` on the reasoning that
-`RAGEngine.retrieve()` built no `Trace` object to take an id from — but that silently narrowed the
-original "propagate correlation_id, request_id, and trace_id" acceptance criterion without an
-explicit decision to do so. Per an explicit human decision, `RAGEngine.retrieve()` now builds a
-real `Trace` and returns it via `RetrievalResult.trace_id` — a public contract change: `RAGEngine.
-retrieve()`/`ApplicationService.retrieve()` now return `RetrievalResult` (`chunks` + `trace_id`),
-not a bare `list[RetrievedChunk]`, and `GET /retrieve`'s JSON response is now `{"chunks": [...],
-"trace_id": "..."}` instead of a bare array — see `docs/api/rest.md`. This `Trace` is not recorded
-via `Telemetry`/`AuditSink` (only `answer()`/`_run()` does that); it exists solely to carry a real
-trace_id, not for the fuller answer-path observability/audit machinery.
+All three `"app.request"` spans carry `app.trace_id` — a real, minimal `Trace` built specifically
+for that call (`Trace(query_id=..., pipeline_id=...)` for `answer()`/`retrieve()`; the
+caller-supplied `Feedback.trace_id` itself for `record_feedback()`, since feedback has no `Trace`
+of its own — it references one already recorded by an earlier `answer()` call).
+
+This was corrected during Lot 11's own review cycle (Codex pass 2 HIGH-002). An earlier version
+omitted `app.trace_id` for `retrieve()` on the reasoning that `RAGEngine.retrieve()` built no
+`Trace` object to take an id from — but that silently narrowed the original "propagate
+correlation_id, request_id, and trace_id" acceptance criterion without an explicit decision to do
+so.
+
+Per an explicit human decision, `RAGEngine.retrieve()` now builds a real `Trace` and returns it
+via `RetrievalResult.trace_id`. This is a public contract change: `RAGEngine.retrieve()`/
+`ApplicationService.retrieve()` now return `RetrievalResult` (`chunks` + `trace_id`), not a bare
+`list[RetrievedChunk]`, and `GET /retrieve`'s JSON response is now `{"chunks": [...], "trace_id":
+"..."}` instead of a bare array — see `docs/api/rest.md`.
+
+This `Trace` is not recorded via `Telemetry`/`AuditSink` (only `answer()`/`_run()` does that); it
+exists solely to carry a real trace_id, not for the fuller answer-path observability/audit
+machinery.
 
 `RAGEngine.ingest()`/`ingest_chunks()` similarly create `rag.ingest` → `rag.chunk` (per document)
 and `rag.embed` spans — these are root spans when called directly (there is no `/ingest` API
@@ -239,12 +253,12 @@ observability:
 ```
 
 `otlp_endpoint` omitted (the default) still creates real spans — every attribute-setting code
-path is exercised identically in every environment — but attaches no exporter, so nothing is
-ever transmitted ("toggleable export function": the toggle is whether an endpoint is
-configured). Export, when enabled, runs through OpenTelemetry's own `BatchSpanProcessor` on a
-background thread, which catches and logs export failures internally rather than raising into
-application code — a down or unreachable OTLP collector has no functional impact on request
-handling.
+path is exercised identically in every environment — but attaches no exporter, so nothing is ever
+transmitted ("toggleable export function": the toggle is whether an endpoint is configured).
+
+Export, when enabled, runs through OpenTelemetry's own `BatchSpanProcessor` on a background
+thread, which catches and logs export failures internally rather than raising into application
+code. A down or unreachable OTLP collector has no functional impact on request handling.
 
 `engine.adapter: langgraph` manifests may also set `observability.tracer` — see the "Where spans
 are created" section above for exactly which spans a LangGraph-routed request gets (the
@@ -312,7 +326,7 @@ spans, never inside `ingestion/`, `retrieval/`, `generation/`, or `security/`.
 
 | Metric | Type | Labels | Where |
 |---|---|---|---|
-| `mrag.request.duration_ms` | histogram | `operation`, `engine`, `status` | `ApplicationService.answer()`/`.retrieve()` — **not** also inside `RAGEngine`, to avoid double-counting. HTTP requests rejected earlier by authentication, body-size, validation, rate-limit or concurrency middleware are outside this denominator. |
+| `mrag.request.duration_ms` | histogram | `operation`, `engine`, `status` | `ApplicationService.answer()`/`.retrieve()`/`.record_feedback()` (Batch 14, `operation="feedback"`) — **not** also inside `RAGEngine`, to avoid double-counting. HTTP requests rejected earlier by authentication, body-size, validation, rate-limit or concurrency middleware are outside this denominator. |
 | `mrag.request.errors` | counter | `operation`, `engine`, `error_type` | same scope: exceptions raised after entering `ApplicationService`, not all HTTP error responses |
 | `mrag.ingest.documents` | counter | — | `RAGEngine.ingest()` |
 | `mrag.ingest.chunks` | counter | — | `RAGEngine.ingest_chunks()` (covers both entry points — `ingest()` calls this internally per document) |
@@ -338,13 +352,14 @@ collector configuration issues.
 ### Cardinality safety
 
 `OtelMeter._sanitize_attributes()` drops (never raises — logs a warning and continues) any
-attribute whose key matches a denylist of per-request identifiers (`correlation_id`, `request_id`,
-`trace_id`, `chunk_id`, `document_id`/`doc_id`, ...) or whose value is UUID/ULID-shaped, applied to
-every `counter()`/`histogram()`/`gauge()` call — defense in depth on top of the primary discipline
-(no first-party call site passes one of those values as a label at all). This check exists
-*specifically* for `Meter`, not `Tracer`: a metric label creates a persistent time series per
-distinct value combination in a real backend, so unbounded cardinality here is a production
-incident; a span attribute carries no such risk.
+attribute whose key is not on an explicit allowlist of bounded, known-safe label keys
+(`operation`, `engine`, `status`, `error_type`, `stage`, `source`, `type`, `direction`, `model`,
+`state`) or whose value is UUID/ULID-shaped, applied to every `counter()`/`histogram()`/`gauge()`
+call.
+
+This check exists *specifically* for `Meter`, not `Tracer`: a metric label creates a persistent
+time series per distinct value combination in a real backend, so unbounded cardinality here is a
+production incident; a span attribute carries no such risk.
 
 ### `NullMeter` / `OtelMeter`
 
@@ -381,11 +396,12 @@ a fabricated `0.0`) for a model the table doesn't recognize. Both `OpenAIGenerat
 ## Log configuration
 
 **There is no `MRAG_LOG_LEVEL` or `MRAG_LOG_FORMAT` environment variable in this codebase** — an
-earlier version of this guide described both; neither is read anywhere in
-`observability/`. `StructlogTelemetry` writes structured JSON with no built-in level or format
-switch of its own. If you need Python's standard logging level or structlog's own output renderer
-configured differently (e.g. a human-readable console renderer for local development instead of
-JSON), configure `structlog` directly in your own application entry point, before calling
-`load_pipeline()`/`load_application()` — see
+earlier version of this guide described both; neither is read anywhere in `observability/`.
+`StructlogTelemetry` writes structured JSON with no built-in level or format switch of its own.
+
+If you need Python's standard logging level or structlog's own output renderer configured
+differently (e.g. a human-readable console renderer for local development instead of JSON),
+configure `structlog` directly in your own application entry point, before calling
+`load_pipeline()`/`load_application()`. See
 [structlog's own configuration documentation](https://www.structlog.org/en/stable/configuration.html)
-for how; this framework does not wrap or simplify that configuration itself today.
+for how — this framework does not wrap or simplify that configuration itself today.

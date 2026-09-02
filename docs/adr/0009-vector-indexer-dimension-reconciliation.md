@@ -28,9 +28,13 @@ property every `Indexer` implementation can meaningfully support.
    `ComponentRegistry.wire()` only acts on stores that do (`isinstance(store, VectorIndexer)`, a
    pure in-memory Protocol check on `@runtime_checkable`, no network call). This keeps
    orchestration free of any Qdrant-specific import — it only knows the generic `VectorIndexer`
-   contract. `bind_embedder()` is the hand-off point: `wire()` calls it with the wired `Embedder`
+   contract.
+
+   `bind_embedder()` is the hand-off point: `wire()` calls it with the wired `Embedder`
    once, and the implementation decides internally whether to reconcile immediately or defer (see
-   §3). An earlier version of this decision had `wire()` write an undocumented private
+   §3).
+
+   An earlier version of this decision had `wire()` write an undocumented private
    `_embedder` attribute directly instead of calling a protocol method — a structurally
    conforming `VectorIndexer` could pass `isinstance()` while silently ignoring that attribute,
    rejecting it via `__slots__`, or reusing the name for unrelated state, so the protocol
@@ -89,7 +93,9 @@ property every `Indexer` implementation can meaningfully support.
    the first call, but `self._client` was already non-`None` — a caller that caught the error and
    retried would find `_get_client()`'s `if self._client is None:` guard already false, skip
    `_ensure_collection()` entirely on every subsequent call, and proceed against the rejected
-   collection (Codex review, second pass). `self._client` is now reset to `None` in an
+   collection (Codex review, second pass).
+
+   `self._client` is now reset to `None` in an
    exception handler around `_ensure_collection()` before re-raising, so a retry re-validates
    from scratch instead of silently bypassing the guarantee after the first failure.
 

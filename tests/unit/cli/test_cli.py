@@ -630,3 +630,207 @@ def test_audit_count_expired_reports_the_count(monkeypatch: pytest.MonkeyPatch) 
 
     assert result.exit_code == 0
     assert "42 audit event(s) past retention." in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Batch 14 (ADR-0014): mrag feedback / mrag review. Same patterns as the
+# audit_* tests above.
+# ---------------------------------------------------------------------------
+
+
+def test_feedback_purge_constructs_the_sink_with_allow_purge_true(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict = {}
+
+    class _FakeSink:
+        def __init__(self, *, dsn: str, allow_purge: bool = False) -> None:
+            captured["dsn"] = dsn
+            captured["allow_purge"] = allow_purge
+
+        def purge_expired(self) -> int:
+            return 3
+
+        def close(self) -> None:
+            captured["closed"] = True
+
+    monkeypatch.setattr(
+        "modular_rag.adapters.feedback.postgres_sink.PostgresFeedbackSink", _FakeSink
+    )
+
+    result = runner.invoke(app, ["feedback", "purge", "--dsn", "postgresql://retention-role/db"])
+
+    assert result.exit_code == 0
+    assert "Purged 3 expired feedback record(s)." in result.stdout
+    assert captured["allow_purge"] is True
+    assert captured["closed"] is True
+
+
+def test_feedback_count_expired_reports_the_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _FakeSink:
+        def __init__(self, *, dsn: str) -> None:
+            pass
+
+        def count_expired(self) -> int:
+            return 9
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(
+        "modular_rag.adapters.feedback.postgres_sink.PostgresFeedbackSink", _FakeSink
+    )
+
+    result = runner.invoke(app, ["feedback", "count-expired", "--dsn", "postgresql://any-role/db"])
+
+    assert result.exit_code == 0
+    assert "9 feedback record(s) past retention." in result.stdout
+
+
+def test_review_resolve_calls_resolve_with_the_given_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict = {}
+
+    class _FakeQueue:
+        def __init__(self, *, dsn: str) -> None:
+            captured["dsn"] = dsn
+
+        def resolve(self, item_id: str, *, approved: bool, reviewer: str) -> None:
+            captured["item_id"] = item_id
+            captured["approved"] = approved
+            captured["reviewer"] = reviewer
+
+        def close(self) -> None:
+            captured["closed"] = True
+
+    monkeypatch.setattr(
+        "modular_rag.adapters.review.postgres_queue.PostgresReviewQueue", _FakeQueue
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "review", "resolve",
+            "--item-id", "item-1",
+            "--approved",
+            "--reviewer", "alice",
+            "--dsn", "postgresql://app-role/db",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Resolved item-1" in result.stdout
+    assert captured["approved"] is True
+    assert captured["reviewer"] == "alice"
+
+
+def test_review_resolve_surfaces_an_unknown_item_as_a_clean_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from modular_rag.core.errors import ModularRAGError
+
+    class _FakeQueue:
+        def __init__(self, *, dsn: str) -> None:
+            pass
+
+        def resolve(self, item_id: str, *, approved: bool, reviewer: str) -> None:
+            raise ModularRAGError(f"No pending review item with id={item_id!r}.")
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(
+        "modular_rag.adapters.review.postgres_queue.PostgresReviewQueue", _FakeQueue
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "review", "resolve",
+            "--item-id", "unknown",
+            "--rejected",
+            "--reviewer", "bob",
+            "--dsn", "postgresql://app-role/db",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "No pending review item" in result.output
+
+
+def test_review_list_pending_prints_each_item(monkeypatch: pytest.MonkeyPatch) -> None:
+    from modular_rag.contracts.review import ReviewItem
+
+    class _FakeQueue:
+        def __init__(self, *, dsn: str) -> None:
+            pass
+
+        @property
+        def pending(self) -> list[ReviewItem]:
+            return [
+                ReviewItem(
+                    id="item-1", answer_id="a1", query_id="q1",
+                    reason="low confidence", confidence=0.2,
+                )
+            ]
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(
+        "modular_rag.adapters.review.postgres_queue.PostgresReviewQueue", _FakeQueue
+    )
+
+    result = runner.invoke(app, ["review", "list-pending", "--dsn", "postgresql://app-role/db"])
+
+    assert result.exit_code == 0
+    assert "item-1" in result.stdout
+    assert "low confidence" in result.stdout
+
+
+def test_review_purge_constructs_the_queue_with_allow_purge_true(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict = {}
+
+    class _FakeQueue:
+        def __init__(self, *, dsn: str, allow_purge: bool = False) -> None:
+            captured["allow_purge"] = allow_purge
+
+        def purge_expired(self) -> int:
+            return 4
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(
+        "modular_rag.adapters.review.postgres_queue.PostgresReviewQueue", _FakeQueue
+    )
+
+    result = runner.invoke(app, ["review", "purge", "--dsn", "postgresql://retention-role/db"])
+
+    assert result.exit_code == 0
+    assert "Purged 4 expired review item(s)." in result.stdout
+    assert captured["allow_purge"] is True
+
+
+def test_review_count_expired_reports_the_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _FakeQueue:
+        def __init__(self, *, dsn: str) -> None:
+            pass
+
+        def count_expired(self) -> int:
+            return 6
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(
+        "modular_rag.adapters.review.postgres_queue.PostgresReviewQueue", _FakeQueue
+    )
+
+    result = runner.invoke(app, ["review", "count-expired", "--dsn", "postgresql://any-role/db"])
+
+    assert result.exit_code == 0
+    assert "6 review item(s) past retention." in result.stdout

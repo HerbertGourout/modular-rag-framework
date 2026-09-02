@@ -29,6 +29,12 @@ class ReviewItem(BaseModel):
     resolved: bool = False
     approved: bool | None = None
     reviewer: str | None = None
+    # ADR-0014 (Batch 14): purely additive, same shape/default as
+    # `contracts.audit.AuditEvent.retention_days` (ADR-0011) — a review item
+    # is a governance record too, and durable storage
+    # (`adapters.review.postgres_queue.PostgresReviewQueue`) needs a
+    # retention window the same way audit events do.
+    retention_days: int = Field(default=365, ge=1)
 
 
 @runtime_checkable

@@ -20,6 +20,12 @@ from modular_rag.contracts.engine import (
 )
 from modular_rag.contracts.erasure import ErasureProof
 from modular_rag.contracts.evaluation import AnswerEngine, Evaluator
+from modular_rag.contracts.feedback import (
+    FEEDBACK_SCHEMA_VERSION,
+    Feedback,
+    FeedbackRating,
+    FeedbackSink,
+)
 from modular_rag.contracts.generation import Generator
 from modular_rag.contracts.health import HealthCheckable
 from modular_rag.contracts.identity import TenantContext, TokenVerifier
@@ -66,6 +72,7 @@ __all__ = [
     "ErasureProof",
     "AnswerEngine",
     "Evaluator",
+    "FEEDBACK_SCHEMA_VERSION", "Feedback", "FeedbackRating", "FeedbackSink",
     "Generator",
     "HealthCheckable",
     "TenantContext", "TokenVerifier",

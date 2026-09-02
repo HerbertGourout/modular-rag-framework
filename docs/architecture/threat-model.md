@@ -59,16 +59,19 @@ flowchart LR
 **Boundary 1 (tenant fail-closed, Lot 1; hardened further by Lot 16a):** this obligation applies to
 the **API only** — the CLI has no `TokenVerifier` concept at all; both `mrag ask --tenant-id` and
 `mrag ingest --tenant-id` trust the value an operator running the command directly supplies, the
-same local-trust model as any other CLI flag, not a verified identity. For the API, authentication
-(`create_app(..., token_verifier=...)`) is no longer unconditionally optional. It remains optional
-only for a manifest with no `governance.tenant_policy` wired (unauthenticated local/dev use is
-still the default posture for those). For a manifest that *does* wire a `tenant_policy` —
-`secure-enterprise-rag.yaml` and any tenant-isolated deployment — a `token_verifier` is effectively
-mandatory: `create_app()` (`src/modular_rag/api/__init__.py`) refuses to start without one, rather
-than serving a tenant-isolated pipeline unauthenticated. Lot 16a additionally wired
-`RateLimitMiddleware` and `MaxBodySizeMiddleware` (`src/modular_rag/api/middleware.py`) onto this
-same boundary — see the Denial-of-service row in §4 below. An unauthenticated single-tenant
-deployment (no `tenant_policy` at all) remains a real, accepted open boundary by design, not a gap.
+same local-trust model as any other CLI flag, not a verified identity.
+
+For the API, authentication (`create_app(..., token_verifier=...)`) is no longer unconditionally
+optional. It remains optional only for a manifest with no `governance.tenant_policy` wired
+(unauthenticated local/dev use is still the default posture for those). For a manifest that
+*does* wire a `tenant_policy` — `secure-enterprise-rag.yaml` and any tenant-isolated deployment —
+a `token_verifier` is effectively mandatory: `create_app()` (`src/modular_rag/api/__init__.py`)
+refuses to start without one, rather than serving a tenant-isolated pipeline unauthenticated.
+
+Lot 16a additionally wired `RateLimitMiddleware` and `MaxBodySizeMiddleware`
+(`src/modular_rag/api/middleware.py`) onto this same boundary — see the Denial-of-service row in
+§4 below. An unauthenticated single-tenant deployment (no `tenant_policy` at all) remains a real,
+accepted open boundary by design, not a gap.
 
 **Boundary 3** has partial mitigation via lazy-imported adapters and manifest-driven configuration
 (no hardcoded credentials, per `.claude/rules/adapters.md` §5) and Lot 16b added dependency

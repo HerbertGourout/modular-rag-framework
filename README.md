@@ -7,26 +7,30 @@
 ![Built by Publicis Sapient](https://img.shields.io/badge/built%20by-Publicis%20Sapient-4a154b)
 
 > **Note on the status badge.** It reads "pre-alpha" while several sections below describe parts
-> of V1 as implemented and unit/contract-tested. Precisely: **V1.0** (CLI, REST API, hybrid
-> retrieval, security) is implementation-complete, and the two live-validation runs `ROADMAP.md`'s
-> checklist once listed as unchecked (`examples/simple_qa/` end-to-end, and the hybrid-retrieval
-> integration run) are now exercised automatically — the hybrid-retrieval integration suite runs
-> against a real Qdrant on every push/PR, and the same pipeline `examples/simple_qa/` uses runs
-> nightly against real Qdrant and a real LLM key (Batch 10, `.github/workflows/ci.yml` and
-> `nightly.yml`) — no longer an open validation gap. **V1.1** (evaluation) and **V1.2** (compliance
-> audit) are different: `ROADMAP.md`
-> marks both "partially built" with genuine, named implementation gaps, not just pending
-> validation — NDCG, populated golden sets, and a regression dashboard for V1.1; formatted
-> GDPR/CCPA/HIPAA report generation, an explicit data-lineage artifact, and an access-control log
-> for V1.2. So "V1 is complete" is not the claim made anywhere in this document, in either sense
-> — only "V1.0 is implemented and live-validated" is. That distinction, and the pre-alpha
-> badge itself, are not documentation errors to silently paper over — they reflect an open
-> governance question (how "alpha" is defined for this project, and who is authorized to change
-> the badge) that this documentation pass does not have the authority to resolve on its own. If
-> you are the maintainer reading this and V1.0 has, in your judgment, graduated past pre-alpha,
-> update the badge; until then, treat the badge as the more conservative, business-level claim,
-> and the technical sections below as precise about which specific sub-version each claim
-> actually covers.
+> of V1 as implemented and unit/contract-tested. Precisely:
+>
+> - **V1.0** (CLI, REST API, hybrid retrieval, security) is implementation-complete. The two
+>   live-validation runs `ROADMAP.md`'s checklist once listed as unchecked
+>   (`examples/simple_qa/` end-to-end, and the hybrid-retrieval integration run) are now exercised
+>   automatically: the hybrid-retrieval integration suite runs against a real Qdrant on every
+>   push/PR, and the same pipeline `examples/simple_qa/` uses runs nightly against real Qdrant
+>   and a real LLM key (Batch 10, `.github/workflows/ci.yml` and `nightly.yml`) — no longer an
+>   open validation gap.
+> - **V1.1** (evaluation) and **V1.2** (compliance audit) are different: `ROADMAP.md` marks both
+>   "partially built" with genuine, named implementation gaps, not just pending validation — NDCG,
+>   populated golden sets, and a regression dashboard for V1.1; formatted GDPR/CCPA/HIPAA report
+>   generation, an explicit data-lineage artifact, and an access-control log for V1.2.
+>
+> So "V1 is complete" is not the claim made anywhere in this document, in either sense — only
+> "V1.0 is implemented and live-validated" is.
+>
+> That distinction, and the pre-alpha badge itself, are not documentation errors to silently paper
+> over. They reflect an open governance question (how "alpha" is defined for this project, and who
+> is authorized to change the badge) that this documentation pass does not have the authority to
+> resolve on its own. If you are the maintainer reading this and V1.0 has, in your judgment,
+> graduated past pre-alpha, update the badge; until then, treat the badge as the more conservative,
+> business-level claim, and the technical sections below as precise about which specific
+> sub-version each claim actually covers.
 
 A **reusable delivery accelerator** built at Publicis Sapient for production-grade RAG
 and agentic systems: declarative orchestration, composable retrieval, structured memory,
@@ -59,21 +63,25 @@ policy is an asset that compounds over time.
 
 **Context.** Publicis Sapient's AI practice repeatedly builds RAG systems for enterprise
 clients — each time re-solving the same problems: governance, multi-tenant data isolation,
-vendor lock-in, auditability, security. This framework is the answer: a proprietary
-control plane that wraps the best available OSS components (sentence-transformers,
-Qdrant, rank-bm25, OpenAI, Anthropic…) behind stable contracts, so that what one
-project builds, every subsequent project inherits. The result is faster delivery,
-higher margins, and a demonstrable technical differentiator on regulated-industry pitches.
+vendor lock-in, auditability, security. This framework is the answer: a proprietary control plane
+that wraps the best available OSS components (sentence-transformers, Qdrant, rank-bm25, OpenAI,
+Anthropic…) behind stable contracts, so that what one project builds, every subsequent project
+inherits. The result is faster delivery, higher margins, and a demonstrable technical
+differentiator on regulated-industry pitches.
 
 **Why this matters concretely.** Without a shared framework, every client engagement
-independently reinvents: how to keep tenant A's documents invisible to tenant B, how to prove
-to an auditor which document produced which answer, how to swap OpenAI for Anthropic (or a
-self-hosted model) without rewriting the retrieval layer, and how to demonstrate to a
-regulated-industry client (finance, healthcare, public sector) that the system fails closed
-rather than open when something goes wrong. Each of those is a multi-week engineering effort if
-built from scratch on a single engagement, and a sunk cost that the next engagement cannot reuse
-if it was built directly against LangChain's or Haystack's primitives instead of behind this
-framework's own contracts. This framework exists specifically so that cost is paid once.
+independently reinvents:
+- How to keep tenant A's documents invisible to tenant B.
+- How to prove to an auditor which document produced which answer.
+- How to swap OpenAI for Anthropic (or a self-hosted model) without rewriting the retrieval
+  layer.
+- How to demonstrate to a regulated-industry client (finance, healthcare, public sector) that the
+  system fails closed rather than open when something goes wrong.
+
+Each of those is a multi-week engineering effort if built from scratch on a single engagement, and
+a sunk cost that the next engagement cannot reuse if it was built directly against LangChain's or
+Haystack's primitives instead of behind this framework's own contracts. This framework exists
+specifically so that cost is paid once.
 
 → [Full business case](docs/business-case.md) · [Onboarding by role — developer, tech lead, delivery, functional, security](docs/onboarding.md)
 
@@ -96,15 +104,20 @@ it is to own the **engine-neutral control plane** around whichever engine you pl
 governance, audit, evaluation, tenant isolation, and portability that scale from a local
 prototype to a multi-tenant enterprise deployment without rewriting the core.
 
-**When should you reach for this framework instead of LangChain/Haystack directly?** If your
-project's hard requirements include: provable per-tenant data isolation, an audit trail a
-compliance officer can query without reading logs, the ability to swap the underlying LLM or
-vector store per client without touching application code, or evaluation gates that block a
-regression before it reaches production — this framework's opinions pay for themselves quickly.
-If your project is a single-tenant prototype with no compliance requirement and no plan to reuse
-the pipeline across engagements, the overhead of learning the manifest/contract/registry model is
-real, and a thinner, more direct use of LangChain or a hand-rolled pipeline may get you to a demo
-faster. This framework optimizes for the second and third project in a family of engagements, not
+**When should you reach for this framework instead of LangChain/Haystack directly?**
+
+Reach for it when your project's hard requirements include: provable per-tenant data isolation,
+an audit trail a compliance officer can query without reading logs, the ability to swap the
+underlying LLM or vector store per client without touching application code, or evaluation gates
+that block a regression before it reaches production. This framework's opinions pay for
+themselves quickly there.
+
+Skip it, or defer adopting it, when your project is a single-tenant prototype with no compliance
+requirement and no plan to reuse the pipeline across engagements. The overhead of learning the
+manifest/contract/registry model is real, and a thinner, more direct use of LangChain or a
+hand-rolled pipeline may get you to a demo faster.
+
+This framework optimizes for the second and third project in a family of engagements, not
 necessarily the first prototype.
 
 ---
@@ -118,37 +131,44 @@ five ideas from scattered comments across dozens of files.
 ### 1. Hexagonal (ports-and-adapters) architecture — what, and why
 
 **What.** The codebase is organized into strict layers with a single allowed direction of
-dependency: `core/` (foundation, imports nothing) ← `contracts/` (interfaces, imports only
-`core/`) ← domain modules (`ingestion/`, `retrieval/`, `generation/`, `security/`, `agents/`,
-`memory/`, `eval/` — each imports only `contracts/` + `core/models/`, **never each other**) ←
-`adapters/` (external bindings: Qdrant, OpenAI, sentence-transformers — import `contracts/` +
-`core/` + external libraries, never domain modules) ← `orchestration/` (wiring, execution flow) ←
-`app/` (composition root, the only place allowed to see every layer at once) ← `cli/`/`api/`
-(thin entry points). See [`docs/architecture/module-model.md`](docs/architecture/module-model.md)
-for the exhaustive, file-by-file version of this map, and
-[ADR-0001](docs/adr/0001-modular-architecture.md) for the original decision record.
+dependency:
+
+- `core/` — foundation, imports nothing.
+- `contracts/` — interfaces, imports only `core/`.
+- Domain modules (`ingestion/`, `retrieval/`, `generation/`, `security/`, `agents/`, `memory/`,
+  `eval/`) — each imports only `contracts/` + `core/models/`, **never each other**.
+- `adapters/` — external bindings (Qdrant, OpenAI, sentence-transformers); import `contracts/` +
+  `core/` + external libraries, never domain modules.
+- `orchestration/` — wiring, execution flow.
+- `app/` — composition root, the only place allowed to see every layer at once.
+- `cli/`/`api/` — thin entry points.
+
+Each layer above only depends on the ones listed before it. See
+[`docs/architecture/module-model.md`](docs/architecture/module-model.md) for the exhaustive,
+file-by-file version of this map, and [ADR-0001](docs/adr/0001-modular-architecture.md) for the
+original decision record.
 
 **Why.** Three concrete failure modes this prevents, each of which has happened in real
 enterprise RAG projects the authors have worked on directly:
 
-1. *Retrieval logic silently depends on which LLM is configured*, because someone imported the
-   generation module from inside a retriever "just this once" to reuse a prompt-formatting
-   helper. Six months later, changing the LLM provider requires touching retrieval code nobody
-   remembers is coupled to it. The **domain modules never import each other** rule makes this
-   architecturally impossible, not just discouraged by convention.
-2. *A vector store migration (Qdrant → pgvector, say) requires touching business logic*, because
-   the retriever class directly constructs and calls the Qdrant SDK inline. The **adapters own
-   all external-library knowledge, domain modules only see `contracts/`** rule means a new vector
-   store is a new file in `adapters/vectorstores/`, registered once, with zero changes to
-   `retrieval/`.
+1. *Retrieval logic silently depends on which LLM is configured.* This happens when someone
+   imports the generation module from inside a retriever "just this once" to reuse a
+   prompt-formatting helper. Six months later, changing the LLM provider requires touching
+   retrieval code nobody remembers is coupled to it. The **domain modules never import each
+   other** rule makes this architecturally impossible, not just discouraged by convention.
+2. *A vector store migration (Qdrant → pgvector, say) requires touching business logic.* This
+   happens when the retriever class directly constructs and calls the Qdrant SDK inline. The
+   **adapters own all external-library knowledge, domain modules only see `contracts/`** rule
+   means a new vector store is a new file in `adapters/vectorstores/`, registered once, with zero
+   changes to `retrieval/`.
 3. *Tests require a live Qdrant instance and an OpenAI API key just to check that chunking logic
-   is correct*, because nothing separates "pure logic" from "talks to the network." The layering
-   rule plus the [contract-testing convention](docs/guides/getting-started.md) means most tests
-   run in milliseconds with no external service.
+   is correct.* This happens when nothing separates "pure logic" from "talks to the network." The
+   layering rule plus the [contract-testing convention](docs/guides/getting-started.md) means most
+   tests run in milliseconds with no external service.
 
 **Alternative considered and rejected.** A more conventional layered MVC-style split
-(`models/`, `services/`, `controllers/`) was considered early on and rejected because it does not
-by itself prevent failure mode #1 above — nothing in a typical MVC split stops a "service" from
+(`models/`, `services/`, `controllers/`) was considered early on and rejected. It does not by
+itself prevent failure mode #1 above — nothing in a typical MVC split stops a "service" from
 importing another unrelated "service." Hexagonal architecture's specific contribution is making
 the **direction of dependency enforceable by a static check** (`scripts/check_layering.py`, run
 in CI on every change) rather than relying on code review discipline alone.
@@ -164,47 +184,51 @@ security guarding, evaluation…) is defined as a `typing.Protocol` in `src/modu
 **Why Protocol instead of ABC (`abc.ABC`).** Two reasons, both deliberate:
 
 - **Adapters wrap third-party objects that cannot be retrofitted to inherit from our base
-  classes.** `OpenAIGenerator` wraps the `openai` SDK's client; forcing an inheritance
+  classes.** `OpenAIGenerator` wraps the `openai` SDK's client. Forcing an inheritance
   relationship would mean either subclassing a library class we don't own (fragile — it can
   change its own inheritance structure any time) or wrapping-and-forwarding every method by hand
   for no additional safety, since Python's duck typing already lets the wrapper satisfy the
   interface structurally.
 - **`isinstance()` against a `@runtime_checkable` Protocol gives us conformance testing for
-  free**, without a metaclass or registration step: `tests/contract/test_*_conformance.py` files
+  free**, without a metaclass or registration step. `tests/contract/test_*_conformance.py` files
   simply assert `isinstance(my_new_adapter, Embedder)` and the interpreter checks every required
   method exists. Compare this to ABC's `register()` mechanism, which does not check method
   presence at all — an ABC subclass with a missing method fails only when that method is actually
   called, at runtime, in production. A missing Protocol method fails `isinstance()` immediately,
   in a unit test, before the adapter ever reaches a manifest.
 
-**When you'd add a new contract vs. a new implementation of an existing one.** Adding a new
-*implementation* (a new embedder, a new generator) never touches `contracts/` — you add a class in
-the appropriate domain module or `adapters/`, and register it. Adding a new *contract* (a
-genuinely new capability category, like `contracts/indexing.py`'s `VectorIndexer` sub-protocol
-added in [ADR-0009](docs/adr/0009-vector-indexer-dimension-reconciliation.md)) is a structural
-change that requires an ADR per `CLAUDE.md` §07 — because every implementation, every
-conformance test, and every piece of orchestration code that might call the new method is a
-consequence of that one decision, and an ADR is where that blast radius gets written down before
-the code does.
+**When you'd add a new contract vs. a new implementation of an existing one.**
+
+Adding a new *implementation* (a new embedder, a new generator) never touches `contracts/` — you
+add a class in the appropriate domain module or `adapters/`, and register it.
+
+Adding a new *contract* (a genuinely new capability category, like `contracts/indexing.py`'s
+`VectorIndexer` sub-protocol added in
+[ADR-0009](docs/adr/0009-vector-indexer-dimension-reconciliation.md)) is a structural change that
+requires an ADR per `CLAUDE.md` §07. Every implementation, every conformance test, and every piece
+of orchestration code that might call the new method is a consequence of that one decision, and an
+ADR is where that blast radius gets written down before the code does.
 
 ### 3. Adapters — the only place external libraries are allowed to leak in
 
 **What.** `adapters/` is where `qdrant-client`, `sentence-transformers`, `openai`, `anthropic`,
-and `fitz` (PDF parsing) are actually imported. Every one of them is imported **lazily, inside
-the method that needs it**, never at module level — see `.claude/rules/adapters.md` for the
-mandatory pattern. This means `import modular_rag.adapters.embeddings.hf_embedder` does not
-trigger a multi-hundred-megabyte `sentence-transformers` download; only calling `.embed()` for
-the first time does.
+and `fitz` (PDF parsing) are actually imported. Every one of them is imported **lazily, inside the
+method that needs it**, never at module level — see `.claude/rules/adapters.md` for the mandatory
+pattern. This means `import modular_rag.adapters.embeddings.hf_embedder` does not trigger a
+multi-hundred-megabyte `sentence-transformers` download; only calling `.embed()` for the first
+time does.
 
 **Why lazy imports specifically, not just "adapters own external deps."** A framework installed
 via `pip install modular-rag[v1]` is expected to import cleanly and run its unit test suite
 (hundreds of tests, sub-10-second wall time in this repository) without any of Qdrant,
-sentence-transformers' model weights, or an LLM API key being present. If `HuggingFaceEmbedder`
-imported `sentence_transformers` at module level, merely importing the framework's package graph
-— which `tests/unit/` does, transitively, through `app/default_factories.py`'s registration of
-every built-in adapter — would require a real model download in CI, in every contributor's local
-environment, and in any deployment that only ever uses the OpenAI embedder. Lazy imports keep
-the framework's own footprint proportional to what a given deployment actually uses.
+sentence-transformers' model weights, or an LLM API key being present.
+
+If `HuggingFaceEmbedder` imported `sentence_transformers` at module level, merely importing the
+framework's package graph — which `tests/unit/` does, transitively, through
+`app/default_factories.py`'s registration of every built-in adapter — would require a real model
+download in CI, in every contributor's local environment, and in any deployment that only ever
+uses the OpenAI embedder. Lazy imports keep the framework's own footprint proportional to what a
+given deployment actually uses.
 
 ### 4. The registry + manifests — how components become a running pipeline
 
@@ -241,22 +265,25 @@ to dismiss as "just YAML config" when it is really a governance mechanism:
 
 **Alternative considered and rejected: a Python DSL / builder API** (e.g.
 `Pipeline().with_embedder(OpenAIEmbedder()).with_generator(...)`, the style LangChain's
-expression language and Haystack's pipeline API both use). This was explicitly rejected for this
-framework's purposes because it collapses the three benefits above back into "read the Python to
-know what's configured" — a Python DSL is still code, requiring a Python-literate reviewer, and
-because a builder API's component instances are constructed inline, there is no single file a
-non-engineer can diff to see what changed between two deployments. The manifest approach trades a
-small amount of expressiveness (you cannot conditionally branch pipeline construction in YAML the
-way you can in Python) for a hard guarantee that pipeline topology is always externally
-observable and diffable. See [ADR-0002](docs/adr/0002-contracts-and-plugins.md) for the original
-decision record, and `.claude/.instructions.md` §2 for the enforced "never wire directly in
-Python" rule.
+expression language and Haystack's pipeline API both use).
+
+This was explicitly rejected for this framework's purposes because it collapses the three
+benefits above back into "read the Python to know what's configured" — a Python DSL is still
+code, requiring a Python-literate reviewer, and because a builder API's component instances are
+constructed inline, there is no single file a non-engineer can diff to see what changed between
+two deployments.
+
+The manifest approach trades a small amount of expressiveness (you cannot conditionally branch
+pipeline construction in YAML the way you can in Python) for a hard guarantee that pipeline
+topology is always externally observable and diffable. See
+[ADR-0002](docs/adr/0002-contracts-and-plugins.md) for the original decision record, and
+`.claude/.instructions.md` §2 for the enforced "never wire directly in Python" rule.
 
 **When to touch the registry vs. the manifest.** Adding a *new type* of an existing role (a new
 generator implementation) touches the registry once (`app/default_factories.py`, one
 `reg.register(...)` call) and then every manifest that wants to use it. Selecting a *different
-already-registered type*, or changing an existing component's config, touches only the manifest —
-zero Python changes.
+already-registered type*, or changing an existing component's config, touches only the
+manifest — zero Python changes.
 
 ### 5. Orchestration engines — native pipeline vs. delegated engine, behind one port
 
@@ -275,25 +302,31 @@ by `NativeEngineAdapter` to conform to a vendor-neutral `DocumentEngine` port
 code (the CLI, the REST API, your own scripts) never needs to know or care** which engine is
 answering a question — `ApplicationService.answer()` is identical regardless of
 `engine.adapter`'s value. This is what lets the framework delegate generic orchestration to an
-external engine without that delegation leaking into every caller as a special case. The shipped
-`LangGraphEngineAdapter` currently implements a fixed route → retrieve → guard → generate graph;
-it proves the boundary and selection mechanism, but does **not** yet provide planning, tool use,
-query decomposition, or collaborative multi-agent execution. Those behaviours remain delegated
-future capabilities under ADR-0005 §5.2. The alternative — application code
-branching on "if using the agentic engine, call `.run_agentic()` instead of `.answer()`" — was
-rejected specifically because it would make every future engine option a breaking change to every
-caller, instead of an additive manifest option.
+external engine without that delegation leaking into every caller as a special case.
+
+The shipped `LangGraphEngineAdapter` currently implements a fixed route → retrieve → guard →
+generate graph. It proves the boundary and selection mechanism, but does **not** yet provide
+planning, tool use, query decomposition, or collaborative multi-agent execution — those behaviours
+remain delegated future capabilities under ADR-0005 §5.2.
+
+The alternative — application code branching on "if using the agentic engine, call
+`.run_agentic()` instead of `.answer()`" — was rejected specifically because it would make every
+future engine option a breaking change to every caller, instead of an additive manifest option.
 
 **Why owned governance still applies uniformly across both.** A `DocumentEngine` implementation
 declares a `capabilities: frozenset[EngineCapability]` — `NativeEngineAdapter` declares an empty
 set deliberately (see its own docstring: overclaiming a capability it cannot honor would be worse
-than declaring none). `LangGraphEngineAdapter` enforces the security guard, tenant isolation, and
-redaction today; a manifest that declares `governance.policy_engine`, `governance.review_queue`,
+than declaring none).
+
+`LangGraphEngineAdapter` enforces the security guard, tenant isolation, and redaction today. A
+manifest that declares `governance.policy_engine`, `governance.review_queue`,
 `governance.audit_sink`, or `observability.telemetry` while selecting `engine.adapter: langgraph`
 **fails validation at startup**, rather than silently constructing an audit sink nothing ever
-writes to. This "declared-but-not-activatable fails validation" rule (ADR-0007 §3) is what keeps
-a manifest an honest, auditable statement of what actually runs — not aspirational documentation
-of what someone hoped would run.
+writes to.
+
+This "declared-but-not-activatable fails validation" rule (ADR-0007 §3) is what keeps a manifest
+an honest, auditable statement of what actually runs — not aspirational documentation of what
+someone hoped would run.
 
 ### 6. The governance stack — tenant isolation, audit, redaction, policy-as-code
 
@@ -323,11 +356,13 @@ of what someone hoped would run.
 **Why this is "owned," not delegated, per ADR-0005.** Multi-agent orchestration and GraphRAG
 traversal are explicitly delegated to LangGraph because dozens of other well-maintained projects
 already solve those problems well, and re-solving them natively would not differentiate this
-framework from its competitors. Governance is the opposite case: it is the thing enterprise
-clients actually pay for and the thing generic orchestration frameworks do *not* solve well out
-of the box (see the comparison table above — "Manual" and "Limited" in the Governance row for
-LangChain and Haystack respectively). Owning it natively, and enforcing it identically regardless
-of which execution engine answers a query, is the framework's stated differentiator.
+framework from its competitors.
+
+Governance is the opposite case: it is the thing enterprise clients actually pay for and the
+thing generic orchestration frameworks do *not* solve well out of the box (see the comparison
+table above — "Manual" and "Limited" in the Governance row for LangChain and Haystack
+respectively). Owning it natively, and enforcing it identically regardless of which execution
+engine answers a query, is the framework's stated differentiator.
 
 ### How a request actually flows — a concrete walk-through
 
@@ -465,10 +500,9 @@ does not duplicate.
 - Python 3.11+
 - [Qdrant](https://qdrant.tech/) running on `localhost:6333` (`docker run -d -p 6333:6333 qdrant/qdrant`)
 - An OpenAI API key for the three shipped presets as written (Anthropic is available by changing
-  the generator component); see
-  [`tests/e2e/manifests/`](tests/e2e/manifests/) for a fully deterministic, no-external-key
-  pipeline you can run without any API key at all, useful for exploring the framework's mechanics
-  without incurring API cost.
+  the generator component). See [`tests/e2e/manifests/`](tests/e2e/manifests/) for a fully
+  deterministic, no-external-key pipeline you can run without any API key at all — useful for
+  exploring the framework's mechanics without incurring API cost.
 
 ### Installation
 
@@ -496,10 +530,12 @@ python examples/simple_qa/first_query.py
 **Why "one process" matters here, specifically.** `HybridRetriever` combines two retrieval
 mechanisms: a persistent vector index (Qdrant, survives across processes) and an in-memory BM25
 lexical index (does **not** survive — it is rebuilt from scratch every time a new Python process
-starts). Running ingestion and querying in the same process, as `first_query.py` does, is the
-only way to see genuinely fused vector+BM25 results on a fresh environment. This is a deliberate
-architectural trade-off, not a bug — see the [FAQ](#frequently-asked-questions--common-pitfalls)
-below for the full explanation and your options if you need BM25 to persist across processes.
+starts).
+
+Running ingestion and querying in the same process, as `first_query.py` does, is the only way to
+see genuinely fused vector+BM25 results on a fresh environment. This is a deliberate architectural
+trade-off, not a bug — see the [FAQ](#frequently-asked-questions--common-pitfalls) below for the
+full explanation and your options if you need BM25 to persist across processes.
 
 ### Use the API directly
 
@@ -538,16 +574,19 @@ print(answer.text)
 app.close()  # releases the Qdrant client, DB connections, etc.
 ```
 
-**Running the fully governed example** (`manifests/presets/secure-enterprise-rag.yaml`) needs
-more than the prerequisites above, and is deliberately not copy/paste-runnable from this
-paragraph alone — its manifest requires a reachable PostgreSQL (the durable audit sink) plus
-three environment variables the manifest resolves via `${VAR}`/`secret://` interpolation
-(`QDRANT_URL`, `QDRANT_API_KEY`, `AUDIT_DATABASE_URL`; see `app/config_resolution.py`). Calling
-`load_application("manifests/presets/secure-enterprise-rag.yaml")` with any of these unset raises
-`ConfigurationError` at manifest-resolution time, before any pipeline is built — a deliberate
-fail-fast behavior (an incompletely-configured governed pipeline should refuse to start, not
-start and silently skip governance). This heavier setup is the point: it is what buys you tenant
-isolation, policy-as-code, and a durable audit trail — see [Core Concepts
+**Running the fully governed example** (`manifests/presets/secure-enterprise-rag.yaml`) needs more
+than the prerequisites above, and is deliberately not copy/paste-runnable from this paragraph
+alone. Its manifest requires a reachable PostgreSQL (the durable audit sink) plus three
+environment variables the manifest resolves via `${VAR}`/`secret://` interpolation (`QDRANT_URL`,
+`QDRANT_API_KEY`, `AUDIT_DATABASE_URL`; see `app/config_resolution.py`).
+
+Calling `load_application("manifests/presets/secure-enterprise-rag.yaml")` with any of these
+unset raises `ConfigurationError` at manifest-resolution time, before any pipeline is built — a
+deliberate fail-fast behavior (an incompletely-configured governed pipeline should refuse to
+start, not start and silently skip governance).
+
+This heavier setup is the point: it is what buys you tenant isolation, policy-as-code, and a
+durable audit trail — see [Core Concepts
 §6](#6-the-governance-stack--tenant-isolation-audit-redaction-policy-as-code) for why that
 trade-off exists, and
 [`tests/e2e/test_secure_preset_e2e.py`](tests/e2e/test_secure_preset_e2e.py)'s own module
@@ -739,63 +778,82 @@ what you actually need without reading everything:
 ## Frequently asked questions & common pitfalls
 
 **Q: I set `MRAG_OPENAI_API_KEY` and the framework still says no API key is configured. Why?**
+
 A: That variable name never worked, at any point in this codebase's history that current code
 reflects. `app/settings.py` once declared `MRAG_`-prefixed environment variables, but nothing in
 the real pipeline-wiring path ever constructed that `Settings` object — it was dead code, deleted
-outright during the ADR-0007 stabilization pass. Every adapter reads its configuration from the
-**manifest**, and when a manifest's `api_key` config field is left unset, the underlying SDK
-(OpenAI's or Anthropic's) falls back to its own standard environment variable —
-`OPENAI_API_KEY` or `ANTHROPIC_API_KEY`, no `MRAG_` prefix, nothing this framework defines itself.
+outright during the ADR-0007 stabilization pass.
+
+Every adapter reads its configuration from the **manifest**, and when a manifest's `api_key`
+config field is left unset, the underlying SDK (OpenAI's or Anthropic's) falls back to its own
+standard environment variable — `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`, no `MRAG_` prefix,
+nothing this framework defines itself.
 
 **Q: I ingested documents with the CLI, then asked a question in a separate `mrag ask` call, and
 retrieval quality feels worse than when I ran ingestion and querying in one script. Why?**
+
 A: This is the BM25/vector persistence asymmetry described in [Getting
 Started](#getting-started) above — and it only applies to the **default** lexical backend.
+
 `HybridRetriever` fuses a persistent vector index (Qdrant) with a lexical leg selected by the
-manifest's `retriever.config.lexical` key: `"bm25-memory"` (the default — an in-memory BM25 index
-rebuilt empty every time a new process starts) or `"sparse-qdrant"` (a persistent Qdrant sparse
-collection that survives process boundaries and is shared across workers, same durability
-guarantee as the vector index — see `manifests/presets/secure-enterprise-rag.yaml`, which sets
-this). On the `bm25-memory` default, a separate CLI invocation for `mrag ask` starts a fresh
-process with zero BM25 state, so `HybridRetriever` falls back to vector-only retrieval for that
-call — supported, but not the fused hybrid behavior you get from a single long-running process.
-If your deployment needs the lexical leg to survive process boundaries or multiple workers, set
-`lexical: sparse-qdrant` (requires Qdrant client/server **1.10+**) rather than supplying your own
-external backend.
+manifest's `retriever.config.lexical` key:
+- `"bm25-memory"` (the default) — an in-memory BM25 index rebuilt empty every time a new process
+  starts.
+- `"sparse-qdrant"` — a persistent Qdrant sparse collection that survives process boundaries and
+  is shared across workers, same durability guarantee as the vector index (see
+  `manifests/presets/secure-enterprise-rag.yaml`, which sets this).
+
+On the `bm25-memory` default, a separate CLI invocation for `mrag ask` starts a fresh process with
+zero BM25 state, so `HybridRetriever` falls back to vector-only retrieval for that call —
+supported, but not the fused hybrid behavior you get from a single long-running process. If your
+deployment needs the lexical leg to survive process boundaries or multiple workers, set `lexical:
+sparse-qdrant` (requires Qdrant client/server **1.10+**) rather than supplying your own external
+backend.
 
 **Q: Why did `POST /answer` return HTTP 422 for every request in an old build I have checked
-out?** A: A now-fixed bug: `QuestionRequest`/`AnswerResponse` were originally nested inside
-`create_app()`; combined with `from __future__ import annotations`, that produced an
-unresolvable forward-reference annotation that FastAPI silently misread as expecting a query
-parameter instead of a JSON request body. The fix (moving both models to module level) shipped
-with a regression test (`tests/unit/api/test_api.py`) specifically so this cannot silently
-regress. If you see this on `main`, it is a genuine bug — please open an issue.
+out?**
+
+A: A now-fixed bug: `QuestionRequest`/`AnswerResponse` were originally nested inside
+`create_app()`. Combined with `from __future__ import annotations`, that produced an unresolvable
+forward-reference annotation that FastAPI silently misread as expecting a query parameter instead
+of a JSON request body.
+
+The fix (moving both models to module level) shipped with a regression test
+(`tests/unit/api/test_api.py`) specifically so this cannot silently regress. If you see this on
+`main`, it is a genuine bug — please open an issue.
 
 **Q: My manifest wires a `governance.tenant_policy` but `create_app()` raises
 `ConfigurationError` at startup instead of just starting with an open API. Is that a bug?**
+
 A: No — that is the intended, fail-closed behavior (see [Core Concepts
 §6](#6-the-governance-stack--tenant-isolation-audit-redaction-policy-as-code)). A tenant-isolated
 manifest with no `token_verifier` passed to `create_app()` would otherwise start successfully and
-silently serve every request as if it had no authenticated tenant, which
-`TenantIsolationPolicy` would then deny one request at a time (a confusing wall of 403s) rather
-than refusing to start at all. Pass a real `token_verifier` (e.g.
-`adapters.auth.keycloak_verifier.KeycloakTokenVerifier`) to `create_app()` for any manifest that
-wires `governance.tenant_policy`.
+silently serve every request as if it had no authenticated tenant, which `TenantIsolationPolicy`
+would then deny one request at a time (a confusing wall of 403s) rather than refusing to start at
+all.
+
+Pass a real `token_verifier` (e.g. `adapters.auth.keycloak_verifier.KeycloakTokenVerifier`) to
+`create_app()` for any manifest that wires `governance.tenant_policy`.
 
 **Q: Can I wire a component directly in Python instead of going through a manifest, just this
-once, to save time?** A: The framework's own rules say no (`.claude/.instructions.md` §2), and
-the reasoning in [Core Concepts §4](#4-the-registry--manifests--how-components-become-a-running-pipeline)
-explains why: doing so silently defeats the "manifest is the reviewable source of truth" property
-every other governance mechanism in this framework assumes holds. If you find yourself wanting
-to, it usually means either the manifest schema is missing a field you need (open an issue/ADR
-discussion) or you are writing a one-off script for which `ComponentRegistry.wire()` directly
-against a hand-built `PipelineManifest` object — still manifest-shaped, just not loaded from a
-YAML file — is the supported escape hatch (see how `tests/unit/orchestration/test_registry.py`
-does this for test purposes).
+once, to save time?**
 
-**Q: Where do I ask a question that isn't answered here?** A: Open a GitHub issue on this
-repository. If your question is about Claude Code or Codex tooling used *on* this repository
-(not the framework itself), see [`docs/guides/claude-code.md`](docs/guides/claude-code.md) first.
+A: The framework's own rules say no (`.claude/.instructions.md` §2), and the reasoning in [Core
+Concepts §4](#4-the-registry--manifests--how-components-become-a-running-pipeline) explains why:
+doing so silently defeats the "manifest is the reviewable source of truth" property every other
+governance mechanism in this framework assumes holds.
+
+If you find yourself wanting to, it usually means either the manifest schema is missing a field
+you need (open an issue/ADR discussion) or you are writing a one-off script for which
+`ComponentRegistry.wire()` directly against a hand-built `PipelineManifest` object — still
+manifest-shaped, just not loaded from a YAML file — is the supported escape hatch (see how
+`tests/unit/orchestration/test_registry.py` does this for test purposes).
+
+**Q: Where do I ask a question that isn't answered here?**
+
+A: Open a GitHub issue on this repository. If your question is about Claude Code or Codex tooling
+used *on* this repository (not the framework itself), see
+[`docs/guides/claude-code.md`](docs/guides/claude-code.md) first.
 
 ---
 

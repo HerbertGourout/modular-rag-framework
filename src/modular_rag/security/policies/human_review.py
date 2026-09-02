@@ -33,7 +33,15 @@ class HumanReviewGate:
     Guarded by a `threading.Lock` (Lot 14, docs/refactoring-plan.md — "make
     ... mutable indexes concurrency-safe"): `resolve()` is a read-then-write
     (check the item exists, then replace it) — a real race under concurrent
-    resolution attempts for the same item without a lock."""
+    resolution attempts for the same item without a lock.
+
+    `resolve()` is a terminal transition (Codex review pass 1, HIGH-002,
+    Batch 14): resolving an already-resolved item raises the same error as
+    resolving an unknown one, rather than silently overwriting the first
+    decision's `approved`/`reviewer` — matching
+    `adapters.review.postgres_queue.PostgresReviewQueue.resolve()`'s
+    identical compare-and-set behavior, which this class must stay
+    interchangeable with."""
 
     def __init__(self, threshold: float = 0.7) -> None:
         self._threshold = threshold
@@ -49,9 +57,9 @@ class HumanReviewGate:
 
     def resolve(self, item_id: str, *, approved: bool, reviewer: str) -> None:
         with self._lock:
-            if item_id not in self._items:
+            item = self._items.get(item_id)
+            if item is None or item.resolved:
                 raise ModularRAGError(f"No pending review item with id={item_id!r}.")
-            item = self._items[item_id]
             self._items[item_id] = item.model_copy(
                 update={"resolved": True, "approved": approved, "reviewer": reviewer}
             )

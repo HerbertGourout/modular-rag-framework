@@ -88,19 +88,21 @@ dependencies (neo4j, networkx, spacy, python-louvain) had zero imports anywhere 
 `src/modular_rag/`, verified before removal, and backed the native GraphRAG traversal/
 community-detection build that ADR-0005 §5.2 delegates to the selected external engine instead.
 
-A `requirements-lock.txt` at the repo root (generated via `uv pip compile pyproject.toml
---python-platform linux --python-version 3.12 --extra v1 --extra dev --extra langgraph --extra
-postgres --extra auth -o requirements-lock.txt` — widened in Lot 9 to also cover `langgraph`,
-`postgres`, and `auth`, the exact three extras the Dockerfile installs alongside `v1`, and pinned
-to the `linux` target platform since the image runs there regardless of which OS generates the
-lock) pins every resolved dependency to an exact version for reproducible installs —
+A `requirements-lock.txt` at the repo root pins every resolved dependency to an exact version for
+reproducible installs. Generated via `uv pip compile pyproject.toml --python-platform linux
+--python-version 3.12 --extra v1 --extra dev --extra langgraph --extra postgres --extra auth -o
+requirements-lock.txt` — widened in Lot 9 to also cover `langgraph`, `postgres`, and `auth`, the
+exact three extras the Dockerfile installs alongside `v1`, and pinned to the `linux` target
+platform since the image runs there regardless of which OS generates the lock.
+
 `pyproject.toml`'s own bounds stay open `>=` ranges by design; the lock file, not the source
 bounds, is what a reproducible install actually resolves against. The Dockerfile's runtime stage
 now actually consumes this lock (`pip install -c requirements-lock.txt`) instead of resolving
-freely against PyPI at build time — see
-[docs/guides/dependency-lock.md](../guides/dependency-lock.md) for the full update procedure and
-`scripts/check_lock_sync.py` for the CI gate that fails if the Dockerfile's installed extras ever
-diverge from what the lock actually covers.
+freely against PyPI at build time.
+
+See [docs/guides/dependency-lock.md](../guides/dependency-lock.md) for the full update procedure
+and `scripts/check_lock_sync.py` for the CI gate that fails if the Dockerfile's installed extras
+ever diverge from what the lock actually covers.
 
 **CLI entry point**: `mrag` → `modular_rag.cli:app` (command installed on the PATH)
 
@@ -947,7 +949,7 @@ their shared fixture/replay helper modules.
 
 ```
 docs/
-├── adr/                          ← 13 ADRs (0001–0013) plus an _index.md
+├── adr/                          ← 14 ADRs (0001–0014) plus an _index.md
 ├── api/
 │   └── rest.md                   ← REST reference (endpoints, schemas, error codes)
 ├── architecture/

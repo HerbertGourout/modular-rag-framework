@@ -1,9 +1,9 @@
 # Capability Matrix — Current Operational Truth
 
 **Baseline snapshot date:** 2026-08-07 (before ADR-0007's Étapes 4-8 landed).
-**Last updated:** 2026-08-26 (full implementation/documentation alignment audit).
+**Last updated:** 2026-08-28 (Batch 14 — feedback, drift, and human review, ADR-0014).
 **Scope:** current repository state, including the ADR-0007 boundary correction and
-ADR-0012/ADR-0013 observability ports.
+ADR-0012/ADR-0013/ADR-0014 observability and governance ports.
 
 This matrix is the evidence-based source for whether a capability is actually usable. A class
 existing under `src/` is not sufficient: a capability is **operational** only when a supported
@@ -39,8 +39,9 @@ Built-in manifest factories, current as of this update:
 | `tenant_policy` | `tenant-isolation` |
 | `policy_engine` | `inline` |
 | `redactor` | `patterns` |
-| `review_queue` | `human-review` |
+| `review_queue` | `human-review`, `postgres-human-review` |
 | `audit_sink` | `in-memory`, `postgres` |
+| `feedback_sink` | `in-memory`, `postgres` |
 | `telemetry` | `structlog`, `null` |
 | `tracer` | `otel`, `null` |
 | `meter` | `otel`, `null` |
@@ -96,15 +97,16 @@ factory) were removed from `ComponentRegistry` in Étape 8.
 | Trace telemetry | **Operational (native)** | Manifest `observability.telemetry.type: structlog` or `null` | Consumed by `RAGEngine`. LangGraph manifests declaring telemetry fail startup. |
 | Distributed tracing (OpenTelemetry) | **Operational, custom manifest** | Manifest `observability.tracer.type: otel` or `null` | ADR-0012. `RAGEngine`-internal spans are native-only; engine-neutral `app.request`/`api.*` spans also work with LangGraph. No shipped preset enables a tracer. |
 | Operational metrics (OpenTelemetry) | **Operational, custom manifest** | Manifest `observability.meter.type: otel` or `null` | ADR-0013. Request metrics work with either engine; pipeline-stage metrics are native-only. No shipped preset enables a meter. Read the sampling limitations in `docs/observability/` before deploying the reference alerts. |
-| Human review queue | **Operational (native)** | Manifest `governance.review_queue.type: human-review` | Consumed by `RAGEngine`; rejected with LangGraph today. |
+| Human review queue | **Operational (native)** | Manifest `governance.review_queue.type: human-review` or `postgres-human-review` | Consumed by `RAGEngine`; rejected with LangGraph today. `postgres-human-review` (ADR-0014, Batch 14) is the durable backend; `mrag review list-pending`/`resolve`/`purge`/`count-expired` are the CLI operations against it. |
+| User feedback collection | **Operational (native)** | Manifest `governance.feedback_sink.type: in-memory` or `postgres`; `POST /feedback` | ADR-0014 (Batch 14). Consumed by `RAGEngine.record_feedback()`; rejected with LangGraph today, same ADR-0008 boundary as `audit_sink`/`review_queue`. `correction_text` requires a wired `governance.redactor` or the call is refused. `mrag feedback purge`/`count-expired` for retention. |
 | Document lifecycle and erasure | **Operational** | Manifest `lifecycle.ledger.type: in-memory` or `postgres` | Both registered (Postgres added Étape 6); engine methods tested. |
 | Index reconciliation | **Operational through CLI and Python** | `mrag reconcile --mode check|repair` or construct `IndexReconciler` | Not exposed through the HTTP API or a manifest role; the CLI resolves the selected pipeline and executes check/repair. |
 | Exact-match evaluator | **Programmatic only** | Construct `ExactMatchEvaluator` for an offline benchmark | Contract/unit-tested. It requires an expected answer and is intentionally rejected in runnable pipeline manifests. |
-| Golden-set benchmark runner | **Programmatic only** | Construct `BenchmarkRunner` | Implemented and unit-tested; no shipped golden-set catalogue (`eval/datasets/` is empty) or user-facing runner. |
-| Quality gates | **Programmatic only** | Apply `QualityGate` to offline benchmark metrics | Unit-tested `report_only`/`blocking` behavior. Intentionally rejected in runnable pipeline manifests; see ADR-0008. |
+| Golden-set benchmark runner | **CI-gated CLI script** | `python scripts/run_benchmark.py [--enforce]`; `.github/workflows/ci.yml`'s `benchmark-gate` job | Batch 13 (external plan). Ships one populated, synthetic, `default`-domain golden set (`eval/datasets/core_v1.yaml`, 13 cases: 9 QA + 4 safety probes) against a deterministic manifest (no LLM key). Scores retrieval (recall/precision/MRR/NDCG, from `Answer.citations`), faithfulness/answer-correctness (deterministic lexical proxies, not an LLM judge), safety-probe pass rate, latency, and best-effort cost. See `docs/guides/offline-evaluation.md`. |
+| Quality gates | **Programmatic, CI-enforced** | Apply `QualityGate` to offline benchmark metrics; `scripts/run_benchmark.py --enforce` runs it in `blocking` mode against `eval/reports/baseline.json` | Unit-tested `report_only`/`blocking` behavior, now also supports `lower_is_better` metrics (cost/latency). Intentionally rejected in runnable pipeline manifests; see ADR-0008. Current baseline thresholds are a documented, deliberately lenient floor pending a real calibration run (no live Qdrant in this environment) — see the guide above. |
 | Data-classification vocabulary | **Construction only** | `DataClassification` enum and fixtures | No classification-aware policy enforcement consumes the values — unchanged by this update. |
 | Cost/latency evidence reporting (V3.1) | **Partially operational** | Custom manifest with `observability.meter.type: otel`; reference Grafana dashboard | Aggregate request latency, token and static estimated-cost series exist. Per-query/user/month attribution, a cost-reporting module and anomaly detection do not. |
-| Drift detection / eval trigger (V3.2) | **Not built** | None | `eval/drift_detection.py`/`eval/feedback_collection/` don't exist on disk. |
+| Drift detection / eval trigger (V3.2) | **Offline script, real and unit-tested** | `python scripts/run_drift_check.py --manifest <path> [--baseline <path>]` | ADR-0014 (Batch 14). `eval/drift_detection.py` is pure (no manifest/DB access itself); never manifest-activated (ADR-0008). No historical baseline from real production traffic exists yet — `--update-baseline` establishes one. `should_trigger_retraining` is an advisory flag nothing currently consumes. See `docs/guides/feedback-and-drift.md`. |
 
 ## Delegated, removed, and future capabilities
 
@@ -113,7 +115,7 @@ factory) were removed from `ComponentRegistry` in Étape 8.
 | Generic multi-agent orchestration | **Delegated target, unavailable today** | Future external engine through `DocumentEngine` | Native prototypes were removed in Lot 17. `langgraph-rag.yaml` proves adapter selection but its current graph is fixed and contains no planning, tools or collaborating agents. |
 | GraphRAG traversal | **Delegated** | Intended external-engine capability, not available in LangGraph today | `manifests/blueprints/graph-memory-rag.yaml` documents the sketch; not loadable. |
 | Native knowledge-graph data model | **Removed** (Étape 8, resolves ADR-0007's open decision #4) | None — `memory/graph/` no longer exists | Zero consumers anywhere outside its own test; `neighbours()`/`subgraph_for_query()` were genuine traversal logic, not passive storage. Restorable via git history. |
-| Fine-tuning execution | **Delegated** | External MLOps tooling | Native ownership is limited to drift detection/evaluation triggers, which are themselves not built yet (see above). |
+| Fine-tuning execution | **Delegated** | External MLOps tooling | Native ownership is limited to drift detection/evaluation triggers, which are now real (see the V3.2 row above) but not wired to any actual external retraining trigger. |
 | Multimodal execution | **Delegated** | Future external-engine adapter capability | `manifests/blueprints/multimodal-rag.yaml` (moved from `presets/`, Étape 7) is a non-runnable sketch, stripped of its fictional native `agents:`/`graph_store:` blocks; parsing/citation enrichment ownership remains evidence-dependent. |
 | Multi-language/cultural reasoning | **Not built** | None | No `adapters/nlp/` module exists; roadmap target only. |
 

@@ -192,13 +192,15 @@ configured), see `orchestration/CLAUDE.md` and
 
 ## Current Status
 
-V1.0's implementation is complete, while its live Qdrant/LLM validation remains pending.
-Tenant isolation, structured audit, document lifecycle, offline evaluation primitives, a
-hardened API/CLI, dependency/licence gates, and an immutable container build also exist; they do
-not make the incomplete V1.1/V1.2 deliverables complete. On top of that, a full 18-lot
-refactoring programme validated the `DocumentEngine` port against a second, real, structurally
-different engine (LangGraph) and closed with a real pilot comparison. See
-[docs/refactoring/README.md](../refactoring/README.md) for the historical evidence trail and
+V1.0's implementation is complete, while its live Qdrant/LLM validation remains pending. Tenant
+isolation, structured audit, document lifecycle, offline evaluation primitives, a hardened
+API/CLI, dependency/licence gates, and an immutable container build also exist — but they do not
+make the incomplete V1.1/V1.2 deliverables complete.
+
+On top of that, a full 18-lot refactoring programme validated the `DocumentEngine` port against a
+second, real, structurally different engine (LangGraph) and closed with a real pilot comparison.
+
+See [docs/refactoring/README.md](../refactoring/README.md) for the historical evidence trail and
 [ROADMAP.md](../../ROADMAP.md) for the authoritative remaining gaps.
 
 ---
@@ -377,11 +379,16 @@ implemented. Use `tests/unit/security/policies/test_tenant_isolation.py` as a re
 
 **Can I use this for production today?**
 Treat the package as a pre-alpha framework requiring deployment-specific qualification, not as a
-turnkey production platform. V1.0 code, API/CLI hardening, tenant isolation, structured audit,
-offline evaluation primitives, and a container build exist. Main CI runs live Qdrant/PostgreSQL
-integration, deterministic e2e and Compose smoke checks; the real-LLM e2e runs on the
-scheduled/manual nightly workflow. Readiness probes wired Qdrant/PostgreSQL/LLM health. V1.1/V1.2
-still have documented gaps, and production qualification remains deployment-specific. Start with [ROADMAP.md](../../ROADMAP.md), the
+turnkey production platform.
+
+- V1.0 code, API/CLI hardening, tenant isolation, structured audit, offline evaluation
+  primitives, and a container build exist.
+- Main CI runs live Qdrant/PostgreSQL integration, deterministic e2e and Compose smoke checks; the
+  real-LLM e2e runs on the scheduled/manual nightly workflow.
+- Readiness probes wired Qdrant/PostgreSQL/LLM health.
+- V1.1/V1.2 still have documented gaps, and production qualification remains deployment-specific.
+
+Start with [ROADMAP.md](../../ROADMAP.md), the
 [capability matrix](../architecture/capability-matrix.md), and the
 [deployment guide](deployment.md).
 

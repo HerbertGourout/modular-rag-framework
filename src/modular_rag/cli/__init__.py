@@ -10,12 +10,18 @@ from modular_rag.app.public import (
     PipelineManifest,
     SecurityError,
     count_expired_audit_events,
+    count_expired_feedback,
+    count_expired_review_items,
     create_default_registry,
     ingest_directory,
     ingest_path,
+    list_pending_review_items,
     migration_status,
     purge_expired_audit_events,
+    purge_expired_feedback,
+    purge_expired_review_items,
     resolve_manifest,
+    resolve_review_item,
     rollback_migrations,
     run_migrations,
     validate_capabilities,
@@ -33,8 +39,18 @@ app = typer.Typer(name="mrag", help="Modular RAG Framework CLI")
 # the application's normal runtime role (docs/guides/postgres-permissions.md).
 db_app = typer.Typer(name="db", help="PostgreSQL schema migration commands (ADR-0011)")
 audit_app = typer.Typer(name="audit", help="PostgreSQL audit-retention commands (ADR-0011)")
+# ADR-0014 (Batch 14): same `--dsn`-only, never `--manifest` structural
+# choice as `audit`/`db` above — feedback retention and review resolution
+# both need roles the application's own runtime DSN should never hold
+# (docs/guides/postgres-permissions.md).
+feedback_app = typer.Typer(
+    name="feedback", help="PostgreSQL feedback-retention commands (ADR-0014)"
+)
+review_app = typer.Typer(name="review", help="PostgreSQL human-review commands (ADR-0014)")
 app.add_typer(db_app, name="db")
 app.add_typer(audit_app, name="audit")
+app.add_typer(feedback_app, name="feedback")
+app.add_typer(review_app, name="review")
 
 # Typed exit codes (Lot 16a, docs/refactoring-plan.md — "CLI exit codes").
 # Previously every failure mode (a typo'd manifest path, a security-guard
@@ -334,3 +350,109 @@ def audit_purge(
         typer.echo(f"ERROR: {exc}", err=True)
         raise typer.Exit(code=_exit_code_for(exc)) from exc
     typer.echo(f"Purged {deleted} expired audit event(s).")
+
+
+@feedback_app.command(name="count-expired")
+def feedback_count_expired(
+    dsn: str = typer.Option(..., "--dsn", help="PostgreSQL DSN"),
+) -> None:
+    """Report how many feedback rows are past their retention_days window,
+    without deleting anything (ADR-0014). Safe to run under the
+    application's own INSERT/SELECT-only role."""
+    try:
+        count = count_expired_feedback(dsn)
+    except Exception as exc:
+        typer.echo(f"ERROR: {exc}", err=True)
+        raise typer.Exit(code=_exit_code_for(exc)) from exc
+    typer.echo(f"{count} feedback record(s) past retention.")
+
+
+@feedback_app.command(name="purge")
+def feedback_purge(
+    dsn: str = typer.Option(
+        ...,
+        "--dsn",
+        help="PostgreSQL DSN — the retention-job role, never the application's own runtime DSN",
+    ),
+) -> None:
+    """Permanently delete every feedback row past its retention_days window
+    (ADR-0014). Deliberately `--dsn`, never `--manifest` — same reasoning as
+    `audit purge`. Irreversible; use `feedback count-expired` first to
+    preview."""
+    try:
+        deleted = purge_expired_feedback(dsn)
+    except Exception as exc:
+        typer.echo(f"ERROR: {exc}", err=True)
+        raise typer.Exit(code=_exit_code_for(exc)) from exc
+    typer.echo(f"Purged {deleted} expired feedback record(s).")
+
+
+@review_app.command(name="list-pending")
+def review_list_pending(
+    dsn: str = typer.Option(..., "--dsn", help="PostgreSQL DSN"),
+) -> None:
+    """List unresolved review items (ADR-0014)."""
+    try:
+        items = list_pending_review_items(dsn)
+    except Exception as exc:
+        typer.echo(f"ERROR: {exc}", err=True)
+        raise typer.Exit(code=_exit_code_for(exc)) from exc
+    if not items:
+        typer.echo("No pending review items.")
+        return
+    for item in items:
+        typer.echo(
+            f"{item['id']}  answer_id={item['answer_id']}  reason={item['reason']!r}  "
+            f"confidence={item['confidence']}"
+        )
+
+
+@review_app.command(name="resolve")
+def review_resolve(
+    item_id: str = typer.Option(..., "--item-id"),
+    approved: bool = typer.Option(..., "--approved/--rejected"),
+    reviewer: str = typer.Option(..., "--reviewer"),
+    dsn: str = typer.Option(..., "--dsn", help="PostgreSQL DSN"),
+) -> None:
+    """Resolve one pending review item (ADR-0014). Raises an error if
+    `item_id` does not exist — see `ReviewQueue.resolve()`."""
+    try:
+        resolve_review_item(dsn, item_id, approved=approved, reviewer=reviewer)
+    except Exception as exc:
+        typer.echo(f"ERROR: {exc}", err=True)
+        raise typer.Exit(code=_exit_code_for(exc)) from exc
+    typer.echo(f"Resolved {item_id} (approved={approved}, reviewer={reviewer}).")
+
+
+@review_app.command(name="count-expired")
+def review_count_expired(
+    dsn: str = typer.Option(..., "--dsn", help="PostgreSQL DSN"),
+) -> None:
+    """Report how many review_items rows are past their retention_days
+    window, without deleting anything (ADR-0014)."""
+    try:
+        count = count_expired_review_items(dsn)
+    except Exception as exc:
+        typer.echo(f"ERROR: {exc}", err=True)
+        raise typer.Exit(code=_exit_code_for(exc)) from exc
+    typer.echo(f"{count} review item(s) past retention.")
+
+
+@review_app.command(name="purge")
+def review_purge(
+    dsn: str = typer.Option(
+        ...,
+        "--dsn",
+        help="PostgreSQL DSN — the retention-job role, never the application's own runtime DSN",
+    ),
+) -> None:
+    """Permanently delete every review_items row past its retention_days
+    window (ADR-0014), resolved or not — retention is a data-age policy,
+    not a resolution-status one. Irreversible; use `review count-expired`
+    first to preview."""
+    try:
+        deleted = purge_expired_review_items(dsn)
+    except Exception as exc:
+        typer.echo(f"ERROR: {exc}", err=True)
+        raise typer.Exit(code=_exit_code_for(exc)) from exc
+    typer.echo(f"Purged {deleted} expired review item(s).")

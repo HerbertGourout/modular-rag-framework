@@ -4,11 +4,12 @@ The Modular RAG Framework ships a FastAPI application (`src/modular_rag/api/`) s
 pipeline can be called as a network service rather than embedded as a Python library. This
 matters for any client whose existing application (a portal, a chatbot integration, an
 internal tool) is not written in Python, or that simply doesn't want heavy dependencies like
-`sentence-transformers` or `qdrant-client` inside its own process. The API is a thin
-`create_app()` factory over the same `ApplicationService` the CLI uses. The service selects the
-manifest's `DocumentEngine` for answer execution and retains native ingestion/retrieval-only
-use cases; the HTTP layer only performs request/response translation, authentication, resource
-lifecycle, and safe-error mapping
+`sentence-transformers` or `qdrant-client` inside its own process.
+
+The API is a thin `create_app()` factory over the same `ApplicationService` the CLI uses. The
+service selects the manifest's `DocumentEngine` for answer execution and retains native
+ingestion/retrieval-only use cases; the HTTP layer only performs request/response translation,
+authentication, resource lifecycle, and safe-error mapping
 (Lot 16a, [docs/refactoring-plan.md](../refactoring-plan.md)).
 
 `create_app(manifest_path, ...)` requires `manifest_path`, so bare `--factory` mode (which calls
@@ -91,14 +92,18 @@ middleware — an orchestrator's own readiness probe must never be blocked by an
 authenticated, non-generative call against the *specific configured model* —
 `client.models.retrieve(self.model)`, no completion/token cost — so a revoked, malformed,
 expired, or over-quota key, or a misspelled/retired/inaccessible model, is caught the same way a
-real `/answer` call would catch it. The call goes through a per-probe view of the client
+real `/answer` call would catch it.
+
+The call goes through a per-probe view of the client
 (`client.with_options(timeout=5.0, max_retries=0)`), never the shared production client — the
 probe is a single short attempt, not the 30s timeout and SDK-default 2 retries a real generation
 call uses. Cached for 30s (per generator instance, lock-guarded so a cache-miss under concurrent
 `/ready` calls triggers only one real provider request) so the unauthenticated, rate-limit-exempt
-`/ready` route can't be used to hammer the provider's own API. Residual limitation: this validates
-retrieving the model's metadata, not the specific chat/completion endpoint a real request uses —
-narrower than a full end-to-end check, but well beyond a bare credential-presence check. See
+`/ready` route can't be used to hammer the provider's own API.
+
+Residual limitation: this validates retrieving the model's metadata, not the specific
+chat/completion endpoint a real request uses — narrower than a full end-to-end check, but well
+beyond a bare credential-presence check. See
 [ADR-0010](../adr/0010-health-checkable-and-readiness-semantics.md) for the full rationale.
 
 **Response**
@@ -252,10 +257,12 @@ verifier configured **and no `governance.tenant_policy` wired on the loaded mani
 is unauthenticated (dev/local use only). If the manifest *does* wire a `tenant_policy`, a
 verifier is no longer optional: `create_app()` raises `ConfigurationError` at startup when one
 isn't given (Lot 1, tenant fail-closed) — plan for this at deployment time, not after a failed
-launch. With a verifier configured, `/answer` and `/retrieve` require
-`Authorization: Bearer <token>`; `/health` and `/ready` never do.
-`adapters/auth/keycloak_verifier.py`'s `KeycloakTokenVerifier` (Lot 11b) is the reference
-implementation, verifying against a real Keycloak realm's JWKS endpoint.
+launch.
+
+With a verifier configured, `/answer` and `/retrieve` require `Authorization: Bearer <token>`;
+`/health` and `/ready` never do. `adapters/auth/keycloak_verifier.py`'s `KeycloakTokenVerifier`
+(Lot 11b) is the reference implementation, verifying against a real Keycloak realm's JWKS
+endpoint.
 
 There is no per-tenant API-key scheme — identity comes only from the verified token's
 `TenantContext`, never from a request field a caller could set to claim a tenant.

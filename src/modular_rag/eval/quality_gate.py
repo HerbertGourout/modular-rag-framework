@@ -2,18 +2,24 @@
 report-only mode and promote agreed thresholds to blocking with recorded
 baselines").
 
-`QualityGate` compares an arbitrary `dict[str, float]` of "higher is
-better" metrics against a recorded baseline. It's deliberately generic over
-the metric dict rather than hardcoded to `BenchmarkReport` — callers build
-the dict themselves (`BenchmarkReport.quality_summary()` is the intended
-source), which keeps this module from needing to know about report-shaped
-data or about metrics whose "better" direction is inverted (e.g.
-`failure_rate`, lower is better — not something this gate's comparison
-logic supports, by design; gating on that needs a different comparison,
-not shoehorned into the same one).
+`QualityGate` compares an arbitrary `dict[str, float]` of metrics against a
+recorded baseline. It's deliberately generic over the metric dict rather
+than hardcoded to `BenchmarkReport` — callers build the dict themselves
+(`BenchmarkReport.quality_summary()` is the intended source for "higher is
+better" metrics; `BenchmarkReport.cost_summary()` for "lower is better"
+ones — see `eval/runners/benchmark.py`).
+
+Batch 13 (external plan — "Offline benchmark"): `lower_is_better` (below)
+was added so one gate instance can also enforce cost/latency/failure-rate
+regressions (worse == a larger number), not only quality regressions
+(worse == a smaller number) — the "configurable quality gate" acceptance
+criterion. Every metric not named in `lower_is_better` keeps the original
+"higher is better" comparison, so this is purely additive: an existing
+caller that never passes `lower_is_better` sees no behavior change.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -58,8 +64,11 @@ class QualityGate:
     blocking" half of the plan's phrasing.
 
     A metric present in `baseline` but missing from the `actual` dict passed
-    to `check()` is treated as `0.0` — fail-closed: an unexpectedly absent
-    metric looks like a regression, not like a silent pass.
+    to `check()` is treated as `0.0` for a "higher is better" metric
+    (fail-closed: an unexpectedly absent metric looks like a regression, not
+    a silent pass) — and, symmetrically, as `+inf` for a metric listed in
+    `lower_is_better`, so a missing cost/latency reading also fails closed
+    rather than looking like a suspiciously perfect zero.
     """
 
     def __init__(
@@ -68,22 +77,28 @@ class QualityGate:
         *,
         mode: GateMode = GateMode.REPORT_ONLY,
         tolerance: float = 0.0,
+        lower_is_better: frozenset[str] = frozenset(),
     ) -> None:
         self._baseline = dict(baseline)
         self._mode = mode
         self._tolerance = tolerance
+        self._lower_is_better = lower_is_better
 
     def check(self, actual: dict[str, float]) -> GateResult:
-        violations = [
-            GateViolation(
-                metric=name,
-                baseline=base,
-                actual=actual.get(name, 0.0),
-                tolerance=self._tolerance,
-            )
-            for name, base in self._baseline.items()
-            if actual.get(name, 0.0) < base - self._tolerance
-        ]
+        violations: list[GateViolation] = []
+        for name, base in self._baseline.items():
+            if name in self._lower_is_better:
+                observed = actual.get(name, math.inf)
+                regressed = observed > base + self._tolerance
+            else:
+                observed = actual.get(name, 0.0)
+                regressed = observed < base - self._tolerance
+            if regressed:
+                violations.append(
+                    GateViolation(
+                        metric=name, baseline=base, actual=observed, tolerance=self._tolerance
+                    )
+                )
         result = GateResult(mode=self._mode, passed=not violations, violations=violations)
         if self._mode == GateMode.BLOCKING and violations:
             raise QualityGateError(result)

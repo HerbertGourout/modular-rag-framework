@@ -252,6 +252,24 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\check.ps1 integr
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\check.ps1 all
 ```
 
+Install the repository's versioned Git hooks once per clone:
+
+```powershell
+# Windows
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\install_git_hooks.ps1
+```
+
+```bash
+# Linux/macOS
+sh scripts/install_git_hooks.sh
+```
+
+This sets the clone-local `core.hooksPath` to `.githooks`. The `pre-push` hook runs
+`scripts/check_docs.py` and blocks the push when links, retired APIs, blueprint labels, alert
+names, runbook anchors, or shared alert/SLO formulas are inconsistent. The hook validates and
+reports; it never rewrites documentation automatically. Git hooks can be bypassed locally, so the
+same documentation check remains mandatory in GitHub Actions.
+
 See [docs/guides/validation-protocol.md](docs/guides/validation-protocol.md) for full reference
 (`validation.md` now redirects there — this points at the canonical file directly).
 

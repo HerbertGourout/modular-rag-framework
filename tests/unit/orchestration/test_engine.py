@@ -11,6 +11,7 @@ import pytest
 
 from modular_rag.app.container import Container
 from modular_rag.contracts.audit import AuditEvent
+from modular_rag.contracts.feedback import Feedback, FeedbackRating
 from modular_rag.contracts.manifests import ComponentConfig, PipelineManifest
 from modular_rag.contracts.security import GuardResult
 from modular_rag.core.enums import RetrievalMethod
@@ -24,6 +25,7 @@ from modular_rag.core.models.trace import Trace, TraceStep
 from modular_rag.ingestion.lifecycle.hashing import document_key
 from modular_rag.ingestion.lifecycle.in_memory_ledger import InMemoryLifecycleLedger
 from modular_rag.orchestration.engine import RAGEngine
+from modular_rag.security.feedback.store import InMemoryFeedbackSink
 from modular_rag.security.policies.human_review import HumanReviewGate
 from modular_rag.security.policies.tenant_isolation import TenantIsolationPolicy
 from modular_rag.security.redaction.patterns import PatternRedactor
@@ -238,6 +240,7 @@ def _engine(
     tracer: object | None = None,
     embedder: _FakeEmbedder | None = None,
     meter: object | None = None,
+    feedback_sink: object | None = None,
 ) -> tuple[RAGEngine, Container]:
     manifest = PipelineManifest(
         id="test-pipeline",
@@ -271,6 +274,8 @@ def _engine(
         container.register("tracer", tracer)
     if meter is not None:
         container.register("meter", meter)
+    if feedback_sink is not None:
+        container.register("feedback_sink", feedback_sink)
     return RAGEngine(container), container
 
 
@@ -461,6 +466,106 @@ def test_tenant_policy_active_is_true_with_a_configured_tenant_policy() -> None:
     engine, _ = _engine(tenant_policy=TenantIsolationPolicy())
 
     assert engine.tenant_policy_active is True
+
+
+def test_indexer_accessor_returns_the_wired_indexer() -> None:
+    """Codex review (pass 1, MEDIUM-002): `scripts/run_benchmark.py` needs a
+    public way to reach the wired indexer (to call `.clear()` before each
+    ingest) without touching the private `_c` container — same "public
+    accessor" pattern already established for `chunker`/`retriever`."""
+    engine, container = _engine()
+
+    assert engine.indexer is container.indexer
+
+
+# ---------------------------------------------------------------------------
+# Batch 14 (ADR-0014): RAGEngine.record_feedback().
+# ---------------------------------------------------------------------------
+
+
+def test_feedback_sink_review_queue_and_lifecycle_ledger_accessors() -> None:
+    """Same "public accessor" pattern as `indexer` above, added for
+    `scripts/run_drift_check.py`."""
+    fake_sink = InMemoryFeedbackSink()
+    review_queue = HumanReviewGate()
+    ledger = InMemoryLifecycleLedger()
+    engine, container = _engine(
+        feedback_sink=fake_sink, review_queue=review_queue, lifecycle_ledger=ledger
+    )
+
+    assert engine.feedback_sink is container.feedback_sink is fake_sink
+    assert engine.review_queue is container.review_queue is review_queue
+    assert engine.lifecycle_ledger is container.lifecycle_ledger is ledger
+
+
+def test_record_feedback_raises_when_no_feedback_sink_configured() -> None:
+    engine, _ = _engine()
+
+    with pytest.raises(ConfigurationError, match="No feedback_sink configured"):
+        engine.record_feedback(Feedback(trace_id="t1", idempotency_key="k1"))
+
+
+def test_record_feedback_stores_it_in_the_wired_sink() -> None:
+    sink = InMemoryFeedbackSink()
+    engine, _ = _engine(feedback_sink=sink)
+
+    result = engine.record_feedback(
+        Feedback(trace_id="t1", idempotency_key="k1", rating=FeedbackRating.THUMBS_UP)
+    )
+
+    assert len(sink.records) == 1
+    assert sink.records[0].rating == FeedbackRating.THUMBS_UP
+    assert result is sink.records[0]  # returns the record actually stored
+
+
+def test_record_feedback_returns_the_canonical_id_on_an_idempotent_retry() -> None:
+    """Codex review pass 1, MEDIUM-001: each HTTP attempt constructs a
+    `Feedback` with a fresh random `id`; a retry with the same
+    `(tenant_id, idempotency_key)` must return the *originally* stored
+    record's id, not the freshly-constructed retry object's own id (which
+    was never actually persisted — the sink's idempotency guard discarded
+    it)."""
+    sink = InMemoryFeedbackSink()
+    engine, _ = _engine(feedback_sink=sink)
+    first_attempt = Feedback(trace_id="t1", idempotency_key="k1", rating=FeedbackRating.THUMBS_UP)
+    retry_attempt = Feedback(trace_id="t1", idempotency_key="k1", rating=FeedbackRating.THUMBS_UP)
+    assert first_attempt.id != retry_attempt.id  # two independent constructions
+
+    first_result = engine.record_feedback(first_attempt)
+    retry_result = engine.record_feedback(retry_attempt)
+
+    assert len(sink.records) == 1
+    assert retry_result.id == first_result.id == sink.records[0].id
+
+
+def test_record_feedback_raises_when_correction_text_given_without_a_redactor() -> None:
+    sink = InMemoryFeedbackSink()
+    engine, _ = _engine(feedback_sink=sink)
+
+    with pytest.raises(ConfigurationError, match="no redactor is configured"):
+        engine.record_feedback(
+            Feedback(trace_id="t1", idempotency_key="k1", correction_text="alice@example.com")
+        )
+    assert len(sink.records) == 0  # refused before ever reaching the sink
+
+
+def test_record_feedback_redacts_correction_text_when_a_redactor_is_configured() -> None:
+    sink = InMemoryFeedbackSink()
+    engine, _ = _engine(feedback_sink=sink, redactor=PatternRedactor())
+
+    result = engine.record_feedback(
+        Feedback(
+            trace_id="t1", idempotency_key="k1", correction_text="reach me at alice@example.com"
+        )
+    )
+
+    assert "[REDACTED]" in sink.records[0].correction_text
+    assert "alice@example.com" not in sink.records[0].correction_text
+    # The returned record reflects redaction too — a caller must not assume
+    # the object it passed in is what ended up stored (pass 1 security
+    # review finding).
+    assert result.correction_text == sink.records[0].correction_text
+    assert "alice@example.com" not in result.correction_text
 
 
 def _hit(tenant_id: str | None) -> RetrievedChunk:
@@ -994,7 +1099,7 @@ def test_retrieve_trace_step_omits_degraded_sources_when_none_reported() -> None
     assert "degraded_sources" not in retrieve_step.metadata
 
 
-def test_retrieve_trace_step_omits_degraded_sources_when_the_retriever_does_not_report_them() -> None:
+def test_retrieve_trace_step_omits_degraded_sources_when_the_retriever_does_not_report_them():
     """Plain _FakeRetriever (used throughout this file) has no
     last_degraded_sources attribute at all — getattr() must not raise."""
     telemetry = _FakeTelemetry()
@@ -1445,7 +1550,9 @@ def test_answer_emits_generation_token_counters_with_model_label() -> None:
 
 def test_answer_emits_generation_cost_counter_when_generator_sets_it() -> None:
     meter = _RecordingMeter()
-    generator = _FakeGenerator(input_tokens=100, output_tokens=50, model="gpt-4o-mini", cost_usd=0.00125)
+    generator = _FakeGenerator(
+        input_tokens=100, output_tokens=50, model="gpt-4o-mini", cost_usd=0.00125
+    )
     engine, _ = _engine(generator=generator, meter=meter)
 
     engine.answer("What is RAG?")
