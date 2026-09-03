@@ -466,19 +466,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [lint, test-unit, test-contract]
-    # security-events: write is required by github/codeql-action/upload-sarif
-    # below (Codex review MEDIUM-003) to publish findings to the repo's code
-    # scanning tab; contents: read matches actions/checkout's own default.
-    # actions: read silences upload-sarif's own internal telemetry call to
-    # GitHub's "get a workflow run" API -- without it, that call fails with
-    # "Resource not accessible by integration" (visible in the job log as a
-    # warning/error either way; upload-sarif treats it as non-fatal and
-    # still publishes the SARIF), but there is no reason to leave a
-    # misleading error in the log for something this cheap to grant.
+    # contents: read matches actions/checkout's own default. No
+    # security-events/actions permissions needed: this repo is private and
+    # personally-owned, and GitHub Advanced Security (which Code scanning
+    # is part of) is only available for private repos owned by an
+    # Organization on a plan that includes it -- never for a private,
+    # personal-account repo, confirmed directly from this repo's own
+    # Security > Code security page ("Advanced Security is only available
+    # for Organizations"). The SARIF-upload step this permission set used
+    # to support was removed for exactly that reason (see git history for
+    # the step this replaced) -- Grype's HIGH/CRITICAL gate below and the
+    # readable-table step remain the actual, working signal.
     permissions:
       contents: read
-      security-events: write
-      actions: read
     steps:
       - uses: actions/checkout@v4
       - name: Build the immutable runtime image (Dockerfile, Lot 16b)
@@ -503,24 +503,32 @@ jobs:
         # risk a supply-chain-hardening lot should not casually reintroduce by
         # picking the more commonly-templated default without checking its own
         # history first. See docs/guides/dependency-lock.md for the sources.
-        id: grype-scan
         uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
         with:
           image: "modular-rag:ci"
           severity-cutoff: high
           fail-build: true
-          output-format: sarif
+          output-format: table
       - name: "Lot 9: print Grype findings as a readable table in the job log"
-        # The scan above emits SARIF only -- a machine-readable format meant
-        # for the Security tab, not the job log -- so a HIGH/CRITICAL finding
-        # that fails the build above is otherwise invisible without opening
-        # Security > Code scanning alerts (which itself needs the SARIF
-        # upload below to have already succeeded). This re-runs the same
-        # scan with grype's own default table output, purely for log
-        # visibility: fail-build is false (the SARIF step above already
-        # owns the actual gate) and if: always() prints it even when that
-        # step already failed the job, so the failure's own cause is right
-        # there in the log that reported it, not one extra click away.
+        # A second, non-gating run purely for log visibility: fail-build is
+        # false (the scan step above already owns the actual gate) and
+        # if: always() prints it even when that step already failed the
+        # job, so the failure's own cause is right there in the log that
+        # reported it, not hidden behind a separate artifact or tab.
+        #
+        # No SARIF/Security-tab publishing here (a prior version of this
+        # job uploaded one via github/codeql-action/upload-sarif): GitHub
+        # Advanced Security -- which Code scanning is part of -- is only
+        # available for private repos owned by an Organization on a plan
+        # that includes it, never for a private, personal-account repo,
+        # confirmed directly from this repo's own Security > Code security
+        # page ("Advanced Security is only available for Organizations").
+        # This repo is private and personally owned, so that upload step
+        # always failed with "Code scanning is not enabled for this
+        # repository" and was removed rather than kept as permanent,
+        # structurally-dead CI weight (see git history for the step this
+        # replaced). The severity-cutoff/fail-build gate above and this
+        # table remain the actual, working signal.
         if: always()
         uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
         with:
@@ -528,27 +536,3 @@ jobs:
           severity-cutoff: high
           fail-build: false
           output-format: table
-      - name: "Lot 9: publish the Grype SARIF report (non-blocking MEDIUM/LOW findings, retained)"
-        # Without this, the SARIF file the step above requests lives only at
-        # its temporary output path and is discarded with the runner --
-        # HIGH/CRITICAL still fail the job via fail-build above, but nothing
-        # below that severity was ever reviewable, trended, or triaged
-        # (Codex review MEDIUM-003). `if: always()` publishes it even when
-        # the scan step above already failed the job on a HIGH/CRITICAL
-        # finding, so that failure's own detail is retained too.
-        #
-        # continue-on-error: true (CI review finding): this step's own name
-        # says "non-blocking", but nothing previously enforced that -- it
-        # requires the repository's "Code scanning" feature to be enabled
-        # (Settings > Security > Code security), a repo-level setting this
-        # workflow cannot itself turn on, and fails outright when it is not
-        # ("Code scanning is not enabled for this repository"). The actual
-        # security gate is severity-cutoff/fail-build on the scan step
-        # above, which stays fully blocking; this step is purely retention
-        # for the Security tab and must not fail the whole job over a
-        # repository setting unrelated to whether the image is vulnerable.
-        if: always() && steps.grype-scan.outputs.sarif != ''
-        continue-on-error: true
-        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
-        with:
-          sarif_file: ${{ steps.grype-scan.outputs.sarif }}
