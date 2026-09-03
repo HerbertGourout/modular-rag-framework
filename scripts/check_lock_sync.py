@@ -80,6 +80,7 @@ _REQ_NAME_RE = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)")
 _BUILD_SYSTEM_HATCHLING_RE = re.compile(r'requires\s*=\s*\[[^\]]*"hatchling==([^"]+)"')
 _DOCKERFILE_HATCHLING_PIN_RE = re.compile(r"\bhatchling==(\S+)")
 _DRY_RUN_TIMEOUT_SECONDS = 180
+_PYTORCH_CPU_INDEX = "https://download.pytorch.org/whl/cpu"
 
 
 class LockSyncError(Exception):
@@ -249,13 +250,19 @@ def find_uncovered_transitive_dependencies(
             "--quiet",
             "--no-cache-dir",
             "--ignore-installed",
-            "-c",
-            str(constraints_path),
             "--report",
             str(report_path),
-            "-e",
-            f"{PROJECT_ROOT}[{','.join(dockerfile_extras)}]",
         ]
+        if re.search(r"^torch==[^\r\n]*\+cpu(?:\s|\\|$)", lock_text, re.MULTILINE):
+            cmd.extend(["--extra-index-url", _PYTORCH_CPU_INDEX])
+        cmd.extend(
+            [
+                "-c",
+                str(constraints_path),
+                "-e",
+                f"{PROJECT_ROOT}[{','.join(dockerfile_extras)}]",
+            ]
+        )
         env = dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8", NO_COLOR="1")
         try:
             result = subprocess.run(
