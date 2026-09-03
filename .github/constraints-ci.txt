@@ -1,0 +1,3 @@
+# Keep GitHub-hosted runners within their disk budget. The CPU wheel is
+# sufficient for CI because tests do not download or execute embedding models.
+torch==2.8.0+cpu
