@@ -1,0 +1,72 @@
+# Grype vulnerability-scan policy (Lot 9, docs/guides/dependency-lock.md's "Image
+# vulnerability scan" section). Auto-detected by anchore/scan-action (the `config`
+# input is not set in .github/workflows/ci.yml, so Grype's default config-file
+# discovery picks this up for both scan steps in the container-build job).
+#
+# severity-cutoff: high (set in the workflow, not here) fails the build on any
+# HIGH or CRITICAL finding. Without the rule below, that gate is permanently
+# unsatisfiable for this image: every current python:3.12-slim (Debian trixie)
+# build carries HIGH/CRITICAL findings on system packages (perl-base, libc6/
+# libc-bin, libncursesw6/libtinfo6/ncurses-*, libsqlite3-0, libacl1, gzip, ...)
+# that Debian's own security team has explicitly decided not to backport a fix
+# for -- confirmed via Grype's own "Fixed In: (won't fix)" column against the
+# real CI failure on 2026-09-03. No image refresh, dependency bump, or code
+# change in this repository can resolve a fix Debian itself has declined to
+# ship.
+ignore:
+  # Ignore by fix-state, not by hand-listed CVE ID (Codex-review-style
+  # reasoning already applied elsewhere in this repo, e.g. Dockerfile's build
+  # backend pin -- "why the lock, not a hand-picked transitive list"): an
+  # enumerated CVE list would need editing every time Debian's vulnerability
+  # database adds a new won't-fix entry on any of these same packages, going
+  # red again with zero actual change on this project's side. `fix-state` is
+  # Grype's own first-class mechanism for exactly this category (see
+  # grype/vulnerability/fix.go's FixStateWontFix, and the CLI's own
+  # `--fail-on-notfixed`/`--only-fixed` flags) -- current and future won't-fix
+  # findings are still printed in full by the "print Grype findings as a
+  # readable table" log step (nothing here is hidden, only unblocked), so a
+  # human reviewing the job log always sees the complete picture; this rule
+  # only changes whether the *build* fails over a distro-level decision this
+  # project cannot act on. Reviewed and accepted by Herbert Gourout,
+  # 2026-09-03.
+  - fix-state: wont-fix
+    reason: >-
+      Debian (trixie) has explicitly declined to backport a fix for this
+      vulnerability at the currently-pinned python:3.12-slim base image.
+      No action available on this project's side; still visible, unblocking
+      only. Accepted 2026-09-03.
+
+  # These three DO have a fix -- but only in Python 3.13.13+/3.14.4+/3.15.0a8+
+  # (and successors), never in the 3.12.x line this project's base image
+  # pins (confirmed against the real CI failure on 2026-09-03: Grype's own
+  # "Fixed In" column names only 3.13+/3.14+/3.15+ versions, and Debian
+  # trixie's python3.12 package has not backported them). `fix-state` here is
+  # "not-fixed", not "wont-fix" -- a real fix exists, just not on the
+  # interpreter line this repository currently targets -- so the blanket rule
+  # above does not (and should not) cover them. Moving to Python 3.13+ is a
+  # real compatibility decision (dependency wheels, tests, CI matrix) outside
+  # the scope of a base-image digest refresh; tracked as a separate, explicit
+  # accepted risk rather than silently ignored by category. Reviewed and
+  # accepted by Herbert Gourout, 2026-09-03 -- revisit when this project
+  # moves its minimum supported Python version.
+  - vulnerability: CVE-2026-4224
+    package:
+      name: python
+    reason: >-
+      Fixed only in Python 3.13.13+/3.14.4+/3.15.0a8+; this project's base
+      image pins 3.12.x. Accepted 2026-09-03, revisit at the next Python
+      version bump.
+  - vulnerability: CVE-2026-7210
+    package:
+      name: python
+    reason: >-
+      Fixed only in Python 3.13.14+/3.14.6+/3.15.0b2+; this project's base
+      image pins 3.12.x. Accepted 2026-09-03, revisit at the next Python
+      version bump.
+  - vulnerability: CVE-2026-3644
+    package:
+      name: python
+    reason: >-
+      Fixed only in Python 3.13.13+/3.14.4+/3.15.0a8+; this project's base
+      image pins 3.12.x. Accepted 2026-09-03, revisit at the next Python
+      version bump.
