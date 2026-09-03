@@ -90,7 +90,7 @@ jobs:
         # was never actually run against this workflow. Found and fixed in Lot 18.
         run: |
           pip install --upgrade pip
-          pip install --extra-index-url https://download.pytorch.org/whl/cpu -c .github/constraints-ci.txt -e .[v1,langgraph,dev]
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -c .github/constraints-ci.txt -e .[v1,v4,langgraph,dev]
       - name: Run unit tests (no external services)
         run: pytest tests/unit/ -v --tb=short
 
@@ -106,7 +106,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install --extra-index-url https://download.pytorch.org/whl/cpu -c .github/constraints-ci.txt -e .[v1,dev]
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -c .github/constraints-ci.txt -e .[v1,v4,dev]
       - name: Run contract conformance tests
         run: pytest tests/contract/ -v --tb=short
 
@@ -360,7 +360,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install --extra-index-url https://download.pytorch.org/whl/cpu -c .github/constraints-ci.txt -e .[v1,langgraph,dev]
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -c .github/constraints-ci.txt -e .[v1,v4,langgraph,dev]
       - name: Run all tests with coverage
         run: pytest tests/unit/ tests/contract/ --cov=src/modular_rag --cov-report=term-missing --cov-report=xml -v
       - name: Upload coverage report
