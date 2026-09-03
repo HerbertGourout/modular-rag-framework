@@ -536,7 +536,19 @@ jobs:
         # (Codex review MEDIUM-003). `if: always()` publishes it even when
         # the scan step above already failed the job on a HIGH/CRITICAL
         # finding, so that failure's own detail is retained too.
+        #
+        # continue-on-error: true (CI review finding): this step's own name
+        # says "non-blocking", but nothing previously enforced that -- it
+        # requires the repository's "Code scanning" feature to be enabled
+        # (Settings > Security > Code security), a repo-level setting this
+        # workflow cannot itself turn on, and fails outright when it is not
+        # ("Code scanning is not enabled for this repository"). The actual
+        # security gate is severity-cutoff/fail-build on the scan step
+        # above, which stays fully blocking; this step is purely retention
+        # for the Security tab and must not fail the whole job over a
+        # repository setting unrelated to whether the image is vulnerable.
         if: always() && steps.grype-scan.outputs.sarif != ''
+        continue-on-error: true
         uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
         with:
           sarif_file: ${{ steps.grype-scan.outputs.sarif }}
