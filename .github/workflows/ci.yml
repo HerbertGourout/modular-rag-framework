@@ -431,7 +431,27 @@ jobs:
         # whatever pip-audit's own environment happens to resolve --
         # correct regardless of which venv is active, and doesn't require
         # the shipped-venv above to exist for this step specifically.
-        run: pip-audit -r requirements-lock.txt
+        #
+        # --disable-pip: requirements-lock.txt is already a fully pinned,
+        # hashed lock (every entry is name==version), so pip-audit needs no
+        # real dependency resolution -- confirmed this repo's own lock
+        # already satisfies --disable-pip's stated precondition ("hashed
+        # requirements files"). Adding --extra-index-url instead (so pip
+        # could resolve the lock's `+cpu`-tagged torch pin, which only
+        # exists on PyTorch's own index) was tried and rejected: with both
+        # indices in play, pip resolved markupsafe==3.0.3 from PyTorch's
+        # mirror instead of PyPI, and that copy's hash did not match the
+        # lock's own recorded hash -- pip's hash-checking mode (triggered
+        # automatically the instant any entry has a --hash) correctly
+        # refused to install it, but that means invoking pip at all here is
+        # fragile in a way this scan doesn't need to depend on.
+        # --disable-pip skips actual installation entirely, at the cost of
+        # `torch` itself being reported as "not found on PyPI, could not be
+        # audited" (its `+cpu` build tag has no separate PyPI metadata
+        # entry) -- confirmed via a real local run: every other package in
+        # the lock is still audited, and the run exits 0 with "No known
+        # vulnerabilities found" when the lock is clean.
+        run: pip-audit -r requirements-lock.txt --disable-pip
       - name: "Licence gate: scripts/check_licenses.py against the shipped-only venv"
         run: python scripts/check_licenses.py --python shipped-venv/bin/python
       - name: "Generate SBOM: CycloneDX, from the shipped-only venv"
