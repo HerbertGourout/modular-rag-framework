@@ -510,6 +510,24 @@ jobs:
           severity-cutoff: high
           fail-build: true
           output-format: sarif
+      - name: "Lot 9: print Grype findings as a readable table in the job log"
+        # The scan above emits SARIF only -- a machine-readable format meant
+        # for the Security tab, not the job log -- so a HIGH/CRITICAL finding
+        # that fails the build above is otherwise invisible without opening
+        # Security > Code scanning alerts (which itself needs the SARIF
+        # upload below to have already succeeded). This re-runs the same
+        # scan with grype's own default table output, purely for log
+        # visibility: fail-build is false (the SARIF step above already
+        # owns the actual gate) and if: always() prints it even when that
+        # step already failed the job, so the failure's own cause is right
+        # there in the log that reported it, not one extra click away.
+        if: always()
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
+        with:
+          image: "modular-rag:ci"
+          severity-cutoff: high
+          fail-build: false
+          output-format: table
       - name: "Lot 9: publish the Grype SARIF report (non-blocking MEDIUM/LOW findings, retained)"
         # Without this, the SARIF file the step above requests lives only at
         # its temporary output path and is discarded with the runner --
