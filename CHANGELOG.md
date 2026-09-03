@@ -5,6 +5,29 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed — container-build supply-chain hardening (2026-09-03)
+
+- CPU-only PyTorch resolves consistently across every install path (CI jobs, the Dockerfile's
+  runtime stage, and the license/SBOM job's dedicated venv) via
+  `--extra-index-url https://download.pytorch.org/whl/cpu`; `pip-audit` instead runs with
+  `--disable-pip` against the fully pinned, hashed lock, avoiding a hash-checking-mode conflict
+  the extra index URL caused for `markupsafe`.
+- `scripts/run_benchmark.py`'s golden-set loader derives deterministic UUID5 ids for corpus
+  chunks instead of passing raw YAML slugs — Qdrant only accepts unsigned-int or UUID point ids.
+- Fixed a stale `HybridRetriever._bm25` attribute reference (renamed to `_lexical` at Lot 5) and
+  redirected `structlog`'s default stdout logger to stderr in the deterministic e2e replay script,
+  which was corrupting the JSON contract the subprocess writes to stdout.
+- `python:3.12-slim` base image digest refreshed to pick up Debian's `openssl`/`libssl3t64`
+  security update; Grype's vulnerability gate now prints its findings as a readable table in the
+  job log (previously SARIF-only, invisible outside the Security tab). Added `.grype.yaml`: a
+  `fix-state: wont-fix` rule accepts CVEs Debian has explicitly declined to backport (no image
+  refresh or dependency change can resolve those), plus three individually-reviewed entries for
+  Python-interpreter CVEs fixed only on 3.13+/3.14+/3.15+ lines this project doesn't yet target.
+- Removed the Grype SARIF upload step: GitHub Advanced Security / Code scanning is unavailable for
+  a private, personal-account repository regardless of plan, so the step could never succeed here.
+- Accepted `psycopg`/`psycopg-binary`/`psycopg-pool` (LGPL-3.0-only) in `.claude/license-baseline.txt`
+  — same unmodified-dependency reasoning already applied to `chardet`.
+
 ### Documentation — product and implementation alignment (2026-09-02)
 
 - Reframed the project as a portable Document AI assurance framework with a native reference RAG
