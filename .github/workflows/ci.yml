@@ -469,9 +469,16 @@ jobs:
     # security-events: write is required by github/codeql-action/upload-sarif
     # below (Codex review MEDIUM-003) to publish findings to the repo's code
     # scanning tab; contents: read matches actions/checkout's own default.
+    # actions: read silences upload-sarif's own internal telemetry call to
+    # GitHub's "get a workflow run" API -- without it, that call fails with
+    # "Resource not accessible by integration" (visible in the job log as a
+    # warning/error either way; upload-sarif treats it as non-fatal and
+    # still publishes the SARIF), but there is no reason to leave a
+    # misleading error in the log for something this cheap to grant.
     permissions:
       contents: read
       security-events: write
+      actions: read
     steps:
       - uses: actions/checkout@v4
       - name: Build the immutable runtime image (Dockerfile, Lot 16b)
