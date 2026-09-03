@@ -419,7 +419,9 @@ jobs:
         run: |
           python -m venv shipped-venv
           shipped-venv/bin/pip install --upgrade pip
-          shipped-venv/bin/pip install --no-cache-dir --no-require-hashes -c requirements-lock.txt -e ".[v1,langgraph,postgres,auth]"
+          shipped-venv/bin/pip install --no-cache-dir --no-require-hashes \
+            --extra-index-url https://download.pytorch.org/whl/cpu \
+            -c requirements-lock.txt -e ".[v1,langgraph,postgres,auth]"
       - name: "Install supply-chain tooling (unconstrained; not part of the shipped image)"
         run: |
           pip install --upgrade pip
