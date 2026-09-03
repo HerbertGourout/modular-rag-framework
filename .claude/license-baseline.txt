@@ -21,3 +21,17 @@ pymupdf=AGPL-3.0/Artifex dual license; PDF parsing dependency; pending explicit 
 # permits normal dependency use without imposing LGPL terms on the
 # depending project, unlike GPL/AGPL's stronger copyleft.
 chardet=LGPLv2+; transitive dependency, standard dynamic-dependency use permitted under LGPL terms
+
+# LGPL-3.0-only. The PostgreSQL driver (`psycopg`, `[binary,pool]` extras)
+# used directly throughout adapters/audit/, adapters/lifecycle/,
+# adapters/feedback/, and adapters/review/ (ADR-0011). Same reasoning
+# already accepted above for chardet: this project uses psycopg as an
+# unmodified, unredistributed dependency -- LGPL's linking exception
+# applies to exactly this use (importing/calling the library), and only
+# imposes its copyleft terms on modifications to psycopg's own source,
+# which this project never makes. Explicitly reviewed and accepted by
+# Herbert Gourout, 2026-09-03, in response to the supply-chain CI gate's
+# first real trigger on this dependency family.
+psycopg=LGPL-3.0-only; direct PostgreSQL driver dependency, unmodified/unredistributed, standard dynamic-dependency use permitted under LGPL terms (accepted 2026-09-03)
+psycopg-binary=LGPL-3.0-only; same acceptance as psycopg -- binary distribution of the same driver
+psycopg-pool=LGPL-3.0-only; same acceptance as psycopg -- connection-pooling extra of the same driver
