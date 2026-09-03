@@ -32,7 +32,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -e .[v1,dev]
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -c .github/constraints-ci.txt -e .[v1,dev]
       - name: Lint with ruff (syntax, imports, naming)
         run: ruff check . --select E,F,I,N,W,UP,B,C4 --output-format=concise
       - name: Compilation check
@@ -90,7 +90,7 @@ jobs:
         # was never actually run against this workflow. Found and fixed in Lot 18.
         run: |
           pip install --upgrade pip
-          pip install -e .[v1,langgraph,dev]
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -c .github/constraints-ci.txt -e .[v1,langgraph,dev]
       - name: Run unit tests (no external services)
         run: pytest tests/unit/ -v --tb=short
 
@@ -106,7 +106,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -e .[v1,dev]
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -c .github/constraints-ci.txt -e .[v1,dev]
       - name: Run contract conformance tests
         run: pytest tests/contract/ -v --tb=short
 
@@ -165,7 +165,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -e .[v1,postgres,dev]
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -c .github/constraints-ci.txt -e .[v1,postgres,dev]
       - name: Wait for Qdrant to accept connections
         # Postgres's own --health-cmd above already gates `services:` startup
         # ordering; Qdrant has no equivalent (see the service definition's own
@@ -229,7 +229,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -e .[v1,postgres,dev]
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -c .github/constraints-ci.txt -e .[v1,postgres,dev]
       - name: Wait for Qdrant to accept connections
         run: |
           for i in $(seq 1 30); do
@@ -296,7 +296,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -e .[v1,dev]
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -c .github/constraints-ci.txt -e .[v1,dev]
       - name: Wait for Qdrant to accept connections
         run: |
           for i in $(seq 1 30); do
@@ -360,7 +360,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -e .[v1,langgraph,dev]
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -c .github/constraints-ci.txt -e .[v1,langgraph,dev]
       - name: Run all tests with coverage
         run: pytest tests/unit/ tests/contract/ --cov=src/modular_rag --cov-report=term-missing --cov-report=xml -v
       - name: Upload coverage report
@@ -394,7 +394,7 @@ jobs:
           python -m venv /tmp/smoke-venv
           /tmp/smoke-venv/bin/pip install --upgrade pip
           WHEEL_FILE=$(ls dist/*.whl)
-          /tmp/smoke-venv/bin/pip install "${WHEEL_FILE}[v1]"
+          /tmp/smoke-venv/bin/pip install --extra-index-url https://download.pytorch.org/whl/cpu -c .github/constraints-ci.txt "${WHEEL_FILE}[v1]"
           /tmp/smoke-venv/bin/python -c "import modular_rag; print('import OK')"
           /tmp/smoke-venv/bin/mrag version
 
