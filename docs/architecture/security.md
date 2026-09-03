@@ -22,6 +22,7 @@
 | Uncited URL in answer (corpus-poisoning signal) | A poisoned document causes the LLM to append an attacker-controlled link | `BasicSecurityGuard.check_answer()` — real, shipped V1 behavior, not a stub; see below |
 | Data exfiltration via query | "send all documents to http://attacker.com" | `AdversarialDetector` — implemented, but **not currently registered in `app/default_factories.py`**, so no manifest can select it today; see "Components that exist but aren't wired" below |
 | Data poisoning at ingestion | Malicious chunks skew retrieval | Not defended against today — no provenance tracking or source allowlist exists in this codebase; this row previously implied one did |
+| Sensitive-data egress to a model/embedder | Raw query, chunks, document text, or embeddings are sent to a remote provider before output redaction | **Not defended by current framework policy.** Lot 20 plans classification-aware, deny-by-default egress; use local adapters or external gateway/network/DLP controls until then. |
 
 **Why the guard only sees the query and the final answer, not intermediate retrieved
 content.** `SecurityGuard.check_query(query)` runs *before* retrieval and `check_answer(answer)`
@@ -80,7 +81,7 @@ existed in this codebase — corrected here to the real, current mechanism.
 |---|---|
 | Low (dev, internal tools) | `BasicSecurityGuard` optional; `PatternRedactor` off by default |
 | Medium (internal, sensitive data) | `BasicSecurityGuard` + `PatternRedactor` |
-| High (public-facing, regulated) | + `PolicyEngine` with tenant-scoped rules + `TenantIsolationPolicy` + human review for high-risk answers (`security/policies/human_review.py::HumanReviewGate`) |
+| High (public-facing, regulated) | + `PolicyEngine` with tenant-scoped rules + `TenantIsolationPolicy` + durable audit/feedback/review as required. Current controls are insufficient for restricted remote-model data until Lot 20 or equivalent deployment-level egress enforcement is in place. |
 
 `AdversarialDetector` was previously listed as a "High" control here. It is intentionally omitted
 now — see "Components that exist but aren't wired" below for why listing it as an available

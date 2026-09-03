@@ -2,7 +2,7 @@
 
 **For**: All team members (developers, architects, product managers, stakeholders)
 **Purpose**: Understand what this framework is, why it exists, what it does now, and what's coming
-**Updated**: 2026-08-26 (implementation/documentation alignment audit)
+**Updated**: 2026-09-01 (product-positioning and implementation alignment)
 **Status**: V1.0 implementation complete and live-validated in integration/e2e workflows;
 V1.1 evaluation and V1.2 audit are partially built. The 18-lot engine-agnostic control-plane
 refactoring programme is complete — see [ROADMAP.md](../../ROADMAP.md) for the current capability
@@ -38,10 +38,10 @@ status and [docs/refactoring/README.md](../refactoring/README.md) for the histor
 
 ## Executive Summary
 
-**Modular RAG Framework** is a production-grade, reusable foundation for building enterprise
-Retrieval-Augmented Generation (RAG) systems — an engine-neutral **control plane**: governance,
-audit, evaluation, tenant isolation, and portability owned natively, wrapped around whichever
-execution engine (native or a selected external one) actually runs a request.
+**Modular RAG Framework** is a pre-alpha, portable assurance and delivery framework for Document
+AI solutions. It combines an engine-neutral control-plane direction with a native reference RAG
+engine. The goal is to complement existing orchestration frameworks and cloud platforms with
+portable policy, evidence, and conformance—not to replace their ecosystems.
 
 ### Key facts (verified against current code, not aspirational)
 
@@ -55,6 +55,9 @@ execution engine (native or a selected external one) actually runs a request.
   current LangGraph graph is fixed and does not itself implement multi-agent behaviour.
 - **V2.0's Policy Engine**: real and shipped (`security/policies/policy_engine.py`,
   `TenantIsolationPolicy`) — not deferred, per ADR-0005 §5.1.
+- **Feedback, durable review, and offline drift**: implemented in Batch 14, including the
+  authenticated `POST /feedback` route and PostgreSQL adapters. These capabilities currently
+  belong to the native path; they are not uniformly enforced by the LangGraph adapter.
 - **V2.1 (multi-agent teams), V3.0 (GraphRAG), V3.2 (fine-tuning execution), V5.0 (multimodal
   execution)**: delegated to the selected external engine, not native builds. A prior native
   prototype for the agent roles existed and was removed (zero test coverage, zero consumers) in
@@ -66,56 +69,60 @@ execution engine (native or a selected external one) actually runs a request.
 
 ### The Problem
 
-Most RAG projects start from scratch:
-- ❌ Reinventing chunking strategy (weeks wasted)
-- ❌ Building security guards manually (compliance risk)
-- ❌ No evaluation framework (ship low-quality systems)
-- ❌ No audit trail (regulatory violations)
-- ❌ Tightly coupled to one LLM (locked to vendor)
-- ❌ No observability (black box in production)
+Enterprise teams often operate multiple RAG and Document AI stacks. Their libraries and cloud
+platforms may already provide orchestration, tracing, evaluation, and guardrails, but the policy
+and evidence model often differs between applications. This makes cross-project qualification,
+provider changes, and consistent data-egress decisions harder to demonstrate.
 
 ### The Solution
 
-A reusable, governed, observable control plane that:
+A reusable assurance and delivery layer that currently:
 - ✅ Orchestrates RAG components via YAML manifests (no Python wiring)
 - ✅ Enforces clean architecture (hexagonal layering, checked in CI)
 - ✅ Includes security by design (guards, redaction, fail-closed tenant isolation)
-- ✅ Provides observability from day one (tracing, audit events)
-- ✅ Evaluation-as-contract (quality gates, versioned metrics)
-- ✅ Works with any LLM, any vector store, any chunker — and, since Lot 15, either the native
-  engine or a selected external one (LangGraph), behind the same port
+- ✅ Provides opt-in tracing, metrics, telemetry, and durable audit components
+- ✅ Provides offline evaluation, a populated golden set, reports, and quality gates
+- ✅ Selects the native or shipped LangGraph adapter behind the same port, while validating known
+  unsupported control combinations before startup
+
+It does **not yet** wrap an arbitrary existing LangChain/LangGraph application or provide uniform
+governance across both engines. [ADR-0015](../adr/0015-portable-assurance-and-external-application-boundary.md)
+proposes that next boundary and L0/L1/L2 assurance levels.
 
 ### Business Impact
 
 | Dimension | Impact |
 |-----------|--------|
-| **Delivery** | Faster per-project setup — security, audit, and evaluation are already built, not rebuilt each time |
-| **IP** | Reusable across projects (Publicis keeps it) |
-| **Differentiation** | An owned engine-neutral control plane, not a from-scratch build per client |
-| **Regulation** | GDPR/CCPA-relevant audit trail and tenant isolation built-in (see caveats in §5) |
+| **Delivery** | Hypothesis: reduce repeated policy, evidence, and qualification work; measure in pilots |
+| **Reuse** | Apache-2.0 framework assets plus deployment-specific manifests, policies, tests, and adapters |
+| **Differentiation** | Proposed portable assurance contract across native and external engines |
+| **Regulation** | Controls and evidence that may support an assessment; never automatic certification |
 | **Knowledge** | Compounds across projects (adapters, manifests, policies) |
 
 ---
 
 ## What Is It?
 
-**Modular RAG Framework** = **Engine-neutral orchestration port** + **Component protocols** +
-**Security/governance policies** + **Observability** + **Audit**.
+**Modular RAG Framework** = **Native reference engine** + **Engine-neutral port** + **Component
+protocols** + **Security/governance policies** + **Evidence and evaluation**.
 
 It's **not**:
 - ❌ A competitor to LangChain/LlamaIndex on breadth of native agent/graph tooling — since
   ADR-0005 it deliberately delegates that territory rather than rebuilding it
+- ❌ A replacement for cloud IAM, networking, key management, model gateways, or legal review
+- ❌ A guarantee that every external engine provides the same assurance level
 - ❌ A SaaS (self-hosted)
 - ❌ A monolithic RAG implementation
 
 It **is**:
-- ✅ A metaframework for composing RAG components behind stable contracts
+- ✅ A reference implementation for composing RAG components behind stable contracts
 - ✅ Protocol-driven (Pydantic models, `typing.Protocol` interfaces)
 - ✅ Manifest-based (YAML configuration, `ComponentRegistry.wire()`)
 - ✅ Modular (swap any component without touching others)
 - ✅ Security-first (see [architecture/security.md](../architecture/security.md))
 - ✅ Observable (`TraceStep`, `AuditEvent`)
-- ✅ Engine-portable with explicit, fail-closed capability differences per engine
+- ✅ Engine-selectable today, with explicit fail-closed capability differences per engine
+- 🟡 Intended to wrap existing external applications through declared assurance levels (proposed)
 
 ### Core concepts
 
@@ -283,37 +290,32 @@ what has and hasn't been run against real infrastructure.
 
 ## Key Differentiators
 
-### vs. LangChain / LlamaIndex
+LangChain/LangGraph, LlamaIndex, Haystack, MLflow, LangSmith, and cloud platforms already cover
+meaningful parts of orchestration, evaluation, tracing, and governance. The project should not
+claim that those capabilities are absent. Its differentiation hypothesis is narrower: one
+portable policy-and-evidence contract, explicit capability gaps, and reusable conformance across
+several execution environments.
 
-| Aspect | LangChain / LlamaIndex | This Framework |
-|--------|-----------|-----------------|
-| **Architecture** | Imperative chains / pipelines | Hexagonal, protocol-driven, layering enforced in CI |
-| **Configuration** | Python code | YAML manifests |
-| **Evaluation** | External tools (Ragas, etc.) | Built-in offline scorers and regression gates |
-| **Audit trail** | Manual logging | Structured `AuditEvent`s, PII/secret payload allowlist |
-| **Multi-tenant** | Not a primary concern | Fail-closed tenant isolation, real Keycloak verifier |
-| **Agent/graph orchestration** | Native, broad | Delegated to LangGraph via a vendor-neutral port; unsupported control-plane combinations fail startup rather than being ignored |
-| **Observability** | Manual tracing | Automatic `TraceStep` + `AuditEvent` |
-
-### vs. Proprietary Cloud Solutions (Bedrock / Vertex AI)
-
-| Aspect | Cloud-native | This Framework |
-|--------|------------------|-----------------|
-| **Vendor lock-in** | High | None — works with any LLM/vector store; the execution engine itself is swappable (native/LangGraph) |
-| **On-premise** | Typically no | Yes |
-| **Cost transparency** | Often opaque | Per-query metrics, when configured |
+| Concern | Existing platforms | This framework's intended role |
+|---|---|---|
+| **Application orchestration** | Broad native chains, agents, graphs, connectors, and managed services | Delegate; do not rebuild a competing ecosystem. |
+| **Platform controls** | Strong within each platform's identity, network, tracing, evaluation, and governance model | Integrate with them and normalize only evidence that can be represented honestly. |
+| **Cross-engine assurance** | Usually platform-specific | Declare L0/L1/L2 guarantees and run shared conformance tests (proposed, not yet implemented). |
+| **Native/local execution** | Varies by platform | Keep an inspectable reference RAG engine and contract-conformant local adapters. |
+| **Unsupported controls** | Platform-dependent | Fail validation when a mandatory declared control cannot be activated. |
+| **Portability** | Migration effort still depends on provider-specific features | Reduce coupling at owned boundaries; never claim zero lock-in or zero migration work. |
 
 ---
 
 ## Business Impact
 
-*(Business framing below is a planning input, not a verified engineering claim — treat the
-numbers as estimates for discussion, not measured results.)*
+*(Business framing below is a hypothesis, not a verified engineering claim.)*
 
-- Faster per-project delivery by not rebuilding security/audit/evaluation each time.
+- Potentially faster per-project delivery by reusing security/audit/evaluation assets; pilots
+  must measure the adapter and qualification cost as well.
 - IP compounds across projects: adapters, manifests, and policies built once are reused.
-- See [business-case.md](../business-case.md) for the full commercial argument and its own
-  correction history (Lot 5 corrected unsupported delivered/security/compliance claims there).
+- See [business-case.md](../business-case.md) for the evidence required before making commercial
+  savings or break-even claims.
 
 ---
 

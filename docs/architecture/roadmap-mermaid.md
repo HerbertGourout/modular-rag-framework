@@ -34,14 +34,39 @@ timeline
         2026 Q4 : Cost/latency reporting (native)
                 : Drift detection (native)
                 : GraphRAG traversal (⚙️ delegated)
-    section V4 Governance
+    section V4 Enterprise governance
         2027 Q1 : Policy-as-code (YAML rules)
                 : Multi-tenant isolation
                 : Audit trail
                 : Human-in-the-loop review
-    section V5 Multimodal
-        2027 Q2 : Parsing & citation enrichment (native, pending evidence)
+                : Multilingual quality (planned)
+                : Jurisdiction from trusted policy context
+    section V5 Multimodal evidence
+        2027 Q2 : Provenance & citation enrichment (native candidate)
                 : VLM execution (⚙️ delegated)
+```
+
+## Accepted assurance direction after Lot 20
+
+This planned sequence comes from accepted ADR-0015. It is intentionally separate from the dated roadmap:
+the maintainer has not accepted the ADR and no delivery date is committed.
+
+```mermaid
+flowchart LR
+    Current[Current native and fixed LangGraph adapters]
+    L20[Lot 20 classification and provider egress]
+    Decision{ADR-0015 accepted?}
+    L21[Lot 21 assurance levels and conformance report]
+    L22[Lot 22 wrap an existing application]
+    Gate{Pilot proves portable value?}
+    Expand[Add adapters based on measured demand]
+    Limit[Keep a bounded internal accelerator]
+
+    Current --> L20 --> Decision
+    Decision -->|Yes| L21 --> L22 --> Gate
+    Decision -->|No| Limit
+    Gate -->|Yes| Expand
+    Gate -->|No| Limit
 ```
 
 ## Module dependency graph

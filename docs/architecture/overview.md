@@ -12,8 +12,8 @@
 
 ## 1. Purpose
 
-This framework provides a **context OS** for RAG and agentic systems: an engine-neutral control
-plane over knowledge, governance, and observability, built around three pillars:
+This framework provides a native reference RAG engine and an engine-neutral control-plane
+direction for Document AI assurance, built around four pillars:
 
 1. **Declarative orchestration** — pipelines are described in YAML (manifests), not in imperative
    Python. See §9 below for the full manifest → running pipeline path, and the root
@@ -29,6 +29,9 @@ plane over knowledge, governance, and observability, built around three pillars:
    [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md), generic multi-agent
    orchestration is delegated to that external engine, not built as a native specialized-agent
    runtime.
+4. **Portable assurance (accepted direction, planned implementation)** — ADR-0015 defines L0/L1/L2 profiles that distinguish what
+   an adapter can observe, verify, and enforce, including a path for wrapping an existing external
+   application without rebuilding its graph. This is target architecture, not current capability.
 
 **Who this document is for.** Anyone about to modify `orchestration/`, `contracts/`, or the
 manifest schema itself; anyone reviewing a pull request that touches layer boundaries; anyone
@@ -46,7 +49,7 @@ here when you need to understand *why* something works the way it does, not just
 |---|---|---|
 | **Strict modularity** | Every major capability is a contract (`typing.Protocol`) | A framework used across many client engagements accumulates adapters faster than any single team can review them. Modularity by contract means a new adapter's correctness is checked structurally (`isinstance()` against the Protocol, enforced in `tests/contract/`) rather than by trusting every contributor read every other adapter's code. |
 | **Loose coupling** | The orchestrator depends on interfaces, never on concrete implementations | `orchestration/engine.py` never imports `QdrantStore` or `OpenAIGenerator` by name — only `Container.indexer`/`Container.generator`, typed against the Protocol. This is what makes `scripts/check_layering.py`'s static enforcement possible: if orchestration *could* import a concrete adapter, the layering rule would be unenforceable by tooling and would degrade to a code-review convention, exactly the failure mode described in the root README's [Core Concepts §1](../../README.md#1-hexagonal-ports-and-adapters-architecture--what-and-why). |
-| **Native evaluation** | A standalone measurement contract exists (`contracts/evaluation.py`'s `Evaluator`) — not, as an earlier version of this row claimed, one measurement protocol per building block | A RAG pipeline's failure modes (hallucination, missed context, cost blowup) are invisible without measurement, and are the single most common reason a client-facing RAG deployment gets pulled back after launch. `Evaluator.evaluate(query, answer, expected, context) -> Metrics` scores a completed run as a whole; retrievers and generators do not each implement their own per-component metric Protocol — see [data-model.md](data-model.md#metrics) for what `Metrics` actually covers today, and V1.1 in `ROADMAP.md` for what's still open (NDCG, populated golden sets). |
+| **Native evaluation** | A standalone measurement contract exists (`contracts/evaluation.py`'s `Evaluator`) — not one measurement protocol per building block | `Evaluator.evaluate(query, answer, expected, context) -> Metrics` scores a completed run as a whole. NDCG@k, a populated synthetic golden set, reporting, and a CI quality gate now ship; LLM-judge scoring, per-domain sets, and production-calibrated thresholds remain open. |
 | **Secure by default** | Input filtering and guardrails run upstream of reasoning | The security guard's `check_query()` runs *before* retrieval, not after generation. A prompt-injection attempt that is denied before retrieval never has the chance to influence which context gets retrieved in the first place — running the guard after generation would only catch the attack after it already shaped the answer. |
 | **Native observability** | Framework traces, live spans and operational metrics are separate, optional signals | `TraceStep` coverage is specific (`guard_query`, `retrieve`, optional `rerank`, `generate`); optional `Telemetry` records the resulting `Trace`. ADR-0012/0013 add manifest-activatable OTel `Tracer` and `Meter` ports at orchestration/application/API boundaries. No shipped preset enables them, and readiness/review gauges have documented sampling limitations — see [observability.md](../guides/observability.md). |
 | **Progressive rollout** | Advanced features (graph, governance, multimodal) stay optional until stabilized | Every governed component (`tenant_policy`, `audit_sink`, `policy_engine`, `redactor`, `review_queue`, `reranker`) is optional in `Container` and no-ops when absent. This lets `manifests/presets/local-hybrid-rag.yaml` (a minimal local-dev pipeline) and `manifests/presets/secure-enterprise-rag.yaml` (the full governance stack) run through the **identical** `RAGEngine._run_steps()` code path — the enterprise manifest does not fork the pipeline logic, it only adds components that were already conditionally supported. |
@@ -303,7 +306,8 @@ rather than replacing it.
   deterministic, no-external-key generator/embedder pair for testing and offline demos (see
   `adapters/embeddings/deterministic_embedder.py`, `generation/synthesizers/deterministic_gen.py`).
 - Basic security: query filtering, injection detection, PII redaction.
-- Native evaluation: exact match, recall@k, MRR.
+- Native offline evaluation: exact match, recall/precision/MRR/NDCG, populated synthetic golden
+  set, deterministic reports, and CI quality gate.
 - Exposure via HTTP API (FastAPI) and CLI (`mrag ask`, `mrag ingest`).
 - Reproducible configuration through versioned YAML manifests.
 
@@ -326,9 +330,10 @@ rather than replacing it.
   and a reference dashboard exist; per-query/user/month attribution and anomaly detection do not.
   Routing logic itself remains delegated.
 - Drift detection and evaluation trigger (native): decides *when* retraining is needed;
-  fine-tuning execution itself is delegated.
+  feedback/durable review and pure offline drift computation now ship, but thresholds are not
+  calibrated on production traffic and fine-tuning execution itself is delegated.
 
-### V4 — Governance
+### V4 — Enterprise and Multilingual Governance
 **Additions:**
 - Policy-as-code: YAML rules versioned in Git, enforced at runtime.
 - Multi-tenant: separate context domains (finance, HR, legal…).
@@ -336,13 +341,24 @@ rather than replacing it.
 - Full audit: who accessed what, when, with which result.
 - Human-in-the-loop: human validation for sensitive answers.
 - Per-pipeline risk profiles.
+- Planned multilingual quality slices, source-language provenance, and explicit translation
+  evidence. Jurisdiction must be provided by trusted deployment/tenant/legal context; it is not
+  inferred from query language.
 
-### V5 — Multimodal (Delegated)
+### V5 — Multimodal Evidence (Execution Delegated)
 **Additions:**
 - VLM execution (image/table/audio/video model inference, modality-specialized agents):
   delegated to the selected external engine via the `DocumentEngine` port — not built natively.
-- Multimodal parsing and citation enrichment (extracting images/tables, attaching timecodes)
-  may remain native if Lot 6/15 evidence supports it — undecided.
+- Multimodal provenance and citation enrichment (page regions, table cells, image references,
+  audio/video timecodes), classification, and egress evidence may remain native if a future ADR
+  supports it — undecided.
+
+### Planned next phase — portable assurance
+
+[ADR-0015](../adr/0015-portable-assurance-and-external-application-boundary.md) defines a planned
+sequence after Lot 20: define L0/L1/L2 assurance/conformance contracts (Lot 21), then wrap and
+measure an existing external application without rebuilding its workflow (Lot 22). Neither lot is
+implemented or authorized while the ADR remains Proposed.
 
 ---
 
@@ -447,6 +463,7 @@ current full set and superseding relationships):
 - [ADR-0003](../adr/0003-security-and-governance.md) — Safety vs Security, policy-as-code
 - [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) — Owned-vs-delegated product boundary (accepted 2026-08-04); partially supersedes [ADR-0004](../adr/0004-strategic-features-v1-v5.md)
 - [ADR-0006](../adr/0006-external-engine-selection.md) — LangGraph selected as the external `DocumentEngine` adapter target
+- [ADR-0015](../adr/0015-portable-assurance-and-external-application-boundary.md) — accepted assurance direction and existing-application boundary; implementation planned
 - [ADR-0007](../adr/0007-layer-boundaries-and-control-plane-activation.md) — The concrete dependency model and activation path that makes ADR-0005 operational: a capability is not delivered merely because its class exists, it must be reachable, wired, and tested
 - [ADR-0008](../adr/0008-offline-evaluation-and-engine-activation.md) — Offline evaluation is separated from online answer execution (§3's Evaluation plane above); runtime engine capability gaps fail startup rather than silently no-opping
 - [ADR-0009](../adr/0009-vector-indexer-dimension-reconciliation.md) — The `VectorIndexer` sub-protocol (§6) and the embedder/store dimension-reconciliation policy

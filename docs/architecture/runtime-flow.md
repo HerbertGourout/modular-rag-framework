@@ -202,6 +202,11 @@ or GraphRAG designs once sketched here.
 Both adapters share the same `Container` (identical chunker/retriever/guard/generator selection);
 only the orchestration engine differs.
 
+This is **not** yet a bring-your-own-application boundary: selecting `langgraph` constructs the
+fixed graph shown below from framework-owned components. It does not accept an existing client
+LangChain/LangGraph graph, state schema, tools, or checkpoints. ADR-0015/Lot 22 plans that
+separate path.
+
 ```mermaid
 flowchart TD
     Q[Query] --> LE["load_engine(manifest)"]
@@ -262,3 +267,35 @@ The native `KnowledgeGraph` data model (`memory/graph/knowledge_graph.py`) was r
 (Étape 8, [ADR-0007](../adr/0007-layer-boundaries-and-control-plane-activation.md)) — zero
 consumers anywhere, restorable via git history. There is no native graph capability of any kind
 today.
+
+---
+
+## Feedback submission and offline drift
+
+Feedback is a separate request after an answer; it is not a node in either answer graph.
+
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant API
+    participant App as ApplicationService
+    participant Native as Native feedback path
+    participant Sink as FeedbackSink
+    participant Offline as run_drift_check.py
+
+    Caller->>API: POST /feedback with trace_id and idempotency_key
+    API->>API: Verify identity when configured
+    API->>App: record_feedback with trusted tenant/user/roles
+    App->>App: Require tester role when is_test=true
+    App->>Native: record_feedback
+    Native->>Native: Require redactor for correction_text
+    Native->>Sink: Store redacted record idempotently per tenant/key
+    Sink-->>Caller: Feedback id
+    Offline->>Sink: Read historical feedback later
+    Offline->>Offline: Compute advisory drift report
+```
+
+`eval/drift_detection.py` is pure offline computation. It is never activated by a runtime
+manifest and never blocks an online answer. The current application facade delegates feedback
+recording to the native control path even when a different engine answers requests; this does not
+mean policy/audit/review execution is otherwise uniform across engines.

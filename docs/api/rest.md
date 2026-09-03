@@ -201,6 +201,52 @@ configured `Generator` actually attaches citations; there is no `model` field on
 
 ---
 
+### `POST /feedback`
+
+Record feedback for an answer previously returned by `/answer` (ADR-0014). Feedback storage is a
+native control-plane operation even when another engine is selected for answer execution.
+
+**Request body**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `trace_id` | `string` | Yes | The `trace_id` returned with the answer. |
+| `idempotency_key` | `string` | Yes | Stable per logical feedback action; HTTP retries reuse the same value. |
+| `rating` | `"thumbs_up" \| "thumbs_down" \| null` | No | Structured user rating. |
+| `correction_text` | `string \| null` | No | Suggested correction. Rejected unless the manifest wires a redactor; stored text is redacted first. |
+| `citation_count` | `integer \| null` | No | Optional caller-reported citation count for offline drift analysis. |
+| `is_test` | `boolean` | No (`false`) | Synthetic/QA marker. Requires the verified `tester` role. |
+
+```http
+POST /feedback
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "trace_id": "a1b2c3d4",
+  "rating": "thumbs_down",
+  "correction_text": "The policy took effect in 2025.",
+  "citation_count": 1,
+  "idempotency_key": "feedback-widget-7f6f"
+}
+```
+
+**Response**
+
+```json
+{
+  "id": "feedback-record-id"
+}
+```
+
+The same `(tenant_id, idempotency_key)` is a silent no-op on retry. Authentication follows
+`/answer`: the tenant/user identity comes only from the verified token. `is_test: true` without a
+verified `tester` role returns 403. A free-text correction without a configured redactor, or a
+manifest without a usable feedback sink, is rejected through the typed API error mapping. See
+[Feedback and drift](../guides/feedback-and-drift.md) for retention, CLI, and offline drift use.
+
+---
+
 ### `GET /retrieve`
 
 Retrieve chunks for a query without generating an answer. Useful for debugging retrieval quality.
@@ -259,8 +305,9 @@ verifier is no longer optional: `create_app()` raises `ConfigurationError` at st
 isn't given (Lot 1, tenant fail-closed) — plan for this at deployment time, not after a failed
 launch.
 
-With a verifier configured, `/answer` and `/retrieve` require `Authorization: Bearer <token>`;
-`/health` and `/ready` never do. `adapters/auth/keycloak_verifier.py`'s `KeycloakTokenVerifier`
+With a verifier configured, `/answer`, `/feedback`, and `/retrieve` require
+`Authorization: Bearer <token>`; `/health` and `/ready` never do.
+`adapters/auth/keycloak_verifier.py`'s `KeycloakTokenVerifier`
 (Lot 11b) is the reference implementation, verifying against a real Keycloak realm's JWKS
 endpoint.
 

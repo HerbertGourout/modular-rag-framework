@@ -55,6 +55,13 @@ document's classification hasn't been explicitly decided, matching the fail-clos
 default). This is a recommended human default, not something `DataClassification` itself causes
 to happen automatically — see the distinction above.
 
+**Outbound-provider gap (Lot 20, not implemented):** `PatternRedactor` currently processes answer
+text after generation and selected stored feedback/audit text. It does not classify or block raw
+queries, retrieved chunks, documents, or embedding inputs before a remote adapter call. Therefore
+the `restricted` row's “before external calls” requirement is policy only today. Until Lot 20
+ships, deployments must keep restricted data local or enforce egress externally; selecting the
+secure preset does not close this boundary.
+
 **Escalation only, never silent downgrade:** if a document is re-classified, only escalation
 (e.g. `internal` → `confidential`) may happen automatically from new evidence (e.g. a PII pattern
 match during redaction, Lot 11c). Downgrading a classification is a deliberate, logged, human

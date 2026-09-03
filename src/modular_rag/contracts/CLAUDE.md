@@ -13,6 +13,17 @@ The contracts module defines **Protocols** that every implementation must satisf
 
 **Any change requires careful consideration and likely an ADR.**
 
+ADR-0015 accepts an engine-independent assurance boundary and L0/L1/L2 adoption direction.
+That architecture decision is not authorization to change the existing Protocols. First write a
+focused contract ADR with compatibility,
+capability-negotiation, migration, and conformance consequences. Preserve the native RAG engine as
+the reference implementation; do not make LangChain, LangGraph, or a cloud SDK a contract-layer
+dependency.
+
+Current feedback, review, evaluation, and engine contracts are real but do not yet constitute the
+planned cross-engine assurance API. Likewise, Lot 20's provider-egress enforcement is planned,
+not part of today's contract surface.
+
 ---
 
 ## Rule 1: Protocol First, Implementation Second

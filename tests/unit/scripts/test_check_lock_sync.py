@@ -249,6 +249,29 @@ class TestFindUncoveredTransitiveDependencies:
         assert skip_reason is None
         assert problems == []
 
+    def test_cpu_torch_lock_uses_the_pytorch_cpu_index(self) -> None:
+        fake_report = {"install": [{"metadata": {"name": "torch"}}]}
+        captured_cmd = []
+        lock_text = LOCK_OK + "\ntorch==2.14.0+cpu \\\n"
+
+        def fake_run(cmd, **kwargs):
+            captured_cmd.extend(cmd)
+            report_path = Path(cmd[cmd.index("--report") + 1])
+            report_path.write_text(json.dumps(fake_report), encoding="utf-8")
+            return MagicMock(returncode=0)
+
+        with patch("scripts.check_lock_sync.platform.system", return_value="Linux"), patch(
+            "scripts.check_lock_sync.subprocess.run", side_effect=fake_run
+        ):
+            problems, skip_reason = find_uncovered_transitive_dependencies(
+                lock_text, ["v1"], {"torch"}
+            )
+
+        assert skip_reason is None
+        assert problems == []
+        assert "--extra-index-url" in captured_cmd
+        assert "https://download.pytorch.org/whl/cpu" in captured_cmd
+
     def test_a_linux_resolver_failure_is_a_hard_failure_not_a_skip(self) -> None:
         """Codex review HIGH-003, round 2: the previous version returned
         `([], skip_reason)` here too, so main() printed "OK" and exited 0

@@ -3,7 +3,7 @@
 **For**: anyone discovering the project who wants to read the code in the right order.
 **Principle**: each level goes deeper than the previous one. Read in order; stop when you know
 enough for your needs. All paths are clickable from an IDE.
-**Updated**: 2026-07-12 (`feature/v1-sota-alignment` batch).
+**Updated**: 2026-09-02 (Batch 14 and portable-assurance documentation alignment).
 
 ---
 
@@ -17,8 +17,8 @@ enough for your needs. All paths are clickable from an IDE.
 | 4 | [docs/architecture/overview.md](../architecture/overview.md) | Technical specification |
 | 5 | [CHANGELOG.md](../../CHANGELOG.md) | What changed recently |
 
-**The idea in one sentence**: a RAG pipeline whose runtime components are Protocol-backed and
-selected by YAML. Parser dispatch is the explicit exception: file parsers are tried from
+**The idea in one sentence**: a native reference RAG pipeline plus an engine-neutral boundary,
+whose runtime components are Protocol-backed and selected by YAML. Parser dispatch is the explicit exception: file parsers are tried from
 `ingestion/pipelines/default.py::_PARSERS`, not selected in the manifest.
 
 ---
@@ -70,11 +70,18 @@ mrag ask "…" --manifest manifests/presets/local-hybrid-rag.yaml
    - **generation** → [generation/synthesizers/openai_gen.py](../../src/modular_rag/generation/synthesizers/openai_gen.py)
      or [anthropic_gen.py](../../src/modular_rag/generation/synthesizers/anthropic_gen.py),
      citations built by [citations/builder.py](../../src/modular_rag/generation/citations/builder.py)
-   - to see guards, tenant isolation, policy engine, redaction, human review and audit exercised
+   - to see guards, tenant isolation, policy engine, redaction, durable feedback/review and audit exercised
      for real, read [security.md](../architecture/security.md) and follow
      `secure-enterprise-rag.yaml` instead of `local-hybrid-rag.yaml`
 6. **The answer** — [core/models/answer.py](../../src/modular_rag/core/models/answer.py):
    `Answer` carries the text, the `Citation` list and the `Trace` id.
+7. **Post-answer feedback** — [contracts/feedback.py](../../src/modular_rag/contracts/feedback.py)
+   and [app/application.py](../../src/modular_rag/app/application.py): `POST /feedback` links a
+   caller rating/correction to that trace, enforces tester-role/redaction rules, and stores it
+   idempotently. Drift is computed later, offline; it is not another answer stage.
+
+The current LangGraph adapter builds a fixed framework graph. It does not wrap an existing
+LangChain/LangGraph application; ADR-0015/Lot 22 plans that future path.
 
 **Hands-on exercise**: use [examples/simple_qa/first_query.py](../../examples/simple_qa/first_query.py)
 for the current runnable hybrid path. `examples/hybrid_search/main.py` is presently a code sample,

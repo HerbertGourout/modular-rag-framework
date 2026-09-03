@@ -215,14 +215,33 @@ changing the pin —
 endpoint) — never hand-type or guess a SHA. Update the version comment (`# vX.Y.Z`) alongside it
 so the two never drift apart silently.
 
-**SARIF retention** (Codex review MEDIUM-003): the scan step alone only requests a SARIF report at
-a path that lives on the runner and is discarded when the job ends — `HIGH`/`CRITICAL` findings
-still fail the job via `fail-build: true`, but nothing below that severity was reviewable, trended,
-or triage-able afterward. A second step (`id: grype-scan` on the scan step itself, then
-`github/codeql-action/upload-sarif`, pinned by SHA the same way, reading
-`steps.grype-scan.outputs.sarif`, with `if: always()` so a HIGH/CRITICAL failure's own detail is
-retained too) publishes it to the repository's code-scanning tab, which needs the job-level
-`permissions: security-events: write`.
+**Findings visibility**: the gating scan step uses `output-format: table` directly (not `sarif`) so
+HIGH/CRITICAL findings that fail the build are printed in the job log itself, not only to a file. A
+second, non-gating step (`fail-build: false`, `if: always()`) re-runs the same scan purely so the
+full table is visible even if something upstream of it changes; this is currently redundant with
+the first step's own table output but kept for the case the gating step's format ever changes back.
+A SARIF report is deliberately **not** uploaded to the repository's code-scanning tab
+(`github/codeql-action/upload-sarif`, previously used here): GitHub Advanced Security — which Code
+scanning is part of — is only available for private repos owned by an Organization on a qualifying
+plan, never for a private, personal-account repo, confirmed directly from this repo's own
+Settings > Security > Code security page ("Advanced Security is only available for
+Organizations"). That upload step always failed here with "Code scanning is not enabled for this
+repository" and was removed 2026-09-03 rather than kept as permanently-dead CI weight.
+
+**Won't-fix policy** (`.grype.yaml`, repo root, auto-detected by `anchore/scan-action` — no
+`config` input is set): `severity-cutoff: high` would otherwise be permanently unsatisfiable, since
+every current `python:3.12-slim` (Debian trixie) build carries HIGH/CRITICAL findings on system
+packages (`perl-base`, `libc6`/`libc-bin`, `libncursesw6`/`libtinfo6`/`ncurses-*`, `libsqlite3-0`,
+`libacl1`, `gzip`, ...) that Debian's own security team has explicitly declined to backport a fix
+for. `.grype.yaml`'s `ignore: [{fix-state: wont-fix}]` rule ignores by Grype's own first-class
+`fix-state` category (see `grype/vulnerability/fix.go`'s `FixStateWontFix`), not a hand-listed CVE
+ID list — a new won't-fix CVE on any of these same packages would otherwise fail the build again
+with zero actual change on this project's side. Findings are still fully visible in the readable
+table above; only the build-failing behavior changes. Three additional, individually-listed
+entries (`CVE-2026-4224`, `CVE-2026-7210`, `CVE-2026-3644` on `python` itself) are a genuinely
+different case — a real fix exists, just not on the pinned 3.12.x interpreter line — accepted as an
+explicit, separate risk until this project moves its minimum supported Python version. All entries
+are dated and reviewed; see the file's own header comment for the acceptance record.
 
 ## Base image: digest-pinned, refresh procedure
 
@@ -231,9 +250,10 @@ stages (Codex review HIGH-001 — the Python dependency lock alone cannot repair
 system libraries, or bundled tools that a floating tag silently moved between two builds of the
 same commit). The current digest was resolved from Docker Hub's own v2 API
 (`https://hub.docker.com/v2/repositories/library/python/tags/3.12-slim`, the `digest` field),
-cross-checked with two independent fetches returning the identical value, on 2026-08-19 — not
-guessed. A human with real Docker access should still cross-verify before treating it as
-production-final:
+cross-checked against the registry's own v2 manifest API (`docker-content-digest` header) returning
+the identical value, on 2026-09-03 — refreshed from the prior 2026-08-19 pin to pick up Debian's
+openssl/libssl3t64 security update after CI's Grype gate flagged the old digest — not guessed. A
+human with real Docker access should still cross-verify before treating it as production-final:
 
 ```bash
 docker pull python:3.12-slim

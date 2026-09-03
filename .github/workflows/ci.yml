@@ -32,7 +32,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -e .[v1,dev]
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -c .github/constraints-ci.txt -e .[v1,dev]
       - name: Lint with ruff (syntax, imports, naming)
         run: ruff check . --select E,F,I,N,W,UP,B,C4 --output-format=concise
       - name: Compilation check
@@ -90,7 +90,7 @@ jobs:
         # was never actually run against this workflow. Found and fixed in Lot 18.
         run: |
           pip install --upgrade pip
-          pip install -e .[v1,langgraph,dev]
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -c .github/constraints-ci.txt -e .[v1,v4,langgraph,dev]
       - name: Run unit tests (no external services)
         run: pytest tests/unit/ -v --tb=short
 
@@ -106,7 +106,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -e .[v1,dev]
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -c .github/constraints-ci.txt -e .[v1,v4,dev]
       - name: Run contract conformance tests
         run: pytest tests/contract/ -v --tb=short
 
@@ -165,7 +165,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -e .[v1,postgres,dev]
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -c .github/constraints-ci.txt -e .[v1,postgres,dev]
       - name: Wait for Qdrant to accept connections
         # Postgres's own --health-cmd above already gates `services:` startup
         # ordering; Qdrant has no equivalent (see the service definition's own
@@ -229,7 +229,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -e .[v1,postgres,dev]
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -c .github/constraints-ci.txt -e .[v1,postgres,dev]
       - name: Wait for Qdrant to accept connections
         run: |
           for i in $(seq 1 30); do
@@ -296,7 +296,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -e .[v1,dev]
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -c .github/constraints-ci.txt -e .[v1,dev]
       - name: Wait for Qdrant to accept connections
         run: |
           for i in $(seq 1 30); do
@@ -360,7 +360,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -e .[v1,langgraph,dev]
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -c .github/constraints-ci.txt -e .[v1,v4,langgraph,dev]
       - name: Run all tests with coverage
         run: pytest tests/unit/ tests/contract/ --cov=src/modular_rag --cov-report=term-missing --cov-report=xml -v
       - name: Upload coverage report
@@ -394,7 +394,7 @@ jobs:
           python -m venv /tmp/smoke-venv
           /tmp/smoke-venv/bin/pip install --upgrade pip
           WHEEL_FILE=$(ls dist/*.whl)
-          /tmp/smoke-venv/bin/pip install "${WHEEL_FILE}[v1]"
+          /tmp/smoke-venv/bin/pip install --extra-index-url https://download.pytorch.org/whl/cpu -c .github/constraints-ci.txt "${WHEEL_FILE}[v1]"
           /tmp/smoke-venv/bin/python -c "import modular_rag; print('import OK')"
           /tmp/smoke-venv/bin/mrag version
 
@@ -419,7 +419,9 @@ jobs:
         run: |
           python -m venv shipped-venv
           shipped-venv/bin/pip install --upgrade pip
-          shipped-venv/bin/pip install --no-cache-dir --no-require-hashes -c requirements-lock.txt -e ".[v1,langgraph,postgres,auth]"
+          shipped-venv/bin/pip install --no-cache-dir --no-require-hashes \
+            --extra-index-url https://download.pytorch.org/whl/cpu \
+            -c requirements-lock.txt -e ".[v1,langgraph,postgres,auth]"
       - name: "Install supply-chain tooling (unconstrained; not part of the shipped image)"
         run: |
           pip install --upgrade pip
@@ -429,7 +431,27 @@ jobs:
         # whatever pip-audit's own environment happens to resolve --
         # correct regardless of which venv is active, and doesn't require
         # the shipped-venv above to exist for this step specifically.
-        run: pip-audit -r requirements-lock.txt
+        #
+        # --disable-pip: requirements-lock.txt is already a fully pinned,
+        # hashed lock (every entry is name==version), so pip-audit needs no
+        # real dependency resolution -- confirmed this repo's own lock
+        # already satisfies --disable-pip's stated precondition ("hashed
+        # requirements files"). Adding --extra-index-url instead (so pip
+        # could resolve the lock's `+cpu`-tagged torch pin, which only
+        # exists on PyTorch's own index) was tried and rejected: with both
+        # indices in play, pip resolved markupsafe==3.0.3 from PyTorch's
+        # mirror instead of PyPI, and that copy's hash did not match the
+        # lock's own recorded hash -- pip's hash-checking mode (triggered
+        # automatically the instant any entry has a --hash) correctly
+        # refused to install it, but that means invoking pip at all here is
+        # fragile in a way this scan doesn't need to depend on.
+        # --disable-pip skips actual installation entirely, at the cost of
+        # `torch` itself being reported as "not found on PyPI, could not be
+        # audited" (its `+cpu` build tag has no separate PyPI metadata
+        # entry) -- confirmed via a real local run: every other package in
+        # the lock is still audited, and the run exits 0 with "No known
+        # vulnerabilities found" when the lock is clean.
+        run: pip-audit -r requirements-lock.txt --disable-pip
       - name: "Licence gate: scripts/check_licenses.py against the shipped-only venv"
         run: python scripts/check_licenses.py --python shipped-venv/bin/python
       - name: "Generate SBOM: CycloneDX, from the shipped-only venv"
@@ -444,12 +466,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [lint, test-unit, test-contract]
-    # security-events: write is required by github/codeql-action/upload-sarif
-    # below (Codex review MEDIUM-003) to publish findings to the repo's code
-    # scanning tab; contents: read matches actions/checkout's own default.
+    # contents: read matches actions/checkout's own default. No
+    # security-events/actions permissions needed: this repo is private and
+    # personally-owned, and GitHub Advanced Security (which Code scanning
+    # is part of) is only available for private repos owned by an
+    # Organization on a plan that includes it -- never for a private,
+    # personal-account repo, confirmed directly from this repo's own
+    # Security > Code security page ("Advanced Security is only available
+    # for Organizations"). The SARIF-upload step this permission set used
+    # to support was removed for exactly that reason (see git history for
+    # the step this replaced) -- Grype's HIGH/CRITICAL gate below and the
+    # readable-table step remain the actual, working signal.
     permissions:
       contents: read
-      security-events: write
     steps:
       - uses: actions/checkout@v4
       - name: Build the immutable runtime image (Dockerfile, Lot 16b)
@@ -474,22 +503,36 @@ jobs:
         # risk a supply-chain-hardening lot should not casually reintroduce by
         # picking the more commonly-templated default without checking its own
         # history first. See docs/guides/dependency-lock.md for the sources.
-        id: grype-scan
         uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
         with:
           image: "modular-rag:ci"
           severity-cutoff: high
           fail-build: true
-          output-format: sarif
-      - name: "Lot 9: publish the Grype SARIF report (non-blocking MEDIUM/LOW findings, retained)"
-        # Without this, the SARIF file the step above requests lives only at
-        # its temporary output path and is discarded with the runner --
-        # HIGH/CRITICAL still fail the job via fail-build above, but nothing
-        # below that severity was ever reviewable, trended, or triaged
-        # (Codex review MEDIUM-003). `if: always()` publishes it even when
-        # the scan step above already failed the job on a HIGH/CRITICAL
-        # finding, so that failure's own detail is retained too.
+          output-format: table
+      - name: "Lot 9: print Grype findings as a readable table in the job log"
+        # A second, non-gating run purely for log visibility: fail-build is
+        # false (the scan step above already owns the actual gate) and
+        # if: always() prints it even when that step already failed the
+        # job, so the failure's own cause is right there in the log that
+        # reported it, not hidden behind a separate artifact or tab.
+        #
+        # No SARIF/Security-tab publishing here (a prior version of this
+        # job uploaded one via github/codeql-action/upload-sarif): GitHub
+        # Advanced Security -- which Code scanning is part of -- is only
+        # available for private repos owned by an Organization on a plan
+        # that includes it, never for a private, personal-account repo,
+        # confirmed directly from this repo's own Security > Code security
+        # page ("Advanced Security is only available for Organizations").
+        # This repo is private and personally owned, so that upload step
+        # always failed with "Code scanning is not enabled for this
+        # repository" and was removed rather than kept as permanent,
+        # structurally-dead CI weight (see git history for the step this
+        # replaced). The severity-cutoff/fail-build gate above and this
+        # table remain the actual, working signal.
         if: always()
-        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
         with:
-          sarif_file: ${{ steps.grype-scan.outputs.sarif }}
+          image: "modular-rag:ci"
+          severity-cutoff: high
+          fail-build: false
+          output-format: table

@@ -1,45 +1,77 @@
 ---
 name: validate-security
-description: Verify security-sensitive changes respect the 7-layer defense rules (no hardcoded secrets, no cross-domain imports, no direct wiring, lazy imports, PII patterns) before merging
+description: Validate security-sensitive changes against current layering, data-flow, governance, and test requirements
 ---
 
 # Validate Security
 
-Manual checklist for security-sensitive changes. There is no single CI job for this (the `futureHooks` entries in `.claude/settings.json`'s history reference `scripts/validate_imports.py` etc., but those scripts don't exist yet — this skill runs the equivalent checks by hand with grep/ruff).
+Use this checklist for changes that affect guards, policies, tenancy, audit, feedback, review,
+credentials, redaction, provider adapters, or external data transfer. It supplements the repository
+checks; it is not a compliance assessment or certification.
 
-## What to do, in order
+## 1. Establish the sensitive data flow
 
-**1. No hardcoded secrets**
-```bash
-grep -rniE '(api[_-]?key|secret|password|token)\s*=\s*["\047][^"\047]+["\047]' src/modular_rag/ --include="*.py" | grep -v "os.getenv\|os.environ"
+List each source, transformation, storage target, log/trace/report, and external destination touched
+by the diff. Confirm that free text, document content, answers, and corrections are treated as
+potentially sensitive. Record any control that remains deployment-owned.
+
+Current limitation: classification-aware, deny-by-default provider egress is planned for Lot 20
+and is not implemented. A current external-provider path therefore cannot be reported as protected
+by that future control. Require an approved external gateway/policy or a local provider where the
+deployment needs this guarantee.
+
+## 2. Run deterministic repository checks
+
+```powershell
+.\.venv\Scripts\python.exe scripts\check_layering.py --strict
+.\.venv\Scripts\python.exe -m ruff check . --select E,F,I,N,W,UP,B,C4
+.\.venv\Scripts\python.exe scripts\check_docs.py
 ```
-Anything returned here that isn't reading from `os.getenv()`/`os.environ` is a violation — see CLAUDE.md block 07 / `.claude/rules/security-layers.md` Layer 05.
 
-**2. No cross-domain imports** (CLAUDE.md block 02 — domain modules import only `contracts/` + `core/models/`, never each other)
-```bash
-for d in ingestion retrieval generation security agents memory eval; do
-  echo "--- $d ---"
-  grep -rn "from modular_rag\.\(ingestion\|retrieval\|generation\|security\|agents\|memory\|eval\)" src/modular_rag/$d/ \
-    | grep -v "from modular_rag\.$d"
-done
+The layering checker, rather than an ad hoc grep loop, is the source of truth for project-layer
+imports. Domain modules may import only `core`, `contracts`, and themselves; concrete composition
+belongs in `app/default_factories.py`.
+
+## 3. Inspect secrets and logging
+
+Use `rg` to inspect the changed surface and review every match, including false positives:
+
+```powershell
+rg -n -i "api[_-]?key|secret|password|token|query\.text|answer\.text|correction_text" src tests manifests
 ```
-Any match means domain `$d` imports from a sibling domain — forbidden.
 
-**3. No direct component wiring** (CLAUDE.md block 05 rule 3 — components are wired only via `orchestration/registry.py` + manifest YAML)
-```bash
-grep -rn "= [A-Z][A-Za-z]*\(Retriever\|Generator\|Chunker\|Embedder\)(" src/modular_rag/ --include="*.py" | grep -v "orchestration/\|tests/"
-```
-Direct instantiation of a concrete component outside `orchestration/` or `tests/` is a violation.
+Reject hard-coded credentials and logs/traces/errors that expose raw sensitive text. Environment
+variable names and test placeholders are not secrets, but must still be handled deliberately.
+Never print a credential value in validation output.
 
-**4. Lazy imports on heavy dependencies** (CLAUDE.md block 05 rule 7)
-```bash
-grep -rn "^import \(qdrant_client\|rank_bm25\|sentence_transformers\|openai\|anthropic\|fitz\)" src/modular_rag/ --include="*.py"
-grep -rn "^from \(qdrant_client\|rank_bm25\|sentence_transformers\|openai\|anthropic\|fitz\)" src/modular_rag/ --include="*.py"
-```
-Any match is a module-level import of a heavy dependency — must be moved inside the method that uses it.
+## 4. Verify declared controls are real and fail closed
 
-**5. PII patterns** — read `src/modular_rag/security/` redaction code by hand and confirm new/changed patterns are documented and tested in `tests/unit/security/`. This isn't automatable with grep; use the `security-specialist` subagent if unsure.
+- Guards use `check_query`/`check_answer` and `GuardResult.allowed`.
+- Tenant policy covers query, ingestion, and retrieved-chunk filtering where applicable.
+- Policy evaluation errors deny rather than silently pass.
+- Free-text feedback correction is not stored without configured redaction.
+- Audit/review persistence errors follow the declared availability policy.
+- A manifest cannot select an unsupported engine/control combination; LangGraph-native-only
+  controls are rejected rather than ignored.
+- Optional provider dependencies remain lazily imported.
+
+Do not describe API authentication roles as a generic RBAC system unless the code actually
+implements the claimed resource/permission semantics.
+
+## 5. Run affected tests
+
+Run unit and contract tests for the precise change, plus manifest/bootstrap tests for wiring. Add
+negative cases for denial, missing identity, malformed policy, redaction absence, idempotency, and
+unsupported-engine selection as relevant. Do not run provider-backed integration tests without
+confirmed services and credentials.
 
 ## Report format
 
-For each of the 5 checks: ✅ clean / ❌ N violations found (list file:line). Don't mark the skill as passed if any check has unresolved violations.
+For each section report `PASS`, `FAIL`, or `NOT APPLICABLE`, with `file:line` evidence for failures.
+Separate:
+
+- controls implemented by the framework;
+- controls required from deployment infrastructure;
+- accepted limitations and planned work.
+
+Do not mark validation passed while a declared mandatory control can be silently bypassed.

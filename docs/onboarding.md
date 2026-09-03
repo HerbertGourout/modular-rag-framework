@@ -40,8 +40,8 @@ when a single page of YAML manifest would have done the job.
 
 Builds or extends internal components: a new chunker, a new retriever, a new generator, a
 new policy. This profile touches `src/modular_rag/`, writes tests, and must respect the
-hexagonal dependency rule (`core/` → `contracts/` → domains → `orchestration/` → `app/` →
-`cli/`/`api/`).
+   inward hexagonal dependency rule (`cli`/`api` → `app` → `orchestration` → contracts/core;
+   domain/adapters depend on inward contracts, never on outer interfaces).
 
 **What this profile should read, in order:**
 1. [CLAUDE.md](../CLAUDE.md) — the non-negotiable rules (contracts first, no cross-domain
@@ -70,9 +70,8 @@ one."
 1. [docs/architecture/overview.md](architecture/overview.md) — the complete technical
    specification, the system's six planes, the V1→V5 roadmap with the detail of what each
    version adds.
-2. [docs/adr/](adr/) — the nine accepted decisions covering modularity, contracts,
-   security/governance, product boundaries, external-engine selection, layer activation,
-   offline-evaluation/engine-activation honesty, and vector-indexer dimension reconciliation.
+2. [docs/adr/](adr/) — fifteen accepted decisions. Always check the
+   status: proposed assurance levels and existing-application support are not implementation.
 3. [docs/architecture/module-model.md](architecture/module-model.md) and
    [structure.md](architecture/structure.md) — the complete map of the code, file by file.
 4. [docs/archive/2026-05-20-initial-review.md](archive/2026-05-20-initial-review.md) — the
@@ -96,8 +95,8 @@ retrieval depth), and how to demonstrate a proof of concept quickly.
    per-version dependencies.
 4. [docs/guides/deployment.md](guides/deployment.md) — how to run this outside a dev
    machine (Docker, multi-environment).
-5. [docs/business-case.md](business-case.md) — arguments to reuse in front of a client
-   (4–8 weeks saved, governance by design, vendor independence).
+5. [docs/business-case.md](business-case.md) — product hypothesis, target users, caveats, and the
+   pilot evidence required before making savings or portability claims.
 
 This profile normally doesn't need to read `data-model.md` or `module-model.md` — unless
 they need to explain to a client's CIO *why* the architecture is trustworthy.
@@ -111,8 +110,8 @@ is exactly why this document exists.
 
 **Priority reading:**
 1. Section 3 below ("The full journey, explained without technical jargon").
-2. [docs/business-case.md](business-case.md) — the full business case: ROI, competitive
-   positioning, regulatory coverage.
+2. [docs/business-case.md](business-case.md) — the product hypothesis and decision gate; it does
+   not claim measured ROI or automatic regulatory coverage.
 3. [ROADMAP.md](../ROADMAP.md) — what's already delivered (box checked) versus what's still
    to be built, by version.
 4. [examples/simple_qa/docs/rag-overview.md](../examples/simple_qa/docs/rag-overview.md) — a
@@ -136,8 +135,11 @@ proof — not marketing promises.
 2. [docs/adr/0003-security-and-governance.md](adr/0003-security-and-governance.md) — the
    Safety (anti-injection, PII) vs. Security (RBAC, policies) split, and what's already
    implemented (V1) versus planned (V4).
-3. [docs/business-case.md](business-case.md), section 4 — coverage of regulated
-   industries, talking points for a client-side DPO or CISO.
+3. [docs/business-case.md](business-case.md) — assurance hypothesis and explicit compliance/
+   licensing caveats.
+4. [docs/architecture/data-classification-policy.md](architecture/data-classification-policy.md)
+   and [threat-model.md](architecture/threat-model.md) — especially the open Lot 20 provider-
+   egress boundary.
 
 **Watch point to communicate to this profile without softening it**: corrected 2026-08-06 —
 this used to say policy-as-code governance, multi-tenancy, and the audit trail were "V4 items,
@@ -145,7 +147,7 @@ not yet delivered." That's no longer true: per [ADR-0005](adr/0005-document-ai-c
 (accepted 2026-08-04), the Policy Engine, fail-closed tenant isolation, and a structured audit
 trail are owned and shipped now (V2.0/Lot 10/Lot 11b-c), not deferred to V4. What genuinely
 remains undelivered per V4 is the *multi-environment* layering (dev/staging/prod overrides) and
-full regulatory/human-in-the-loop review workflows — see [ROADMAP.md](../ROADMAP.md).
+full regulatory reporting and classification-aware model egress — see [ROADMAP.md](../ROADMAP.md).
 
 Still never present a capability as operational before checking its actual status here or in
 [docs/refactoring/README.md](refactoring/README.md) §5's honest "what's still open" list — this
@@ -231,12 +233,10 @@ adapter; the engine boundary and native policy/tenant mechanisms are shipped.
 Z". This kind of multi-hop question ("who is affected, in cascade, by the incident at Y?")
 needs a knowledge graph, not just text search.
 
-**Target behaviour.** The corpus would be analyzed to extract entities (people, organizations,
-projects) and their relationships, building a graph. At query time, the framework starts
-from the entities mentioned, explores the graph N hops out, and injects that sub-graph as
-structured context alongside the usual text chunks. A feedback mechanism (EvoRAG)
-strengthens or weakens the graph's relationships depending on whether the answers based on
-them turned out to be correct.
+**Delegated target behaviour.** An external engine may extract entities/relationships, traverse
+them, and return graph-grounded evidence through a future adapter. This repository does not plan
+to rebuild that traversal engine. Its owned role is to validate portable policy, provenance, and
+quality evidence where the adapter exposes it.
 
 > Per ADR-0005, GraphRAG **traversal** (the N-hop exploration and reasoning) is delegated to
 > the selected external engine, not built natively. A prior native graph *data model* was
@@ -262,22 +262,23 @@ chunk filtering. Pattern redaction, structured audit sinks and human-review queu
 manifest components. The current LangGraph adapter supports tenant isolation, guards and
 redaction, but rejects audit, policy-engine, review-queue and telemetry controls it cannot honor.
 
-**Status**: 🟡 core primitives (inline policy, tenant isolation, redaction, audit sinks and
-`HumanReviewGate`) are real and manifest-activatable. Multi-environment layering, OPA integration,
-risk profiles and formatted compliance reporting remain — see [ROADMAP.md](../ROADMAP.md). This is the version that unlocks client
-projects in regulated sectors (see [docs/business-case.md](business-case.md), section 4).
+**Status**: 🟡 core primitives (inline policy, tenant isolation, redaction, audit, durable feedback
+and review) are real and manifest-activatable on the native path. Multi-environment layering, OPA,
+risk profiles, formatted compliance reporting, uniform external-engine controls, and Lot 20 data
+egress remain. Suitability for a regulated deployment requires deployment-specific technical and
+legal qualification; this status alone does not establish it.
 
-### V5 — Multimodal: beyond text
+### V5 — Multimodal evidence: beyond text
 
 **The problem solved.** Many useful documents aren't plain text: a financial report has
 charts, a contract has tables, a meeting has an audio recording. V1 through V4 only process
 the text extracted from these documents — losing the information contained in an image or a
 table.
 
-**How it works.** Specialized parsers extract images, tables, audio transcriptions, and
-video segments. Each modality has its own specialized agent, and the vector index becomes
-multi-vector (text + image + table). Answers can directly cite an image, a table excerpt, or
-a video timecode as evidence.
+**Target boundary.** VLM/model execution is delegated to an external engine. A future native
+contribution may normalize provenance and citations for page regions, images, table cells, audio
+or video timecodes, and apply classification/egress policy before those assets leave the trust
+boundary. Exact parsers, stores, and models require evidence and an ADR; they are not fixed here.
 
 **Status**: ⬜ planned, the least advanced implementation to date — see
 [ROADMAP.md](../ROADMAP.md).
@@ -294,10 +295,11 @@ Three documents, at different levels of granularity, get updated as things evolv
 | [CHANGELOG.md](../CHANGELOG.md) | Narrative entry per notable change | On every Pull Request, under the `[Unreleased]` section (a rule enforced by the PR checklist in [CONTRIBUTING.md](../CONTRIBUTING.md)) |
 | [README.md](../README.md), "Project status" section | Flat overview, per component | When a major component changes status (✅/⬜) |
 
-There is no automated mechanism: updating these three files is part of the Pull Request
-checklist. It's a team discipline, not a tool — if a PR closes a roadmap item without
-checking the matching box, the roadmap silently becomes wrong. See
-[CONTRIBUTING.md](../CONTRIBUTING.md), "Pull Request checklist" section.
+Documentation updates still require author judgment; no tool can infer the correct narrative from
+a diff. However, the repository now has an automated drift gate: install `.githooks/pre-push` via
+the documented hook installer and every push runs `scripts/check_docs.py`; CI runs the same check.
+It validates links and known stale/forbidden patterns but does not rewrite documentation. See
+[CONTRIBUTING.md](../CONTRIBUTING.md), "Automated documentation gate".
 
 To visualize the same roadmap as diagrams (timeline, dependency graphs), see
 [docs/architecture/roadmap-mermaid.md](architecture/roadmap-mermaid.md).
@@ -312,9 +314,12 @@ writing:
 
 - The LangGraph adapter does not provide multi-agent coordination, query decomposition, tool use
   or multi-turn interaction; selecting its preset does not activate those behaviours.
-- GraphRAG traversal, multilingual/cultural reasoning, drift detection, fine-tuning execution and
-  multimodal execution do not exist in the current runtime. Graph and multimodal manifests are
-  blueprints, not presets.
+- GraphRAG traversal, multilingual quality support, fine-tuning execution and multimodal execution
+  do not exist in the current runtime. Graph and multimodal manifests are blueprints, not presets.
+- Feedback, durable review, and offline drift detection do exist (ADR-0014), but production drift
+  thresholds are uncalibrated and no external retraining workflow consumes the advisory flag.
+- Classification-aware provider egress (Lot 20), assurance levels/reports (proposed Lot 21), and
+  wrapping an existing external application (proposed Lot 22) do not exist.
 - RBAC/classification-aware enforcement, OPA, environment promotion and formatted compliance
   reports are not implemented, even though core tenant/policy/audit/review primitives ship.
 - `adapters/llms/` and `adapters/auth/` are implemented; only `adapters/graphstores/` and

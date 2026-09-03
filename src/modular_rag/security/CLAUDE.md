@@ -1,385 +1,129 @@
-# CLAUDE.md — Security Module
+# CLAUDE.md — Security module
 
-This file provides security-specific guidance for Claude working on the security module. Read this **before editing any file in this directory**.
+Read this file before editing `src/modular_rag/security/`. This module handles untrusted content,
+tenant boundaries, policy decisions, redaction, audit, feedback, and human review. Treat logs,
+traces, feedback corrections, and provider payloads as possible sensitive-data paths.
 
----
+## Architectural boundary
 
-## ⚠️ Safety Critical Module
+Security is a domain module. It may import `contracts/`, `core/`, and its own package; it must not
+import sibling domains such as `retrieval/`, `generation/`, `ingestion/`, `agents/`, `memory/`, or
+`eval/`. Concrete composition belongs in `app/default_factories.py` and selection belongs in YAML
+manifests.
 
-The security module handles **sensitive data** (PII, credentials, policy enforcement). Claude must be extremely careful about:
-- Exposing secrets in logs or error messages
-- Creating overly permissive regex patterns (PII detection bypass)
-- Mixing Safety (filters, redaction) with Security (policies, RBAC)
-- Importing from domain modules (FORBIDDEN)
+The currently implemented controls are useful safeguards, not a compliance certification. In
+particular, the framework does not yet enforce classification-aware, deny-by-default provider
+egress. That boundary is planned as Lot 20. Until then, deployments that send content to external
+LLM or embedding APIs need an external gateway/control or must restrict themselves to approved
+local providers.
 
----
+ADR-0015 accepts a broader portable assurance direction. It is not authority to add or change a
+Protocol until the separate contract-change work is approved.
 
-## 1. No Cross-Domain Imports
+## Current contracts and implementations
 
-### Rule: Never Import from Domain Modules
-The security module sits **above** domain modules in the architecture. It cannot import from `ingestion/`, `retrieval/`, `generation/`, `agents/`, `memory/`, or `eval/`.
+### Content guard
 
-### ❌ FORBIDDEN
+`contracts/security.py` defines the runtime-checkable `SecurityGuard` Protocol:
+
 ```python
-# ❌ Security importing from domain module (real paths, corrected 2026-08-07)
-from modular_rag.retrieval.retrievers.bm25 import BM25Retriever
-from modular_rag.generation.synthesizers.openai_gen import OpenAIGenerator
-
-# This breaks hexagonal layering!
+def check_query(self, query: Query) -> GuardResult: ...
+def check_answer(self, answer: Answer) -> GuardResult: ...
+def name(self) -> str: ...
 ```
 
-### ✅ ALLOWED
+`GuardResult` contains `allowed`, optional `reason`, optional `modified_content`, and
+`risk_score`. The reference implementation is `filters/basic_guard.py`. It is a first-line,
+pattern-based defense, not proof that arbitrary prompt injection or corpus poisoning is detected.
+
+### Redaction
+
+`PatternRedactor` in `redaction/patterns.py` implements `Redactor.redact(text)`. Extend the existing
+pattern set and tests rather than duplicating regex families. Redaction is destructive masking; it
+does not provide reversible pseudonymization or establish whether an external transfer is lawful.
+
+### Policy and tenant isolation
+
+- `PolicyEngine.enforce_query(query)` evaluates enabled `Policy` rules and fails closed on
+  evaluation errors.
+- `TenantIsolationPolicy` implements the `TenantPolicy` contract:
+  `enforce_query`, `enforce_ingest`, and `filter_chunks`.
+- There is no shipped generic `RBACPolicy` class. API roles and policy rules must be documented
+  according to their actual enforcement points.
+
+### Audit, feedback, and review
+
+- Audit sinks record governed events; never include raw secrets or unnecessary content.
+- Feedback sinks persist the `contracts/feedback.py` model. Free-text correction content is
+  rejected unless a redactor is configured, then redacted before storage.
+- `HumanReviewGate` and the PostgreSQL review adapter implement the `ReviewQueue` contract.
+  Resolution is terminal; a resolved item must not be overwritten.
+- In-memory implementations are functional references, not durable production storage.
+
+## Mandatory implementation rules
+
+1. Never log full query, answer, document, correction, credential, or provider payload text.
+   Prefer identifiers, lengths, counts, and bounded classifications.
+2. Load credentials from the provider's supported environment/configuration mechanism and never
+   echo their values. The repository currently uses standard provider variables such as
+   `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`; do not invent an undocumented secret convention.
+3. Keep configurable thresholds in constructor/manifest configuration. Preserve the existing
+   `BasicSecurityGuard` risk scale unless an accepted design explicitly changes its semantics.
+4. Fail closed when a declared mandatory policy, tenant, audit, redaction, or future egress control
+   cannot execute. Do not silently downgrade a requested control.
+5. Keep safety checks, access/policy enforcement, audit, and redaction as distinct components even
+   when the orchestration flow composes them.
+6. Register a new built-in through `app/default_factories.py`; add or update its manifest schema
+   only when necessary.
+7. Use lazy imports for optional heavy dependencies.
+
+## Minimal guard example
+
 ```python
-# ✅ Security imports from contracts and core.
-# Note: PolicyEngine is NOT in contracts/security.py — it's a concrete class
-# (security/policies/policy_engine.py), not a Protocol. contracts/security.py
-# only has SecurityGuard, Redactor, TenantPolicy, and the GuardResult dataclass.
-from modular_rag.contracts.security import SecurityGuard, GuardResult
+from modular_rag.contracts.security import GuardResult
+from modular_rag.core.models.answer import Answer
 from modular_rag.core.models.query import Query
-from modular_rag.core.errors import SecurityError
+
+
+class ExampleGuard:
+    def name(self) -> str:
+        return "example"
+
+    def check_query(self, query: Query) -> GuardResult:
+        return GuardResult(allowed=True, risk_score=0.0)
+
+    def check_answer(self, answer: Answer) -> GuardResult:
+        return GuardResult(allowed=True, risk_score=0.0)
 ```
 
-**Why this matters**: Security is foundational. Domain modules depend on security. If security depended on domain modules, it would create circular dependencies.
+Use `result.allowed`; `evaluate()` and `result.is_safe` are not part of the current contract.
 
----
+## Required tests
 
-## 2. Safety vs Security (Distinct Concerns)
+- Unit tests for allowed, denied, malformed, boundary, and false-positive cases.
+- Contract conformance for every new Protocol implementation.
+- Manifest/factory tests for a new built-in component.
+- Tenant isolation tests for both query and ingestion paths when tenancy changes.
+- Parity tests for every governance control that must work under both native and delegated engines.
+- Redaction tests that assert sensitive values are absent from persisted/logged output.
 
-### Safety (Filters, Redaction)
-**Purpose**: Protect against content issues (prompt injection, PII, toxicity).
+Run the narrow affected tests, then the repository checks. Do not run provider-backed integration
+or end-to-end tests without confirmed services and credentials.
 
-**Location**: `security/filters/`, `security/redaction/`
+## Before finalizing
 
-**Example**:
-```python
-# safety/ concern: block injection attempts
-class PromptGuard:
-    def evaluate(self, query: Query) -> bool:
-        if "'; DROP TABLE" in query.text:
-            return False  # Block SQL injection
-        return True
-
-# safety/ concern: redact PII
-class PatternRedactor:
-    def redact(self, text: str) -> str:
-        return re.sub(r'\b\d{3}-\d{2}-\d{4}\b', '[SSN]', text)  # Mask SSNs
-```
-
-### Security (Policies, RBAC)
-**Purpose**: Enforce access control, audit, compliance.
-
-**Location**: `security/policies/`
-
-**Example**:
-```python
-# security/ concern: enforce role-based access
-class RBACPolicy:
-    def can_access(self, user: User, resource: Resource) -> bool:
-        if user.role == "admin":
-            return True
-        if user.role == "user" and resource.visibility == "public":
-            return True
-        return False
-
-# security/ concern: audit log
-class AuditLog:
-    def log_access(self, user: User, action: str, resource: Resource):
-        logger.info(f"User {user.id} {action} {resource.id}")
-```
-
-### ❌ Bad: Mixing Concerns
-```python
-# ❌ Bad: mixing Safety and Security
-class MixedGuard:
-    def evaluate(self, query: Query, user: User):
-        # This is confusing: is this Safety or Security?
-        if self._is_prompt_injection(query):  # Safety
-            return False
-        if user.role != "user":  # Security
-            return False
-        return True
-```
-
-### ✅ Good: Separate Concerns
-```python
-# ✅ Good: distinct Safety and Security
-class PromptGuard:  # Safety
-    def evaluate(self, query: Query) -> bool:
-        return not self._is_prompt_injection(query)
-
-class AccessPolicy:  # Security
-    def can_execute(self, user: User) -> bool:
-        return user.role in ["admin", "user"]
-```
-
----
-
-## 3. PII Detection & Redaction Rules
-
-### Never Log Full Text
-Full text may contain PII (names, emails, SSNs, credit cards, medical info).
-
-### ❌ WRONG
-```python
-def evaluate(self, query: Query) -> bool:
-    logger.info(f"Evaluating query: {query.text}")  # ❌ May expose PII!
-    # ... rest of logic
-```
-
-### ✅ CORRECT
-```python
-def evaluate(self, query: Query) -> bool:
-    logger.info(f"Evaluating query (length={len(query.text)})")  # ✅ Safe
-    # ... rest of logic
-```
-
-### PII Patterns to Detect
-Use `PatternRedactor` to mask:
-- **SSN**: `\b\d{3}-\d{2}-\d{4}\b` → `[SSN]`
-- **Credit Card**: `\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b` → `[CC]`
-- **Email**: `\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b` → `[EMAIL]`
-- **Phone**: `\b\d{3}[-.]?\d{3}[-.]?\d{4}\b` → `[PHONE]`
-- **Medical**: `ICD-10|\bmedication\b|\bdiagnosis\b` → `[MEDICAL]`
-
-**Reference**: See [src/modular_rag/security/redaction/patterns.py](redaction/patterns.py) (`PatternRedactor`) for implementation.
-
----
-
-## 4. Risk Scoring Guidelines
-
-### TraceStep Metadata: risk_score Field
-Every guard evaluation must emit a `risk_score` (0.0 to 1.0) in metadata.
-
-### Scale
-```
-1.0 = Critical (block immediately)
-0.9 = High (prompt injection detected)
-0.8 = Medium (suspicious term found)
-0.5 = Low (threshold exceeded)
-0.0 = Safe (pass through)
-```
-
-### ✅ Example
-```python
-def evaluate(self, query: Query) -> GuardResult:
-    trace = Trace()
-    
-    # Check for injection
-    if self._is_injection(query):
-        trace.add_step(TraceStep(
-            name="guard_injection_check",
-            metadata={"risk_score": 0.9}
-        ))
-        return GuardResult(is_safe=False, risk_score=0.9)
-    
-    # Check for PII
-    pii_count = self._count_pii(query)
-    if pii_count > 0:
-        trace.add_step(TraceStep(
-            name="guard_pii_check",
-            metadata={"risk_score": 0.5 + (0.1 * pii_count)}
-        ))
-        return GuardResult(is_safe=False, risk_score=min(0.8, 0.5 + (0.1 * pii_count)))
-    
-    # Safe
-    trace.add_step(TraceStep(
-        name="guard_all_checks",
-        metadata={"risk_score": 0.0}
-    ))
-    return GuardResult(is_safe=True, risk_score=0.0)
-```
-
----
-
-## 5. Never Hardcode Security Thresholds
-
-### ❌ WRONG: Hardcoded Values
-```python
-class PromptGuard:
-    def evaluate(self, query: Query) -> bool:
-        # ❌ Hardcoded threshold
-        if len(query.text) > 1000:  # Why 1000? No flexibility!
-            return False
-        return True
-```
-
-### ✅ CORRECT: Configurable via Manifest
-```python
-class PromptGuard:
-    def __init__(self, max_query_length: int = 1000):
-        self.max_query_length = max_query_length
-    
-    def evaluate(self, query: Query) -> bool:
-        if len(query.text) > self.max_query_length:
-            return False
-        return True
-
-# In orchestration/registry.py:
-@_register_factory("PromptGuard", SecurityGuard)
-def create_prompt_guard(config: dict) -> SecurityGuard:
-    return PromptGuard(
-        max_query_length=config.get("max_query_length", 1000)
-    )
-
-# In manifest YAML:
-components:
-  guard:
-    type: "PromptGuard"
-    config:
-      max_query_length: 2000
-```
-
----
-
-## 6. Testing Security Components
-
-### Unit Tests (No External Services)
-```python
-# tests/unit/security/test_prompt_guard.py
-
-def test_guard_blocks_sql_injection():
-    guard = PromptGuard()
-    query = Query(text="'; DROP TABLE users; --")
-    result = guard.evaluate(query)
-    assert result.is_safe is False
-    assert result.risk_score >= 0.9
-
-def test_guard_allows_safe_query():
-    guard = PromptGuard()
-    query = Query(text="What is machine learning?")
-    result = guard.evaluate(query)
-    assert result.is_safe is True
-    assert result.risk_score == 0.0
-```
-
-### Conformance Tests (All Implementations)
-```python
-# tests/contract/test_security_conformance.py
-
-import pytest
-from modular_rag.contracts.security import SecurityGuard
-from modular_rag.security.filters import PromptGuard, ToxicityFilter
-
-@pytest.mark.parametrize("guard_class", [PromptGuard, ToxicityFilter])
-def test_security_guard_implements_protocol(guard_class):
-    """Verify all SecurityGuard implementations conform to Protocol."""
-    guard = guard_class()
-    assert isinstance(guard, SecurityGuard)
-    
-    # Test interface
-    query = Query(text="test")
-    result = guard.evaluate(query)
-    assert hasattr(result, "is_safe")
-    assert hasattr(result, "risk_score")
-    assert 0.0 <= result.risk_score <= 1.0
-```
-
----
-
-## 7. Vault/Credentials: Never Log or Expose
-
-### ❌ WRONG
-```python
-# ❌ Never log credentials
-api_key = os.getenv("MRAG_SECURITY_API_KEY")
-logger.info(f"Using API key: {api_key}")  # ❌ Exposed!
-```
-
-### ✅ CORRECT
-```python
-# ✅ Safe: just log that we loaded a key
-api_key = os.getenv("OPENAI_API_KEY")
-if not api_key:
-    raise SecurityError("OPENAI_API_KEY not set")
-logger.info("Loaded API key from environment")  # ✅ Safe
-```
-
-### Environment Variables (Corrected 2026-08-06)
-
-There is no `MRAG_SECURITY_API_KEY`/`MRAG_AUTH_SECRET`/`MRAG_*` convention in this codebase —
-those don't exist anywhere in `src/`. The only credential env vars anything actually reads are
-the LLM SDKs' own standard names:
-```bash
-OPENAI_API_KEY=your_openai_key_here
-ANTHROPIC_API_KEY=your_anthropic_key_here
-```
-(`app/settings.py` declared a separate `MRAG_`-prefixed `Settings` class; it was orphaned —
-nothing in the real pipeline-wiring path ever constructed it — and was deleted in Étape 8 of the
-ADR-0007 stabilization pass, `docs/adr/0007-layer-boundaries-and-control-plane-activation.md`.)
-
----
-
-## 8. Summary: Security Module Dos & Don'ts
-
-### ✅ DO
-- Import from `contracts/security.py` and `core/models/`
-- Separate Safety (filters, redaction) from Security (policies, RBAC)
-- Emit TraceStep with risk_score in metadata
-- Use lazy imports for heavy deps (never at module level)
-- Configure via manifest YAML (no hardcoded thresholds)
-- Test with unit + conformance tests
-- Load credentials from environment variables
-- Log safely (never log full text or secrets)
-- Use PatternRedactor for PII masking
-
-### ❌ NEVER
-- Import from domain modules (`ingestion/`, `retrieval/`, etc.)
-- Mix Safety and Security in one class
-- Log full query text (might contain PII)
-- Hardcode security thresholds or credentials
-- Create overly permissive regex patterns
-- Leave unmasked PII in logs or traces
-- Implement a guard without conformance test
-- Modify protocols without updating tests
-
----
-
-## 9. Common Violations & Fixes
-
-### Violation 1: Cross-Domain Import
-```python
-# ❌ Bad
-from modular_rag.retrieval.retrievers.bm25 import BM25Retriever
-
-# ✅ Fix
-from modular_rag.contracts.retrieval import Retriever
-```
-
-### Violation 2: Mixing Safety & Security
-```python
-# ❌ Bad
-class GuardAndPolicy:
-    def evaluate(self, query, user):
-        # Both safety and security — confusing!
-        return self._is_safe(query) and self._can_access(user)
-
-# ✅ Fix
-class PromptGuard:  # Safety
-    def evaluate(self, query) -> bool:
-        return self._is_safe(query)
-
-class AccessPolicy:  # Security
-    def can_access(self, user) -> bool:
-        return user.role in ["admin", "user"]
-```
-
-### Violation 3: Logging PII
-```python
-# ❌ Bad
-logger.info(f"Processing query: {query.text}")
-
-# ✅ Fix
-logger.info(f"Processing query (len={len(query.text)})")
-```
-
----
+- [ ] No sibling-domain import or concrete wiring outside the composition root.
+- [ ] No raw sensitive content or secrets in logs, traces, reports, or exceptions.
+- [ ] Declared controls fail closed and have negative-path tests.
+- [ ] Contract, factory, manifest, and documentation changes agree.
+- [ ] Claims distinguish implemented safeguards, deployment responsibility, and planned Lot 20.
+- [ ] A Protocol change has an accepted ADR and migration/conformance coverage.
 
 ## References
 
-- [.claude/rules/security.md](../../../.claude/rules/security.md) — Global security rules
-- [src/modular_rag/contracts/security.py](../contracts/security.py) — SecurityGuard Protocol
-- [ADR-0003: Security & Governance](../../../docs/adr/0003-security-and-governance.md) — Architecture decision
-
----
-
-**Work safely. Protect user data. Never compromise on security.**
+- `contracts/security.py`, `contracts/feedback.py`, `contracts/review.py`
+- `docs/architecture/security.md`
+- `docs/architecture/data-classification-policy.md`
+- `docs/architecture/threat-model.md`
+- `docs/adr/0003-security-and-governance.md`
+- `docs/refactoring/lot-20-data-protection-and-provider-egress.md`

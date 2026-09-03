@@ -17,16 +17,22 @@
 # patch version, system libraries, and bundled tools between two builds of
 # the same commit, which the Python dependency lock alone cannot repair.
 # Digest resolved from Docker Hub's own v2 API (repositories/library/python/
-# tags/3.12-slim) on 2026-08-19 -- cross-checked with two independent
-# fetches returning the identical value; a human with real Docker access
-# should still cross-verify with `docker pull python:3.12-slim && docker
-# inspect --format='{{index .RepoDigests 0}}' python:3.12-slim` before this
-# is treated as production-final, since this sandboxed environment has no
-# `docker` binary to perform that check itself (verified directly). Refresh
-# procedure and the exact command are in docs/guides/dependency-lock.md;
-# both stages below MUST be updated together -- a builder/runtime split on
-# different base digests defeats the point.
-FROM python:3.12-slim@sha256:2c941e860699f878900b0edc2403613c234d4b32eda3cc9fa7036991a2a63c4a AS builder
+# tags/3.12-slim) on 2026-09-03 -- cross-checked against the registry's own
+# v2 manifest API (`docker-content-digest` header on
+# registry-1.docker.io/v2/library/python/manifests/3.12-slim), both
+# returning the identical value; refreshed from the prior 2026-08-19 pin to
+# pick up Debian's openssl/libssl3t64 security update (CI's Grype gate
+# flagged the old digest's openssl as HIGH/CRITICAL -- see
+# docs/guides/dependency-lock.md's Grype section). A human with real Docker
+# access should still cross-verify with `docker pull python:3.12-slim &&
+# docker inspect --format='{{index .RepoDigests 0}}' python:3.12-slim`
+# before this is treated as production-final, since this sandboxed
+# environment has no `docker` binary to perform that check itself (verified
+# directly). Refresh procedure and the exact command are in
+# docs/guides/dependency-lock.md; both stages below MUST be updated
+# together -- a builder/runtime split on different base digests defeats the
+# point.
+FROM python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea AS builder
 WORKDIR /src
 # Pinned, not "--upgrade" to whatever's latest at build time (Lot 9) --
 # matches this repo's own dev environment (pip) and requirements-lock.txt's
@@ -40,7 +46,7 @@ WORKDIR /src
 # cannot repair a wheel that was already built with moving inputs.
 # --no-isolation uses this same environment instead of building a fresh one.
 #
-# `-c requirements-lock.txt` (Codex review HIGH-002, round 2): `build==1.5.0`
+# `-c requirements-lock.txt` (Codex review HIGH-002, round 2): `build`
 # itself unconditionally requires `pyproject_hooks`, which the earlier
 # explicit-pin list omitted entirely -- confirmed via `importlib.metadata.
 # requires("build")` -- so it resolved freely from the live index despite
@@ -62,15 +68,16 @@ WORKDIR /src
 # couldn't be verified without a real Docker daemon) -- a plain `COPY`,
 # same proven pattern the runtime stage below already uses.
 COPY requirements-lock.txt /tmp/requirements-lock.txt
-RUN pip install --no-cache-dir --no-require-hashes -c /tmp/requirements-lock.txt \
-    pip==26.2 build==1.5.0 \
+RUN pip install --no-cache-dir pip==26.2 && \
+    pip install --no-cache-dir --no-require-hashes -c /tmp/requirements-lock.txt \
+    pip==26.2 build==1.6.0 \
     hatchling==1.32.0 tomlkit==0.15.1 trove-classifiers==2026.6.1.19 && \
     rm -f /tmp/requirements-lock.txt
 COPY pyproject.toml README.md LICENSE ./
 COPY src/ src/
 RUN python -m build --wheel --no-isolation
 
-FROM python:3.12-slim@sha256:2c941e860699f878900b0edc2403613c234d4b32eda3cc9fa7036991a2a63c4a AS runtime
+FROM python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea AS runtime
 RUN useradd --create-home --uid 1000 mrag && \
     mkdir -p /home/mrag/.cache/huggingface && \
     chown -R mrag:mrag /home/mrag/.cache
@@ -111,8 +118,17 @@ COPY requirements-lock.txt /tmp/requirements-lock.txt
 # the wheel itself remains a real, open follow-up (see
 # docs/guides/dependency-lock.md), not silently dropped, but this specific
 # combination could not work as originally written.
+#
+# --extra-index-url: requirements-lock.txt pins a `+cpu`-tagged torch build
+# (a CPU-only wheel, pulled in transitively via sentence-transformers under
+# the `v1` extra) that only exists on PyTorch's own package index, never on
+# PyPI -- every CI job's own `pip install -e .` already passes this same
+# flag (.github/workflows/ci.yml); this runtime install line was the one
+# place that didn't, so it failed here with "no matching distribution" for
+# torch even though the exact same lock resolves fine everywhere else.
 RUN WHEEL_FILE=$(ls /tmp/*.whl) && \
-    pip install --no-cache-dir --no-require-hashes -c /tmp/requirements-lock.txt "${WHEEL_FILE}[v1,langgraph,postgres,auth]" && \
+    pip install --no-cache-dir pip==26.2 && \
+    pip install --no-cache-dir --no-require-hashes --extra-index-url https://download.pytorch.org/whl/cpu -c /tmp/requirements-lock.txt "${WHEEL_FILE}[v1,langgraph,postgres,auth]" && \
     rm -rf /tmp/*.whl /tmp/requirements-lock.txt
 COPY manifests/ manifests/
 COPY docker/server.py server.py
