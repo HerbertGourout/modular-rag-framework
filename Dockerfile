@@ -62,7 +62,8 @@ WORKDIR /src
 # couldn't be verified without a real Docker daemon) -- a plain `COPY`,
 # same proven pattern the runtime stage below already uses.
 COPY requirements-lock.txt /tmp/requirements-lock.txt
-RUN pip install --no-cache-dir --no-require-hashes -c /tmp/requirements-lock.txt \
+RUN pip install --no-cache-dir pip==26.2 && \
+    pip install --no-cache-dir --no-require-hashes -c /tmp/requirements-lock.txt \
     pip==26.2 build==1.5.0 \
     hatchling==1.32.0 tomlkit==0.15.1 trove-classifiers==2026.6.1.19 && \
     rm -f /tmp/requirements-lock.txt
@@ -112,6 +113,7 @@ COPY requirements-lock.txt /tmp/requirements-lock.txt
 # docs/guides/dependency-lock.md), not silently dropped, but this specific
 # combination could not work as originally written.
 RUN WHEEL_FILE=$(ls /tmp/*.whl) && \
+    pip install --no-cache-dir pip==26.2 && \
     pip install --no-cache-dir --no-require-hashes -c /tmp/requirements-lock.txt "${WHEEL_FILE}[v1,langgraph,postgres,auth]" && \
     rm -rf /tmp/*.whl /tmp/requirements-lock.txt
 COPY manifests/ manifests/
