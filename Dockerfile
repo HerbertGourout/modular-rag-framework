@@ -40,7 +40,7 @@ WORKDIR /src
 # cannot repair a wheel that was already built with moving inputs.
 # --no-isolation uses this same environment instead of building a fresh one.
 #
-# `-c requirements-lock.txt` (Codex review HIGH-002, round 2): `build==1.5.0`
+# `-c requirements-lock.txt` (Codex review HIGH-002, round 2): `build`
 # itself unconditionally requires `pyproject_hooks`, which the earlier
 # explicit-pin list omitted entirely -- confirmed via `importlib.metadata.
 # requires("build")` -- so it resolved freely from the live index despite
@@ -64,7 +64,7 @@ WORKDIR /src
 COPY requirements-lock.txt /tmp/requirements-lock.txt
 RUN pip install --no-cache-dir pip==26.2 && \
     pip install --no-cache-dir --no-require-hashes -c /tmp/requirements-lock.txt \
-    pip==26.2 build==1.5.0 \
+    pip==26.2 build==1.6.0 \
     hatchling==1.32.0 tomlkit==0.15.1 trove-classifiers==2026.6.1.19 && \
     rm -f /tmp/requirements-lock.txt
 COPY pyproject.toml README.md LICENSE ./
@@ -112,9 +112,17 @@ COPY requirements-lock.txt /tmp/requirements-lock.txt
 # the wheel itself remains a real, open follow-up (see
 # docs/guides/dependency-lock.md), not silently dropped, but this specific
 # combination could not work as originally written.
+#
+# --extra-index-url: requirements-lock.txt pins a `+cpu`-tagged torch build
+# (a CPU-only wheel, pulled in transitively via sentence-transformers under
+# the `v1` extra) that only exists on PyTorch's own package index, never on
+# PyPI -- every CI job's own `pip install -e .` already passes this same
+# flag (.github/workflows/ci.yml); this runtime install line was the one
+# place that didn't, so it failed here with "no matching distribution" for
+# torch even though the exact same lock resolves fine everywhere else.
 RUN WHEEL_FILE=$(ls /tmp/*.whl) && \
     pip install --no-cache-dir pip==26.2 && \
-    pip install --no-cache-dir --no-require-hashes -c /tmp/requirements-lock.txt "${WHEEL_FILE}[v1,langgraph,postgres,auth]" && \
+    pip install --no-cache-dir --no-require-hashes --extra-index-url https://download.pytorch.org/whl/cpu -c /tmp/requirements-lock.txt "${WHEEL_FILE}[v1,langgraph,postgres,auth]" && \
     rm -rf /tmp/*.whl /tmp/requirements-lock.txt
 COPY manifests/ manifests/
 COPY docker/server.py server.py
