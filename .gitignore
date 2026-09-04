@@ -154,6 +154,18 @@ logs/
 .gitlab/ci-artifacts/
 
 ---
+## RESEARCH CORPUS — raw PDFs (untracked 2026-09-04)
+---
+# .claude/research-papers/ held 56 arXiv PDFs (~128MB, ~97% of this repo's tracked size)
+# whose per-paper redistribution rights were never verified (escalated, undecided, in
+# Lot 16b — docs/refactoring/lot-16b-supply-chain.md). CLAUDE.md section 05 point 8's citation
+# requirement is satisfied by the distilled digests in docs/research/ (DIGEST-*.md,
+# EVIDENCE-CATALOGUE.md), which are still tracked and do not depend on the raw PDFs being
+# present. Untracking removes them from new clones and future commits; the existing blobs
+# remain in this repo's git history until a separate, explicit history rewrite (not done here).
+.claude/research-papers/
+
+---
 ## NOTES FOR CONTRIBUTORS
 ---
 # ✅ WHAT TO COMMIT:
