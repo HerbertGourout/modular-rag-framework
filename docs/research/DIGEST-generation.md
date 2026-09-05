@@ -1,8 +1,9 @@
 # Research Digest — Generation, Grounding & Faithfulness
 
-> **Auto-distilled** from the 3 arXiv PDFs in
-> [`.claude/research-papers/generation/`](../../.claude/research-papers/generation/)
-> on **2026-07-12**. Purpose: give literature backing (or corrections) to the V1 generation design
+> **Auto-distilled** from the 3 arXiv PDFs formerly tracked under `.claude/research-papers/generation/`
+> on **2026-07-12** (untracked 2026-09-06 — 128MB, unresolved per-paper redistribution rights, see
+> `docs/refactoring/lot-16b-supply-chain.md`; the arXiv ids remain in `EVIDENCE-CATALOGUE.md`).
+> Purpose: give literature backing (or corrections) to the V1 generation design
 > decisions that are currently unsourced — the grounding system prompt, `temperature=0.1`, the
 > numbered-source context format, the token-overlap groundedness score, and the citation builder.
 >

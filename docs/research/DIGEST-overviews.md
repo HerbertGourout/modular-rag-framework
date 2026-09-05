@@ -1,6 +1,8 @@
 # RAG Survey Digest — Overviews
 
-> **Auto-distilled** from the 5 arXiv PDFs in [`.claude/research-papers/overviews/`](../../.claude/research-papers/overviews/) on **2026-07-12**.
+> **Auto-distilled** from the 5 arXiv PDFs formerly tracked under `.claude/research-papers/overviews/`
+> on **2026-07-12** (untracked 2026-09-06 — 128MB, unresolved per-paper redistribution rights, see
+> `docs/refactoring/lot-16b-supply-chain.md`; the arXiv ids remain in `EVIDENCE-CATALOGUE.md`).
 > Purpose: extract cross-cutting, state-of-the-art guidance for this framework's V1 pipeline
 > (ingestion → hybrid retrieval → reranking → generation → guards, with `TraceStep` throughout)
 > and its V1→V5 [ROADMAP.md](../../ROADMAP.md). Numbers are quoted from the source papers.

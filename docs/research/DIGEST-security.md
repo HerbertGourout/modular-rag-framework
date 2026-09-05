@@ -1,7 +1,9 @@
 # Security Research Digest — RAG Threats & Defenses
 
-> **Auto-distilled** from the 9 arXiv PDFs in [`.claude/research-papers/security/`](../../.claude/research-papers/security/)
-> on **2026-07-12**. Purpose: make the state of the art directly usable for hardening V1 security
+> **Auto-distilled** from the 9 arXiv PDFs formerly tracked under `.claude/research-papers/security/`
+> on **2026-07-12** (untracked 2026-09-06 — 128MB, unresolved per-paper redistribution rights, see
+> `docs/refactoring/lot-16b-supply-chain.md`; the arXiv ids remain in `EVIDENCE-CATALOGUE.md`).
+> Purpose: make the state of the art directly usable for hardening V1 security
 > ([`security/filters/basic_guard.py`](../../src/modular_rag/security/filters/basic_guard.py),
 > [`security/redaction/patterns.py`](../../src/modular_rag/security/redaction/patterns.py)) and for planning
 > the **V1.2 Compliance Audit Trail** (see [ROADMAP.md](../../ROADMAP.md)).
