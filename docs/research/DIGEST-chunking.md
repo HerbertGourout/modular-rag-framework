@@ -1,6 +1,8 @@
 # Chunking Strategies — Research Digest
 
-**Auto-distilled** from the 6 arXiv PDFs in [`.claude/research-papers/chunkings_strategies/`](../../.claude/research-papers/chunkings_strategies/) on **2026-07-12**.
+**Auto-distilled** from the 6 arXiv PDFs formerly tracked under `.claude/research-papers/chunkings_strategies/`
+on **2026-07-12** (untracked 2026-09-06 — 128MB, unresolved per-paper redistribution rights, see
+`docs/refactoring/lot-16b-supply-chain.md`; the arXiv ids remain in `EVIDENCE-CATALOGUE.md`).
 Purpose: make the state of the art directly usable when building/optimizing V1 ingestion chunkers
 (`src/modular_rag/ingestion/chunkers/` — currently `fixed.py`, `adaptive.py`). Numbers are quoted from the papers;
 verify against the source PDF before treating any figure as ground truth.

@@ -1,8 +1,9 @@
 # Research Digest — RAG Optimisation & Evaluation
 
-> **Auto-distilled** from the 9 arXiv PDFs in
-> [`.claude/research-papers/rag_optimisation_evaluation/`](../../.claude/research-papers/rag_optimisation_evaluation/)
-> on **2026-07-12**. Purpose: make the state of the art directly usable for (a) tuning V1 hybrid
+> **Auto-distilled** from the 9 arXiv PDFs formerly tracked under
+> `.claude/research-papers/rag_optimisation_evaluation/` on **2026-07-12** (untracked 2026-09-06 —
+> 128MB, unresolved per-paper redistribution rights, see `docs/refactoring/lot-16b-supply-chain.md`;
+> the arXiv ids remain in `EVIDENCE-CATALOGUE.md`). Purpose: make the state of the art directly usable for (a) tuning V1 hybrid
 > retrieval (weighted RRF in [`src/modular_rag/retrieval/fusion/rrf.py`](../../src/modular_rag/retrieval/fusion/rrf.py),
 > weights in [`manifests/presets/local-hybrid-rag.yaml`](../../manifests/presets/local-hybrid-rag.yaml)) and
 > (b) designing the **V1.1 Evaluation-as-Contract** milestone (`eval/` — see [ROADMAP.md](../../ROADMAP.md)).
