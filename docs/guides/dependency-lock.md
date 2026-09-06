@@ -240,8 +240,12 @@ with zero actual change on this project's side. Findings are still fully visible
 table above; only the build-failing behavior changes. Three additional, individually-listed
 entries (`CVE-2026-4224`, `CVE-2026-7210`, `CVE-2026-3644` on `python` itself) are a genuinely
 different case — a real fix exists, just not on the pinned 3.12.x interpreter line — accepted as an
-explicit, separate risk until this project moves its minimum supported Python version. All entries
-are dated and reviewed; see the file's own header comment for the acceptance record.
+explicit, separate risk until this project moves its minimum supported Python version. A fifth
+entry (`CVE-2026-85091` on `zlib1g`, accepted 2026-09-06) is different again: `fix-state: not-fixed`,
+not `wont-fix` — a fresh CVE with no patch anywhere yet (neither Debian nor upstream zlib), narrow
+attack surface (`gzprintf`/`gzvprintf` misuse this project's own code never exercises), tracked to
+be removed once a fix ships rather than folded into the blanket won't-fix rule. All entries are
+dated and reviewed; see the file's own header comment for the acceptance record.
 
 ## Base image: digest-pinned, refresh procedure
 
