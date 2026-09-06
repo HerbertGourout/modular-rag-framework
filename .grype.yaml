@@ -70,3 +70,24 @@ ignore:
       Fixed only in Python 3.13.13+/3.14.4+/3.15.0a8+; this project's base
       image pins 3.12.x. Accepted 2026-09-03, revisit at the next Python
       version bump.
+
+  # Fresh CVE (published 2026-09-03, NVD status still "Received" as of
+  # 2026-09-06) with no fix anywhere yet -- not Debian, not upstream zlib.
+  # `fix-state` here is `not-fixed`, not `wont-fix`: a patch is plausible
+  # soon once upstream ships one, unlike the two categories above, so this
+  # is tracked as its own dated, narrow entry rather than folded into either
+  # existing rule. Heap buffer overflow in zlib's gz_vacate(), reachable via
+  # gzprintf()/gzvprintf() after a non-blocking gzwrite() stall with a stale
+  # external buffer pointer (CVSSv3.1 7.4) -- this project does not call
+  # gzprintf/gzvprintf on zlib directly; zlib1g is a transitive base-image
+  # library. Reviewed and accepted by Herbert Gourout, 2026-09-06 -- remove
+  # this entry as soon as a Debian trixie zlib1g build fixes it (check on
+  # the next base-image digest refresh).
+  - vulnerability: CVE-2026-85091
+    package:
+      name: zlib1g
+    reason: >-
+      Published 2026-09-03, no fix yet anywhere (Debian or upstream zlib).
+      Narrow attack surface (gzprintf/gzvprintf misuse) not exercised by
+      this project's own code. Accepted 2026-09-06, revisit at the next
+      base-image digest refresh.
