@@ -6,7 +6,12 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from modular_rag.contracts.manifests import ComponentConfig, EngineSelection, PipelineManifest
+from modular_rag.contracts.manifests import (
+    ComponentConfig,
+    EngineSelection,
+    GovernanceSection,
+    PipelineManifest,
+)
 
 
 def test_pipeline_manifest_rejects_unknown_top_level_fields() -> None:
@@ -50,3 +55,23 @@ def test_v2_manifest_with_engine_section_validates() -> None:
 def test_engine_selection_rejects_unknown_fields() -> None:
     with pytest.raises(ValidationError):
         EngineSelection(adapter="native", unexpected=True)  # type: ignore[call-arg]
+
+
+def test_governance_section_egress_policy_defaults_to_none() -> None:
+    """Lot 20 (docs/refactoring-plan.md): additive, optional — a manifest
+    with no governance.egress_policy is unaffected by this section existing."""
+    governance = GovernanceSection()
+    assert governance.egress_policy is None
+
+
+def test_governance_section_accepts_a_configured_egress_policy() -> None:
+    governance = GovernanceSection(
+        egress_policy=ComponentConfig(
+            type="manifest",
+            config={"providers": {"openai": {"local": False, "max_classification": "internal"}}},
+        )
+    )
+    assert governance.egress_policy is not None
+    assert governance.egress_policy.type == "manifest"
+    providers = governance.egress_policy.config["providers"]
+    assert providers["openai"]["max_classification"] == "internal"

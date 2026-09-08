@@ -2,15 +2,18 @@
 
 **Status:** originally a Lot 11a deliverable (`docs/refactoring-plan.md` Phase C) — a
 paper-and-fixture policy, not enforcement code, at the time it was written. **Updated here to
-reflect that Lot 11b/11c have since executed** (`docs/refactoring-plan.md`'s change log,
-2026-08-05): tenant-scoped enforcement is real and wired in today. The *classification-level*
-part of this document is a narrower, still-open exception to that — see the split explained in
-§2 below. `core.enums.DataClassification` remains, as of this pass, confirmed pure vocabulary:
-its own docstring in the source states plainly that nothing in the codebase reads or enforces it
-yet, and a direct grep of the codebase for consumers turns up nothing beyond this policy document
-and its fixtures. Conflating "tenant enforcement landed" with "classification-level enforcement
-landed" was the exact kind of mistake this document used to invite by treating both as one
-"Lot 11b" outcome — they are not the same piece of work, and only the first one shipped.
+reflect that Lot 11b/11c/20 have since executed** (`docs/refactoring-plan.md`'s change log):
+tenant-scoped enforcement (Lot 11b/11c) and classification-aware provider-egress control (Lot 20)
+are both real and wired in today, as two separate, independently-optional mechanisms — see §2 for
+the tenant split and the "Outbound-provider control" note below for egress.
+`core.enums.DataClassification` is no longer pure vocabulary: `Document.classification`/
+`Chunk.classification` carry it, `governance.egress_policy` reads it, and its own docstring in
+the source now names those consumers directly. Conflating "tenant enforcement landed" with
+"classification-level enforcement landed" was the exact kind of mistake this document used to
+invite by treating both as one "Lot 11b" outcome — they were never the same piece of work; the
+gap that left open (classification-level enforcement) is what Lot 20 closes for the
+provider-egress boundary specifically, not for every consumer named in §1's handling-requirement
+column (`PolicyEngine`/`TenantIsolationPolicy` still do not branch on classification — see §5).
 
 This document exists because Lot 11b ("Propagate authenticated identity and tenant through
 `ExecutionContext`; enforce fail-closed policy before indexing, retrieval, and generation") needed
@@ -55,12 +58,21 @@ document's classification hasn't been explicitly decided, matching the fail-clos
 default). This is a recommended human default, not something `DataClassification` itself causes
 to happen automatically — see the distinction above.
 
-**Outbound-provider gap (Lot 20, not implemented):** `PatternRedactor` currently processes answer
-text after generation and selected stored feedback/audit text. It does not classify or block raw
-queries, retrieved chunks, documents, or embedding inputs before a remote adapter call. Therefore
-the `restricted` row's “before external calls” requirement is policy only today. Until Lot 20
-ships, deployments must keep restricted data local or enforce egress externally; selecting the
-secure preset does not close this boundary.
+**Outbound-provider control (Lot 20, opt-in):** `PatternRedactor` still only processes answer text
+after generation and selected stored feedback/audit text — it does not classify or block raw
+queries, retrieved chunks, documents, or embedding inputs before a remote adapter call. Lot 20
+closes that specific gap with a separate, opt-in control: `governance.egress_policy`
+(`security.policies.egress_policy.ManifestEgressPolicy`) checks `Chunk.classification` (or, for
+query-time embedding at retrieval, the policy's own `default_classification` — `Query` itself
+carries no classification field) against a manifest-declared provider profile before
+`Embedder.embed()`, `Reranker.rerank()`, and `Generator.generate()`. No shipped preset configures
+it — selecting the secure preset alone still does not close this boundary; an operator must add
+`governance.egress_policy` explicitly and declare a profile for every wired provider. Real gaps
+remain even when configured: [ADR-0016](../adr/0016-provider-egress-control.md) is drafted but not
+yet accepted, no pseudonymization, and this covers only the
+owned embedder/generator/reranker/delegated-engine boundary, not PostgreSQL or any other outbound
+connection. See
+`docs/refactoring/lot-20-data-classification-egress-control.md` for full evidence.
 
 **Escalation only, never silent downgrade:** if a document is re-classified, only escalation
 (e.g. `internal` → `confidential`) may happen automatically from new evidence (e.g. a PII pattern
@@ -129,11 +141,12 @@ validates the fixture file's shape (every entry has a valid `DataClassification`
   without waiting on this mapping being resolved first (redaction is opt-in per manifest today,
   not driven by a classification→regulation lookup), so this is no longer a hard blocker on
   anything already delivered, but the mapping itself remains undone.
-- **Classification-level propagation and enforcement** (renamed/clarified from "automatic
-  classification" — the two are related but distinct gaps): no code path sets a
-  `DataClassification` value on an ingested document, and no code path reads one to decide which
-  controls to apply. This is the one piece of what this document originally scoped to "Lot 11b"
-  that did not, in fact, ship — Lot 11b's real delivered scope was tenant identity/enforcement
-  (§2), not classification-level enforcement. Building an ingestion-time classifier, or accepting
-  a classification level as an explicit ingestion parameter and having `PolicyEngine`/
-  `TenantIsolationPolicy` actually branch on it, remains unassigned to any lot.
+- **Classification-level propagation and enforcement — partially closed by Lot 20.**
+  `Document.classification`/`Chunk.classification` are now real fields, propagated by every
+  registered `Chunker`, and `governance.egress_policy` branches on them (provider-egress, this
+  document's §1 "before external calls" requirement). What Lot 20 did **not** build: an
+  ingestion-time *classifier* — the value is still explicit, caller-supplied only, exactly the
+  "accepting a classification level as an explicit ingestion parameter" option this item
+  originally named, not automatic inference from content. `PolicyEngine`/`TenantIsolationPolicy`
+  still do not branch on classification (only `tenant_id`) — that remains open, unassigned to any
+  lot. See `docs/refactoring/lot-20-data-classification-egress-control.md`.

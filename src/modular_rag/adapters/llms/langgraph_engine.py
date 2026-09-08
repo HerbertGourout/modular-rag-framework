@@ -48,6 +48,7 @@ from collections.abc import AsyncIterator
 from typing import Any, Protocol, TypedDict, runtime_checkable
 
 from modular_rag import __version__ as _package_version
+from modular_rag.contracts.egress import EgressOperation, EgressPolicy
 from modular_rag.contracts.engine import (
     EngineCapability,
     EngineRequest,
@@ -59,7 +60,13 @@ from modular_rag.contracts.generation import Generator
 from modular_rag.contracts.manifests import PipelineManifest
 from modular_rag.contracts.retrieval import Retriever
 from modular_rag.contracts.security import Redactor, SecurityGuard, TenantPolicy
-from modular_rag.core.errors import EngineCancelledError, EngineCapabilityError, SecurityError
+from modular_rag.core.enums import combined_classification
+from modular_rag.core.errors import (
+    EgressDeniedError,
+    EngineCancelledError,
+    EngineCapabilityError,
+    SecurityError,
+)
 from modular_rag.core.models.answer import Citation
 from modular_rag.core.models.query import Query
 from modular_rag.core.models.retrieved import RetrievedChunk
@@ -88,6 +95,9 @@ class _ComponentSource(Protocol):
 
     @property
     def redactor(self) -> Redactor | None: ...
+
+    @property
+    def egress_policy(self) -> EgressPolicy | None: ...
 
 
 class _GraphState(TypedDict):
@@ -210,6 +220,23 @@ class LangGraphEngineAdapter:
         if tenant_policy:
             tenant_policy.enforce_query(query)
 
+        # Egress policy (Lot 20, Codex review pass 1, HIGH-002): the retriever embeds the
+        # query text internally before returning -- same missing checkpoint, same fix, as
+        # RAGEngine._retrieve() on the native path. Query carries no classification field,
+        # so this resolves through the policy's own default_classification.
+        egress_policy = self._c.egress_policy
+        if egress_policy is not None:
+            decision = egress_policy.check(
+                classification=None,
+                provider=self._c.manifest.embedder.type,
+                operation=EgressOperation.EMBED,
+            )
+            if not decision.allowed:
+                raise EgressDeniedError(
+                    f"{decision.operation.value} denied by egress policy: {decision.reason} "
+                    f"(provider={decision.provider!r})"
+                )
+
         k = self._c.manifest.retriever.config.get("k", 20)
         chunks = self._c.retriever.retrieve(query, k=k)
 
@@ -271,6 +298,33 @@ class LangGraphEngineAdapter:
     def _node_generate(self, state: _GraphState) -> dict[str, Any]:
         query = state["query"]
         self._check_cancelled(state["context"], state["context"].request_id)
+
+        # Egress policy (Lot 20, docs/refactoring-plan.md): the security-critical checkpoint
+        # this adapter's own module docstring says it must replicate ("must hold regardless
+        # of which engine executes a request"). Uses the same Container.egress_policy/
+        # manifest.generator.type inputs RAGEngine._run_steps() checks before its own
+        # generate() call -- both engines delegate to the identical wired Generator, so this
+        # is "protect delegated engine requests before DocumentEngine.execute()" applied at
+        # the actual external-provider call site, not a second, coarser gate around the
+        # whole graph run (which would duplicate this same decision for no additional
+        # protection, since generation is the only owned external-provider call this graph
+        # makes -- retrieval's embedding call is native-only, see ingest_chunks(); this graph
+        # has no ingestion node).
+        egress_policy = self._c.egress_policy
+        if egress_policy is not None:
+            decision = egress_policy.check(
+                classification=combined_classification(
+                    c.chunk.classification for c in state["chunks"]
+                ),
+                provider=self._c.manifest.generator.type,
+                operation=EgressOperation.GENERATE,
+            )
+            if not decision.allowed:
+                raise EgressDeniedError(
+                    f"{decision.operation.value} denied by egress policy: {decision.reason} "
+                    f"(provider={decision.provider!r})"
+                )
+
         trace = Trace(query_id=query.id, pipeline_id=self._c.manifest.id)
         answer = self._c.generator.generate(query, state["chunks"], trace)
 

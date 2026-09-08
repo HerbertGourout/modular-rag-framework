@@ -2,13 +2,14 @@
 
 **Status:** originally a Lot 11a deliverable (`docs/refactoring-plan.md` Phase C), written when
 this was a paper deliverable with no enforcement code behind it yet. It is kept current here as of
-the `docs/refactoring-plan.md` change log through **Lot 18** — nearly every item this document
+the `docs/refactoring-plan.md` change log through **Lot 20** — nearly every item this document
 originally listed as open (Lots 11b, 11c, 12a, 12b, 16a, 16b, 16c) has since shipped real code;
 see each STRIDE row below for what changed and what, concretely, remains open today. Extends
 [security.md](security.md)'s attack-surface table with assets, trust boundaries, actors, and a
 STRIDE pass, and cross-references each threat to its current mitigation (if any) or the lot that
-owns closing it. Lot 20 now owns the still-open classification-aware provider-egress boundary;
-ADR-0015 is accepted, but planned Lots 21–22 do not yet mitigate threats. Read alongside
+owns closing it. Lot 20's classification-aware provider-egress boundary now ships as an opt-in
+manifest control (Boundary 3 below) — ADR-0015 is accepted, but planned Lots 21–22 do not yet
+mitigate threats. Read alongside
 [data-classification-policy.md](data-classification-policy.md), which this model assumes as the
 sensitivity vocabulary for "what's at risk." If you're reading this to judge whether a specific
 control is real, don't trust the prose alone — the file paths and function names cited in each row
@@ -83,11 +84,20 @@ deployment.md`'s own examples use `https://` endpoint URLs for Keycloak/Qdrant, 
 convention shown in an example, not a check this codebase performs or requires. Still a real,
 open gap — see §5 below.
 
-More importantly, current output redaction occurs after model generation. It cannot prevent raw
-query/context or embedding input from crossing Boundary 3. Lot 20 plans a deny-by-default,
-classification-aware decision before every owned remote adapter and delegated-engine handoff.
-Until then, restricted data must remain local or be protected by deployment/provider controls
-outside this framework.
+Output redaction occurs after model generation and cannot by itself prevent raw query/context or
+embedding input from crossing Boundary 3. Lot 20 (`security.policies.egress_policy.
+ManifestEgressPolicy`, `contracts/egress.py`) closes this for the boundary's owned adapters when
+`governance.egress_policy` is configured: a deny-by-default, classification-aware decision runs
+before `Embedder.embed()` — both document/chunk ingestion and query-time embedding at retrieval,
+the latter closed in Codex review pass 1 (HIGH-002) — `Reranker.rerank()`, and
+`Generator.generate()`, on both the native engine and the LangGraph delegated-engine handoff (its
+own generate node performs the identical check against the same wired `Generator`). It is opt-in
+— no shipped preset enables it, so an unconfigured pipeline is exactly as before this lot — and
+real, documented gaps remain: [ADR-0016](../adr/0016-provider-egress-control.md) is drafted but
+not yet accepted, no pseudonymization, and PostgreSQL
+(audit/lifecycle/feedback/review) is untouched by this lot, remaining a deployment-network
+concern. See
+`docs/refactoring/lot-20-data-classification-egress-control.md` for full scope and evidence.
 
 ## 3. Threat actors
 

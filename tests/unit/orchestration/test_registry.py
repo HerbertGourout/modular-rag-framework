@@ -145,6 +145,9 @@ def test_default_registry_has_the_documented_builtin_type_names() -> None:
     assert set(reg._factories["tenant_policy"]) == {"tenant-isolation"}
     assert set(reg._factories["policy_engine"]) == {"inline"}
     assert set(reg._factories["redactor"]) == {"patterns"}
+    # Lot 20 (docs/refactoring-plan.md): new optional governance role, one built-in
+    # implementation (ManifestEgressPolicy).
+    assert set(reg._factories["egress_policy"]) == {"manifest"}
     assert set(reg._factories["review_queue"]) == {"human-review", "postgres-human-review"}
     assert set(reg._factories["audit_sink"]) == {"in-memory", "postgres"}
     # ADR-0014 (Batch 14): new optional governance role, same in-memory/postgres
@@ -294,6 +297,103 @@ def test_wire_rejects_tenant_enforcement_true_without_a_tenant_policy() -> None:
     )
 
     with pytest.raises(RegistryError, match="tenant_enforcement=true"):
+        reg.wire(manifest)
+
+
+def test_wire_rejects_egress_policy_missing_a_provider_profile_for_the_wired_embedder() -> None:
+    """Lot 20 (docs/refactoring-plan.md): 'reject an incompatible manifest
+    before startup' — a wired embedder type with no matching
+    providers[...] entry must fail at wire() time, not defer to a
+    deny-by-default EgressDeniedError on the pipeline's first real embed
+    call."""
+    reg = _fake_registry()
+    reg.register("egress_policy", "fake-egress-policy", lambda cfg: object())
+    manifest = _minimal_manifest(
+        governance=GovernanceSection(
+            egress_policy=ComponentConfig(
+                type="fake-egress-policy",
+                # Only covers the generator, not the wired "fake-embedder".
+                config={"providers": {"fake-generator": {"local": True}}},
+            )
+        )
+    )
+
+    with pytest.raises(RegistryError, match="fake-embedder"):
+        reg.wire(manifest)
+
+
+def test_wire_rejects_egress_policy_missing_a_provider_profile_for_the_wired_generator() -> None:
+    reg = _fake_registry()
+    reg.register("egress_policy", "fake-egress-policy", lambda cfg: object())
+    manifest = _minimal_manifest(
+        governance=GovernanceSection(
+            egress_policy=ComponentConfig(
+                type="fake-egress-policy",
+                config={"providers": {"fake-embedder": {"local": True}}},
+            )
+        )
+    )
+
+    with pytest.raises(RegistryError, match="fake-generator"):
+        reg.wire(manifest)
+
+
+def test_wire_accepts_egress_policy_covering_every_wired_provider_type() -> None:
+    reg = _fake_registry()
+    reg.register("egress_policy", "fake-egress-policy", lambda cfg: object())
+    manifest = _minimal_manifest(
+        governance=GovernanceSection(
+            egress_policy=ComponentConfig(
+                type="fake-egress-policy",
+                config={
+                    "providers": {
+                        "fake-embedder": {"local": True},
+                        "fake-generator": {"local": False, "max_classification": "internal"},
+                    }
+                },
+            )
+        )
+    )
+
+    container = reg.wire(manifest)
+
+    assert container.egress_policy is not None
+
+
+def test_wire_without_egress_policy_configured_leaves_it_none() -> None:
+    """Absent from the manifest -> Container.egress_policy is None, matching
+    every other optional governance role's precedent (redactor, tenant_policy)."""
+    reg = _fake_registry()
+
+    container = reg.wire(_minimal_manifest())
+
+    assert container.egress_policy is None
+
+
+def test_wire_rejects_egress_policy_covering_the_wired_reranker_type_too() -> None:
+    """A reranker is only checked when the manifest actually wires one — the
+    same conditional shape as `manifest.reranker is not None` throughout
+    this module."""
+    reg = _fake_registry()
+    reg.register("egress_policy", "fake-egress-policy", lambda cfg: object())
+    reg.register("reranker", "fake-reranker", lambda cfg: object())
+    manifest = _minimal_manifest(
+        reranker=ComponentConfig(type="fake-reranker"),
+        governance=GovernanceSection(
+            egress_policy=ComponentConfig(
+                type="fake-egress-policy",
+                config={
+                    "providers": {
+                        "fake-embedder": {"local": True},
+                        "fake-generator": {"local": True},
+                        # fake-reranker deliberately omitted
+                    }
+                },
+            )
+        ),
+    )
+
+    with pytest.raises(RegistryError, match="fake-reranker"):
         reg.wire(manifest)
 
 

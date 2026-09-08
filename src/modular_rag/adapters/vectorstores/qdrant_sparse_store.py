@@ -299,6 +299,10 @@ class QdrantSparseStore:
                         "end_char": chunk.end_char,
                         "page": chunk.page,
                         "tenant_id": chunk.tenant_id,
+                        # classification persisted explicitly (Lot 20, Codex review pass 1,
+                        # HIGH-003) -- same tenant_id-shaped bug, same fix; see
+                        # QdrantStore.index()'s identical comment for the full rationale.
+                        "classification": chunk.classification,
                     },
                 )
             )
@@ -493,6 +497,7 @@ class QdrantSparseStore:
                 end_char=payload.get("end_char"),
                 page=payload.get("page"),
                 tenant_id=payload.get("tenant_id"),
+                classification=payload.get("classification"),
                 metadata={
                     k: v
                     for k, v in payload.items()
@@ -505,6 +510,7 @@ class QdrantSparseStore:
                         "end_char",
                         "page",
                         "tenant_id",
+                        "classification",
                     }
                 },
             )

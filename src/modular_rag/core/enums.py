@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from enum import StrEnum
 
 
@@ -39,17 +40,67 @@ class PolicyAction(StrEnum):
 
 
 class DataClassification(StrEnum):
-    """Data-sensitivity level (Lot 11a, docs/refactoring-plan.md — "paper-and-fixture
-    deliverable; no enforcement code yet"). Vocabulary only: nothing in the codebase
-    reads or enforces this yet. Definitions and handling requirements per level are in
-    docs/architecture/data-classification-policy.md. Enforcement against this
-    vocabulary (deny-by-default on policy-engine error, tenant-scoped filtering) is
-    Lot 11b scope, not this one."""
+    """Data-sensitivity level (Lot 11a, docs/refactoring-plan.md). Originally
+    vocabulary-only ("nothing in the codebase reads or enforces this yet") —
+    Lot 20 (docs/refactoring-plan.md, "Data Classification and LLM Egress
+    Control") is the first real consumer: `Document.classification`/
+    `Chunk.classification` carry it, and
+    `security.policies.egress_policy.ManifestEgressPolicy` reads it (via
+    `classification_rank()`/`combined_classification()` below) to decide
+    whether content may reach a remote embedder/generator. Definitions and
+    handling requirements per level are in
+    docs/architecture/data-classification-policy.md. Tenant-scoped
+    filtering (a related but distinct control) remains Lot 11b's own
+    `tenant_id`-based mechanism, not this enum."""
 
     PUBLIC = "public"
     INTERNAL = "internal"
     CONFIDENTIAL = "confidential"
     RESTRICTED = "restricted"
+
+
+# Lot 20 (docs/refactoring-plan.md, "Data Classification and LLM Egress Control"): the first
+# real consumer of DataClassification's ordering. Kept next to the enum itself, not inside
+# security/policies/egress_policy.py, so any layer may rank a classification value without
+# importing the security domain module (core/ has zero import restrictions elsewhere; every
+# layer in this codebase may already import core/).
+_CLASSIFICATION_RANK: dict[DataClassification, int] = {
+    DataClassification.PUBLIC: 0,
+    DataClassification.INTERNAL: 1,
+    DataClassification.CONFIDENTIAL: 2,
+    DataClassification.RESTRICTED: 3,
+}
+
+
+def classification_rank(level: DataClassification) -> int:
+    """Strictly-increasing sensitivity rank (`public` < `internal` <
+    `confidential` < `restricted`), for comparing a classification against a
+    provider's declared ceiling. Takes a real `DataClassification` only —
+    reducing an *unclassified* (`None`) value to a rank is a policy decision
+    (what a deployment defaults unclassified content to), not a ranking
+    question; see `combined_classification()` below and
+    `security.policies.egress_policy.ManifestEgressPolicy`'s own
+    `default_classification` handling."""
+    return _CLASSIFICATION_RANK[level]
+
+
+def combined_classification(
+    values: Iterable[DataClassification | None],
+) -> DataClassification | None:
+    """Reduce several classification values (e.g. every chunk in one
+    generation call's context) to the single most-restrictive value an
+    egress decision should be made against.
+
+    `None` (unclassified) in *any* input makes the combined result `None`
+    too, rather than being skipped: a `restricted` chunk sitting next to an
+    unlabeled one must not silently average out to something less
+    restrictive than "unknown" just because the unlabeled item was ignored.
+    An empty input is also `None` — there is nothing to classify as safe.
+    """
+    materialized = list(values)
+    if not materialized or any(v is None for v in materialized):
+        return None
+    return max(materialized, key=classification_rank)
 
 
 class ReadinessState(StrEnum):

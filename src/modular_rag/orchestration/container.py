@@ -6,6 +6,7 @@ import structlog
 
 from modular_rag.contracts.audit import AuditSink
 from modular_rag.contracts.chunking import Chunker
+from modular_rag.contracts.egress import EgressPolicy
 from modular_rag.contracts.embeddings import Embedder
 from modular_rag.contracts.feedback import FeedbackSink
 from modular_rag.contracts.generation import Generator
@@ -268,6 +269,14 @@ class Container:
     @property
     def redactor(self) -> Redactor | None:
         return self._store.get("redactor")
+
+    @property
+    def egress_policy(self) -> EgressPolicy | None:
+        """Lot 20 (docs/refactoring-plan.md) — same `.get()`-based optional-role
+        pattern as `tenant_policy`/`redactor` above. `None` when no
+        `governance.egress_policy` is configured; a pipeline behaves exactly
+        as it did before this lot in that case."""
+        return self._store.get("egress_policy")
 
     @property
     def review_queue(self) -> ReviewQueue | None:

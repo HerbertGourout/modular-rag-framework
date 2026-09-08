@@ -710,6 +710,61 @@ def test_index_does_not_let_metadata_override_any_structured_payload_field(
     assert payload[field] == real_value
 
 
+# ---------------------------------------------------------------------------
+# Lot 20 (Codex review pass 1, HIGH-003): classification round-trip. Same bug
+# shape as tenant_id above -- previously dropped from the payload in index()
+# and never reconstructed in retrieve_by_text(), which silently defeated
+# governance.egress_policy for the real Qdrant sparse path.
+# ---------------------------------------------------------------------------
+
+
+def test_index_persists_classification_in_the_payload(monkeypatch):
+    from modular_rag.core.enums import DataClassification
+
+    store = QdrantSparseStore()
+    fake_client = _FakeUpsertClient()
+    monkeypatch.setattr(store, "_get_client", lambda: fake_client)
+    chunk = Chunk(
+        id=new_id(),
+        doc_id="doc-1",
+        content="hello world",
+        classification=DataClassification.RESTRICTED,
+    )
+
+    store.index([chunk])
+
+    assert fake_client.upserted_points[0].payload["classification"] == "restricted"
+
+
+def test_retrieve_by_text_reconstructs_classification_from_the_payload(monkeypatch):
+    class _ClassifiedHitClient:
+        def query_points(self, **kwargs):  # type: ignore[no-untyped-def]
+            class _Hit:
+                id = "chunk-1"
+                score = 0.9
+                payload = {
+                    "doc_id": "doc-1",
+                    "content": "restricted content",
+                    "start_char": 0,
+                    "end_char": 19,
+                    "classification": "restricted",
+                }
+
+            class _Result:
+                points = [_Hit()]
+
+            return _Result()
+
+    store = QdrantSparseStore()
+    monkeypatch.setattr(store, "_get_client", lambda: _ClassifiedHitClient())
+
+    results = store.retrieve_by_text("restricted content", k=5)
+
+    assert len(results) == 1
+    assert results[0].chunk.classification == "restricted"
+    assert "classification" not in results[0].chunk.metadata
+
+
 def test_index_still_preserves_legitimate_non_colliding_metadata(monkeypatch):
     """The fix must not drop legitimate metadata entirely — only structured
     fields are protected from being overridden."""

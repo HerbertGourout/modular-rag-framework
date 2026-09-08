@@ -335,6 +335,16 @@ class QdrantStore:
                         # but for the wrong reason, and would incorrectly drop
                         # legitimately tenant-scoped content too).
                         "tenant_id": chunk.tenant_id,
+                        # classification persisted explicitly (Lot 20, Codex review pass 1,
+                        # HIGH-003): same bug shape as tenant_id above -- previously dropped
+                        # here and never reconstructed in retrieve_by_vector(), which
+                        # silently defeated governance.egress_policy for the real Qdrant
+                        # path (every chunk round-tripped through Qdrant came back with
+                        # classification=None, indistinguishable from genuinely unclassified
+                        # content -- the policy's own default_classification then applied,
+                        # which can incorrectly deny permitted content or, with a permissive
+                        # default, incorrectly allow restricted content).
+                        "classification": chunk.classification,
                     },
                 )
             )
@@ -646,6 +656,7 @@ class QdrantStore:
                 end_char=payload.get("end_char"),
                 page=payload.get("page"),
                 tenant_id=payload.get("tenant_id"),
+                classification=payload.get("classification"),
                 metadata={
                     k: v
                     for k, v in payload.items()
@@ -658,6 +669,7 @@ class QdrantStore:
                         "end_char",
                         "page",
                         "tenant_id",
+                        "classification",
                     }
                 },
             )

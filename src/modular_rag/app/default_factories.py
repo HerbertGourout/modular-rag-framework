@@ -174,6 +174,7 @@ def register_defaults(reg: ComponentRegistry) -> None:
     from modular_rag.security.audit.store import InMemoryAuditSink
     from modular_rag.security.feedback.store import InMemoryFeedbackSink
     from modular_rag.security.filters.basic_guard import BasicSecurityGuard
+    from modular_rag.security.policies.egress_policy import ManifestEgressPolicy
     from modular_rag.security.policies.human_review import HumanReviewGate
     from modular_rag.security.policies.policy_engine import PolicyEngine
     from modular_rag.security.policies.tenant_isolation import TenantIsolationPolicy
@@ -202,6 +203,7 @@ def register_defaults(reg: ComponentRegistry) -> None:
         lambda cfg: PolicyEngine([Policy.model_validate(item) for item in cfg.config["policies"]]),
     )
     reg.register("redactor", "patterns", lambda cfg: PatternRedactor())
+    reg.register("egress_policy", "manifest", lambda cfg: ManifestEgressPolicy(**cfg.config))
     reg.register("review_queue", "human-review", lambda cfg: HumanReviewGate(**cfg.config))
     reg.register("review_queue", "postgres-human-review", _build_postgres_review_queue)
     reg.register("audit_sink", "in-memory", lambda cfg: InMemoryAuditSink())

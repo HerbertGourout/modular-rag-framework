@@ -36,6 +36,14 @@ ALLOWED_PAYLOAD_KEYS = frozenset({
     "model_name",
     "latency_ms",
     "error_type",
+    # Lot 20 (docs/refactoring-plan.md): egress-decision evidence. Content-free by
+    # construction (EgressDecision, contracts/egress.py) -- never the classified
+    # query/chunk/document text, only what was decided and against what provider/operation.
+    "egress_decision",
+    "egress_reason",
+    "egress_provider",
+    "egress_classification",
+    "egress_operation",
 })
 
 
@@ -46,6 +54,7 @@ class AuditEventType(StrEnum):
     GUARD_DECISION = "guard_decision"
     RUN_SUCCEEDED = "run_succeeded"
     RUN_FAILED = "run_failed"
+    EGRESS_DECISION = "egress_decision"  # Lot 20 (docs/refactoring-plan.md)
 
 
 class AuditEvent(BaseModel):

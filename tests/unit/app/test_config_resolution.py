@@ -120,6 +120,22 @@ def test_validate_capabilities_reports_unknown_type_without_instantiating() -> N
     assert any("chunker" in e and "adaptive" in e for e in errors)
 
 
+def test_validate_capabilities_reports_unknown_egress_policy_type_without_wiring() -> None:
+    """Lot 20 (docs/refactoring-plan.md): catches a typo'd egress_policy
+    type at dry-run time, same as every other governance role checked here."""
+    registry = ComponentRegistry()
+    manifest = PipelineManifest(
+        id="x",
+        governance=GovernanceSection(
+            egress_policy=ComponentConfig(type="does-not-exist", config={"providers": {}})
+        ),
+    )
+
+    errors = validate_capabilities(manifest, registry)
+
+    assert any("egress_policy" in e and "does-not-exist" in e for e in errors)
+
+
 def test_validate_capabilities_rejects_offline_quality_configuration() -> None:
     registry = ComponentRegistry()
     manifest = PipelineManifest(

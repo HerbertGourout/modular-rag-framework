@@ -2,8 +2,9 @@
 
 This is the index for the original 18-lot engine-agnostic control-plane refactoring programme
 and its follow-on lots (`docs/refactoring-plan.md`). Lots 0-18 were executed 2026-08-03 through
-2026-08-05; Lot 19 followed, Lot 20 is planned, and Lots 21–22 are planned by accepted
-ADR-0015. It answers: **what
+2026-08-05; Lot 19 followed, Lot 20 shipped 2026-09-08 (engineering scope; ADR-0016 drafted,
+Proposed, not yet accepted), and
+Lots 21–22 are planned by accepted ADR-0015, gated on Lot 20's sign-off/ADR. It answers: **what
 happened, in what order, why, and where's the proof** — for anyone reading this repository
 after the fact, whether that's a new team member, a reviewer, or a future Claude Code session
 picking the work back up.
@@ -155,13 +156,21 @@ implemented and tested but not reachable through any manifest. Lot 19
 ([ADR-0007](../adr/0007-layer-boundaries-and-control-plane-activation.md)) is the
 correction — engineering-complete as of 2026-08-07, same sign-off caveat as Lots 0-18.
 
-Lot 20 is a new, unimplemented security lot. It closes the separate outbound-data gap where
-post-generation redaction cannot prevent raw query/context or embedding input from reaching an
-external provider. It is intentionally local-first and provider-neutral.
+Lot 20 (engineering-complete 2026-09-08, see
+[lot-20-data-classification-egress-control.md](lot-20-data-classification-egress-control.md))
+closes the outbound-data gap where post-generation redaction cannot prevent document/chunk
+content, or the query text embedded to retrieve it, from reaching an external embedder/generator:
+an opt-in, fail-closed `governance.egress_policy` gates embedding (both ingestion and query-time
+retrieval), reranking, and generation on both the native and LangGraph engines. It is local-first
+(a `local: true` provider always allowed) and provider-neutral (profiles are manifest data, not
+hardcoded vendor logic). No shipped preset enables it, and its ADR-0016 remains Proposed, not
+accepted — see the evidence
+doc for the complete list of what did and did not ship.
 
 Lots 21–22 are planned scope documents, not implementation evidence. They become actionable only
-after their dependencies are complete: first define honest assurance
-levels and reports, then test them by wrapping an existing application without reconstructing it.
+after their dependencies are complete: Lot 20's own sign-off/ADR gap closes first, then define
+honest assurance levels and reports, then test them by wrapping an existing application without
+reconstructing it.
 
 ---
 

@@ -5,6 +5,37 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added — data classification and provider-egress control (Lot 20, 2026-09-08)
+
+- `Document.classification`/`Chunk.classification` (`core.enums.DataClassification`), propagated
+  by every registered chunker — explicit, caller-supplied only, not inferred from content.
+- `contracts/egress.py` (`EgressPolicy`, `EgressDecision`, `EgressOperation`) and
+  `security.policies.egress_policy.ManifestEgressPolicy`: a fail-closed, classification-aware
+  gate checked before `Embedder.embed()` (document/chunk ingestion, and query-time embedding at
+  retrieval), `Reranker.rerank()`, and `Generator.generate()`, on both the native engine and the
+  LangGraph delegated-engine handoff. A `local: true` provider is always allowed; an unknown
+  provider or unclassified content with no explicit manifest permission is denied by default.
+- New, opt-in manifest section `governance.egress_policy` — absent from a manifest, behavior is
+  unchanged from before this lot (same optionality as `tenant_policy`/`redactor`); no shipped
+  preset enables it. A manifest missing a provider profile for any wired embedder/generator/
+  reranker fails at `wire()`, before any request reaches the runtime deny-by-default path.
+- New typed `EgressDeniedError` (`SecurityError` subclass) — maps to HTTP 403 / CLI exit 3
+  automatically. Content-free `AuditEventType.EGRESS_DECISION` evidence — for both allowed and
+  denied decisions — and `mrag.egress.{allowed,denied}` counters.
+- `Chunk.classification` round-trips through both Qdrant adapters (dense and sparse): persisted
+  on `index()`, reconstructed on retrieval.
+- Codex review pass 1 found this and 3 other real issues (`CHANGES_REQUIRED`); corrected in the
+  same pass — see `docs/refactoring/lot-20-data-classification-egress-control.md` §8. Two
+  findings needed a decision beyond an implementation pass's own authorization, both now
+  resolved: keep the opt-in design (risk accepted, would otherwise break every shipped preset and
+  `examples/simple_qa/`), and [ADR-0016](docs/adr/0016-provider-egress-control.md) drafted
+  (Status: Proposed) for the outbound-data boundary.
+- **Not delivered in this pass**: ADR-0016 is drafted but not yet accepted; no
+  pseudonymization/reversible token mapping; provider profiles model only
+  `{local, max_classification}`, not retention/residency/DPA terms. See
+  `docs/refactoring/lot-20-data-classification-egress-control.md` for full evidence and the
+  reasoning behind each scope decision.
+
 ### Fixed — container-build supply-chain hardening (2026-09-03)
 
 - CPU-only PyTorch resolves consistently across every install path (CI jobs, the Dockerfile's

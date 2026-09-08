@@ -75,6 +75,33 @@ def runtime_manifest_errors(manifest: PipelineManifest) -> list[str]:
                 "enforces it unconditionally regardless of this flag. Set "
                 "tenant_enforcement=true, or remove tenant_policy."
             )
+        if manifest.governance.egress_policy is not None:
+            # Lot 20 (docs/refactoring-plan.md): "Reject an incompatible manifest before
+            # startup" -- a provider profile missing entirely for a wired component would
+            # otherwise only surface as a deny-by-default EgressDeniedError on the pipeline's
+            # first real embed/generate/rerank call, rather than as a clear manifest error now.
+            # Reads the raw config dict directly (not security.policies.egress_policy.
+            # ManifestEgressPolicy) -- orchestration/ may import only core/ + contracts/ +
+            # orchestration/, never security/ (a domain module); this mirrors every other
+            # check in this function, which inspects manifest.* fields only.
+            configured_providers = set(
+                manifest.governance.egress_policy.config.get("providers", {})
+            )
+            wired_provider_types = {
+                ("embedder", manifest.embedder.type),
+                ("generator", manifest.generator.type),
+            }
+            if manifest.reranker is not None:
+                wired_provider_types.add(("reranker", manifest.reranker.type))
+            for role, provider_type in wired_provider_types:
+                if provider_type not in configured_providers:
+                    errors.append(
+                        f"governance.egress_policy is configured but has no "
+                        f"providers[{provider_type!r}] entry for the wired {role} — every "
+                        "component type reachable through an egress checkpoint must have an "
+                        "explicit profile (local: true, or local: false with "
+                        "max_classification set)."
+                    )
 
     adapter = manifest.engine.adapter if manifest.engine else "native"
     if adapter not in {"native", "langgraph"}:
@@ -141,6 +168,7 @@ class ComponentRegistry:
             "tenant_policy": {},
             "policy_engine": {},
             "redactor": {},
+            "egress_policy": {},
             "review_queue": {},
             "audit_sink": {},
             "feedback_sink": {},
@@ -194,6 +222,7 @@ class ComponentRegistry:
                 ("tenant_policy", governance.tenant_policy),
                 ("policy_engine", governance.policy_engine),
                 ("redactor", governance.redactor),
+                ("egress_policy", governance.egress_policy),
                 ("review_queue", governance.review_queue),
                 ("audit_sink", governance.audit_sink),
                 ("feedback_sink", governance.feedback_sink),

@@ -6,6 +6,7 @@ from modular_rag.contracts.audit import (
     AuditSink,
 )
 from modular_rag.contracts.chunking import Chunker
+from modular_rag.contracts.egress import EgressDecision, EgressOperation, EgressPolicy
 from modular_rag.contracts.embeddings import Embedder
 from modular_rag.contracts.engine import (
     CancellationToken,
@@ -59,6 +60,7 @@ from modular_rag.contracts.tracing import AttributeValue, Span, Tracer
 __all__ = [
     "ALLOWED_PAYLOAD_KEYS", "AUDIT_SCHEMA_VERSION", "AuditEvent", "AuditEventType", "AuditSink",
     "Chunker",
+    "EgressDecision", "EgressOperation", "EgressPolicy",
     "Embedder",
     "CancellationToken",
     "DocumentEngine",
