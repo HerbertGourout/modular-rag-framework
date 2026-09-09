@@ -193,7 +193,7 @@ configured `Generator` actually attaches citations; there is no `model` field on
 | Status | When |
 |---|---|
 | `401 Unauthorized` | `token_verifier` is configured and the request is missing a bearer token, or the token fails verification (`AuthenticationError`). |
-| `403 Forbidden` | A `SecurityError` (guard denial, tenant-policy denial, or any `PolicyViolationError`) — `detail` is that exception's own message, which is written to be caller-facing (the same `reason` a `SecurityGuard` returns). |
+| `403 Forbidden` | A `SecurityError` (guard denial, tenant-policy denial, any `PolicyViolationError`, or — Lot 20 — an `EgressDeniedError` when a configured `governance.egress_policy` denies an embedding/reranking/generation call) — `detail` is that exception's own message, which is written to be caller-facing (the same `reason` a `SecurityGuard` returns). |
 | `413 Payload Too Large` | Request body exceeds `max_body_bytes`. |
 | `422 Unprocessable Entity` | Invalid request body (e.g. missing `question`). |
 | `429 Too Many Requests` | Rate limit exceeded; response has a `Retry-After` header. |

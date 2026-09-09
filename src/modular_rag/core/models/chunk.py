@@ -4,7 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from modular_rag.core.enums import Modality
+from modular_rag.core.enums import DataClassification, Modality
 from modular_rag.core.ids import new_id
 
 
@@ -24,6 +24,10 @@ class Chunk(BaseModel):
     page: int | None = None
     tenant_id: str | None = None  # Lot 11b: owning tenant; None (legacy/unclassified) is
     # treated as inaccessible by tenant-isolation filtering, not implicitly public.
+    classification: DataClassification | None = None  # Lot 20: see Document.classification's
+    # field docstring -- propagated unchanged from the source Document by every registered
+    # Chunker. None (unclassified) is never treated as PUBLIC by a configured
+    # governance.egress_policy; see core.enums.combined_classification().
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     model_config = {"frozen": False}

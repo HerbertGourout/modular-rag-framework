@@ -1032,3 +1032,85 @@ def test_index_still_preserves_legitimate_non_colliding_metadata(monkeypatch):
     payload = fake_client.upserted_points[0].payload
     assert payload["source"] == "manual-upload.txt"
     assert payload["tenant_id"] == "tenant-a"
+
+
+# ---------------------------------------------------------------------------
+# Lot 20 (Codex review pass 1, HIGH-003): classification round-trip. Same bug
+# shape as tenant_id above -- previously dropped from the payload in index()
+# and never reconstructed in retrieve_by_vector(), which silently defeated
+# governance.egress_policy for the real Qdrant path: every chunk that came
+# back through this store had classification=None regardless of what it was
+# ingested with.
+# ---------------------------------------------------------------------------
+
+
+def test_index_persists_classification_in_the_payload(monkeypatch):
+    from modular_rag.core.enums import DataClassification
+    from modular_rag.core.ids import new_id
+    from modular_rag.core.models.chunk import Chunk
+
+    store = QdrantStore()
+    fake_client = _FakeUpsertClient()
+    monkeypatch.setattr(store, "_get_client", lambda: fake_client)
+    chunk = Chunk(
+        id=new_id(),
+        doc_id="doc-1",
+        content="hello world",
+        classification=DataClassification.RESTRICTED,
+    )
+    chunk.embedding = [0.1, 0.2]
+
+    store.index([chunk])
+
+    assert fake_client.upserted_points[0].payload["classification"] == "restricted"
+
+
+def test_index_persists_a_null_classification_when_unset(monkeypatch):
+    """An unclassified chunk must round-trip as unclassified (None), not
+    silently coerce to some default value at the storage layer -- the
+    egress policy's own default_classification is where that decision
+    belongs, not here."""
+    from modular_rag.core.ids import new_id
+    from modular_rag.core.models.chunk import Chunk
+
+    store = QdrantStore()
+    fake_client = _FakeUpsertClient()
+    monkeypatch.setattr(store, "_get_client", lambda: fake_client)
+    chunk = Chunk(id=new_id(), doc_id="doc-1", content="hello world")
+    chunk.embedding = [0.1, 0.2]
+
+    store.index([chunk])
+
+    assert fake_client.upserted_points[0].payload["classification"] is None
+
+
+def test_retrieve_by_vector_reconstructs_classification_from_the_payload():
+    class _ClassifiedHitClient:
+        def query_points(self, **kwargs):  # type: ignore[no-untyped-def]
+            class _Hit:
+                id = "chunk-1"
+                score = 0.9
+                payload = {
+                    "doc_id": "doc-1",
+                    "content": "restricted content",
+                    "start_char": 0,
+                    "end_char": 19,
+                    "classification": "restricted",
+                }
+
+            class _Result:
+                points = [_Hit()]
+
+            return _Result()
+
+        def close(self):  # type: ignore[no-untyped-def]
+            pass
+
+    store = QdrantStore()
+    store._client = _ClassifiedHitClient()
+
+    results = store.retrieve_by_vector([0.1, 0.2, 0.3], k=5)
+
+    assert len(results) == 1
+    assert results[0].chunk.classification == "restricted"
+    assert "classification" not in results[0].chunk.metadata  # not double-counted as metadata

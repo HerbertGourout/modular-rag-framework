@@ -57,6 +57,18 @@ generator:
     max_tokens: 2048
 
 governance:
+  # Lot 20 final remediation: the Compose runtime also wires the built-in
+  # remote OpenAI generator, so it must declare the same explicit egress
+  # profiles as the source local-hybrid preset.  Keeping the ceiling at
+  # `restricted` preserves the pre-Lot-20 smoke-test behaviour while making
+  # the remote-provider permission explicit and fail-closed at startup.
+  egress_policy:
+    type: manifest
+    config:
+      providers:
+        sentence-transformers: {local: true}
+        cross-encoder: {local: true}
+        openai: {local: false, max_classification: restricted}
   audit_sink:
     type: postgres
     config:

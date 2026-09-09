@@ -40,6 +40,18 @@ class PolicyViolationError(SecurityError):
     """Raised when a pipeline action violates a declared policy."""
 
 
+class EgressDeniedError(SecurityError):
+    """Raised when a configured `contracts.egress.EgressPolicy` denies an
+    owned external provider call (embedding, generation, or delegated-engine
+    handoff — Lot 20, docs/refactoring-plan.md). Fail-closed: raised for an
+    unclassified/unknown-classification input the policy has no explicit
+    permission for, not only for an explicitly denied classification. The
+    message is safe to return to a caller (matching `SecurityError`'s own
+    convention, `api/errors.py::to_http_exception()`) — it names the
+    classification/provider/operation that was denied, never the underlying
+    query, chunk, or document content."""
+
+
 class AuthenticationError(SecurityError):
     """Raised when a bearer token fails identity verification (Lot 11b,
     docs/refactoring-plan.md) — invalid signature, expired, wrong audience/

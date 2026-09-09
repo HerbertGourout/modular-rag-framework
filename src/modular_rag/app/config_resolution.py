@@ -149,6 +149,7 @@ def validate_capabilities(manifest: PipelineManifest, registry: ComponentRegistr
         _check("tenant_policy", manifest.governance.tenant_policy)
         _check("policy_engine", manifest.governance.policy_engine)
         _check("redactor", manifest.governance.redactor)
+        _check("egress_policy", manifest.governance.egress_policy)
         _check("review_queue", manifest.governance.review_queue)
         _check("audit_sink", manifest.governance.audit_sink)
         # The tenant_enforcement/tenant_policy consistency checks used to live

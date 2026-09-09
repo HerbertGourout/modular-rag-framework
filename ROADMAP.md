@@ -40,10 +40,10 @@ V4: Enterprise + Multilingual Governance       (Q1 2027)
 V5: Multimodal Evidence                         (Q2 2027)
 └─ V5.0: Provenance/citation enrichment (native candidate) — VLM execution ⚙️ delegated
 
-Next assurance programme (proposed; no committed date)
-├─ Lot 20: Classification + fail-closed provider egress
-├─ Lot 21: Engine-independent assurance contract and conformance report
-└─ Lot 22: Existing-application adapters and cross-engine conformance
+Next assurance programme
+├─ Lot 20: Classification + fail-closed provider egress — implemented, mandatory for known remote providers
+├─ Lot 21: Engine-independent assurance contract and conformance report (proposed)
+└─ Lot 22: Existing-application adapters and cross-engine conformance (proposed)
 ```
 
 ---
@@ -485,7 +485,7 @@ controls, normalized evidence, explicit capability gaps, and shared conformance 
 | Evaluation and drift | Operational offline, production calibration incomplete | Retain as portable evidence and release gates. |
 | Tenant/policy/audit/review | Broadest on native; partial on LangGraph | Move toward explicit assurance levels instead of claiming uniformity. |
 | Multi-agent and GraphRAG | Not provided by current fixed adapter | Delegate to external applications/engines. |
-| Data classification and provider egress | Lot 20 not started | Treat as a P0 assurance boundary. |
+| Data classification and provider egress | Lot 20 implemented, mandatory for known remote providers (`governance.egress_policy`) | All three shipped presets now configure it; [ADR-0016](docs/adr/0016-provider-egress-control.md) drafted for the outbound-data boundary, not yet accepted. |
 | Existing-application wrapping | Not built | Proposed Lot 22 after the assurance contract. |
 | Multilingual/multimodal | Not built | Focus owned work on quality, provenance, citations, classification, and policy evidence. |
 

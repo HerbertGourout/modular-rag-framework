@@ -54,6 +54,7 @@ class FixedSizeChunker:
                 start_char=start,
                 end_char=end,
                 tenant_id=document.tenant_id,
+                classification=document.classification,
                 metadata={"source": document.source},
             )
             for start, end in spans

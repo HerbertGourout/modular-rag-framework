@@ -19,6 +19,7 @@ from modular_rag.contracts.engine import DocumentEngine
 from modular_rag.core.errors import ConfigurationError, ManifestError
 from modular_rag.orchestration.engine import RAGEngine
 from modular_rag.orchestration.native_engine import NativeEngineAdapter
+from modular_rag.orchestration.registry import runtime_manifest_errors
 
 
 def test_load_manifest_raises_manifest_error_when_file_is_missing(tmp_path: Path) -> None:
@@ -26,6 +27,19 @@ def test_load_manifest_raises_manifest_error_when_file_is_missing(tmp_path: Path
 
     with pytest.raises(ManifestError, match="Manifest not found"):
         load_manifest(missing)
+
+
+def test_docker_compose_manifest_covers_every_wired_provider_for_startup() -> None:
+    """HIGH-001 final-remediation regression: the fail-closed provider check
+    must cover the Compose-specific manifest as well as manifests/presets/.
+
+    The CI smoke test loads this baked-in file directly; before this test and
+    fix, the API container exited during import because its OpenAI generator
+    had no explicit egress profile.
+    """
+    manifest = load_manifest("docker/local-hybrid-rag.yaml")
+
+    assert runtime_manifest_errors(manifest) == []
 
 
 def test_load_manifest_raises_manifest_error_on_invalid_yaml(tmp_path: Path) -> None:
@@ -63,7 +77,7 @@ def test_load_pipeline_wires_the_default_registry_and_returns_a_rag_engine(
         "embedder:\n  type: sentence-transformers\n  config: {}\n"
         "indexer:\n  type: qdrant\n  config: {}\n"
         "retriever:\n  type: vector\n  config: {}\n"
-        "generator:\n  type: openai\n  config: {}\n",
+        "generator:\n  type: deterministic\n  config: {}\n",
         encoding="utf-8",
     )
 
@@ -85,7 +99,7 @@ def test_load_native_engine_wraps_the_same_wiring_as_load_pipeline(tmp_path: Pat
         "embedder:\n  type: sentence-transformers\n  config: {}\n"
         "indexer:\n  type: qdrant\n  config: {}\n"
         "retriever:\n  type: vector\n  config: {}\n"
-        "generator:\n  type: openai\n  config: {}\n",
+        "generator:\n  type: deterministic\n  config: {}\n",
         encoding="utf-8",
     )
 
@@ -101,7 +115,7 @@ _MINIMAL_MANIFEST = (
     "embedder:\n  type: sentence-transformers\n  config: {}\n"
     "indexer:\n  type: qdrant\n  config: {}\n"
     "retriever:\n  type: vector\n  config: {}\n"
-    "generator:\n  type: openai\n  config: {}\n"
+    "generator:\n  type: deterministic\n  config: {}\n"
 )
 
 

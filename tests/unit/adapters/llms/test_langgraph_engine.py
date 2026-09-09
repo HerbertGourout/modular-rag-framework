@@ -25,8 +25,9 @@ from modular_rag.contracts.engine import (
 )
 from modular_rag.contracts.manifests import ComponentConfig, PipelineManifest
 from modular_rag.contracts.security import GuardResult
-from modular_rag.core.enums import RetrievalMethod
+from modular_rag.core.enums import DataClassification, RetrievalMethod
 from modular_rag.core.errors import (
+    EgressDeniedError,
     EngineCancelledError,
     EngineCapabilityError,
     PolicyViolationError,
@@ -40,12 +41,19 @@ from modular_rag.core.models.retrieved import RetrievedChunk
 from modular_rag.core.models.trace import TraceStep
 from modular_rag.orchestration.engine import RAGEngine
 from modular_rag.orchestration.native_engine import NativeEngineAdapter
+from modular_rag.security.policies.egress_policy import ManifestEgressPolicy
 from modular_rag.security.policies.tenant_isolation import TenantIsolationPolicy
 from modular_rag.security.redaction.patterns import PatternRedactor
 
 
-def _hit(content: str, tenant_id: str | None = None) -> RetrievedChunk:
-    chunk = Chunk(doc_id=new_id(), content=content, tenant_id=tenant_id)
+def _hit(
+    content: str,
+    tenant_id: str | None = None,
+    classification: DataClassification | None = None,
+) -> RetrievedChunk:
+    chunk = Chunk(
+        doc_id=new_id(), content=content, tenant_id=tenant_id, classification=classification
+    )
     return RetrievedChunk(chunk=chunk, score=0.9, rank=1, retrieval_method=RetrievalMethod.HYBRID)
 
 
@@ -101,6 +109,8 @@ def _container(
     guard: _FakeGuard | None = None,
     tenant_policy: TenantIsolationPolicy | None = None,
     redactor: PatternRedactor | None = None,
+    egress_policy: object | None = None,
+    generator_type: str = "fake",
 ) -> Container:
     manifest = PipelineManifest(
         id="langgraph-test",
@@ -108,7 +118,7 @@ def _container(
         embedder=ComponentConfig(type="fake"),
         indexer=ComponentConfig(type="fake"),
         retriever=ComponentConfig(type="fake"),
-        generator=ComponentConfig(type="fake"),
+        generator=ComponentConfig(type=generator_type),
     )
     container = Container(manifest)
     container.register("chunker", object())
@@ -122,6 +132,8 @@ def _container(
         container.register("tenant_policy", tenant_policy)
     if redactor is not None:
         container.register("redactor", redactor)
+    if egress_policy is not None:
+        container.register("egress_policy", egress_policy)
     return container
 
 
@@ -455,4 +467,110 @@ def test_parity_with_native_adapter_on_a_guard_denial() -> None:
     with pytest.raises(SecurityError):
         native.run(_request(), _context())
     with pytest.raises(SecurityError):
+        langgraph.run(_request(), _context())
+
+
+# ---------------------------------------------------------------------------
+# Provider-egress control (Lot 20, docs/refactoring-plan.md) — the
+# "delegated engine requests before DocumentEngine.execute()" checkpoint,
+# exercised at the graph's own generate node (the only owned external-
+# provider call this graph makes; retrieval's embedding call and ingestion
+# are native-only, see orchestration.engine.RAGEngine).
+# ---------------------------------------------------------------------------
+
+
+def test_run_without_egress_policy_configured_is_unaffected() -> None:
+    hit = _hit("restricted context", classification=DataClassification.RESTRICTED)
+    container = _container(retriever=_FakeRetriever(hits=[hit]))
+    adapter = LangGraphEngineAdapter(container)
+
+    result = adapter.run(_request(), _context())
+
+    assert result.text == "fake answer"
+
+
+def test_run_denies_generation_when_context_classification_exceeds_the_providers_ceiling() -> None:
+    hit = _hit("restricted context", classification=DataClassification.RESTRICTED)
+    policy = ManifestEgressPolicy(
+        providers={
+            "fake": {"local": True},  # _container()'s default embedder_type
+            "remote-generator": {"local": False, "max_classification": "internal"},
+        }
+    )
+    generator = _FakeGenerator()
+    container = _container(
+        retriever=_FakeRetriever(hits=[hit]),
+        egress_policy=policy,
+        generator_type="remote-generator",
+        generator=generator,
+    )
+    adapter = LangGraphEngineAdapter(container)
+
+    with pytest.raises(EgressDeniedError, match="generate"):
+        adapter.run(_request(), _context())
+
+    assert generator.received_context == []  # generate() was never called
+
+
+def test_run_allows_generation_within_the_providers_ceiling() -> None:
+    hit = _hit("internal context", classification=DataClassification.INTERNAL)
+    policy = ManifestEgressPolicy(
+        providers={
+            "fake": {"local": True},  # _container()'s default embedder_type
+            "remote-generator": {"local": False, "max_classification": "internal"},
+        }
+    )
+    container = _container(
+        retriever=_FakeRetriever(hits=[hit]),
+        egress_policy=policy,
+        generator_type="remote-generator",
+    )
+    adapter = LangGraphEngineAdapter(container)
+
+    result = adapter.run(_request(), _context())
+
+    assert result.text == "fake answer"
+
+
+def test_run_allows_a_local_generator_regardless_of_classification() -> None:
+    hit = _hit("restricted context", classification=DataClassification.RESTRICTED)
+    policy = ManifestEgressPolicy(
+        providers={"fake": {"local": True}, "local-generator": {"local": True}}
+    )
+    container = _container(
+        retriever=_FakeRetriever(hits=[hit]),
+        egress_policy=policy,
+        generator_type="local-generator",
+    )
+    adapter = LangGraphEngineAdapter(container)
+
+    result = adapter.run(_request(), _context())
+
+    assert result.text == "fake answer"
+
+
+def test_parity_with_native_adapter_on_an_egress_denial() -> None:
+    """Both adapters raise EgressDeniedError for the identical
+    Container.egress_policy denial — matching the module's own "must hold
+    regardless of which engine executes a request" scope statement, the
+    same bar test_parity_with_native_adapter_on_a_guard_denial() already
+    holds guard denial to."""
+    hit = _hit("restricted context", classification=DataClassification.RESTRICTED)
+    policy = ManifestEgressPolicy(
+        providers={
+            "fake": {"local": True},  # _container()'s default embedder_type
+            "remote-generator": {"local": False, "max_classification": "internal"},
+        }
+    )
+    container = _container(
+        retriever=_FakeRetriever(hits=[hit]),
+        egress_policy=policy,
+        generator_type="remote-generator",
+    )
+    native = NativeEngineAdapter(RAGEngine(container))
+    langgraph = LangGraphEngineAdapter(container)
+
+    with pytest.raises(EgressDeniedError):
+        native.run(_request(), _context())
+    with pytest.raises(EgressDeniedError):
         langgraph.run(_request(), _context())

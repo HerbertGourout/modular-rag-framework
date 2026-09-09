@@ -10,6 +10,7 @@ import structlog
 
 from modular_rag.contracts.audit import AuditEvent, AuditEventType
 from modular_rag.contracts.chunking import Chunker
+from modular_rag.contracts.egress import EgressDecision, EgressOperation
 from modular_rag.contracts.erasure import ErasureProof
 from modular_rag.contracts.feedback import Feedback, FeedbackSink
 from modular_rag.contracts.indexing import Indexer
@@ -20,7 +21,9 @@ from modular_rag.contracts.retrieval import Retriever
 from modular_rag.contracts.review import ReviewItem, ReviewQueue
 from modular_rag.contracts.tracing import Span, Tracer
 from modular_rag.core.document_identity import content_hash, document_key
-from modular_rag.core.errors import ConfigurationError, SecurityError
+from modular_rag.core.enums import combined_classification
+from modular_rag.core.errors import ConfigurationError, EgressDeniedError, SecurityError
+from modular_rag.core.ids import new_id
 from modular_rag.core.models.answer import Answer
 from modular_rag.core.models.document import Document
 from modular_rag.core.models.health import ReadinessReport
@@ -397,6 +400,43 @@ class RAGEngine:
             # indexing" — checked before any embedding/indexing work starts, not after.
             for chunk in chunks:
                 self._c.tenant_policy.enforce_ingest(chunk.tenant_id)
+        if self._c.egress_policy:
+            # Lot 20 (docs/refactoring-plan.md): same "check before any embedding work
+            # starts" placement as tenant_policy above — one shared correlation id for
+            # every chunk in this call, since it is a single ingest_chunks() operation
+            # (matches _audit()'s own one-event-per-run granularity, not per-chunk).
+            #
+            # Every chunk's decision is enforced individually (a denial on chunk 50 of
+            # 100 must still stop the batch) but ALLOWED evidence is recorded at most
+            # once per unique (classification, provider) combination actually seen in
+            # this batch (Codex review pass 1, MEDIUM-001's own recommended action) —
+            # calling _audit_egress() unconditionally here, once per chunk, would put one
+            # audit row per embedded chunk on a large, fully-permitted ingest batch,
+            # which is exactly the volume problem that finding asked to avoid.
+            correlation_id = new_id()
+            audited_allowed: set[tuple[str, str]] = set()
+            for chunk in chunks:
+                decision = self._c.egress_policy.check(
+                    classification=chunk.classification,
+                    provider=self._c.manifest.embedder.type,
+                    operation=EgressOperation.EMBED,
+                )
+                if not decision.allowed:
+                    self._enforce_egress(
+                        decision, tenant_id=chunk.tenant_id, correlation_id=correlation_id
+                    )
+                else:
+                    allow_key = (
+                        decision.classification.value
+                        if decision.classification is not None
+                        else "unclassified",
+                        decision.provider,
+                    )
+                    if allow_key not in audited_allowed:
+                        audited_allowed.add(allow_key)
+                        self._audit_egress(
+                            decision, tenant_id=chunk.tenant_id, correlation_id=correlation_id
+                        )
         ingest_t0 = time.perf_counter()
         with self._span(
             "rag.embed", {"chunk_count": len(chunks), "provider": self._c.embedder.name()}
@@ -519,7 +559,7 @@ class RAGEngine:
         with self._span("rag.retrieve", {"provider": self._c.retriever.name(), "k": k}) as span:
             t0 = time.perf_counter()
             try:
-                chunks = self._retrieve(query, k)
+                chunks = self._retrieve(query, k, correlation_id=trace.id)
             except Exception as exc:
                 # `mrag.request.errors` is deliberately NOT emitted here --
                 # `ApplicationService.retrieve()` (the standard CLI/API entry
@@ -626,6 +666,71 @@ class RAGEngine:
         )
         self._c.audit_sink.record(event)
 
+    def _audit_egress(
+        self, decision: EgressDecision, *, tenant_id: str | None, correlation_id: str
+    ) -> None:
+        """Record content-free audit/metric evidence for one egress decision
+        — allowed or denied (Lot 20, docs/refactoring-plan.md; Codex review
+        pass 1, MEDIUM-001: an allowed decision must also be provable after
+        the fact — "why was this external provider call permitted," not
+        only "what was blocked"). Does not raise; callers decide what to do
+        with a denial via `_enforce_egress()` below.
+
+        No `Query`/`Trace` object exists at every call site
+        (`ingest_chunks()` has neither), so this builds an `AuditEvent`
+        directly rather than reusing `_audit()`'s `Query`/`Trace`-coupled
+        signature.
+        """
+        if self._c.meter:
+            self._c.meter.counter(
+                "mrag.egress.allowed" if decision.allowed else "mrag.egress.denied",
+                attributes={
+                    "operation": decision.operation.value,
+                    "provider": decision.provider,
+                },
+            )
+        if self._c.audit_sink:
+            self._c.audit_sink.record(
+                AuditEvent(
+                    event_type=AuditEventType.EGRESS_DECISION,
+                    correlation_id=correlation_id,
+                    tenant_id=tenant_id or "unknown",
+                    payload={
+                        "egress_decision": "allowed" if decision.allowed else "denied",
+                        "egress_reason": decision.reason,
+                        "egress_provider": decision.provider,
+                        "egress_classification": (
+                            decision.classification.value
+                            if decision.classification is not None
+                            else "unclassified"
+                        ),
+                        "egress_operation": decision.operation.value,
+                    },
+                )
+            )
+
+    def _enforce_egress(
+        self, decision: EgressDecision, *, tenant_id: str | None, correlation_id: str
+    ) -> None:
+        """Record evidence for `decision` via `_audit_egress()`, then raise
+        if it denies. Every single-check egress checkpoint in this class
+        (retrieval, reranking, generation) funnels through here so evidence
+        and enforcement can never drift apart. `ingest_chunks()`'s per-chunk
+        loop calls `_audit_egress()` directly instead, with its own
+        one-event-per-unique-(classification,provider) aggregation — see
+        that call site for why a plain per-chunk call here would not fit.
+
+        Mirrors `_audit()`'s "record evidence, then always re-raise" shape
+        already used by the tenant-isolation/guard denial paths in
+        `_run_steps()` — this is not exception-swallowing.
+        """
+        self._audit_egress(decision, tenant_id=tenant_id, correlation_id=correlation_id)
+        if not decision.allowed:
+            raise EgressDeniedError(
+                f"{decision.operation.value} denied by egress policy: {decision.reason} "
+                f"(provider={decision.provider!r})"
+            )
+
     def _run_steps(self, query: Query, trace: Trace, sm: PipelineStateMachine) -> Answer:
         # 0. tenant isolation — identity check (Lot 11b, docs/refactoring-plan.md).
         # Caught only to record audit evidence of the specific denial (Lot 11c:
@@ -675,7 +780,11 @@ class RAGEngine:
         # 2. retrieval
         sm.transition(PipelineState.RETRIEVING)
         with self._span("rag.retrieve", {"provider": self._c.retriever.name()}) as span:
-            context = self._retrieve(query, k=self._c.manifest.retriever.config.get("k", 20))
+            context = self._retrieve(
+                query,
+                k=self._c.manifest.retriever.config.get("k", 20),
+                correlation_id=trace.id,
+            )
             if span is not None:
                 span.set_attribute("chunks_returned", len(context))
         # Lot 5: surface a per-source backend failure in observability, not just
@@ -705,6 +814,19 @@ class RAGEngine:
                 )
             )
 
+        # 2c. egress policy — reranking (Lot 20, docs/refactoring-plan.md). Checked before
+        # the reranker below runs, matching "denied or unclassified content produces zero
+        # adapter calls" — the only registered reranker today (CrossEncoderReranker) runs
+        # locally and always resolves to allowed; this guards a future remote reranker
+        # adapter without needing its own separate wiring pass.
+        if self._c.egress_policy and self._c.reranker and context:
+            decision = self._c.egress_policy.check(
+                classification=combined_classification(c.chunk.classification for c in context),
+                provider=self._c.manifest.reranker.type,  # type: ignore[union-attr]
+                operation=EgressOperation.RERANK,
+            )
+            self._enforce_egress(decision, tenant_id=query.tenant_id, correlation_id=trace.id)
+
         # 3. reranking
         if self._c.reranker and context:
             sm.transition(PipelineState.RERANKING)
@@ -726,6 +848,20 @@ class RAGEngine:
         # standalone path already does correctly.
         if self._c.meter and not context:
             self._c.meter.counter("mrag.retrieve.empty", attributes={"operation": "answer"})
+
+        # 3b. egress policy — generation (Lot 20, docs/refactoring-plan.md). The query text
+        # and retrieved context both travel to the generator in the same call below, so
+        # blocking that call protects both at once — Query carries no classification field
+        # of its own (see Document.classification's docstring for why), so there is no
+        # separate "query classification" signal to check independently of the context it
+        # always accompanies.
+        if self._c.egress_policy:
+            decision = self._c.egress_policy.check(
+                classification=combined_classification(c.chunk.classification for c in context),
+                provider=self._c.manifest.generator.type,
+                operation=EgressOperation.GENERATE,
+            )
+            self._enforce_egress(decision, tenant_id=query.tenant_id, correlation_id=trace.id)
 
         # 4. generation
         # No wrapping TraceStep here on purpose (Lot 10, docs/refactoring-plan.md):
@@ -833,7 +969,25 @@ class RAGEngine:
 
         return ans
 
-    def _retrieve(self, query: Query, k: int) -> list[RetrievedChunk]:
+    def _retrieve(self, query: Query, k: int, *, correlation_id: str) -> list[RetrievedChunk]:
+        if self._c.egress_policy:
+            # Lot 20 (Codex review pass 1, HIGH-002): the retriever embeds the query text
+            # internally (retrieval.retrievers.vector.VectorRetriever.retrieve(), reached by
+            # HybridRetriever too) before this method returns -- this is the actual, missing
+            # checkpoint for both the answer() path and the standalone retrieve() path;
+            # neither previously had any egress check before that embed call. Query carries
+            # no classification field (see Document.classification's docstring for why), so
+            # this always resolves through the policy's own default_classification -- the
+            # identical fail-closed treatment every other unclassified input already
+            # receives, not a new rule invented for queries specifically.
+            decision = self._c.egress_policy.check(
+                classification=None,
+                provider=self._c.manifest.embedder.type,
+                operation=EgressOperation.EMBED,
+            )
+            self._enforce_egress(
+                decision, tenant_id=query.tenant_id, correlation_id=correlation_id
+            )
         t0 = time.perf_counter()
         chunks = self._c.retriever.retrieve(query, k=k)
         log.debug("engine.retrieved", chunks=len(chunks), ms=(time.perf_counter() - t0) * 1000)

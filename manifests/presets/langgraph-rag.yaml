@@ -86,5 +86,19 @@ security:
   config:
     max_query_length: 4000
 
+# Lot 20 corrective pass (Codex review pass 1, HIGH-001): required, not optional -- see
+# local-hybrid-rag.yaml's identical section for the full rationale. max_classification:
+# restricted preserves this preset's exact pre-Lot-20 behavior (no real classification data
+# flows through it today). Consumed identically under engine.adapter: langgraph (checked in
+# LangGraphEngineAdapter._node_retrieve()/_node_generate()), not just the native engine.
+governance:
+  egress_policy:
+    type: manifest
+    config:
+      providers:
+        sentence-transformers: {local: true}
+        cross-encoder: {local: true}
+        openai: {local: false, max_classification: restricted}
+
 engine:
   adapter: langgraph

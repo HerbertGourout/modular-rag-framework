@@ -50,6 +50,12 @@ class GovernanceSection(BaseModel):
     # ADR-0014 (Batch 14): additive, mirrors audit_sink/review_queue's own
     # optionality exactly.
     feedback_sink: ComponentConfig | None = None
+    # Lot 20 (docs/refactoring-plan.md): additive, same optionality pattern as every other
+    # governance role above — absent means no gate, exactly as before this lot. Consumed by
+    # both engine.adapter values ("native" and "langgraph"), unlike policy_engine/review_queue/
+    # audit_sink/feedback_sink above, which "langgraph" rejects (see
+    # orchestration.registry.runtime_manifest_errors()).
+    egress_policy: ComponentConfig | None = None
 
 
 class QualitySection(BaseModel):

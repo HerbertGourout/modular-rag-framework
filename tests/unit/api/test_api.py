@@ -268,6 +268,32 @@ def test_answer_maps_security_error_to_403_with_its_own_safe_message(
     assert response.json()["detail"] == "blocked: looks like an injection"
 
 
+def test_answer_maps_egress_denied_error_to_403_with_its_own_safe_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Lot 20 (docs/refactoring-plan.md): EgressDeniedError is a SecurityError
+    subclass, so `to_http_exception()`'s isinstance check already covers it —
+    this test exists to prove that concretely, per the task's own explicit
+    'API and CLI return safe, typed errors on denied egress' requirement,
+    not to test new mapping logic."""
+    from modular_rag.core.errors import EgressDeniedError
+
+    client = _client(
+        _FakePipeline(
+            answer_error=EgressDeniedError(
+                "generate denied by egress policy: classification 'restricted' exceeds "
+                "provider 'openai's max_classification 'confidential' (provider='openai')"
+            )
+        ),
+        monkeypatch,
+    )
+
+    response = client.post("/answer", json={"question": "what's in the restricted contract?"})
+
+    assert response.status_code == 403
+    assert "restricted" in response.json()["detail"]
+
+
 # ---------------------------------------------------------------------------
 # Batch 14 (ADR-0014): POST /feedback.
 # ---------------------------------------------------------------------------

@@ -14,8 +14,13 @@ from modular_rag.contracts.audit import AuditEvent
 from modular_rag.contracts.feedback import Feedback, FeedbackRating
 from modular_rag.contracts.manifests import ComponentConfig, PipelineManifest
 from modular_rag.contracts.security import GuardResult
-from modular_rag.core.enums import RetrievalMethod
-from modular_rag.core.errors import ConfigurationError, PolicyViolationError, SecurityError
+from modular_rag.core.enums import DataClassification, RetrievalMethod
+from modular_rag.core.errors import (
+    ConfigurationError,
+    EgressDeniedError,
+    PolicyViolationError,
+    SecurityError,
+)
 from modular_rag.core.ids import new_id
 from modular_rag.core.models.answer import Answer
 from modular_rag.core.models.chunk import Chunk
@@ -26,6 +31,7 @@ from modular_rag.ingestion.lifecycle.hashing import document_key
 from modular_rag.ingestion.lifecycle.in_memory_ledger import InMemoryLifecycleLedger
 from modular_rag.orchestration.engine import RAGEngine
 from modular_rag.security.feedback.store import InMemoryFeedbackSink
+from modular_rag.security.policies.egress_policy import ManifestEgressPolicy
 from modular_rag.security.policies.human_review import HumanReviewGate
 from modular_rag.security.policies.tenant_isolation import TenantIsolationPolicy
 from modular_rag.security.redaction.patterns import PatternRedactor
@@ -241,14 +247,20 @@ def _engine(
     embedder: _FakeEmbedder | None = None,
     meter: object | None = None,
     feedback_sink: object | None = None,
+    egress_policy: object | None = None,
+    embedder_type: str = "fake",
+    generator_type: str = "fake",
+    reranker: object | None = None,
+    reranker_type: str = "fake",
 ) -> tuple[RAGEngine, Container]:
     manifest = PipelineManifest(
         id="test-pipeline",
         chunker=ComponentConfig(type="fake"),
-        embedder=ComponentConfig(type="fake"),
+        embedder=ComponentConfig(type=embedder_type),
         indexer=ComponentConfig(type="fake"),
         retriever=ComponentConfig(type="fake"),
-        generator=ComponentConfig(type="fake"),
+        generator=ComponentConfig(type=generator_type),
+        reranker=ComponentConfig(type=reranker_type) if reranker is not None else None,
     )
     container = Container(manifest)
     container.register("chunker", _FakeChunker())
@@ -276,6 +288,10 @@ def _engine(
         container.register("meter", meter)
     if feedback_sink is not None:
         container.register("feedback_sink", feedback_sink)
+    if egress_policy is not None:
+        container.register("egress_policy", egress_policy)
+    if reranker is not None:
+        container.register("reranker", reranker)
     return RAGEngine(container), container
 
 
@@ -1586,3 +1602,343 @@ def test_answer_emits_review_enqueued_counter_and_pending_gauge() -> None:
 
     assert meter.calls_named("mrag.review.enqueued")[0][2] == 1
     assert meter.calls_named("mrag.review.pending")[0][2] == 1
+
+
+# -- Lot 20 (docs/refactoring-plan.md): provider-egress control --
+
+
+def _local_only_policy() -> ManifestEgressPolicy:
+    return ManifestEgressPolicy(providers={"local-embedder": {"local": True}})
+
+
+def _remote_policy(max_classification: str = "internal") -> ManifestEgressPolicy:
+    return ManifestEgressPolicy(
+        providers={
+            # "fake" is _engine()'s default embedder_type -- these tests exercise the
+            # generation/reranking checkpoints, not query-time embedding (see the
+            # dedicated test_answer_denies_generation_over_the_providers_classification_
+            # ceiling-adjacent query-embedding tests below), so the default embedder is
+            # given a local profile here, matching a real local-embedder deployment.
+            "fake": {"local": True},
+            "remote-generator": {"local": False, "max_classification": max_classification},
+        }
+    )
+
+
+def test_ingest_chunks_without_egress_policy_configured_is_unaffected() -> None:
+    """Backward compatibility (acceptance criterion): absent
+    governance.egress_policy, ingestion behaves exactly as it did before
+    this lot, regardless of a chunk's classification."""
+    indexer = _FakeIndexer()
+    engine, container = _engine()
+    container.register("indexer", indexer)
+    chunk = Chunk(doc_id=new_id(), content="hi", classification=DataClassification.RESTRICTED)
+
+    n = engine.ingest_chunks([chunk])
+
+    assert n == 1
+    assert len(indexer.indexed) == 1
+
+
+def test_ingest_chunks_allows_a_local_embedder_regardless_of_classification() -> None:
+    engine, _ = _engine(egress_policy=_local_only_policy(), embedder_type="local-embedder")
+    chunk = Chunk(doc_id=new_id(), content="hi", classification=DataClassification.RESTRICTED)
+
+    n = engine.ingest_chunks([chunk])
+
+    assert n == 1
+
+
+def test_ingest_chunks_denies_embedding_a_classification_the_provider_may_not_receive() -> None:
+    policy = ManifestEgressPolicy(
+        providers={"remote-embedder": {"local": False, "max_classification": "internal"}}
+    )
+    embedder = _RecordingEmbedder()
+    engine, _ = _engine(egress_policy=policy, embedder_type="remote-embedder", embedder=embedder)
+    chunk = Chunk(doc_id=new_id(), content="hi", classification=DataClassification.RESTRICTED)
+
+    with pytest.raises(EgressDeniedError, match="embed"):
+        engine.ingest_chunks([chunk])
+
+    assert embedder.calls == []  # zero adapter calls on a denied classification
+
+
+def test_ingest_chunks_denies_an_unclassified_chunk_by_default() -> None:
+    """Unknown classification is denied by default (acceptance criterion):
+    an unclassified chunk resolves to the policy's default_classification
+    (restricted), which exceeds this provider's confidential ceiling."""
+    policy = ManifestEgressPolicy(
+        providers={"remote-embedder": {"local": False, "max_classification": "confidential"}},
+        default_classification="restricted",
+    )
+    embedder = _RecordingEmbedder()
+    engine, _ = _engine(egress_policy=policy, embedder_type="remote-embedder", embedder=embedder)
+    chunk = Chunk(doc_id=new_id(), content="hi")  # classification=None
+
+    with pytest.raises(EgressDeniedError):
+        engine.ingest_chunks([chunk])
+
+    assert embedder.calls == []
+
+
+def test_ingest_chunks_records_egress_denial_in_audit_and_meter() -> None:
+    policy = ManifestEgressPolicy(
+        providers={"remote-embedder": {"local": False, "max_classification": "internal"}}
+    )
+    audit_sink = _FakeAuditSink()
+    meter = _RecordingMeter()
+    engine, _ = _engine(
+        egress_policy=policy,
+        embedder_type="remote-embedder",
+        audit_sink=audit_sink,
+        meter=meter,
+    )
+    chunk = Chunk(
+        doc_id=new_id(),
+        content="hi",
+        tenant_id="acme-corp",
+        classification=DataClassification.RESTRICTED,
+    )
+
+    with pytest.raises(EgressDeniedError):
+        engine.ingest_chunks([chunk])
+
+    assert len(audit_sink.recorded) == 1
+    event = audit_sink.recorded[0]
+    assert event.event_type.value == "egress_decision"
+    assert event.tenant_id == "acme-corp"
+    assert event.payload["egress_decision"] == "denied"
+    assert event.payload["egress_classification"] == "restricted"
+    assert event.payload["egress_provider"] == "remote-embedder"
+    assert meter.calls_named("mrag.egress.denied")
+
+
+def test_answer_without_egress_policy_configured_is_unaffected() -> None:
+    """Backward compatibility: no governance.egress_policy -> generation is
+    unaffected regardless of retrieved-chunk classification."""
+    chunk = Chunk(doc_id=new_id(), content="hit", classification=DataClassification.RESTRICTED)
+    hit = RetrievedChunk(chunk=chunk, score=0.5, rank=1, retrieval_method=RetrievalMethod.HYBRID)
+    engine, _ = _engine(retriever=_FakeRetriever(hits=[hit]))
+
+    answer = engine.answer("What is RAG?")
+
+    assert answer.text == "fake answer"
+
+
+def test_answer_denies_generation_over_the_providers_classification_ceiling() -> None:
+    chunk = Chunk(doc_id=new_id(), content="hit", classification=DataClassification.RESTRICTED)
+    hit = RetrievedChunk(chunk=chunk, score=0.5, rank=1, retrieval_method=RetrievalMethod.HYBRID)
+    generator = _FakeGenerator()
+    engine, _ = _engine(
+        retriever=_FakeRetriever(hits=[hit]),
+        egress_policy=_remote_policy(max_classification="internal"),
+        generator_type="remote-generator",
+        generator=generator,
+    )
+
+    with pytest.raises(EgressDeniedError, match="generate"):
+        engine.answer("What is RAG?")
+
+    assert generator.received_context == []  # generate() was never called
+
+
+def test_answer_allows_generation_within_the_providers_ceiling() -> None:
+    chunk = Chunk(doc_id=new_id(), content="hit", classification=DataClassification.INTERNAL)
+    hit = RetrievedChunk(chunk=chunk, score=0.5, rank=1, retrieval_method=RetrievalMethod.HYBRID)
+    engine, _ = _engine(
+        retriever=_FakeRetriever(hits=[hit]),
+        egress_policy=_remote_policy(max_classification="internal"),
+        generator_type="remote-generator",
+    )
+
+    answer = engine.answer("What is RAG?")
+
+    assert answer.text == "fake answer"
+
+
+def test_answer_with_empty_context_and_a_remote_generator_is_denied_by_default() -> None:
+    """No retrieved chunks -> combined_classification is None (unclassified)
+    -> denied unless the provider's ceiling covers default_classification
+    (restricted, unless configured otherwise)."""
+    engine, _ = _engine(
+        retriever=_FakeRetriever(hits=[]),
+        egress_policy=_remote_policy(max_classification="confidential"),
+        generator_type="remote-generator",
+    )
+
+    with pytest.raises(EgressDeniedError):
+        engine.answer("What is RAG?")
+
+
+def test_answer_denies_reranking_over_the_rerankers_classification_ceiling() -> None:
+    chunk = Chunk(doc_id=new_id(), content="hit", classification=DataClassification.RESTRICTED)
+    hit = RetrievedChunk(chunk=chunk, score=0.5, rank=1, retrieval_method=RetrievalMethod.HYBRID)
+    policy = ManifestEgressPolicy(
+        providers={
+            "remote-reranker": {"local": False, "max_classification": "internal"},
+            "fake": {"local": True},
+        }
+    )
+    engine, _ = _engine(
+        retriever=_FakeRetriever(hits=[hit]),
+        egress_policy=policy,
+        reranker=object(),
+        reranker_type="remote-reranker",
+    )
+
+    with pytest.raises(EgressDeniedError, match="rerank"):
+        engine.answer("What is RAG?")
+
+
+def test_answer_records_egress_denial_audit_event_on_generation_denial() -> None:
+    chunk = Chunk(
+        doc_id=new_id(),
+        content="hit",
+        tenant_id="acme-corp",
+        classification=DataClassification.RESTRICTED,
+    )
+    hit = RetrievedChunk(chunk=chunk, score=0.5, rank=1, retrieval_method=RetrievalMethod.HYBRID)
+    audit_sink = _FakeAuditSink()
+    engine, _ = _engine(
+        retriever=_FakeRetriever(hits=[hit]),
+        egress_policy=_remote_policy(max_classification="internal"),
+        generator_type="remote-generator",
+        audit_sink=audit_sink,
+    )
+
+    with pytest.raises(EgressDeniedError):
+        engine.answer("What is RAG?", tenant_id="acme-corp")
+
+    # One allowed "embed" event (query-time embedding via the local "fake" embedder,
+    # Codex review pass 1, HIGH-002) plus one denied "generate" event -- MEDIUM-001's
+    # fix means allowed decisions are audited too, not just denials.
+    egress_events = [e for e in audit_sink.recorded if e.event_type.value == "egress_decision"]
+    denied = [e for e in egress_events if e.payload["egress_decision"] == "denied"]
+    allowed = [e for e in egress_events if e.payload["egress_decision"] == "allowed"]
+    assert len(denied) == 1
+    assert denied[0].payload["egress_operation"] == "generate"
+    assert len(allowed) == 1
+    assert allowed[0].payload["egress_operation"] == "embed"
+
+
+# -- Codex review pass 1, HIGH-002: query-time embedding was unguarded --
+
+
+def test_answer_denies_query_embedding_before_retrieval_when_embedder_has_no_profile() -> None:
+    """The retriever embeds the query text internally before answer()'s own
+    generation-stage check is ever reached -- this proves the denial happens
+    at the retrieval step, before the retriever (and therefore its embed
+    call) runs at all, not merely that *some* EgressDeniedError eventually
+    surfaces."""
+    retriever = _FakeRetriever(hits=[])
+    policy = ManifestEgressPolicy(providers={})  # no profile for "fake" (the embedder type)
+    engine, _ = _engine(retriever=retriever, egress_policy=policy)
+
+    with pytest.raises(EgressDeniedError, match="embed"):
+        engine.answer("What is RAG?")
+
+
+def test_retrieve_denies_query_embedding_when_embedder_has_no_profile() -> None:
+    """Same checkpoint, the standalone retrieve() path -- HIGH-002 called
+    this out specifically: /retrieve never reaches a generation check at
+    all, so it had zero protection before this fix."""
+    retriever = _FakeRetriever(hits=[])
+    policy = ManifestEgressPolicy(providers={})
+    engine, _ = _engine(retriever=retriever, egress_policy=policy)
+
+    with pytest.raises(EgressDeniedError, match="embed"):
+        engine.retrieve("What is RAG?")
+
+
+def test_retrieve_allows_query_embedding_through_a_local_embedder() -> None:
+    chunk = Chunk(doc_id=new_id(), content="some content")
+    hit = RetrievedChunk(chunk=chunk, score=0.5, rank=1, retrieval_method=RetrievalMethod.HYBRID)
+    retriever = _FakeRetriever(hits=[hit])
+    policy = ManifestEgressPolicy(providers={"fake": {"local": True}})
+    engine, _ = _engine(retriever=retriever, egress_policy=policy)
+
+    result = engine.retrieve("What is RAG?")
+
+    assert len(result.chunks) == 1
+
+
+# -- Codex review pass 1, MEDIUM-001: allowed egress decisions were not audited --
+
+
+def test_ingest_chunks_aggregates_allowed_audit_events_by_classification_and_provider() -> None:
+    """A 3-chunk batch sharing the same classification must produce exactly
+    one allow event, not one per chunk -- the volume concern the finding's
+    own recommended action named explicitly."""
+    policy = ManifestEgressPolicy(
+        providers={"remote-embedder": {"local": False, "max_classification": "internal"}}
+    )
+    audit_sink = _FakeAuditSink()
+    engine, _ = _engine(
+        egress_policy=policy, embedder_type="remote-embedder", audit_sink=audit_sink
+    )
+    chunks = [
+        Chunk(doc_id=new_id(), content=f"c{i}", classification=DataClassification.INTERNAL)
+        for i in range(3)
+    ]
+
+    n = engine.ingest_chunks(chunks)
+
+    assert n == 3
+    egress_events = [e for e in audit_sink.recorded if e.event_type.value == "egress_decision"]
+    assert len(egress_events) == 1
+    assert egress_events[0].payload["egress_decision"] == "allowed"
+    assert egress_events[0].payload["egress_classification"] == "internal"
+
+
+def test_ingest_chunks_records_one_allow_event_per_distinct_classification() -> None:
+    """Two distinct classifications in the same batch -> two allow events,
+    not one -- the aggregation key is (classification, provider), not just
+    "any allow happened"."""
+    policy = ManifestEgressPolicy(
+        providers={"remote-embedder": {"local": False, "max_classification": "confidential"}}
+    )
+    audit_sink = _FakeAuditSink()
+    engine, _ = _engine(
+        egress_policy=policy, embedder_type="remote-embedder", audit_sink=audit_sink
+    )
+    chunks = [
+        Chunk(doc_id=new_id(), content="a", classification=DataClassification.PUBLIC),
+        Chunk(doc_id=new_id(), content="b", classification=DataClassification.INTERNAL),
+        Chunk(doc_id=new_id(), content="c", classification=DataClassification.PUBLIC),
+    ]
+
+    engine.ingest_chunks(chunks)
+
+    egress_events = [e for e in audit_sink.recorded if e.event_type.value == "egress_decision"]
+    classifications = sorted(e.payload["egress_classification"] for e in egress_events)
+    assert classifications == ["internal", "public"]
+
+
+def test_answer_records_an_allowed_egress_event_for_generation() -> None:
+    chunk = Chunk(
+        doc_id=new_id(), content="public content", classification=DataClassification.PUBLIC
+    )
+    hit = RetrievedChunk(chunk=chunk, score=0.5, rank=1, retrieval_method=RetrievalMethod.HYBRID)
+    audit_sink = _FakeAuditSink()
+    policy = ManifestEgressPolicy(
+        providers={
+            "fake": {"local": True},
+            "remote-generator": {"local": False, "max_classification": "confidential"},
+        }
+    )
+    engine, _ = _engine(
+        retriever=_FakeRetriever(hits=[hit]),
+        egress_policy=policy,
+        generator_type="remote-generator",
+        audit_sink=audit_sink,
+    )
+
+    engine.answer("What is RAG?")
+
+    generate_events = [
+        e
+        for e in audit_sink.recorded
+        if e.event_type.value == "egress_decision" and e.payload["egress_operation"] == "generate"
+    ]
+    assert len(generate_events) == 1
+    assert generate_events[0].payload["egress_decision"] == "allowed"

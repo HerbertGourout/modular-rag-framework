@@ -137,6 +137,29 @@ def test_ask_command_exits_with_a_typed_code_on_a_security_denial(
     assert "blocked by policy" in result.output
 
 
+def test_ask_command_exits_with_a_typed_code_on_an_egress_denial(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Lot 20 (docs/refactoring-plan.md): EgressDeniedError is a
+    SecurityError subclass, so `_exit_code_for()`'s isinstance check already
+    covers it — this test exists to prove that concretely, per the task's
+    own explicit 'API and CLI return safe, typed errors on denied egress'
+    requirement, not to test new exit-code logic."""
+    from modular_rag.core.errors import EgressDeniedError
+
+    manifest = tmp_path / "m.yaml"
+    manifest.write_text("id: x\n", encoding="utf-8")
+    fake_pipeline = _FakePipeline(
+        answer_error=EgressDeniedError("generate denied by egress policy: too sensitive")
+    )
+    monkeypatch.setattr(cli_module, "load_pipeline", lambda path: fake_pipeline)
+
+    result = runner.invoke(app, ["ask", "hi", "--manifest", str(manifest)])
+
+    assert result.exit_code == 3
+    assert "generate denied by egress policy" in result.output
+
+
 def test_ask_command_exits_with_a_typed_code_on_a_configuration_error(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
