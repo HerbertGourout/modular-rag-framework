@@ -61,9 +61,19 @@ def _parse_provider_profile(provider: str, raw: dict[str, Any]) -> _ProviderProf
 
 class ManifestEgressPolicy:
     """Reference `EgressPolicy` implementation. Registered on
-    `Container.egress_policy` — optional, mirrors `TenantIsolationPolicy`'s
-    optionality: absent from a manifest, `RAGEngine`/`LangGraphEngineAdapter`
-    behave exactly as they did before this lot.
+    `Container.egress_policy`.
+
+    Optional for a manifest wiring only local or custom/unrecognized provider
+    types — absent, `RAGEngine`/`LangGraphEngineAdapter` behave exactly as
+    they did before this lot, same optionality as `TenantIsolationPolicy`.
+    **Not optional** the moment a manifest wires one of this framework's own
+    known built-in remote provider types (`openai`, `anthropic`,
+    `openai-embeddings`, `orchestration.registry._KNOWN_REMOTE_PROVIDER_TYPES`)
+    — `orchestration/registry.py::runtime_manifest_errors()` rejects such a
+    manifest at `wire()` when this policy (with a covering `providers[...]`
+    entry for that type) is absent, regardless of engine adapter (Lot 20
+    corrective remediation, HIGH-001; see docs/adr/0016-provider-egress-control.md
+    §2).
 
     Configuration (`governance.egress_policy.config`):
 

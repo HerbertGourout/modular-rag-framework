@@ -160,11 +160,14 @@ Lot 20 (engineering-complete 2026-09-08, see
 [lot-20-data-classification-egress-control.md](lot-20-data-classification-egress-control.md))
 closes the outbound-data gap where post-generation redaction cannot prevent document/chunk
 content, or the query text embedded to retrieve it, from reaching an external embedder/generator:
-an opt-in, fail-closed `governance.egress_policy` gates embedding (both ingestion and query-time
-retrieval), reranking, and generation on both the native and LangGraph engines. It is local-first
-(a `local: true` provider always allowed) and provider-neutral (profiles are manifest data, not
-hardcoded vendor logic). No shipped preset enables it, and its ADR-0016 remains Proposed, not
-accepted — see the evidence
+a fail-closed `governance.egress_policy` gates embedding (both ingestion and query-time
+retrieval), reranking, and generation on both the native and LangGraph engines — mandatory, not
+optional, the moment a manifest wires one of this framework's own known remote provider types
+(`openai`/`anthropic`/`openai-embeddings`); a manifest that doesn't cover one fails to load
+(Codex review pass 1, HIGH-001). It is local-first (a `local: true` provider always allowed,
+zero configuration needed for a purely local pipeline) and provider-neutral (profiles are
+manifest data, not hardcoded vendor logic). All three shipped presets now configure it, and its
+ADR-0016 remains Proposed, not accepted — see the evidence
 doc for the complete list of what did and did not ship.
 
 Lots 21–22 are planned scope documents, not implementation evidence. They become actionable only

@@ -14,6 +14,20 @@ log = structlog.get_logger(__name__)
 
 _Factory = Callable[[ComponentConfig], Any]
 
+# Lot 20 corrective pass (Codex review pass 1, HIGH-001): the built-in remote provider types
+# this framework itself registers (app/default_factories.py) -- deliberately scoped to exactly
+# these three, not "any type this manifest declares that isn't explicitly local." A blanket
+# "unrecognized type -> deny" rule would also catch every test-double type name
+# (test_registry.py's "fake-generator"/"fake-embedder" etc.) that has never had anything to do
+# with egress, breaking dozens of unrelated tests for no security benefit. Scoping to the actual
+# shipped remote adapters closes the real gap (a manifest wiring "openai"/"anthropic" with no
+# governance.egress_policy silently sent content to that provider) without that collateral
+# damage. Lives here, not in contracts/egress.py, so contracts/ stays fully vendor-neutral per
+# CLAUDE.md §07 ("no OpenAI/Anthropic semantics into core contracts") -- orchestration/registry.py
+# already references concrete built-in names locally for the same reason (the "native"/"langgraph"
+# engine.adapter check below).
+_KNOWN_REMOTE_PROVIDER_TYPES = frozenset({"openai", "anthropic", "openai-embeddings"})
+
 
 def runtime_manifest_errors(manifest: PipelineManifest) -> list[str]:
     """Return declarations that the selected online runtime cannot consume.
@@ -75,33 +89,51 @@ def runtime_manifest_errors(manifest: PipelineManifest) -> list[str]:
                 "enforces it unconditionally regardless of this flag. Set "
                 "tenant_enforcement=true, or remove tenant_policy."
             )
-        if manifest.governance.egress_policy is not None:
-            # Lot 20 (docs/refactoring-plan.md): "Reject an incompatible manifest before
-            # startup" -- a provider profile missing entirely for a wired component would
-            # otherwise only surface as a deny-by-default EgressDeniedError on the pipeline's
-            # first real embed/generate/rerank call, rather than as a clear manifest error now.
-            # Reads the raw config dict directly (not security.policies.egress_policy.
-            # ManifestEgressPolicy) -- orchestration/ may import only core/ + contracts/ +
-            # orchestration/, never security/ (a domain module); this mirrors every other
-            # check in this function, which inspects manifest.* fields only.
-            configured_providers = set(
-                manifest.governance.egress_policy.config.get("providers", {})
+    # Lot 20 (docs/refactoring-plan.md): "Reject an incompatible manifest before startup" --
+    # deliberately unconditional (not nested inside `if manifest.governance:`), since the gap
+    # this closes is exactly a manifest with *no* governance section at all wiring a known
+    # remote generator/embedder. Reads the raw config dict directly (not security.policies.
+    # egress_policy.ManifestEgressPolicy) -- orchestration/ may import only core/ + contracts/ +
+    # orchestration/, never security/ (a domain module); this mirrors every other check in this
+    # function, which inspects manifest.* fields only.
+    egress_policy_cfg = manifest.governance.egress_policy if manifest.governance else None
+    configured_providers = (
+        set(egress_policy_cfg.config.get("providers", {})) if egress_policy_cfg else set()
+    )
+    wired_provider_types = {
+        ("embedder", manifest.embedder.type),
+        ("generator", manifest.generator.type),
+    }
+    if manifest.reranker is not None:
+        wired_provider_types.add(("reranker", manifest.reranker.type))
+    for role, provider_type in wired_provider_types:
+        if provider_type in configured_providers:
+            continue
+        if egress_policy_cfg is not None:
+            # An explicit governance.egress_policy was configured but doesn't cover this
+            # wired type -- always an error, regardless of what the type is (operator-declared
+            # policies must be complete, not partially applied).
+            errors.append(
+                f"governance.egress_policy is configured but has no "
+                f"providers[{provider_type!r}] entry for the wired {role} — every "
+                "component type reachable through an egress checkpoint must have an "
+                "explicit profile (local: true, or local: false with "
+                "max_classification set)."
             )
-            wired_provider_types = {
-                ("embedder", manifest.embedder.type),
-                ("generator", manifest.generator.type),
-            }
-            if manifest.reranker is not None:
-                wired_provider_types.add(("reranker", manifest.reranker.type))
-            for role, provider_type in wired_provider_types:
-                if provider_type not in configured_providers:
-                    errors.append(
-                        f"governance.egress_policy is configured but has no "
-                        f"providers[{provider_type!r}] entry for the wired {role} — every "
-                        "component type reachable through an egress checkpoint must have an "
-                        "explicit profile (local: true, or local: false with "
-                        "max_classification set)."
-                    )
+        elif provider_type in _KNOWN_REMOTE_PROVIDER_TYPES:
+            # No governance.egress_policy configured at all, AND this wired type is one of
+            # this framework's own known remote providers (Codex review pass 1, HIGH-001):
+            # fail closed by default rather than silently sending content to it with zero
+            # protection. Any other, unrecognized type (a test double, a future custom
+            # adapter) is unaffected -- this is not "unknown types are denied," only "these
+            # specific built-in remote types require an explicit decision."
+            errors.append(
+                f"{role} type {provider_type!r} is a known remote provider, but no "
+                "governance.egress_policy is configured to cover it. A manifest wiring "
+                f"{provider_type!r} must configure governance.egress_policy explicitly "
+                "(even to declare it fully allowed) -- unconfigured remote providers are "
+                "denied by default (Lot 20 fail-closed default, ADR-0016 §2)."
+            )
 
     adapter = manifest.engine.adapter if manifest.engine else "native"
     if adapter not in {"native", "langgraph"}:

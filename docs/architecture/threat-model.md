@@ -91,10 +91,14 @@ ManifestEgressPolicy`, `contracts/egress.py`) closes this for the boundary's own
 before `Embedder.embed()` — both document/chunk ingestion and query-time embedding at retrieval,
 the latter closed in Codex review pass 1 (HIGH-002) — `Reranker.rerank()`, and
 `Generator.generate()`, on both the native engine and the LangGraph delegated-engine handoff (its
-own generate node performs the identical check against the same wired `Generator`). It is opt-in
-— no shipped preset enables it, so an unconfigured pipeline is exactly as before this lot — and
-real, documented gaps remain: [ADR-0016](../adr/0016-provider-egress-control.md) is drafted but
-not yet accepted, no pseudonymization, and PostgreSQL
+own generate node performs the identical check against the same wired `Generator`). It is
+mandatory, not opt-in, for this framework's own known remote provider types (`openai`,
+`anthropic`, `openai-embeddings`) — a manifest wiring one with no covering
+`governance.egress_policy` fails at `wire()` time (Codex review pass 1, HIGH-001). A purely local
+pipeline (`sentence-transformers`/`deterministic`/`cross-encoder` only) needs no configuration and
+is exactly as before this lot. Real, documented gaps remain:
+[ADR-0016](../adr/0016-provider-egress-control.md) is drafted but not yet accepted, no
+pseudonymization, and PostgreSQL
 (audit/lifecycle/feedback/review) is untouched by this lot, remaining a deployment-network
 concern. See
 `docs/refactoring/lot-20-data-classification-egress-control.md` for full scope and evidence.

@@ -11,8 +11,10 @@
 > delivery) are all **engineering-COMPLETE** — final sign-off pending, see Lot 18 below. Full
 > detail in `docs/refactoring/lot-{0..18}-*.md` (one file per lot/sub-lot). **Lot 19** (below) is
 > also engineering-complete as of 2026-08-07, and **Lot 20** (Data Classification and LLM Egress
-> Control) is engineering-complete as of 2026-09-08, opt-in, with
-> [ADR-0016](adr/0016-provider-egress-control.md) drafted (Proposed, not yet accepted) — see
+> Control) is engineering-complete as of 2026-09-08, fail-closed by default for this framework's
+> own known remote provider types (`openai`/`anthropic`/`openai-embeddings`; local-only pipelines
+> need no configuration), with [ADR-0016](adr/0016-provider-egress-control.md) drafted (Proposed,
+> not yet accepted) — see
 > [`docs/refactoring/lot-19-layer-boundary-stabilization.md`](refactoring/lot-19-layer-boundary-stabilization.md)
 > and
 > [`docs/refactoring/lot-20-data-classification-egress-control.md`](refactoring/lot-20-data-classification-egress-control.md):
@@ -128,10 +130,12 @@
 > evidence in [lot-19-layer-boundary-stabilization.md](refactoring/lot-19-layer-boundary-stabilization.md)
 > and [capability-matrix.md](architecture/capability-matrix.md); same sign-off caveat as Lots 0-18
 > above applies.
-> **Lot 20 (2026-09-08):** Data Classification and LLM Egress Control closes the boundary where
-> retrieved context or embedding input can reach an external model provider before output
-> redaction runs. It adds vendor-neutral, fail-closed policy enforcement (opt-in,
-> `governance.egress_policy`) before owned document/chunk embedding, reranking, and generation —
+> **Lot 20 (2026-09-08, revised same day after Codex review pass 1):** Data Classification and
+> LLM Egress Control closes the boundary where retrieved context or embedding input can reach an
+> external model provider before output redaction runs. It adds vendor-neutral, fail-closed
+> policy enforcement (`governance.egress_policy`, mandatory the moment a manifest wires one of
+> this framework's own known remote provider types — `openai`/`anthropic`/`openai-embeddings` —
+> optional otherwise) before owned document/chunk embedding, reranking, and generation —
 > including the LangGraph delegated engine's own generate call; local-only routing remains the
 > safe, always-allowed fallback. Scope and acceptance evidence are defined in Phase E below and
 > [lot-20-data-classification-egress-control.md](refactoring/lot-20-data-classification-egress-control.md).
@@ -504,9 +508,12 @@ for full implementation evidence. Delivered:
   retrieval (Codex review pass 1, HIGH-002) — `Reranker.rerank()`, and `Generator.generate()`, on
   both the native engine (`RAGEngine._retrieve()`/`_run_steps()`/`ingest_chunks()`) and the
   LangGraph delegated engine (`LangGraphEngineAdapter._node_retrieve()`/`_node_generate()`).
-- `governance.egress_policy` manifest section, opt-in (absent = unchanged pre-Lot-20 behavior,
-  same optionality as `tenant_policy`/`redactor`); `runtime_manifest_errors()` rejects a manifest
-  missing a provider profile for any wired embedder/generator/reranker before `wire()` succeeds.
+- `governance.egress_policy` manifest section — optional for a purely local pipeline (absent =
+  unchanged pre-Lot-20 behavior), but **mandatory the moment a manifest wires one of this
+  framework's own known remote provider types** (`openai`/`anthropic`/`openai-embeddings`; Codex
+  review pass 1, HIGH-001, `orchestration/registry.py::_KNOWN_REMOTE_PROVIDER_TYPES`).
+  `runtime_manifest_errors()` rejects a manifest missing a provider profile for any such wired
+  type — whether or not `governance.egress_policy` is present at all — before `wire()` succeeds.
 - Typed `EgressDeniedError(SecurityError)` — maps to HTTP 403 / CLI exit 3 automatically via the
   existing `SecurityError` handling.
 - Content-free `AuditEventType.EGRESS_DECISION` evidence for both allowed and denied decisions
@@ -611,7 +618,7 @@ assurance or reuse at acceptable cost, do not expand into a broad adapter progra
 | Lot 17 | Each removal has impact evidence, deprecation or non-use proof, and restoration path |
 | Lot 18 | Pilot and rollback exercise pass; mandatory gates green; named owners sign final evidence — **partially met**: the pilot scenario ran for real and found+fixed a genuine tenant-isolation parity bug in the LangGraph adapter; rollback is proven (single manifest field); all local gates are green (`check.sh full`) and a real CI gap (`langgraph` missing from `test-unit`/`coverage`) was found and fixed. **Sign-off is not self-granted** — that is Herbert Gourout's to give per `docs/refactoring/lot-0-baseline.md` §2's sole decision authority, not something this lot can claim on his behalf. |
 | Lot 19 | Strict layering and application facade are enforced; configured governance/audit/quality sections are either activated or rejected before execution. |
-| Lot 20 | **Mostly met, ADR drafted not accepted.** Every owned generator/embedder (document/chunk ingestion and query-time embedding at retrieval — Codex review pass 1, HIGH-002) and the LangGraph delegated-engine retrieve/generate handoffs are guarded before transmission; denied or unclassified content produces zero adapter calls (proven by `_RecordingEmbedder`/`_FakeGenerator` call-count assertions in `tests/unit/orchestration/test_engine.py`); content-free evidence reaches `AuditEvent`/`mrag.egress.{allowed,denied}` for both allowed and denied decisions (MEDIUM-001), never raw prompt/chunk/response text; a `local: true` profile completes with no network egress or fails closed otherwise; a manifest missing a provider profile for any wired embedder/generator/reranker is rejected before `wire()` succeeds (`orchestration.registry.runtime_manifest_errors()`); a classified chunk's classification round-trips through both Qdrant adapters intact (HIGH-003). **Not met**: [ADR-0016](adr/0016-provider-egress-control.md) drafted but not yet accepted; no pseudonymization/reversible token mapping. |
+| Lot 20 | **Mostly met, ADR drafted not accepted.** Every owned generator/embedder (document/chunk ingestion and query-time embedding at retrieval — Codex review pass 1, HIGH-002) and the LangGraph delegated-engine retrieve/generate handoffs are guarded before transmission; denied or unclassified content produces zero adapter calls (proven by `_RecordingEmbedder`/`_FakeGenerator` call-count assertions in `tests/unit/orchestration/test_engine.py`); content-free evidence reaches `AuditEvent`/`mrag.egress.{allowed,denied}` for both allowed and denied decisions (MEDIUM-001), never raw prompt/chunk/response text; a `local: true` profile completes with no network egress or fails closed otherwise; a manifest wiring one of this framework's own known remote provider types with no provider profile covering it is rejected before `wire()` succeeds — mandatory, not opt-in (Codex review pass 1, HIGH-001, `orchestration.registry.runtime_manifest_errors()`); a classified chunk's classification round-trips through both Qdrant adapters intact (HIGH-003). **Not met**: [ADR-0016](adr/0016-provider-egress-control.md) drafted but not yet accepted; no pseudonymization/reversible token mapping; the known-remote-type list is scoped to this framework's own three built-in adapters, not arbitrary third-party providers. |
 | Lot 21 (planned) | Accepted contract ADR; versioned L0/L1/L2 profiles; observable/verifiable/enforceable distinctions; deterministic conformance reports for native and LangGraph; overclaim and missing-evidence tests fail closed. |
 | Lot 22 (planned) | An existing application runs without graph reconstruction; declared assurance level passes; egress/tenant/streaming/tool bypass tests pass; measured integration evidence supports a human continue/stop decision. |
 
@@ -787,6 +794,7 @@ scope change, or an approved architecture decision — never as a silent in-plac
 | 2026-09-02 | Accepted ADR-0015: portable L0/L1/L2 assurance levels and existing-application adoption path | ACCEPTED — direction approved; capability not implemented |
 | 2026-09-02 | Added bounded Lots 21–22 for the assurance contract and measured external-application pilot | PLANNED — gated by Lot 20, the Lot 21 contract ADR, and lot-specific evidence |
 | 2026-09-08 | Lot 20: `contracts/egress.py` + `ManifestEgressPolicy`, `Document`/`Chunk.classification`, opt-in `governance.egress_policy` checked before embedding (ingestion)/reranking/generation on both engines. No ADR authored; query-time embedding, pseudonymization, and richer provider profiles remain open. Evidence in `docs/refactoring/lot-20-data-classification-egress-control.md`. | COMPLETE (engineering scope) — no ADR, sign-off pending |
+| 2026-09-08 | Lot 20, Codex review pass 1 corrective batch: closed query-time embedding, classification persistence in both Qdrant adapters, and allowed-decision auditing; drafted [ADR-0016](adr/0016-provider-egress-control.md) (Proposed). Same day, HIGH-001 revisited: `governance.egress_policy` is now mandatory (not opt-in) the moment a manifest wires a known remote provider type (`openai`/`anthropic`/`openai-embeddings`) — a manifest omitting it for one of those fails to load. All three shipped presets updated accordingly. | COMPLETE (engineering scope) — ADR-0016 Proposed, sign-off pending |
 | Pending | Decide final product/package name | Non-blocking |
 | Pending | Validate the business case with measured pilots rather than assumed project volume | Lot 22 decision gate |
 
@@ -819,3 +827,4 @@ scope change, or an approved architecture decision — never as a silent in-plac
 | 2026-09-02 | Accepted ADR-0015 and planned Phase F (Lots 21–22): explicit assurance levels/conformance evidence, then a measured pilot wrapping an existing application without rebuilding its graph. Implementation remains gated by Lot 20, the Lot 21 contract ADR, and lot-specific evidence. |
 | 2026-09-08 | Lot 20 executed: `Document`/`Chunk.classification`, `contracts/egress.py`, `ManifestEgressPolicy`, opt-in `governance.egress_policy` gating `Embedder.embed()` (ingestion), `Reranker.rerank()`, and `Generator.generate()` on both the native and LangGraph engines, `EgressDeniedError`, content-free `AuditEventType.EGRESS_DECISION` evidence. Fail-closed: unknown provider or unclassified content with no explicit permission denies; a `local: true` provider always allowed. No ADR authored (recorded as an open decision, not a silent gap); query-time embedding, pseudonymization, and richer provider profiles remain unaddressed. Evidence in `docs/refactoring/lot-20-data-classification-egress-control.md`. |
 | 2026-09-08 | Codex review pass 1 (DISCOVERY) on Lot 20, `CHANGES_REQUIRED`, 4 HIGH + 1 MEDIUM. Corrective pass: closed query-time embedding (HIGH-002, `RAGEngine._retrieve()` and `LangGraphEngineAdapter._node_retrieve()`); persisted/reconstructed `Chunk.classification` in both Qdrant adapters, previously silently dropped (HIGH-003); audited allowed egress decisions too, aggregated per unique (classification, provider) per ingest batch to bound volume (MEDIUM-001). HIGH-001 and HIGH-004 required decisions beyond this pass's own authorization, escalated to Herbert Gourout: HIGH-001 (make remote-provider egress fail-closed by default, not opt-in) — **confirmed keep opt-in**, risk accepted; HIGH-004 (missing ADR) — **drafted [ADR-0016](adr/0016-provider-egress-control.md), Proposed status**, not self-accepted. See `docs/refactoring/lot-20-data-classification-egress-control.md` and `.review/handoff.md` (pass 2/2). |
+| 2026-09-08 | HIGH-001 revisited same day: Herbert Gourout asked for the fail-closed alternative after all, reversing the "keep opt-in" decision recorded above. `orchestration/registry.py::runtime_manifest_errors()` now rejects a manifest wiring any of this framework's own known remote provider types (`openai`, `anthropic`, `openai-embeddings` — `_KNOWN_REMOTE_PROVIDER_TYPES`) with no `governance.egress_policy` covering it, regardless of whether a governance section exists at all; scoped to exactly these three built-in type strings (not "any unrecognized type") to avoid rejecting the test-double provider names ("fake-generator", etc.) used throughout `tests/unit/orchestration/test_registry.py` for unrelated reasons. All three shipped presets, plus `tests/unit/app/test_bootstrap.py`'s fixtures, updated to configure it (`max_classification: restricted`, preserving prior behavior — no real classification data flows through any of them today). [ADR-0016](adr/0016-provider-egress-control.md) §2 revised in place to record the reversed decision. 6 new regression tests in `tests/unit/orchestration/test_registry.py`; 1480 total unit/contract tests pass. |

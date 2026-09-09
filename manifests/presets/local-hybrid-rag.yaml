@@ -47,3 +47,22 @@ generator:
     model: "gpt-4o-mini"
     temperature: 0.1
     max_tokens: 2048
+
+# Lot 20 corrective pass (Codex review pass 1, HIGH-001): a manifest wiring a known remote
+# provider ("openai" here) with no governance.egress_policy at all is now rejected before
+# wire() succeeds (orchestration/registry.py's runtime_manifest_errors()) -- this section is
+# therefore required, not optional, for this preset to load. max_classification: restricted
+# (the most permissive ceiling) preserves this preset's exact pre-Lot-20 behavior: nothing in
+# this codebase sets Document.classification on any real ingestion call path today (it is an
+# explicit, caller-supplied field -- see core/models/document.py), so every chunk ingested
+# through this preset is unclassified and would otherwise resolve through
+# ManifestEgressPolicy's own default_classification ("restricted") and be denied outright.
+# Tighten this once real classification data exists for this deployment's content.
+governance:
+  egress_policy:
+    type: manifest
+    config:
+      providers:
+        sentence-transformers: {local: true}
+        cross-encoder: {local: true}
+        openai: {local: false, max_classification: restricted}

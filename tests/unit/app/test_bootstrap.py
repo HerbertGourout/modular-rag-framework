@@ -63,7 +63,7 @@ def test_load_pipeline_wires_the_default_registry_and_returns_a_rag_engine(
         "embedder:\n  type: sentence-transformers\n  config: {}\n"
         "indexer:\n  type: qdrant\n  config: {}\n"
         "retriever:\n  type: vector\n  config: {}\n"
-        "generator:\n  type: openai\n  config: {}\n",
+        "generator:\n  type: deterministic\n  config: {}\n",
         encoding="utf-8",
     )
 
@@ -85,7 +85,7 @@ def test_load_native_engine_wraps_the_same_wiring_as_load_pipeline(tmp_path: Pat
         "embedder:\n  type: sentence-transformers\n  config: {}\n"
         "indexer:\n  type: qdrant\n  config: {}\n"
         "retriever:\n  type: vector\n  config: {}\n"
-        "generator:\n  type: openai\n  config: {}\n",
+        "generator:\n  type: deterministic\n  config: {}\n",
         encoding="utf-8",
     )
 
@@ -101,7 +101,7 @@ _MINIMAL_MANIFEST = (
     "embedder:\n  type: sentence-transformers\n  config: {}\n"
     "indexer:\n  type: qdrant\n  config: {}\n"
     "retriever:\n  type: vector\n  config: {}\n"
-    "generator:\n  type: openai\n  config: {}\n"
+    "generator:\n  type: deterministic\n  config: {}\n"
 )
 
 

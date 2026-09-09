@@ -58,17 +58,19 @@ document's classification hasn't been explicitly decided, matching the fail-clos
 default). This is a recommended human default, not something `DataClassification` itself causes
 to happen automatically — see the distinction above.
 
-**Outbound-provider control (Lot 20, opt-in):** `PatternRedactor` still only processes answer text
-after generation and selected stored feedback/audit text — it does not classify or block raw
-queries, retrieved chunks, documents, or embedding inputs before a remote adapter call. Lot 20
-closes that specific gap with a separate, opt-in control: `governance.egress_policy`
-(`security.policies.egress_policy.ManifestEgressPolicy`) checks `Chunk.classification` (or, for
-query-time embedding at retrieval, the policy's own `default_classification` — `Query` itself
-carries no classification field) against a manifest-declared provider profile before
-`Embedder.embed()`, `Reranker.rerank()`, and `Generator.generate()`. No shipped preset configures
-it — selecting the secure preset alone still does not close this boundary; an operator must add
-`governance.egress_policy` explicitly and declare a profile for every wired provider. Real gaps
-remain even when configured: [ADR-0016](../adr/0016-provider-egress-control.md) is drafted but not
+**Outbound-provider control (Lot 20, mandatory for known remote providers):** `PatternRedactor`
+still only processes answer text after generation and selected stored feedback/audit text — it
+does not classify or block raw queries, retrieved chunks, documents, or embedding inputs before a
+remote adapter call. Lot 20 closes that specific gap with a separate control:
+`governance.egress_policy` (`security.policies.egress_policy.ManifestEgressPolicy`) checks
+`Chunk.classification` (or, for query-time embedding at retrieval, the policy's own
+`default_classification` — `Query` itself carries no classification field) against a
+manifest-declared provider profile before `Embedder.embed()`, `Reranker.rerank()`, and
+`Generator.generate()`. Not opt-in for this framework's own known remote provider types
+(`openai`, `anthropic`, `openai-embeddings`) — a manifest wiring one with no covering
+`governance.egress_policy` fails to load at all (Codex review pass 1, HIGH-001); all three
+shipped presets, including the secure one, now configure it. Real gaps remain even when
+configured: [ADR-0016](../adr/0016-provider-egress-control.md) is drafted but not
 yet accepted, no pseudonymization, and this covers only the
 owned embedder/generator/reranker/delegated-engine boundary, not PostgreSQL or any other outbound
 connection. See

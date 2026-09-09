@@ -120,6 +120,22 @@ governance:
     config:
       dsn: "secret://AUDIT_DATABASE_URL"
       threshold: 0.7
+  # Lot 20 corrective pass (Codex review pass 1, HIGH-001): required, not optional -- a
+  # manifest wiring a known remote provider ("openai") with no governance.egress_policy at
+  # all is now rejected before wire() succeeds. max_classification: restricted (the most
+  # permissive ceiling) preserves this preset's exact pre-Lot-20 behavior: nothing in this
+  # codebase sets Document.classification on any real ingestion call path today, so every
+  # chunk ingested here is unclassified. This is the natural preset to tighten first once
+  # real classification data exists, given its own governance-first positioning -- the other
+  # controls above (tenant_enforcement, redactor, policy_engine) do not currently branch on
+  # classification either (see docs/architecture/data-classification-policy.md §5).
+  egress_policy:
+    type: manifest
+    config:
+      providers:
+        sentence-transformers: {local: true}
+        cross-encoder: {local: true}
+        openai: {local: false, max_classification: restricted}
 
 observability:
   telemetry:

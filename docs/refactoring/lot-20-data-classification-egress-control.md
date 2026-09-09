@@ -1,9 +1,12 @@
 # Lot 20 — Data Classification and LLM Egress Control
 
 **Status:** engineering scope COMPLETE, 2026-09-08, corrected after Codex review pass 1
-(`CHANGES_REQUIRED` — 4 HIGH, 1 MEDIUM; see §8). [ADR-0016](../adr/0016-provider-egress-control.md)
-drafted (Proposed, not yet accepted) in response to HIGH-004 — sign-off pending, same
-"not self-granted" convention every prior lot in this programme uses (see §7).
+(`CHANGES_REQUIRED` — 4 HIGH, 1 MEDIUM; see §8), then further revised the same day after HIGH-001's
+initial "keep opt-in" disposition was reversed by explicit user decision (see §8). Remote-provider
+egress is now fail-closed by default for this framework's own known remote provider types.
+[ADR-0016](../adr/0016-provider-egress-control.md) drafted (Proposed, not yet accepted) in
+response to HIGH-004, revised the same day to record the HIGH-001 reversal — sign-off pending,
+same "not self-granted" convention every prior lot in this programme uses (see §7).
 
 ## 1. What this closes
 
@@ -88,6 +91,21 @@ denial to.
   never `security/`). A manifest missing coverage fails at `wire()`, before any request reaches
   the deny-by-default runtime path. `app/config_resolution.py::validate_capabilities()` also
   dry-run-checks the `type:` itself against the registry, same as every other role.
+- **Fail-closed at `wire()` for known remote provider types (HIGH-001 reversal, 2026-09-08).**
+  `runtime_manifest_errors()` also runs this check **unconditionally**, not only when
+  `governance.egress_policy` is present: a module-level `_KNOWN_REMOTE_PROVIDER_TYPES = frozenset({
+  "openai", "anthropic", "openai-embeddings"})` names this framework's own built-in remote
+  provider types. If a manifest wires one of these for its embedder/generator/(reranker if
+  present) and `governance.egress_policy` is either absent entirely or present but missing that
+  provider's entry, `wire()` fails — the manifest cannot load. Any other, unrecognized `type:`
+  string (including every synthetic `"fake-*"` provider the test suite uses) is unaffected: no
+  collateral restriction, verified empirically by running the full suite before touching any
+  preset/fixture, which produced exactly the 5 failures attributable to the 3 shipped presets and
+  one CLI test — no unexpected breakage. Deliberately scoped to a small, explicit allowlist in
+  `orchestration/registry.py`, not `contracts/egress.py` — CLAUDE.md §07 forbids hard-coding
+  vendor names into `contracts/`; `registry.py` already hardcodes `{"native", "langgraph"}` for
+  `engine.adapter`, so this follows existing precedent rather than creating a new one. See §8 for
+  the full HIGH-001 reversal record.
 - Consumed identically under `engine.adapter: native` and `engine.adapter: langgraph` —
   deliberately **not** added to `runtime_manifest_errors()`'s LangGraph-unsupported list (unlike
   `policy_engine`/`review_queue`/`audit_sink`/`feedback_sink`), since the task's own acceptance
@@ -118,18 +136,36 @@ denial to.
   retrieval/generation/reranking paths reuse `trace.id` like every other audit call in that class.
   `LangGraphEngineAdapter` does not audit — unchanged, matches its own documented scope boundary
   ("does not replicate `RAGEngine`'s audit-event emission... belongs above the `DocumentEngine`
-  boundary").
+  boundary"). Codex review pass 2 named this gap explicitly for the two egress checkpoints
+  specifically (pass-2 MEDIUM-001, re-numbered from pass 1's MEDIUM-001 which this closed for the
+  native engine only): LangGraph's egress *enforcement* is correct (both checkpoints deny/allow
+  identically to the native path), but produces no audit evidence. Presented to the user as a
+  scope-expansion decision (closing it means either reversing `registry.py`'s existing rejection
+  of `governance.audit_sink` under `engine.adapter: langgraph`, or inventing a new adapter-local
+  audit mechanism outside this adapter's documented Lot 15 boundary) — **user confirmed: defer,
+  accept as documented risk**, consistent with every other audit-eligible event this adapter
+  already doesn't record. See `.review/handoff.md`'s "Final Claude remediation" section for the
+  full record.
 
 ## 3. Backward compatibility
 
-Every one of the 1411 pre-existing unit/contract tests still passes unmodified. Confirmed
+Every one of the 1411 pre-existing unit/contract tests still passes unmodified for any manifest
+that does **not** wire one of this framework's own known remote provider types — confirmed
 directly, not assumed: `test_ingest_chunks_without_egress_policy_configured_is_unaffected` and
 `test_answer_without_egress_policy_configured_is_unaffected` construct a `RESTRICTED`-classified
-chunk with **no** `governance.egress_policy` configured and assert the pipeline behaves exactly
-as it did before this lot. All three shipped presets (`local-hybrid-rag.yaml`,
-`secure-enterprise-rag.yaml`, `langgraph-rag.yaml`) use `embedder.type: sentence-transformers`
-(local) with `generator.type: openai`/`anthropic` (remote) and none configures
-`governance.egress_policy` — this lot changes nothing about their current, shipped behavior.
+chunk with **no** `governance.egress_policy` configured and a non-remote (`"fake"`) provider, and
+assert the pipeline behaves exactly as it did before this lot.
+
+**Revised after the HIGH-001 reversal (2026-09-08):** this no longer holds unconditionally for the
+three shipped presets. All three (`local-hybrid-rag.yaml`, `secure-enterprise-rag.yaml`,
+`langgraph-rag.yaml`) use `embedder.type: sentence-transformers` (local) with
+`generator.type: openai`/`anthropic` (a known remote type) — each now carries an explicit
+`governance.egress_policy` with `max_classification: restricted` for that provider, added as part
+of this reversal. Runtime request-handling behavior for these presets is unchanged (no real
+classification data flows through any of them today, so the ceiling check never actually denies
+anything in current usage) — but a **manifest that omits this block and wires a known remote
+provider type now fails at `wire()`**, where it previously loaded successfully. This is the
+intended, accepted consequence of closing HIGH-001, not an unintended compatibility break: see §8.
 
 ## 4. Tests added
 
@@ -176,9 +212,11 @@ was also not re-run — no `eval/` code path changed.
 
 Sign-off is Herbert Gourout's to give, per `docs/refactoring/lot-0-baseline.md` §2's sole
 decision authority — not self-granted here, same convention every completed lot in this
-programme has followed. Two decisions are explicit and already recorded (§8): HIGH-001's opt-in
-design was confirmed 2026-09-08 (kept, risk accepted); HIGH-004's ADR-0016 is drafted but awaits
-formal acceptance, revision, or rejection.
+programme has followed. Two decisions are explicit and already recorded (§8): HIGH-001 was
+initially confirmed opt-in on 2026-09-08, then that decision was explicitly reversed the same day
+— remote-provider egress is now fail-closed by default for this framework's own known remote
+provider types; HIGH-004's ADR-0016 is drafted but awaits formal acceptance, revision, or
+rejection.
 
 ## 8. Codex review pass 1 — findings and corrective actions
 
@@ -187,12 +225,13 @@ Independently re-verified against the code before any fix — not applied blindl
 
 | Finding | Disposition | Resolution |
 |---|---|---|
-| HIGH-001 — remote providers with no `governance.egress_policy` configured remain fully open | Valid, confirmed | **Escalated; resolved by user decision, 2026-09-08.** Making remote-provider egress fail-closed by default would break all three shipped presets and `examples/simple_qa/`, directly conflicting with CLAUDE.md's non-negotiable "must not break `examples/simple_qa/`" priority. Presented to the user as a security-policy decision; **confirmed: keep opt-in, accept the residual risk.** Now recorded as an explicit, ratified decision in [ADR-0016](../adr/0016-provider-egress-control.md) §2, not a silent gap. |
+| HIGH-001 — remote providers with no `governance.egress_policy` configured remain fully open | Valid, confirmed | **Escalated; resolved by user decision, 2026-09-08, then reversed the same day.** Initially: making remote-provider egress fail-closed by default would break all three shipped presets and `examples/simple_qa/`, conflicting with CLAUDE.md's non-negotiable "must not break `examples/simple_qa/`" priority — presented as a security-policy decision, **confirmed: keep opt-in, accept the residual risk.** **Reversed the same day** on explicit user instruction ("traiter le problème de HIGH-001"): the opt-in gap was judged unacceptable. **Fixed** — `orchestration/registry.py::runtime_manifest_errors()` now rejects, at `wire()`, any manifest that wires one of this framework's own known remote provider types (`openai`, `anthropic`, `openai-embeddings`, scoped via a new `_KNOWN_REMOTE_PROVIDER_TYPES` allowlist) without a covering `governance.egress_policy` entry — resolving the CLAUDE.md conflict by updating all three shipped presets and `examples/simple_qa/`'s manifest to configure `governance.egress_policy` (`max_classification: restricted`, preserving current runtime behavior) rather than by leaving the gap open. Any unrecognized provider `type:` (including every test double) is unaffected — verified empirically, zero collateral test failures beyond the 3 presets + 1 CLI test predicted by the design. See §2.4, §3. Documented in [ADR-0016](../adr/0016-provider-egress-control.md) §2 as a superseded-and-revised decision, not a silently rewritten one. |
 | HIGH-002 — query-time embedding bypasses the egress policy | Valid, confirmed | **Fixed.** New checkpoint in `RAGEngine._retrieve()` (shared by `answer()` and `retrieve()`) and `LangGraphEngineAdapter._node_retrieve()`, before the retriever's internal embed call. `classification=None` always (`Query` has no classification field), resolving through the policy's existing `default_classification` — no new manifest field invented. See §2.3. |
 | HIGH-003 — Qdrant adapters drop `Chunk.classification` on the real persisted round trip | Valid, confirmed — a real correctness bug, not a design gap | **Fixed.** `classification` added to both dense (`qdrant_store.py`) and sparse (`qdrant_sparse_store.py`) `index()` payloads and retrieval reconstruction, mirroring the existing `tenant_id` pattern exactly (which had the identical bug shape at Lot 12b, already fixed there). |
 | HIGH-004 — new public `contracts.egress` Protocol added without an ADR | Valid, confirmed — restates this document's own §5/§7 disclosure | **Escalated; ADR drafted, 2026-09-08.** Presented to the user as a public-contract decision; user chose to have a Proposed-status ADR drafted for their own review rather than leave the gap undocumented. [ADR-0016](../adr/0016-provider-egress-control.md) now exists — not self-accepted, still awaits Herbert Gourout's acceptance/revision/rejection. |
 | MEDIUM-001 — allowed egress decisions are not auditable | Valid, confirmed | **Fixed, in scope.** `_audit_egress()`/`_enforce_egress()` record both outcomes; `ingest_chunks()` aggregates allowed evidence to one event per unique `(classification, provider)` pair per batch to bound volume, per the finding's own recommended action. See §2.5. |
 
-HIGH-001 is now a ratified, documented decision (ADR-0016 §2) rather than an open question.
-HIGH-004's remaining open step is formal ADR-0016 acceptance/revision/rejection by Herbert
-Gourout — see `.review/handoff.md`.
+HIGH-001 is now fixed in code (fail-closed by default for known remote provider types), not merely
+a ratified accepted-risk decision — the reversal itself is documented in ADR-0016 §2 as a revised
+decision, superseding the original 2026-09-08 acceptance. HIGH-004's remaining open step is formal
+ADR-0016 acceptance/revision/rejection by Herbert Gourout — see `.review/handoff.md`.

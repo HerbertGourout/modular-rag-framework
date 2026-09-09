@@ -6,7 +6,8 @@ rejection, or revision is Herbert Gourout's decision, per
 [`docs/refactoring/lot-0-baseline.md`](../refactoring/lot-0-baseline.md) §2's sole decision
 authority — the same convention every other ADR in this repository has followed.
 
-**Date:** 2026-09-08
+**Date:** 2026-09-08 (§2 revised same day — see the note at its start; the rest of this ADR is
+unchanged from its first draft).
 
 **Authors:** Drafted by Claude Code during Lot 20 corrective remediation, at explicit user
 instruction (Codex review pass 1 named this contract's missing ADR as a required-scope gap; the
@@ -44,7 +45,8 @@ ManifestEgressPolicy` is the reference implementation: a manifest-configured map
 `provider -> {local: bool, max_classification?: DataClassification}`, plus a
 `default_classification` applied to unclassified input.
 
-The guarantee, when `governance.egress_policy` is configured: content is checked against a
+The guarantee, when `governance.egress_policy` is configured (§2: mandatory for this framework's
+own known remote provider types, optional otherwise): content is checked against a
 manifest-declared ceiling before `Embedder.embed()` (both document/chunk ingestion and
 query-time embedding for retrieval), `Reranker.rerank()`, and `Generator.generate()`, on both the
 native engine and the LangGraph delegated-engine handoff. A `local: true` provider is always
@@ -53,29 +55,50 @@ An unknown provider, or content whose classification (or, absent one, the policy
 `default_classification`) exceeds a provider's declared ceiling, is denied — raising
 `EgressDeniedError`, a `SecurityError` subclass, before the guarded call executes.
 
-### 2. Opt-in, not a default-closed gate — a deliberate, now-confirmed choice
+### 2. Fail-closed by default for known remote providers — revised 2026-09-08
 
-`governance.egress_policy` is optional, mirroring `tenant_policy`/`redactor`'s existing
-optionality. **Absent from a manifest, this control is inert and behavior is unchanged from
-before this ADR/lot existed** — including for a manifest wiring a remote provider with no
-classified content protection at all. This was flagged explicitly (Codex review pass 1,
-HIGH-001: "remote providers still run with no manifest egress permission") as arguably
-contradicting the plain-language acceptance criterion "no owned external path can receive
-classified content unless the manifest explicitly permits it."
+**Superseded revision.** This section originally accepted the residual risk of an unconfigured
+pipeline having no egress protection at all ("keep the opt-in design"). Herbert Gourout revisited
+that decision the same day and asked for the fail-closed alternative to be implemented instead.
+The reasoning below reflects the corrected, current behavior — the earlier "opt-in, accept the
+risk" text is not preserved inline (see git history / `.review/handoff.md` for the superseded
+version and the reasoning that led to reversing it).
 
-The alternative — failing closed by default whenever a manifest wires any non-local provider,
-regardless of whether `governance.egress_policy` is configured — was considered and rejected for
-this decision. It would break all three shipped presets (`local-hybrid-rag.yaml`,
-`secure-enterprise-rag.yaml`, `langgraph-rag.yaml`, all wiring `generator.type: openai`/
-`anthropic` with no egress policy) and `examples/simple_qa/`, directly conflicting with
-[CLAUDE.md](../../CLAUDE.md) §01's non-negotiable priority ("must not break
-`examples/simple_qa/`"). Confirmed by Herbert Gourout, 2026-09-08, in response to Codex review
-pass 1's HIGH-001: **accept the residual risk of an unconfigured pipeline having no egress
-protection, keep the opt-in design.** An operator handling any classified/sensitive content
-through a remote provider must configure `governance.egress_policy` explicitly — this is a
-deployment responsibility this contract makes possible to discharge, not one it enforces
-unconditionally by itself. `docs/guides/`-level operator documentation should say this plainly
-wherever `governance.egress_policy` is documented.
+`governance.egress_policy` remains an *optional manifest section* — an operator never has to
+write one to use only local, in-process components (`sentence-transformers`, `deterministic`,
+`cross-encoder`). But `orchestration/registry.py::runtime_manifest_errors()` now fails a manifest
+at `wire()` time — before it can serve a single request — if it wires any of this framework's own
+known remote provider types (`openai`, `anthropic`, `openai-embeddings`, as embedder, generator,
+or reranker) **and** no `governance.egress_policy` entry covers that type. Silence is no longer
+treated as permission: an operator using a remote provider must say so explicitly, even if only
+to declare it fully allowed (`max_classification: restricted`).
+
+This directly satisfies the literal acceptance criterion — "no owned external path can receive
+classified content unless the manifest explicitly permits it" — for every provider type this
+framework itself ships. It does **not** attempt to police arbitrary third-party or future adapter
+type names: the rejection list is deliberately the three concrete strings above, not "anything not
+declared local." A blanket "unrecognized type → deny" rule would have caught every test-double
+provider name in this repository's own unit tests (`test_registry.py`'s `"fake-generator"`, etc.),
+which have never had anything to do with egress — that collateral damage was rejected as
+disproportionate to the actual gap. A deployment using a genuinely new remote adapter that isn't
+one of these three built-in types is, today, in the same position pre-Lot-20 code always was:
+protected only if the operator configures `governance.egress_policy` voluntarily. Extending the
+known-remote list to cover a future built-in remote adapter, should one ship, is a small, low-risk
+follow-up (add its type string to `orchestration/registry.py::_KNOWN_REMOTE_PROVIDER_TYPES`), not
+a structural change.
+
+**Consequence for the three shipped presets.** All three (`local-hybrid-rag.yaml`,
+`secure-enterprise-rag.yaml`, `langgraph-rag.yaml`) wire `generator.type: openai` and previously
+had no `governance.egress_policy` — they would now fail to wire at all. Each was given an explicit
+`governance.egress_policy` block (`sentence-transformers`/`cross-encoder`: `local: true`; `openai`:
+`local: false, max_classification: restricted`). `max_classification: restricted` — the most
+permissive ceiling — was chosen deliberately to preserve every preset's exact prior behavior:
+nothing in this codebase sets `Document.classification` on any real ingestion path today (it is an
+explicit, caller-supplied field), so every chunk flowing through any of these presets is
+unclassified and would otherwise be denied outright by `ManifestEgressPolicy`'s own
+`default_classification` ("restricted"). This is a compatibility choice, not a security judgment
+about the presets' actual content sensitivity — `secure-enterprise-rag.yaml` in particular is the
+natural candidate to tighten first once real classification data exists for its own deployment.
 
 ### 3. Out of scope for this contract
 
@@ -137,17 +160,25 @@ wherever `governance.egress_policy` is documented.
 
 - Closes a real, previously undefended path (raw query/chunk/document content reaching a remote
   provider before any classification-aware decision) for every owned embedder/generator/reranker
-  call and the LangGraph delegated-engine handoff, when an operator opts in.
+  call and the LangGraph delegated-engine handoff — now enforced by default for this framework's
+  own known remote provider types, not only when an operator remembers to opt in (§2).
 - Local-only deployments remain fully unaffected and require no new configuration.
-- Provider identity is manifest data, not vendor-specific code — no OpenAI/Anthropic/LangGraph
-  semantics were hardcoded into `contracts/` or `core/`, per CLAUDE.md §07.
+- Provider identity is manifest data, not vendor-specific code in `contracts/`/`core/` — the three
+  known-remote-type strings this fail-closed default checks against live in
+  `orchestration/registry.py`, alongside that same module's pre-existing `"native"`/`"langgraph"`
+  engine-adapter check, not in `contracts/egress.py` itself (per CLAUDE.md §07).
 
 ### Negative / risks
 
-- **The opt-in design (§2) means the acceptance criterion "no owned external path can receive
-  classified content unless the manifest explicitly permits it" is only true for a pipeline that
-  configures `governance.egress_policy`.** An unconfigured pipeline wiring a remote provider has
-  no protection from this contract at all — accepted explicitly, not an oversight (§2).
+- **The fail-closed default (§2) is scoped to three specific, known built-in remote provider
+  type strings, not "anything not local."** A deployment using a genuinely new/custom remote
+  adapter that isn't `openai`/`anthropic`/`openai-embeddings` gets no automatic protection unless
+  the operator configures `governance.egress_policy` voluntarily — the same residual gap the
+  originally-accepted opt-in design had, just narrowed to non-built-in providers only.
+- **`max_classification: restricted` on all three shipped presets is a compatibility choice, not
+  a security judgment** — it does not mean their content has been reviewed and found safe up to
+  `restricted`; it means no classification signal exists for their content today, so the ceiling
+  was set to reproduce prior behavior exactly rather than silently start denying real traffic.
 - Query-time content is never individually classified (§3) — a deployment whose query text itself
   may be sensitive, using a remote embedder, relies entirely on `default_classification`, not a
   per-query decision.
@@ -158,6 +189,9 @@ wherever `governance.egress_policy` is documented.
 ## Open decision
 
 **This ADR's own Status (Proposed) is itself the primary open decision** — accept, revise, or
-reject is Herbert Gourout's to make. Revision candidates, if not accepted as-is, most likely
-concern §2 (the opt-in-vs-default-closed boundary) — see `.review/handoff.md` for the exact
-finding this responds to and the reasoning already exchanged.
+reject is Herbert Gourout's to make. The opt-in-vs-default-closed question §2 originally left open
+has already been resolved (fail-closed by default for known remote providers, confirmed
+2026-09-08) — remaining revision candidates are narrower: whether the three-type known-remote list
+should grow, and whether `max_classification: restricted` on the shipped presets is the right
+compatibility default versus something stricter now that it is a real, visible manifest field
+rather than an implicit absence.
