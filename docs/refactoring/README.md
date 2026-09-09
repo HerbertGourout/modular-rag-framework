@@ -2,9 +2,11 @@
 
 This is the index for the original 18-lot engine-agnostic control-plane refactoring programme
 and its follow-on lots (`docs/refactoring-plan.md`). Lots 0-18 were executed 2026-08-03 through
-2026-08-05; Lot 19 followed, Lot 20 shipped 2026-09-08 (engineering scope; ADR-0016 drafted,
-Proposed, not yet accepted), and
-Lots 21–22 are planned by accepted ADR-0015, gated on Lot 20's sign-off/ADR. It answers: **what
+2026-08-05; Lot 19 followed, Lot 20 shipped 2026-09-08 and is now fully complete (ADR-0016
+Accepted 2026-09-09), and
+Lots 21–22 are planned by accepted ADR-0015; Lot 21's Lot-20 dependency is now satisfied and its
+own contract ADR ([ADR-0017](../adr/0017-engine-independent-assurance-contract.md)) is drafted,
+but not yet accepted — implementation has not started. It answers: **what
 happened, in what order, why, and where's the proof** — for anyone reading this repository
 after the fact, whether that's a new team member, a reviewer, or a future Claude Code session
 picking the work back up.
@@ -167,13 +169,15 @@ optional, the moment a manifest wires one of this framework's own known remote p
 (Codex review pass 1, HIGH-001). It is local-first (a `local: true` provider always allowed,
 zero configuration needed for a purely local pipeline) and provider-neutral (profiles are
 manifest data, not hardcoded vendor logic). All three shipped presets now configure it, and its
-ADR-0016 remains Proposed, not accepted — see the evidence
+[ADR-0016](../adr/0016-provider-egress-control.md) is Accepted (2026-09-09) — see the evidence
 doc for the complete list of what did and did not ship.
 
 Lots 21–22 are planned scope documents, not implementation evidence. They become actionable only
-after their dependencies are complete: Lot 20's own sign-off/ADR gap closes first, then define
-honest assurance levels and reports, then test them by wrapping an existing application without
-reconstructing it.
+after their dependencies are complete: Lot 20's own sign-off/ADR gap is now closed (ADR-0016
+Accepted 2026-09-09); Lot 21's own focused contract ADR
+([ADR-0017](../adr/0017-engine-independent-assurance-contract.md)) is drafted, defining honest
+assurance levels and reports, but not yet accepted — implementation starts only once it is, then
+Lot 22 tests them by wrapping an existing application without reconstructing it.
 
 ---
 

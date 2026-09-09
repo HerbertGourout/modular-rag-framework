@@ -1,6 +1,9 @@
 # Lot 21 — Engine-Independent Assurance Contract and Conformance Report
 
-**Status:** PLANNED — blocked on completion of Lot 20 and acceptance of a contract ADR
+**Status:** PLANNED — Lot 20 is complete ([ADR-0016](../adr/0016-provider-egress-control.md)
+Accepted 2026-09-09). This lot's own contract ADR,
+[ADR-0017](../adr/0017-engine-independent-assurance-contract.md), is drafted (Proposed,
+2026-09-09) but not yet accepted — implementation is still blocked until it is.
 
 **Priority:** P0 after Lot 20
 
@@ -12,8 +15,9 @@ Turn the current collection of engine capabilities and control-plane components 
 machine-readable assurance contract. The result must state what an adapter can observe, enforce,
 and evidence without implying that every engine provides native-equivalent governance.
 
-ADR-0015 authorizes this direction. Implementation remains blocked until Lot 20 is complete and a
-focused contract ADR approves the public schemas, compatibility policy, and migration.
+ADR-0015 authorizes this direction. Implementation remains blocked until this lot's own focused
+contract ADR ([ADR-0017](../adr/0017-engine-independent-assurance-contract.md)) approves the
+public schemas, compatibility policy, and migration.
 
 ## Inputs
 
