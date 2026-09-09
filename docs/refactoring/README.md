@@ -4,8 +4,9 @@ This is the index for the original 18-lot engine-agnostic control-plane refactor
 and its follow-on lots (`docs/refactoring-plan.md`). Lots 0-18 were executed 2026-08-03 through
 2026-08-05; Lot 19 followed, Lot 20 shipped 2026-09-08 and is now fully complete (ADR-0016
 Accepted 2026-09-09), and
-Lots 21–22 are planned by accepted ADR-0015; Lot 21's Lot-20 dependency is now satisfied, but it
-still needs its own accepted focused contract ADR before implementation. It answers: **what
+Lots 21–22 are planned by accepted ADR-0015; Lot 21's Lot-20 dependency is now satisfied and its
+own contract ADR ([ADR-0017](../adr/0017-engine-independent-assurance-contract.md)) is drafted,
+but not yet accepted — implementation has not started. It answers: **what
 happened, in what order, why, and where's the proof** — for anyone reading this repository
 after the fact, whether that's a new team member, a reviewer, or a future Claude Code session
 picking the work back up.
@@ -173,9 +174,10 @@ doc for the complete list of what did and did not ship.
 
 Lots 21–22 are planned scope documents, not implementation evidence. They become actionable only
 after their dependencies are complete: Lot 20's own sign-off/ADR gap is now closed (ADR-0016
-Accepted 2026-09-09); Lot 21 still needs its own accepted focused contract ADR — defining honest
-assurance levels and reports — before implementation starts, then Lot 22 tests them by wrapping
-an existing application without reconstructing it.
+Accepted 2026-09-09); Lot 21's own focused contract ADR
+([ADR-0017](../adr/0017-engine-independent-assurance-contract.md)) is drafted, defining honest
+assurance levels and reports, but not yet accepted — implementation starts only once it is, then
+Lot 22 tests them by wrapping an existing application without reconstructing it.
 
 ---
 
