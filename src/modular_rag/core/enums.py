@@ -100,7 +100,12 @@ def combined_classification(
     materialized = list(values)
     if not materialized or any(v is None for v in materialized):
         return None
-    return max(materialized, key=classification_rank)
+    # mypy cannot narrow `list[DataClassification | None]` to
+    # `list[DataClassification]` from the `any(v is None ...)` guard above --
+    # the `if v is not None` filter on this generator expression re-derives
+    # that narrowing directly, since every element reaching `classification_rank`
+    # is provably non-None at this point either way.
+    return max((v for v in materialized if v is not None), key=classification_rank)
 
 
 class ReadinessState(StrEnum):
