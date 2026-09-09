@@ -1,12 +1,13 @@
 # Lot 20 — Data Classification and LLM Egress Control
 
-**Status:** engineering scope COMPLETE, 2026-09-08, corrected after Codex review pass 1
+**Status:** COMPLETE. Engineering scope closed 2026-09-08, corrected after Codex review pass 1
 (`CHANGES_REQUIRED` — 4 HIGH, 1 MEDIUM; see §8), then further revised the same day after HIGH-001's
 initial "keep opt-in" disposition was reversed by explicit user decision (see §8). Remote-provider
 egress is now fail-closed by default for this framework's own known remote provider types.
-[ADR-0016](../adr/0016-provider-egress-control.md) drafted (Proposed, not yet accepted) in
-response to HIGH-004, revised the same day to record the HIGH-001 reversal — sign-off pending,
-same "not self-granted" convention every prior lot in this programme uses (see §7).
+[ADR-0016](../adr/0016-provider-egress-control.md) drafted (Proposed) 2026-09-08 in response to
+HIGH-004, revised the same day to record the HIGH-001 reversal, and **Accepted by Herbert Gourout
+2026-09-09** — the last open item this lot had, per the "not self-granted" convention every prior
+lot in this programme uses (see §7). No open items remain.
 
 ## 1. What this closes
 
@@ -184,10 +185,6 @@ intended, accepted consequence of closing HIGH-001, not an unintended compatibil
 
 ## 5. Not delivered — explicit, not silent
 
-- **ADR drafted, not accepted.** [ADR-0016](../adr/0016-provider-egress-control.md) (Status:
-  Proposed) now exists, drafted after Codex review pass 1's HIGH-004 finding. It is not
-  self-accepted — acceptance, revision, or rejection remains Herbert Gourout's decision, same
-  convention as every other ADR in this repository.
 - **No pseudonymization / reversible token mapping.** `docs/refactoring-plan.md`'s full Lot 20
   scope described locally pseudonymizing PII/secrets before an *allowed* remote call, with an
   encrypted, short-lived, audit-invisible token mapping. Not built — an allowed call still sends
@@ -210,13 +207,14 @@ was also not re-run — no `eval/` code path changed.
 
 ## 7. Sign-off
 
-Sign-off is Herbert Gourout's to give, per `docs/refactoring/lot-0-baseline.md` §2's sole
-decision authority — not self-granted here, same convention every completed lot in this
-programme has followed. Two decisions are explicit and already recorded (§8): HIGH-001 was
-initially confirmed opt-in on 2026-09-08, then that decision was explicitly reversed the same day
-— remote-provider egress is now fail-closed by default for this framework's own known remote
-provider types; HIGH-004's ADR-0016 is drafted but awaits formal acceptance, revision, or
-rejection.
+**Given — Herbert Gourout, 2026-09-09.** Sign-off is Herbert Gourout's to give, per
+`docs/refactoring/lot-0-baseline.md` §2's sole decision authority — not self-granted, same
+convention every completed lot in this programme has followed. Two decisions were explicit
+(§8): HIGH-001 was initially confirmed opt-in on 2026-09-08, then that decision was explicitly
+reversed the same day — remote-provider egress is now fail-closed by default for this framework's
+own known remote provider types; HIGH-004's [ADR-0016](../adr/0016-provider-egress-control.md)
+was drafted 2026-09-08 and **Accepted 2026-09-09** ("j'accepte l'ADR 0016"). Lot 20 has no open
+items remaining.
 
 ## 8. Codex review pass 1 — findings and corrective actions
 
@@ -228,10 +226,11 @@ Independently re-verified against the code before any fix — not applied blindl
 | HIGH-001 — remote providers with no `governance.egress_policy` configured remain fully open | Valid, confirmed | **Escalated; resolved by user decision, 2026-09-08, then reversed the same day.** Initially: making remote-provider egress fail-closed by default would break all three shipped presets and `examples/simple_qa/`, conflicting with CLAUDE.md's non-negotiable "must not break `examples/simple_qa/`" priority — presented as a security-policy decision, **confirmed: keep opt-in, accept the residual risk.** **Reversed the same day** on explicit user instruction ("traiter le problème de HIGH-001"): the opt-in gap was judged unacceptable. **Fixed** — `orchestration/registry.py::runtime_manifest_errors()` now rejects, at `wire()`, any manifest that wires one of this framework's own known remote provider types (`openai`, `anthropic`, `openai-embeddings`, scoped via a new `_KNOWN_REMOTE_PROVIDER_TYPES` allowlist) without a covering `governance.egress_policy` entry — resolving the CLAUDE.md conflict by updating all three shipped presets and `examples/simple_qa/`'s manifest to configure `governance.egress_policy` (`max_classification: restricted`, preserving current runtime behavior) rather than by leaving the gap open. Any unrecognized provider `type:` (including every test double) is unaffected — verified empirically, zero collateral test failures beyond the 3 presets + 1 CLI test predicted by the design. See §2.4, §3. Documented in [ADR-0016](../adr/0016-provider-egress-control.md) §2 as a superseded-and-revised decision, not a silently rewritten one. |
 | HIGH-002 — query-time embedding bypasses the egress policy | Valid, confirmed | **Fixed.** New checkpoint in `RAGEngine._retrieve()` (shared by `answer()` and `retrieve()`) and `LangGraphEngineAdapter._node_retrieve()`, before the retriever's internal embed call. `classification=None` always (`Query` has no classification field), resolving through the policy's existing `default_classification` — no new manifest field invented. See §2.3. |
 | HIGH-003 — Qdrant adapters drop `Chunk.classification` on the real persisted round trip | Valid, confirmed — a real correctness bug, not a design gap | **Fixed.** `classification` added to both dense (`qdrant_store.py`) and sparse (`qdrant_sparse_store.py`) `index()` payloads and retrieval reconstruction, mirroring the existing `tenant_id` pattern exactly (which had the identical bug shape at Lot 12b, already fixed there). |
-| HIGH-004 — new public `contracts.egress` Protocol added without an ADR | Valid, confirmed — restates this document's own §5/§7 disclosure | **Escalated; ADR drafted, 2026-09-08.** Presented to the user as a public-contract decision; user chose to have a Proposed-status ADR drafted for their own review rather than leave the gap undocumented. [ADR-0016](../adr/0016-provider-egress-control.md) now exists — not self-accepted, still awaits Herbert Gourout's acceptance/revision/rejection. |
+| HIGH-004 — new public `contracts.egress` Protocol added without an ADR | Valid, confirmed — restates this document's own §5/§7 disclosure | **Fixed.** Presented to the user as a public-contract decision; user chose to have a Proposed-status ADR drafted for their own review rather than leave the gap undocumented. [ADR-0016](../adr/0016-provider-egress-control.md) drafted 2026-09-08, **Accepted by Herbert Gourout 2026-09-09**. |
 | MEDIUM-001 — allowed egress decisions are not auditable | Valid, confirmed | **Fixed, in scope.** `_audit_egress()`/`_enforce_egress()` record both outcomes; `ingest_chunks()` aggregates allowed evidence to one event per unique `(classification, provider)` pair per batch to bound volume, per the finding's own recommended action. See §2.5. |
 
-HIGH-001 is now fixed in code (fail-closed by default for known remote provider types), not merely
-a ratified accepted-risk decision — the reversal itself is documented in ADR-0016 §2 as a revised
-decision, superseding the original 2026-09-08 acceptance. HIGH-004's remaining open step is formal
-ADR-0016 acceptance/revision/rejection by Herbert Gourout — see `.review/handoff.md`.
+HIGH-001 is fixed in code (fail-closed by default for known remote provider types), not merely a
+ratified accepted-risk decision — the reversal itself is documented in ADR-0016 §2 as a revised
+decision, superseding the original 2026-09-08 acceptance. HIGH-004 is closed: ADR-0016 is
+Accepted, not merely drafted — see `.review/handoff.md` and §7 above. Every finding from Codex
+review pass 1 now has a final, closed disposition; no items remain open for this lot.

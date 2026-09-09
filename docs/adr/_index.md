@@ -322,10 +322,10 @@ and enforce, and mandatory unsupported controls must fail before traffic is serv
 - **ADR-0013**: Operational metrics via a new `Meter` port. Accepted.
 - **ADR-0014**: Feedback contract, durable human review, and offline drift detection. Accepted.
 - **ADR-0015**: Portable assurance levels and external-application boundary. Accepted.
-- **ADR-0016**: Provider data-egress control boundary (Lot 20). Proposed — drafted in response to
-  Codex review pass 1's HIGH-004 finding; not yet accepted.
+- **ADR-0016**: Provider data-egress control boundary (Lot 20). Accepted 2026-09-09 — drafted in
+  response to Codex review pass 1's HIGH-004 finding.
 
-Fifteen ADRs are Accepted as of this writing, plus one Proposed (ADR-0016). Future ADRs will be
+Sixteen ADRs are Accepted as of this writing. Future ADRs will be
 added as new major decisions arise; per this project's own rule
 ([CLAUDE.md §07](../../CLAUDE.md#07--security-rules)), any new top-level module, layer boundary,
 or contract modification requires one.

@@ -70,8 +70,8 @@ manifest-declared provider profile before `Embedder.embed()`, `Reranker.rerank()
 (`openai`, `anthropic`, `openai-embeddings`) — a manifest wiring one with no covering
 `governance.egress_policy` fails to load at all (Codex review pass 1, HIGH-001); all three
 shipped presets, including the secure one, now configure it. Real gaps remain even when
-configured: [ADR-0016](../adr/0016-provider-egress-control.md) is drafted but not
-yet accepted, no pseudonymization, and this covers only the
+configured, deliberately scoped, not silently missing: [ADR-0016](../adr/0016-provider-egress-control.md)
+(Accepted 2026-09-09), no pseudonymization, and this covers only the
 owned embedder/generator/reranker/delegated-engine boundary, not PostgreSQL or any other outbound
 connection. See
 `docs/refactoring/lot-20-data-classification-egress-control.md` for full evidence.

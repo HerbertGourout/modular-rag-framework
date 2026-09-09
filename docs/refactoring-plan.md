@@ -13,8 +13,8 @@
 > also engineering-complete as of 2026-08-07, and **Lot 20** (Data Classification and LLM Egress
 > Control) is engineering-complete as of 2026-09-08, fail-closed by default for this framework's
 > own known remote provider types (`openai`/`anthropic`/`openai-embeddings`; local-only pipelines
-> need no configuration), with [ADR-0016](adr/0016-provider-egress-control.md) drafted (Proposed,
-> not yet accepted) — see
+> need no configuration), with [ADR-0016](adr/0016-provider-egress-control.md) **Accepted
+> 2026-09-09** — Lot 20 is now fully signed off, and Lot 21 (below) is unblocked — see
 > [`docs/refactoring/lot-19-layer-boundary-stabilization.md`](refactoring/lot-19-layer-boundary-stabilization.md)
 > and
 > [`docs/refactoring/lot-20-data-classification-egress-control.md`](refactoring/lot-20-data-classification-egress-control.md):
@@ -139,14 +139,17 @@
 > including the LangGraph delegated engine's own generate call; local-only routing remains the
 > safe, always-allowed fallback. Scope and acceptance evidence are defined in Phase E below and
 > [lot-20-data-classification-egress-control.md](refactoring/lot-20-data-classification-egress-control.md).
-> Status: **COMPLETE (engineering scope) — [ADR-0016](adr/0016-provider-egress-control.md) drafted
-> (Proposed), sign-off pending.** Codex review pass 1 also found and closed a query-time-embedding
-> gap and a classification-persistence bug in both Qdrant adapters (HIGH-002/HIGH-003).
+> Status: **COMPLETE — [ADR-0016](adr/0016-provider-egress-control.md) Accepted 2026-09-09.**
+> Codex review pass 1 also found and closed a query-time-embedding gap and a
+> classification-persistence bug in both Qdrant adapters (HIGH-002/HIGH-003). Lot 20's sign-off
+> gate is now closed; Lot 21 (below) is unblocked on that front — its own focused contract ADR
+> still needs drafting and accepting before implementation starts.
 > **Lots 21–22 (planned, 2026-09-02):** accepted [ADR-0015](adr/0015-portable-assurance-and-external-application-boundary.md)
 > proposes explicit assurance levels, an engine-independent conformance report, and support for
 > wrapping an existing external application without rebuilding its graph. These lots are
-> **PLANNED, dependency-gated implementation**: Lot 21 requires Lot 20 sign-off/ADR and its own
-> accepted focused contract ADR; Lot 22 additionally requires Lot 21 evidence.
+> **PLANNED, dependency-gated implementation**: Lot 21's Lot-20 sign-off/ADR dependency is now met
+> (ADR-0016 Accepted 2026-09-09); it still requires its own accepted focused contract ADR before
+> implementation. Lot 22 additionally requires Lot 21 evidence.
 > **Target outcome:** Deploy compliant, measurable document-AI solutions faster, independently
 > of the underlying execution engine.
 > **Migration principle:** Incremental, evidence-based, reversible, and releasable after every
@@ -337,8 +340,8 @@ stated otherwise.
 | 17 | Prototype retirement and final docs/Claude/research consolidation | P1 | M (1wk) | COMPLETE (one sub-item blocked by the permission system) | 16a-16c |
 | 18 | Multi-engine pilot, release gates, and programme closure | P1 | M-L (1-2wk) | COMPLETE (engineering scope) — sign-off pending | 17 |
 | 19 | Layer-boundary correction and control-plane activation (ADR-0007) | P0 | L (1.5-2wk) | COMPLETE (engineering scope) — sign-off pending, see [lot-19-layer-boundary-stabilization.md](refactoring/lot-19-layer-boundary-stabilization.md), [ADR-0007](adr/0007-layer-boundaries-and-control-plane-activation.md), and [capability-matrix.md](architecture/capability-matrix.md) | 18 |
-| 20 | Data classification and fail-closed LLM/embedding egress control | P0 | M-L (1-2wk) | COMPLETE (engineering scope) — [ADR-0016](adr/0016-provider-egress-control.md) drafted (Proposed), sign-off pending; see [lot-20-data-classification-egress-control.md](refactoring/lot-20-data-classification-egress-control.md) | 11a, 11c, 19; approved ADR before contract/structural changes |
-| 21 | Engine-independent assurance contract, levels, and conformance report | P0 | L (2-3wk; re-estimate after spike) | PLANNED — blocked on Lot 20 sign-off/ADR and its own contract ADR | 20; accepted contract ADR |
+| 20 | Data classification and fail-closed LLM/embedding egress control | P0 | M-L (1-2wk) | COMPLETE — [ADR-0016](adr/0016-provider-egress-control.md) Accepted 2026-09-09; see [lot-20-data-classification-egress-control.md](refactoring/lot-20-data-classification-egress-control.md) | 11a, 11c, 19; approved ADR before contract/structural changes |
+| 21 | Engine-independent assurance contract, levels, and conformance report | P0 | L (2-3wk; re-estimate after spike) | PLANNED — Lot 20 sign-off/ADR dependency met (ADR-0016 Accepted 2026-09-09); still blocked on its own accepted contract ADR | 20; accepted contract ADR |
 | 22 | Existing-application adapter and measured cross-engine pilot | P1 | L-XL (3-5wk, time-boxed) | PLANNED — blocked on Lots 20-21 | 21 |
 
 Ranges (e.g. `8-10`) list the earliest and latest lot whose evidence is required via the
@@ -522,12 +525,15 @@ for full implementation evidence. Delivered:
   aggregated to one event per unique (classification, provider) pair actually seen in the batch,
   not one per chunk (Codex review pass 1, MEDIUM-001).
 
+**Delivered late, closing the sign-off gate:**
+
+- **ADR accepted 2026-09-09.** [ADR-0016](adr/0016-provider-egress-control.md) (Status: Accepted),
+  drafted after Codex review pass 1's HIGH-004 finding, closed the gap the "Required scope" list
+  below's first bullet named — accepted by Herbert Gourout, not self-granted. This was Lot 20's
+  last open item; Lot 20 is now fully complete, not merely engineering-complete.
+
 **Not delivered — explicitly out of this pass's scope, not silently dropped:**
 
-- **ADR drafted, not yet accepted.** [ADR-0016](adr/0016-provider-egress-control.md) (Status:
-  Proposed) now exists, drafted after Codex review pass 1's HIGH-004 finding — closing the gap the
-  "Required scope" list below's first bullet named, but acceptance itself remains Herbert
-  Gourout's decision, not self-granted here.
 - **No pseudonymization / reversible token mapping.** `PatternRedactor` remains post-generation
   only; this lot does not pseudonymize PII/secrets before an allowed remote call.
 - **No richer provider capability profiles.** A profile is `{local: bool, max_classification}`
@@ -618,7 +624,7 @@ assurance or reuse at acceptable cost, do not expand into a broad adapter progra
 | Lot 17 | Each removal has impact evidence, deprecation or non-use proof, and restoration path |
 | Lot 18 | Pilot and rollback exercise pass; mandatory gates green; named owners sign final evidence — **partially met**: the pilot scenario ran for real and found+fixed a genuine tenant-isolation parity bug in the LangGraph adapter; rollback is proven (single manifest field); all local gates are green (`check.sh full`) and a real CI gap (`langgraph` missing from `test-unit`/`coverage`) was found and fixed. **Sign-off is not self-granted** — that is Herbert Gourout's to give per `docs/refactoring/lot-0-baseline.md` §2's sole decision authority, not something this lot can claim on his behalf. |
 | Lot 19 | Strict layering and application facade are enforced; configured governance/audit/quality sections are either activated or rejected before execution. |
-| Lot 20 | **Mostly met, ADR drafted not accepted.** Every owned generator/embedder (document/chunk ingestion and query-time embedding at retrieval — Codex review pass 1, HIGH-002) and the LangGraph delegated-engine retrieve/generate handoffs are guarded before transmission; denied or unclassified content produces zero adapter calls (proven by `_RecordingEmbedder`/`_FakeGenerator` call-count assertions in `tests/unit/orchestration/test_engine.py`); content-free evidence reaches `AuditEvent`/`mrag.egress.{allowed,denied}` for both allowed and denied decisions (MEDIUM-001), never raw prompt/chunk/response text; a `local: true` profile completes with no network egress or fails closed otherwise; a manifest wiring one of this framework's own known remote provider types with no provider profile covering it is rejected before `wire()` succeeds — mandatory, not opt-in (Codex review pass 1, HIGH-001, `orchestration.registry.runtime_manifest_errors()`); a classified chunk's classification round-trips through both Qdrant adapters intact (HIGH-003). **Not met**: [ADR-0016](adr/0016-provider-egress-control.md) drafted but not yet accepted; no pseudonymization/reversible token mapping; the known-remote-type list is scoped to this framework's own three built-in adapters, not arbitrary third-party providers. |
+| Lot 20 | **Met.** [ADR-0016](adr/0016-provider-egress-control.md) Accepted 2026-09-09. Every owned generator/embedder (document/chunk ingestion and query-time embedding at retrieval — Codex review pass 1, HIGH-002) and the LangGraph delegated-engine retrieve/generate handoffs are guarded before transmission; denied or unclassified content produces zero adapter calls (proven by `_RecordingEmbedder`/`_FakeGenerator` call-count assertions in `tests/unit/orchestration/test_engine.py`); content-free evidence reaches `AuditEvent`/`mrag.egress.{allowed,denied}` for both allowed and denied decisions (MEDIUM-001), never raw prompt/chunk/response text; a `local: true` profile completes with no network egress or fails closed otherwise; a manifest wiring one of this framework's own known remote provider types with no provider profile covering it is rejected before `wire()` succeeds — mandatory, not opt-in (Codex review pass 1, HIGH-001, `orchestration.registry.runtime_manifest_errors()`); a classified chunk's classification round-trips through both Qdrant adapters intact (HIGH-003). **Deliberately out of scope, not a gap**: no pseudonymization/reversible token mapping; the known-remote-type list is scoped to this framework's own three built-in adapters, not arbitrary third-party providers (see ADR-0016 §3, Consequences). |
 | Lot 21 (planned) | Accepted contract ADR; versioned L0/L1/L2 profiles; observable/verifiable/enforceable distinctions; deterministic conformance reports for native and LangGraph; overclaim and missing-evidence tests fail closed. |
 | Lot 22 (planned) | An existing application runs without graph reconstruction; declared assurance level passes; egress/tenant/streaming/tool bypass tests pass; measured integration evidence supports a human continue/stop decision. |
 
@@ -795,6 +801,7 @@ scope change, or an approved architecture decision — never as a silent in-plac
 | 2026-09-02 | Added bounded Lots 21–22 for the assurance contract and measured external-application pilot | PLANNED — gated by Lot 20, the Lot 21 contract ADR, and lot-specific evidence |
 | 2026-09-08 | Lot 20: `contracts/egress.py` + `ManifestEgressPolicy`, `Document`/`Chunk.classification`, opt-in `governance.egress_policy` checked before embedding (ingestion)/reranking/generation on both engines. No ADR authored; query-time embedding, pseudonymization, and richer provider profiles remain open. Evidence in `docs/refactoring/lot-20-data-classification-egress-control.md`. | COMPLETE (engineering scope) — no ADR, sign-off pending |
 | 2026-09-08 | Lot 20, Codex review pass 1 corrective batch: closed query-time embedding, classification persistence in both Qdrant adapters, and allowed-decision auditing; drafted [ADR-0016](adr/0016-provider-egress-control.md) (Proposed). Same day, HIGH-001 revisited: `governance.egress_policy` is now mandatory (not opt-in) the moment a manifest wires a known remote provider type (`openai`/`anthropic`/`openai-embeddings`) — a manifest omitting it for one of those fails to load. All three shipped presets updated accordingly. | COMPLETE (engineering scope) — ADR-0016 Proposed, sign-off pending |
+| 2026-09-09 | Accepted ADR-0016: provider data-egress control boundary, per Herbert Gourout's explicit instruction ("j'accepte l'ADR 0016"). Closes Lot 20's last open item; Lot 20 is now fully complete, not merely engineering-complete. Unblocks Lot 21's Lot-20 sign-off/ADR dependency — Lot 21 still needs its own accepted focused contract ADR before implementation. | Lot 20: COMPLETE. Lot 21: PLANNED — one dependency remaining (own contract ADR) |
 | Pending | Decide final product/package name | Non-blocking |
 | Pending | Validate the business case with measured pilots rather than assumed project volume | Lot 22 decision gate |
 
@@ -828,3 +835,5 @@ scope change, or an approved architecture decision — never as a silent in-plac
 | 2026-09-08 | Lot 20 executed: `Document`/`Chunk.classification`, `contracts/egress.py`, `ManifestEgressPolicy`, opt-in `governance.egress_policy` gating `Embedder.embed()` (ingestion), `Reranker.rerank()`, and `Generator.generate()` on both the native and LangGraph engines, `EgressDeniedError`, content-free `AuditEventType.EGRESS_DECISION` evidence. Fail-closed: unknown provider or unclassified content with no explicit permission denies; a `local: true` provider always allowed. No ADR authored (recorded as an open decision, not a silent gap); query-time embedding, pseudonymization, and richer provider profiles remain unaddressed. Evidence in `docs/refactoring/lot-20-data-classification-egress-control.md`. |
 | 2026-09-08 | Codex review pass 1 (DISCOVERY) on Lot 20, `CHANGES_REQUIRED`, 4 HIGH + 1 MEDIUM. Corrective pass: closed query-time embedding (HIGH-002, `RAGEngine._retrieve()` and `LangGraphEngineAdapter._node_retrieve()`); persisted/reconstructed `Chunk.classification` in both Qdrant adapters, previously silently dropped (HIGH-003); audited allowed egress decisions too, aggregated per unique (classification, provider) per ingest batch to bound volume (MEDIUM-001). HIGH-001 and HIGH-004 required decisions beyond this pass's own authorization, escalated to Herbert Gourout: HIGH-001 (make remote-provider egress fail-closed by default, not opt-in) — **confirmed keep opt-in**, risk accepted; HIGH-004 (missing ADR) — **drafted [ADR-0016](adr/0016-provider-egress-control.md), Proposed status**, not self-accepted. See `docs/refactoring/lot-20-data-classification-egress-control.md` and `.review/handoff.md` (pass 2/2). |
 | 2026-09-08 | HIGH-001 revisited same day: Herbert Gourout asked for the fail-closed alternative after all, reversing the "keep opt-in" decision recorded above. `orchestration/registry.py::runtime_manifest_errors()` now rejects a manifest wiring any of this framework's own known remote provider types (`openai`, `anthropic`, `openai-embeddings` — `_KNOWN_REMOTE_PROVIDER_TYPES`) with no `governance.egress_policy` covering it, regardless of whether a governance section exists at all; scoped to exactly these three built-in type strings (not "any unrecognized type") to avoid rejecting the test-double provider names ("fake-generator", etc.) used throughout `tests/unit/orchestration/test_registry.py` for unrelated reasons. All three shipped presets, plus `tests/unit/app/test_bootstrap.py`'s fixtures, updated to configure it (`max_classification: restricted`, preserving prior behavior — no real classification data flows through any of them today). [ADR-0016](adr/0016-provider-egress-control.md) §2 revised in place to record the reversed decision. 6 new regression tests in `tests/unit/orchestration/test_registry.py`; 1480 total unit/contract tests pass. |
+| 2026-09-09 | Two follow-up fixes surfaced by CI after the HIGH-001 reversal, both pre-existing gaps the reversal's own validation pass didn't cover: (1) a pre-existing mypy baseline regression in `core.enums.combined_classification()` (from the original 2026-09-08 Lot 20 commit, undetected all along since `/qa-v1` does not run mypy) — fixed with a type-narrowing generator expression, no behavior change; (2) `docker/local-hybrid-rag.yaml`, a Compose-specific manifest never exercised by `pytest` (no Docker daemon in that environment), still wired `openai` with no `governance.egress_policy` and failed the `compose-smoke` CI job — fixed identically to the three shipped presets, plus a new regression test (`test_docker_compose_manifest_covers_every_wired_provider_for_startup`) so a manifest outside `manifests/presets/` can't silently reintroduce the same gap again. 1481 total unit/contract tests pass. |
+| 2026-09-09 | Herbert Gourout accepted [ADR-0016](adr/0016-provider-egress-control.md) ("j'accepte l'ADR 0016"). Lot 20 is now fully complete — no open items remain. Lot 21's Lot-20 sign-off/ADR dependency is satisfied; its own focused contract ADR is the next concrete step before any Lot 21 implementation begins. |

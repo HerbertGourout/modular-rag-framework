@@ -33,14 +33,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   same pass — see `docs/refactoring/lot-20-data-classification-egress-control.md` §8. Two
   findings needed a decision beyond an implementation pass's own authorization: the fail-closed
   default described above was decided the same day, after an initial "keep opt-in, accept the
-  risk" answer was revisited; [ADR-0016](docs/adr/0016-provider-egress-control.md) drafted
-  (Status: Proposed) for the outbound-data boundary.
-- **Not delivered in this pass**: ADR-0016 is drafted but not yet accepted; no
-  pseudonymization/reversible token mapping; provider profiles model only
+  risk" answer was revisited; [ADR-0016](docs/adr/0016-provider-egress-control.md) drafted for
+  the outbound-data boundary and **Accepted 2026-09-09**.
+- **Not delivered**: no pseudonymization/reversible token mapping; provider profiles model only
   `{local, max_classification}`, not retention/residency/DPA terms; the fail-closed default
   covers only this framework's three known built-in remote provider types, not arbitrary
-  third-party or future adapters. See
-  `docs/refactoring/lot-20-data-classification-egress-control.md` for full evidence and the
+  third-party or future adapters — a deliberate, ADR-recorded scope boundary, not an oversight.
+  See `docs/refactoring/lot-20-data-classification-egress-control.md` for full evidence and the
   reasoning behind each scope decision.
 
 ### Fixed — container-build supply-chain hardening (2026-09-03)

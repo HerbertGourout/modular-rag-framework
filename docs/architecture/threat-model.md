@@ -96,8 +96,8 @@ mandatory, not opt-in, for this framework's own known remote provider types (`op
 `anthropic`, `openai-embeddings`) — a manifest wiring one with no covering
 `governance.egress_policy` fails at `wire()` time (Codex review pass 1, HIGH-001). A purely local
 pipeline (`sentence-transformers`/`deterministic`/`cross-encoder` only) needs no configuration and
-is exactly as before this lot. Real, documented gaps remain:
-[ADR-0016](../adr/0016-provider-egress-control.md) is drafted but not yet accepted, no
+is exactly as before this lot. Real, documented gaps remain — deliberately scoped, per
+[ADR-0016](../adr/0016-provider-egress-control.md) (Accepted 2026-09-09): no
 pseudonymization, and PostgreSQL
 (audit/lifecycle/feedback/review) is untouched by this lot, remaining a deployment-network
 concern. See

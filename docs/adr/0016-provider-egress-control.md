@@ -1,13 +1,14 @@
 # ADR-0016 — Provider Data-Egress Control Boundary
 
-**Status:** Proposed — drafted 2026-09-08 in response to Codex review pass 1's HIGH-004 finding
-on Lot 20 (`.review/codex-review.md`, `.review/handoff.md`); not self-accepted. Acceptance,
-rejection, or revision is Herbert Gourout's decision, per
+**Status:** Accepted — accepted 2026-09-09 by Herbert Gourout, per
 [`docs/refactoring/lot-0-baseline.md`](../refactoring/lot-0-baseline.md) §2's sole decision
-authority — the same convention every other ADR in this repository has followed.
+authority. Drafted Proposed 2026-09-08 in response to Codex review pass 1's HIGH-004 finding on
+Lot 20 (`.review/codex-review.md`, `.review/handoff.md`); not self-accepted at draft time. This
+acceptance also closes Lot 20's own remaining open item (`docs/refactoring-plan.md` acceptance
+table) and unblocks Lot 21, which was gated on this ADR's disposition.
 
-**Date:** 2026-09-08 (§2 revised same day — see the note at its start; the rest of this ADR is
-unchanged from its first draft).
+**Date:** 2026-09-08 (drafted; §2 revised same day — see the note at its start), accepted
+2026-09-09.
 
 **Authors:** Drafted by Claude Code during Lot 20 corrective remediation, at explicit user
 instruction (Codex review pass 1 named this contract's missing ADR as a required-scope gap; the
@@ -188,10 +189,10 @@ natural candidate to tighten first once real classification data exists for its 
 
 ## Open decision
 
-**This ADR's own Status (Proposed) is itself the primary open decision** — accept, revise, or
-reject is Herbert Gourout's to make. The opt-in-vs-default-closed question §2 originally left open
-has already been resolved (fail-closed by default for known remote providers, confirmed
-2026-09-08) — remaining revision candidates are narrower: whether the three-type known-remote list
-should grow, and whether `max_classification: restricted` on the shipped presets is the right
-compatibility default versus something stricter now that it is a real, visible manifest field
-rather than an implicit absence.
+**Accepted 2026-09-09, no revision requested.** The opt-in-vs-default-closed question §2
+originally left open was resolved before acceptance (fail-closed by default for known remote
+providers, confirmed 2026-09-08). Two narrower items remain genuinely open, not blocking on this
+ADR's own status: whether the three-type known-remote list should grow as new built-in adapters
+ship, and whether `max_classification: restricted` on the shipped presets should tighten now that
+it is a real, visible manifest field rather than an implicit absence. Neither requires reopening
+this ADR — see Consequences → Negative/risks.
