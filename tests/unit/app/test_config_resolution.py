@@ -136,6 +136,32 @@ def test_validate_capabilities_reports_unknown_egress_policy_type_without_wiring
     assert any("egress_policy" in e and "does-not-exist" in e for e in errors)
 
 
+def test_validate_capabilities_rejects_an_unmeetable_assurance_min_level() -> None:
+    """Lot 21 (ADR-0017, Accepted 2026-09-10): validate_capabilities() folds
+    runtime_manifest_errors() into its own return value (see that function's
+    own comment on why), so the assurance.min_level check is covered here
+    too, not only through ComponentRegistry.wire() directly."""
+    from modular_rag.contracts.assurance import AssuranceLevel
+    from modular_rag.contracts.manifests import AssuranceSection
+
+    registry = ComponentRegistry()
+    for role in ("chunker", "embedder", "indexer", "retriever", "generator"):
+        registry.register(role, "fake", lambda cfg: object())
+    manifest = PipelineManifest(
+        id="x",
+        chunker=ComponentConfig(type="fake"),
+        embedder=ComponentConfig(type="fake"),
+        indexer=ComponentConfig(type="fake"),
+        retriever=ComponentConfig(type="fake"),
+        generator=ComponentConfig(type="fake"),
+        assurance=AssuranceSection(min_level=AssuranceLevel.L2),
+    )
+
+    errors = validate_capabilities(manifest, registry)
+
+    assert any("assurance.min_level" in e for e in errors)
+
+
 def test_validate_capabilities_rejects_offline_quality_configuration() -> None:
     registry = ComponentRegistry()
     manifest = PipelineManifest(

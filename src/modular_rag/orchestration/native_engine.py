@@ -20,6 +20,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 
 from modular_rag import __version__
+from modular_rag.contracts.assurance import ConformanceReport
 from modular_rag.contracts.engine import (
     EngineCapability,
     EngineRequest,
@@ -60,7 +61,14 @@ class NativeEngineAdapter:
         # denies it when tenant isolation is configured. Note `request.query
         # .tenant_id` is never consulted here — `context.tenant_id` is the
         # sole source, matching LangGraphEngineAdapter's identical rule.
-        answer = self._engine.answer(request.query.text, tenant_id=context.tenant_id)
+        # `request_id` (Lot 21; Codex review pass 1, HIGH-003) lets RAGEngine
+        # key this execution's provenance/usage evidence to the caller's own
+        # request, so a later `conformance_report(context)` for the same
+        # context reports what this request actually earned rather than what
+        # the manifest merely wired.
+        answer = self._engine.answer(
+            request.query.text, tenant_id=context.tenant_id, request_id=context.request_id
+        )
         metadata = {"trace_id": answer.trace_id} if answer.trace_id else {}
         return EngineResult(
             text=answer.text,
@@ -87,3 +95,12 @@ class NativeEngineAdapter:
 
     def engine_version(self) -> str:
         return __version__
+
+    def conformance_report(self, context: ExecutionContext) -> ConformanceReport:
+        """Lot 21 (ADR-0017, Accepted 2026-09-10) — one-line delegation to
+        the wrapped `RAGEngine`, same pattern `run()`'s own docstring
+        establishes for every other method on this adapter: this class
+        translates the `DocumentEngine` port, it does not reimplement
+        `RAGEngine`'s own logic. See `RAGEngine.conformance_report()` for
+        the actual per-kind evidence computation."""
+        return self._engine.conformance_report(context)

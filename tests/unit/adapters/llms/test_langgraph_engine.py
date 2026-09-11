@@ -15,6 +15,7 @@ import pytest
 
 from modular_rag.adapters.llms.langgraph_engine import LangGraphEngineAdapter
 from modular_rag.app.container import Container
+from modular_rag.contracts.assurance import AssuranceLevel, EvidenceKind, EvidenceStatus
 from modular_rag.contracts.engine import (
     CancellationToken,
     DocumentEngine,
@@ -39,6 +40,7 @@ from modular_rag.core.models.chunk import Chunk
 from modular_rag.core.models.query import Query
 from modular_rag.core.models.retrieved import RetrievedChunk
 from modular_rag.core.models.trace import TraceStep
+from modular_rag.generation.citations.builder import build_citations
 from modular_rag.orchestration.engine import RAGEngine
 from modular_rag.orchestration.native_engine import NativeEngineAdapter
 from modular_rag.security.policies.egress_policy import ManifestEgressPolicy
@@ -86,6 +88,19 @@ class _FakeGenerator:
 
     def name(self) -> str:
         return "fake-generator"
+
+
+class _CitingGenerator:
+    """Returns citations genuinely built from the retrieved chunks, so the
+    framework's grounding check can mark provenance VERIFIED (Lot 21)."""
+
+    def generate(self, query, context, trace):  # type: ignore[no-untyped-def]
+        return Answer(
+            query_id=query.id, text="grounded answer", citations=build_citations(context)
+        )
+
+    def name(self) -> str:
+        return "citing-generator"
 
 
 class _FakeGuard:
@@ -574,3 +589,171 @@ def test_parity_with_native_adapter_on_an_egress_denial() -> None:
         native.run(_request(), _context())
     with pytest.raises(EgressDeniedError):
         langgraph.run(_request(), _context())
+
+
+# ---------------------------------------------------------------------------
+# conformance_report() — Lot 21, ADR-0017 (Accepted 2026-09-10)
+# ---------------------------------------------------------------------------
+
+
+def test_conformance_report_with_nothing_wired_achieves_l0() -> None:
+    adapter = LangGraphEngineAdapter(_container())
+
+    report = adapter.conformance_report(_context())
+
+    assert report.adapter_name == "langgraph"
+    assert report.achieved_level == AssuranceLevel.L0
+
+
+def test_conformance_report_claims_no_provenance_before_any_execution() -> None:
+    """Codex review pass 1, HIGH-003: provenance is execution-derived on this
+    adapter too — an earlier version reported VERIFIED unconditionally, which
+    was false for any generator that returns no citations."""
+    adapter = LangGraphEngineAdapter(_container())
+
+    assert (
+        adapter.conformance_report(_context())
+        .evidence_for(EvidenceKind.RETRIEVAL_PROVENANCE)
+        .status
+        == EvidenceStatus.UNSUPPORTED
+    )
+
+
+def test_conformance_report_verifies_provenance_after_a_grounded_execution() -> None:
+    adapter = LangGraphEngineAdapter(_container(generator=_CitingGenerator()))
+    context = _context()
+
+    adapter.run(_request(), context)
+
+    assert (
+        adapter.conformance_report(context)
+        .evidence_for(EvidenceKind.RETRIEVAL_PROVENANCE)
+        .status
+        == EvidenceStatus.VERIFIED
+    )
+
+
+def test_conformance_report_does_not_verify_provenance_for_a_zero_citation_generator() -> None:
+    """`_FakeGenerator` returns an Answer with no citations at all — exactly
+    the HIGH-003 reproduction, on the delegated engine."""
+    adapter = LangGraphEngineAdapter(_container())
+    context = _context()
+
+    adapter.run(_request(), context)
+
+    assert (
+        adapter.conformance_report(context)
+        .evidence_for(EvidenceKind.RETRIEVAL_PROVENANCE)
+        .status
+        == EvidenceStatus.UNSUPPORTED
+    )
+
+
+def test_conformance_report_usage_cost_is_unsupported_even_with_a_meter_wired() -> None:
+    """Codex review pass 1, MEDIUM-001: `mrag.generation.tokens` is emitted
+    only inside RAGEngine._run_steps(), which this adapter never calls, so a
+    wired Meter receives no token or cost data from this engine at all."""
+    container = _container()
+    container.register("meter", object())
+    adapter = LangGraphEngineAdapter(container)
+
+    assert (
+        adapter.conformance_report(_context()).evidence_for(EvidenceKind.USAGE_COST).status
+        == EvidenceStatus.UNSUPPORTED
+    )
+
+
+def test_conformance_report_audit_completion_is_always_unsupported() -> None:
+    """The concrete, honest restatement of Lot 20's MEDIUM-001 deferral
+    (.review/handoff.md): this adapter never reaches RAGEngine._audit(), and
+    governance.audit_sink is itself structurally rejected under
+    engine.adapter='langgraph' — there is no wiring that changes this."""
+    adapter = LangGraphEngineAdapter(
+        _container(guard=_FakeGuard(), tenant_policy=TenantIsolationPolicy())
+    )
+
+    report = adapter.conformance_report(_context())
+
+    assert report.evidence_for(EvidenceKind.AUDIT_COMPLETION).status == EvidenceStatus.UNSUPPORTED
+    assert (
+        report.evidence_for(EvidenceKind.FEEDBACK_REVIEW_ROUTING).status
+        == EvidenceStatus.UNSUPPORTED
+    )
+
+
+def test_conformance_report_caps_below_l2_even_with_guard_tenant_and_egress_all_wired() -> None:
+    """The full, real-world proof for the exact scenario
+    tests/unit/orchestration/test_registry.py's manifest-level pre-flight
+    test predicts: guard + tenant_policy + egress_policy wired is not
+    enough to reach L2 on this adapter, because AUDIT_COMPLETION can never
+    rise above UNSUPPORTED here."""
+    policy = ManifestEgressPolicy(
+        providers={"fake": {"local": True}, "fake-generator": {"local": True}}
+    )
+    adapter = LangGraphEngineAdapter(
+        _container(
+            # Tenant-matching hits: TenantIsolationPolicy.filter_chunks()
+            # would otherwise drop every chunk, leaving nothing to cite and
+            # (correctly) no provenance to verify.
+            retriever=_FakeRetriever(hits=[_hit("fake context", tenant_id="test-tenant")]),
+            guard=_FakeGuard(),
+            tenant_policy=TenantIsolationPolicy(),
+            egress_policy=policy,
+            generator=_CitingGenerator(),
+        )
+    )
+    context = _context()
+
+    # A real, grounded execution first: provenance is execution-derived, so
+    # without it even a fully-governed wiring cannot rise above L0.
+    adapter.run(_request(), context)
+    report = adapter.conformance_report(context)
+
+    assert report.achieved_level == AssuranceLevel.L1
+    assert report.achieved_level != AssuranceLevel.L2
+
+
+def test_conformance_report_policy_decision_is_enforced_by_a_context_governance_hook_alone() -> (
+    None
+):
+    """The one genuinely per-request kind: a caller supplying a
+    governance_hook reaches POLICY_DECISION=ENFORCED even with no
+    Container.guard wired at all — real state
+    orchestration/registry.py's manifest-only pre-flight check cannot see,
+    since it never assumes what a future caller's context will contain."""
+
+    class _AllowHook:
+        def check(self, step_name: str, payload: dict) -> GovernanceDecision:
+            return GovernanceDecision(allowed=True)
+
+    adapter = LangGraphEngineAdapter(_container())  # no guard wired
+
+    without_hook = adapter.conformance_report(_context())
+    with_hook = adapter.conformance_report(_context(governance_hook=_AllowHook()))
+
+    assert (
+        without_hook.evidence_for(EvidenceKind.POLICY_DECISION).status
+        == EvidenceStatus.UNSUPPORTED
+    )
+    assert with_hook.evidence_for(EvidenceKind.POLICY_DECISION).status == EvidenceStatus.ENFORCED
+
+
+def test_conformance_report_streaming_prevalidation_enforced_only_when_something_gates_it() -> (
+    None
+):
+    """Codex review pass 1, MEDIUM-001: with neither a guard nor an egress
+    policy wired, no pre-output check runs at all, so the honest status is
+    UNSUPPORTED — an earlier version reported OBSERVED from the mere presence
+    of the STREAMING capability, claiming an observation that never happened."""
+    ungated = LangGraphEngineAdapter(_container())
+    gated = LangGraphEngineAdapter(_container(guard=_FakeGuard()))
+
+    ungated_status = ungated.conformance_report(_context()).evidence_for(
+        EvidenceKind.STREAMING_PREVALIDATION
+    ).status
+    gated_status = gated.conformance_report(_context()).evidence_for(
+        EvidenceKind.STREAMING_PREVALIDATION
+    ).status
+
+    assert ungated_status == EvidenceStatus.UNSUPPORTED
+    assert gated_status == EvidenceStatus.ENFORCED

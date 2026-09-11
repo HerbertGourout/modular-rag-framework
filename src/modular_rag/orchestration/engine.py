@@ -8,9 +8,18 @@ from typing import Any, cast
 
 import structlog
 
-from modular_rag.contracts.audit import AuditEvent, AuditEventType
+from modular_rag import __version__
+from modular_rag.contracts.assurance import (
+    ConformanceReport,
+    EvidenceEntry,
+    EvidenceKind,
+    EvidenceStatus,
+    classify_provenance,
+)
+from modular_rag.contracts.audit import AuditEvent, AuditEventType, AuditSink
 from modular_rag.contracts.chunking import Chunker
-from modular_rag.contracts.egress import EgressDecision, EgressOperation
+from modular_rag.contracts.egress import EgressDecision, EgressOperation, EgressPolicy
+from modular_rag.contracts.engine import ExecutionContext
 from modular_rag.contracts.erasure import ErasureProof
 from modular_rag.contracts.feedback import Feedback, FeedbackSink
 from modular_rag.contracts.indexing import Indexer
@@ -19,6 +28,7 @@ from modular_rag.contracts.meter import Meter
 from modular_rag.contracts.reconciliation import ReconciliationReport, RepairResult
 from modular_rag.contracts.retrieval import Retriever
 from modular_rag.contracts.review import ReviewItem, ReviewQueue
+from modular_rag.contracts.security import SecurityGuard, TenantPolicy
 from modular_rag.contracts.tracing import Span, Tracer
 from modular_rag.core.document_identity import content_hash, document_key
 from modular_rag.core.enums import combined_classification
@@ -37,12 +47,24 @@ from modular_rag.orchestration.state_machine import PipelineState, PipelineState
 
 log = structlog.get_logger(__name__)
 
+# Lot 21 (Codex review pass 1, HIGH-002/HIGH-003): how many completed
+# executions' evidence this engine keeps so `conformance_report(context)` can
+# answer from what actually happened rather than from what is merely wired.
+# Bounded and small on purpose: this is evidence for a *recent* request, not
+# an audit log (that is `AuditSink`'s job), and an unbounded dict keyed by
+# request id would be a straightforward memory leak in a long-lived process.
+# Oldest entries are evicted first; a report for an evicted or never-executed
+# request falls back to the conservative, execution-independent status, never
+# to another request's evidence.
+_EXECUTION_EVIDENCE_CAPACITY = 32
+
 
 class RAGEngine:
     """Main entry point: ingest documents and answer queries via a configured pipeline."""
 
     def __init__(self, container: Container) -> None:
         self._c = container
+        self._execution_evidence: dict[str, dict[EvidenceKind, EvidenceStatus]] = {}
 
     # -- public API --
 
@@ -102,6 +124,166 @@ class RAGEngine:
         actual probing and criticality logic — this is a one-line
         delegation, same pattern as `close()` above."""
         return self._c.check_readiness()
+
+    def conformance_report(self, context: ExecutionContext) -> ConformanceReport:
+        """Lot 21 (ADR-0017, Accepted 2026-09-10). `NativeEngineAdapter.
+        conformance_report()` is a one-line delegation to this method, same
+        pattern as `check_readiness()` above.
+
+        Two distinct sources feed this report, and Codex review pass 1
+        (HIGH-002/HIGH-003) is exactly why they are kept apart:
+
+        1. **Control-surface evidence** -- the framework-owned checkpoints this
+           engine runs for any request. A role counts only when it is wired
+           *and* structurally satisfies its contract Protocol. Before this
+           correction a plain `object()` registered as `tenant_policy`/
+           `guard`/`egress_policy`/`audit_sink` reported `ENFORCED` for all
+           four, then failed the first real request with `AttributeError`
+           (HIGH-002, reproduced). `isinstance()` against a
+           `runtime_checkable` Protocol is a pure, in-memory structural check
+           -- the same mechanism `registry.wire()` already uses for
+           `VectorIndexer` (ADR-0009): no network call, nothing constructed.
+        2. **Execution evidence** -- what the framework actually checked while
+           serving `context.request_id`, recorded by `_run_steps()`. Only this
+           can earn `RETRIEVAL_PROVENANCE: VERIFIED`, because
+           `contracts.generation.Generator` requires nothing about citations
+           at all: a generator returning none, or returning citations
+           unrelated to the retrieved chunks, previously still reported
+           `VERIFIED` (HIGH-003, reproduced). With no matching execution
+           recorded, provenance and usage/cost report `UNSUPPORTED` -- never
+           another request's evidence, and never an assumption about what a
+           generator is going to do.
+
+        A report requested before any execution therefore describes the
+        control surface honestly and claims no provenance; the same context
+        re-reported after its request completes carries the verified
+        provenance that request actually earned.
+        """
+        executed = self._execution_evidence.get(context.request_id, {})
+        tenant_policy_usable = isinstance(self._c.tenant_policy, TenantPolicy)
+        guard_usable = isinstance(self._c.guard, SecurityGuard)
+        # `Container.policy_engine` is typed `Any` -- there is no `PolicyEngine`
+        # Protocol to check against -- so validate the single method
+        # `_run_steps()` actually calls on it, duck-typed, rather than accept
+        # mere presence (the HIGH-002 defect) or invent a public Protocol this
+        # corrective pass was not authorized to add.
+        policy_engine_usable = callable(getattr(self._c.policy_engine, "enforce_query", None))
+        evidence = (
+            EvidenceEntry(
+                EvidenceKind.IDENTITY_TENANT,
+                # TenantPolicy.enforce_query() raises before retrieval on any
+                # missing/invalid tenant_id (Lot 11b, fail-closed): the
+                # framework owns the checkpoint and propagates the denial.
+                EvidenceStatus.ENFORCED if tenant_policy_usable else EvidenceStatus.UNSUPPORTED,
+            ),
+            EvidenceEntry(
+                EvidenceKind.RETRIEVAL_PROVENANCE,
+                # Execution-derived only (HIGH-003) -- see the docstring above.
+                executed.get(EvidenceKind.RETRIEVAL_PROVENANCE, EvidenceStatus.UNSUPPORTED),
+            ),
+            EvidenceEntry(
+                EvidenceKind.EGRESS_DECISION,
+                # _enforce_egress() raises EgressDeniedError before the guarded
+                # embed/rerank/generate call (ADR-0016).
+                EvidenceStatus.ENFORCED
+                if isinstance(self._c.egress_policy, EgressPolicy)
+                else EvidenceStatus.UNSUPPORTED,
+            ),
+            EvidenceEntry(
+                EvidenceKind.POLICY_DECISION,
+                # SecurityGuard.check_query()/check_answer() and
+                # PolicyEngine.enforce_query() both raise SecurityError-family
+                # exceptions before generation on a denial.
+                EvidenceStatus.ENFORCED
+                if (guard_usable or policy_engine_usable)
+                else EvidenceStatus.UNSUPPORTED,
+            ),
+            EvidenceEntry(
+                EvidenceKind.AUDIT_COMPLETION,
+                # _audit() calls audit_sink.record() with no try/except on
+                # every _run() path (see orchestration/container.py's
+                # _CRITICAL_ROLES comment: "a down audit sink already fails
+                # every /answer call today") -- a write failure blocks the
+                # response rather than being a best-effort side record.
+                EvidenceStatus.ENFORCED
+                if isinstance(self._c.audit_sink, AuditSink)
+                else EvidenceStatus.UNSUPPORTED,
+            ),
+            EvidenceEntry(
+                EvidenceKind.USAGE_COST,
+                # Execution-derived (Codex review pass 1, MEDIUM-001): a wired
+                # Meter is necessary but not sufficient -- the generator must
+                # actually have produced a token/cost TraceStep for this
+                # request, which a custom generator need not do.
+                executed.get(EvidenceKind.USAGE_COST, EvidenceStatus.UNSUPPORTED),
+            ),
+            EvidenceEntry(
+                EvidenceKind.FEEDBACK_REVIEW_ROUTING,
+                # ReviewQueue.enqueue() (_run_steps() step 7) is not wrapped in
+                # try/except: when should_review() says an answer needs review,
+                # a failure to route it fails the request. Verified directly
+                # against that call site, which is why this is ENFORCED rather
+                # than the VERIFIED an earlier version of this method assigned.
+                EvidenceStatus.ENFORCED
+                if isinstance(self._c.review_queue, ReviewQueue)
+                else EvidenceStatus.UNSUPPORTED,
+            ),
+            EvidenceEntry(
+                EvidenceKind.STREAMING_PREVALIDATION,
+                # RAGEngine/NativeEngineAdapter declare no
+                # EngineCapability.STREAMING at all.
+                EvidenceStatus.UNSUPPORTED,
+            ),
+        )
+        return ConformanceReport(
+            adapter_name="native", adapter_version=__version__, evidence=evidence
+        )
+
+    def _record_execution_evidence(
+        self,
+        request_id: str | None,
+        context: list[RetrievedChunk],
+        answer: Answer,
+        trace: Trace,
+    ) -> None:
+        """Record what the framework actually verified for one completed
+        execution (Lot 21; Codex review pass 1, HIGH-003 and MEDIUM-001).
+
+        Called at the end of `_run_steps()`, where both halves of the
+        provenance question are in scope for the first and only time: the
+        chunks this engine really retrieved, and the citations the generator
+        really returned. `contracts.assurance.classify_provenance()` owns the
+        comparison so both shipped engines apply one definition of "grounded".
+
+        No-op without a `request_id`: a direct `RAGEngine.answer()` call that
+        never came through a `DocumentEngine` adapter has no request identity
+        to key evidence by, and inventing one would let an unrelated later
+        `conformance_report()` pick up evidence that was never its own.
+        """
+        if request_id is None:
+            return
+        # Real token/cost evidence, not merely "a Meter is wired" (Codex review
+        # pass 1, MEDIUM-001) and not merely "the trace has steps": `_run_steps()`
+        # records a retrieval step on every request, so a non-empty trace proves
+        # nothing about generation usage. Only a step actually carrying token
+        # counts does -- a custom generator need not emit one.
+        last_step = trace.steps[-1] if trace.steps else None
+        usage_recorded = (
+            self._c.meter is not None
+            and last_step is not None
+            and bool(last_step.input_tokens or last_step.output_tokens)
+        )
+        self._execution_evidence[request_id] = {
+            EvidenceKind.RETRIEVAL_PROVENANCE: classify_provenance(
+                answer.citations, context
+            ),
+            EvidenceKind.USAGE_COST: (
+                EvidenceStatus.OBSERVED if usage_recorded else EvidenceStatus.UNSUPPORTED
+            ),
+        }
+        while len(self._execution_evidence) > _EXECUTION_EVIDENCE_CAPACITY:
+            # dicts preserve insertion order: drop the oldest recorded request.
+            self._execution_evidence.pop(next(iter(self._execution_evidence)))
 
     def check_index_reconciliation(self) -> ReconciliationReport:
         """ADR-0011 (PostgreSQL migrations, connection pooling, and audit
@@ -518,10 +700,22 @@ class RAGEngine:
         log.info("engine.ingested", chunks=len(chunks))
         return len(chunks)
 
-    def answer(self, question: str, **query_kwargs: object) -> Answer:
-        """Answer a natural-language question and return a sourced Answer."""
+    def answer(
+        self, question: str, *, request_id: str | None = None, **query_kwargs: object
+    ) -> Answer:
+        """Answer a natural-language question and return a sourced Answer.
+
+        `request_id` (Lot 21; Codex review pass 1, HIGH-003) is the caller's
+        own request identity, threaded through so `_run_steps()` can key the
+        execution evidence `conformance_report()` later reads for that exact
+        request. Keyword-only and optional: a direct `RAGEngine.answer()` call
+        that never came through a `DocumentEngine` adapter simply records no
+        execution evidence, and every existing caller is unaffected. It is
+        deliberately not a `Query` field -- it identifies the *request*, not
+        the question, and `Query` is persisted/audited while this is not.
+        """
         query = Query(text=question, **query_kwargs)  # type: ignore[arg-type]
-        return self._run(query)
+        return self._run(query, request_id=request_id)
 
     def retrieve(
         self, question: str, k: int = 10, tenant_id: str | None = None
@@ -595,7 +789,17 @@ class RAGEngine:
 
     # -- internal pipeline --
 
-    def _run(self, query: Query) -> Answer:
+    def _run(self, query: Query, *, request_id: str | None = None) -> Answer:
+        # Lot 21 (Codex review pass 2, HIGH-005): invalidate any evidence this
+        # request id already carries, *before* the attempt starts. Evidence is
+        # written only when _run_steps() reaches its successful end, so without
+        # this a retry (or any reuse of the same id) that is denied or fails
+        # part-way would leave the previous attempt's VERIFIED provenance
+        # standing and report it as if this attempt had earned it. Clearing up
+        # front makes the failure mode conservative: a failed attempt reports
+        # UNSUPPORTED, never another attempt's evidence.
+        if request_id is not None:
+            self._execution_evidence.pop(request_id, None)
         trace = Trace(query_id=query.id, pipeline_id=self._c.manifest.id)
         sm = PipelineStateMachine(self._c.manifest.id)
         # ADR-0012: wraps the whole run in one root span, so `answer()` alone
@@ -604,7 +808,7 @@ class RAGEngine:
         # never a set of disconnected per-stage root spans.
         with self._span("rag.answer") as run_span:
             try:
-                ans = self._run_steps(query, trace, sm)
+                ans = self._run_steps(query, trace, sm, request_id=request_id)
             except Exception as exc:
                 # Lot 10 (docs/refactoring-plan.md): a failed run used to skip
                 # telemetry entirely — nothing was recorded for a blocked query,
@@ -731,7 +935,14 @@ class RAGEngine:
                 f"(provider={decision.provider!r})"
             )
 
-    def _run_steps(self, query: Query, trace: Trace, sm: PipelineStateMachine) -> Answer:
+    def _run_steps(
+        self,
+        query: Query,
+        trace: Trace,
+        sm: PipelineStateMachine,
+        *,
+        request_id: str | None = None,
+    ) -> Answer:
         # 0. tenant isolation — identity check (Lot 11b, docs/refactoring-plan.md).
         # Caught only to record audit evidence of the specific denial (Lot 11c:
         # "emit audit evidence for every governed execution"), then always
@@ -967,6 +1178,14 @@ class RAGEngine:
                 payload={"guard_decision": "flagged_for_review"},
             )
 
+        # Lot 21 (Codex review pass 1, HIGH-003/MEDIUM-001): the one point
+        # where both halves of the provenance question exist together — the
+        # chunks this engine retrieved, and the citations the generator
+        # actually returned. Recorded, never enforced: this does not raise on
+        # ungrounded or absent citations, so it adds no new failure mode to
+        # the native reference pipeline; it only lets conformance_report()
+        # tell the truth instead of assuming.
+        self._record_execution_evidence(request_id, context, ans, trace)
         return ans
 
     def _retrieve(self, query: Query, k: int, *, correlation_id: str) -> list[RetrievedChunk]:

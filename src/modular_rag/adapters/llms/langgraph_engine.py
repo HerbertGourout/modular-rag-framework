@@ -48,6 +48,13 @@ from collections.abc import AsyncIterator
 from typing import Any, Protocol, TypedDict, runtime_checkable
 
 from modular_rag import __version__ as _package_version
+from modular_rag.contracts.assurance import (
+    ConformanceReport,
+    EvidenceEntry,
+    EvidenceKind,
+    EvidenceStatus,
+    classify_provenance,
+)
 from modular_rag.contracts.egress import EgressOperation, EgressPolicy
 from modular_rag.contracts.engine import (
     EngineCapability,
@@ -100,6 +107,13 @@ class _ComponentSource(Protocol):
     def egress_policy(self) -> EgressPolicy | None: ...
 
 
+# Lot 21 (Codex review pass 1, HIGH-003): bounded per-request execution
+# evidence, same rationale and capacity as `RAGEngine`'s own store — small on
+# purpose, since this is evidence for a recent request rather than an audit
+# log, and an unbounded dict keyed by request id would leak.
+_EXECUTION_EVIDENCE_CAPACITY = 32
+
+
 class _GraphState(TypedDict):
     query: Query
     context: ExecutionContext
@@ -117,6 +131,7 @@ class LangGraphEngineAdapter:
     def __init__(self, container: _ComponentSource) -> None:
         self._c = container
         self._graph: Any = None  # compiled lazily — needs langgraph installed
+        self._execution_evidence: dict[str, dict[EvidenceKind, EvidenceStatus]] = {}
 
     @property
     def capabilities(self) -> frozenset[EngineCapability]:
@@ -148,6 +163,142 @@ class LangGraphEngineAdapter:
             return getattr(langgraph, "__version__", _package_version)
         except ImportError:
             return _package_version
+
+    def conformance_report(self, context: ExecutionContext) -> ConformanceReport:
+        """Lot 21 (ADR-0017, Accepted 2026-09-10). Unlike `NativeEngineAdapter`
+        (a one-line delegation to `RAGEngine`), this adapter has no wrapped
+        engine to delegate to: it computes evidence directly from `self._c`'s
+        wired roles plus what it recorded while actually serving
+        `context.request_id`.
+
+        Same two-source discipline `RAGEngine.conformance_report()` documents,
+        for the same Codex review pass 1 reasons:
+
+        - A wired role counts only when it also satisfies its contract
+          Protocol (HIGH-002) -- a plain `object()` is not a tenant policy.
+        - `RETRIEVAL_PROVENANCE` is execution-derived only (HIGH-003), via the
+          shared `contracts.assurance.classify_provenance()`, so one
+          definition of "grounded" applies to both shipped engines.
+        - Everything this adapter genuinely cannot do reports `UNSUPPORTED`
+          rather than a softer-sounding status it has not earned.
+
+        `context.governance_hook` genuinely matters here, unlike native: a
+        caller that supplies one, when `GOVERNANCE_INTERCEPT` is declared,
+        gets `POLICY_DECISION: ENFORCED` even with no `Container.guard`
+        wired -- a real, per-request difference `orchestration/registry.py`'s
+        manifest-only pre-flight check cannot see, which is why that check is
+        a conservative floor rather than a duplicate of this method.
+        """
+        capabilities = self.capabilities
+        executed = self._execution_evidence.get(context.request_id, {})
+        guard_usable = isinstance(self._c.guard, SecurityGuard)
+        hook_enforced = (
+            EngineCapability.GOVERNANCE_INTERCEPT in capabilities
+            and context.governance_hook is not None
+        )
+        egress_usable = isinstance(self._c.egress_policy, EgressPolicy)
+        streaming_declared = EngineCapability.STREAMING in capabilities
+        evidence = (
+            EvidenceEntry(
+                EvidenceKind.IDENTITY_TENANT,
+                # _node_retrieve() calls tenant_policy.enforce_query(), raising
+                # before retrieval -- the identical fail-closed mechanism
+                # RAGEngine uses (Lot 18 parity fix).
+                EvidenceStatus.ENFORCED
+                if isinstance(self._c.tenant_policy, TenantPolicy)
+                else EvidenceStatus.UNSUPPORTED,
+            ),
+            EvidenceEntry(
+                EvidenceKind.RETRIEVAL_PROVENANCE,
+                # Execution-derived only (HIGH-003), recorded by
+                # _node_generate() -- never inferred from the fact that a
+                # Generator is wired, since contracts.generation.Generator
+                # requires nothing about citations.
+                executed.get(EvidenceKind.RETRIEVAL_PROVENANCE, EvidenceStatus.UNSUPPORTED),
+            ),
+            EvidenceEntry(
+                EvidenceKind.EGRESS_DECISION,
+                # _node_retrieve()/_node_generate() both raise EgressDeniedError
+                # before their guarded call (Lot 20, HIGH-002 fix). This graph
+                # has no rerank node at all, but EMBED+GENERATE alone already
+                # make the checkpoint real.
+                EvidenceStatus.ENFORCED if egress_usable else EvidenceStatus.UNSUPPORTED,
+            ),
+            EvidenceEntry(
+                EvidenceKind.POLICY_DECISION,
+                # _node_guard() raises SecurityError on a Container.guard
+                # denial (native's own convention, Lot 15), or blocks via the
+                # port-level GovernanceHook when the caller supplies one.
+                # policy_engine never applies here: it is structurally rejected
+                # at wire() for this adapter.
+                EvidenceStatus.ENFORCED
+                if (guard_usable or hook_enforced)
+                else EvidenceStatus.UNSUPPORTED,
+            ),
+            EvidenceEntry(
+                EvidenceKind.AUDIT_COMPLETION,
+                # This adapter's own documented Lot 15 scope boundary (module
+                # docstring): it does not replicate RAGEngine's audit-event
+                # emission, and governance.audit_sink is structurally rejected
+                # under engine.adapter='langgraph'. No wiring changes this.
+                # Restates Lot 20's MEDIUM-001 deferral as a machine-readable
+                # fact rather than only a prose caveat.
+                EvidenceStatus.UNSUPPORTED,
+            ),
+            EvidenceEntry(
+                EvidenceKind.USAGE_COST,
+                # Codex review pass 1, MEDIUM-001: an earlier version reported
+                # OBSERVED whenever a Meter was wired. That was false --
+                # `mrag.generation.tokens`/`cost_usd` are emitted only inside
+                # RAGEngine._run_steps(), which this adapter never calls, so a
+                # wired Meter receives no token or cost data from this engine
+                # at all. app/application.py's request duration/error metrics
+                # are engine-neutral and are not usage/cost evidence.
+                EvidenceStatus.UNSUPPORTED,
+            ),
+            EvidenceEntry(
+                EvidenceKind.FEEDBACK_REVIEW_ROUTING,
+                # governance.review_queue/feedback_sink are both structurally
+                # rejected under engine.adapter='langgraph' -- same ADR-0008
+                # boundary as audit_sink above.
+                EvidenceStatus.UNSUPPORTED,
+            ),
+            EvidenceEntry(
+                EvidenceKind.STREAMING_PREVALIDATION,
+                # The fixed graph (route -> retrieve -> guard ->
+                # [blocked | generate]) structurally runs guard/egress before
+                # any streamable "generate" output exists, and astream() only
+                # yields a node's steps once that node completes. That ordering
+                # is evidence only when something is actually wired to check at
+                # that point: with neither a guard nor an egress policy, no
+                # pre-output check runs, so this is UNSUPPORTED, not the
+                # OBSERVED an earlier version reported (Codex review pass 1,
+                # MEDIUM-001 -- the evidence kind requires a check to run).
+                EvidenceStatus.ENFORCED
+                if streaming_declared and (guard_usable or egress_usable)
+                else EvidenceStatus.UNSUPPORTED,
+            ),
+        )
+        return ConformanceReport(
+            adapter_name=self.name(), adapter_version=self.engine_version(), evidence=evidence
+        )
+
+    def _record_execution_evidence(
+        self, context: ExecutionContext, chunks: list[RetrievedChunk], citations: list[Citation]
+    ) -> None:
+        """Record what this adapter actually verified for one completed
+        execution (Lot 21; Codex review pass 1, HIGH-003).
+
+        Mirrors `RAGEngine._record_execution_evidence()`, including its bounded
+        store and its refusal to attribute evidence to a request that did not
+        produce it. `classify_provenance()` is shared with the native engine so
+        "grounded" means exactly one thing across both.
+        """
+        self._execution_evidence[context.request_id] = {
+            EvidenceKind.RETRIEVAL_PROVENANCE: classify_provenance(citations, chunks),
+        }
+        while len(self._execution_evidence) > _EXECUTION_EVIDENCE_CAPACITY:
+            self._execution_evidence.pop(next(iter(self._execution_evidence)))
 
     # -- graph construction --
 
@@ -339,6 +490,15 @@ class LangGraphEngineAdapter:
         redactor = self._c.redactor
         text = redactor.redact(answer.text) if redactor else answer.text
 
+        # Lot 21 (Codex review pass 1, HIGH-003): the one point in this graph
+        # where the retrieved chunks and the generator's returned citations
+        # exist together, so provenance can be checked rather than assumed.
+        # Recorded, never enforced — this adds no new failure mode to the
+        # graph; it only lets conformance_report() tell the truth.
+        self._record_execution_evidence(
+            state["context"], state["chunks"], list(answer.citations)
+        )
+
         # Fold the generator's own TraceStep instrumentation into this run's
         # EngineSteps — TraceStep/EngineStep are shape-compatible on purpose
         # (contracts/engine.py's EngineStep docstring).
@@ -361,6 +521,13 @@ class LangGraphEngineAdapter:
         # pre-set query.tenant_id outrank the authenticated context — a
         # spoofing vector for any future caller that constructs an
         # EngineRequest with its own Query.tenant_id.
+        # Lot 21 (Codex review pass 2, HIGH-005): invalidate any evidence this
+        # request id already carries before the attempt starts. `_initial_state()`
+        # is the single entry point run()/arun()/astream() all funnel through, so
+        # this covers every execution path. Same rationale as
+        # `RAGEngine._run()`: a denied or failed retry must not inherit the
+        # previous attempt's verified provenance.
+        self._execution_evidence.pop(context.request_id, None)
         query = request.query.model_copy(update={"tenant_id": context.tenant_id})
         return _GraphState(
             query=query,

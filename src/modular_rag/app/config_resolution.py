@@ -28,7 +28,7 @@ from modular_rag.orchestration.registry import ComponentRegistry, runtime_manife
 _ENV_VAR_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 _SECRET_PREFIX = "secret://"
 
-_V2_ONLY_SECTIONS = ("engine", "governance", "quality", "observability", "lifecycle")
+_V2_ONLY_SECTIONS = ("engine", "governance", "quality", "observability", "lifecycle", "assurance")
 
 
 class EnvSecretResolver:

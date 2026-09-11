@@ -5,8 +5,21 @@ from typing import Any
 
 import structlog
 
+from modular_rag.contracts.assurance import (
+    AssuranceLevel,
+    EvidenceEntry,
+    EvidenceKind,
+    EvidenceStatus,
+    assurance_level_rank,
+    compute_achieved_level,
+)
+from modular_rag.contracts.audit import AuditSink
+from modular_rag.contracts.egress import EgressPolicy
 from modular_rag.contracts.indexing import VectorIndexer
 from modular_rag.contracts.manifests import ComponentConfig, PipelineManifest
+from modular_rag.contracts.meter import Meter
+from modular_rag.contracts.review import ReviewQueue
+from modular_rag.contracts.security import SecurityGuard, TenantPolicy
 from modular_rag.core.errors import RegistryError
 from modular_rag.orchestration.container import Container
 
@@ -27,6 +40,177 @@ _Factory = Callable[[ComponentConfig], Any]
 # already references concrete built-in names locally for the same reason (the "native"/"langgraph"
 # engine.adapter check below).
 _KNOWN_REMOTE_PROVIDER_TYPES = frozenset({"openai", "anthropic", "openai-embeddings"})
+
+
+def _capability_evidence(
+    *,
+    adapter: str,
+    tenant_policy_usable: bool,
+    guard_usable: bool,
+    policy_engine_usable: bool,
+    egress_policy_usable: bool,
+    audit_sink_usable: bool,
+    review_queue_usable: bool,
+    meter_usable: bool,
+) -> tuple[EvidenceEntry, ...]:
+    """The *capability* profile of one wiring: the best status each
+    `EvidenceKind` could reach for a request this pipeline actually serves.
+
+    Deliberately distinct from `DocumentEngine.conformance_report()`, which
+    reports what was true for one specific request (Codex review pass 1,
+    HIGH-002: "separate a configuration capability profile from per-execution
+    evidence"). The difference matters for exactly two kinds:
+
+    - `RETRIEVAL_PROVENANCE` is `VERIFIED` here because both shipped engines
+      run the framework-owned grounding check
+      (`contracts.assurance.classify_provenance()`) on every request, so this
+      wiring *can* produce verified provenance. A real report only claims it
+      once a request has actually earned it.
+    - `USAGE_COST` is `OBSERVED` here when a `Meter` is wired on the native
+      engine, because a generator *may* emit token/cost evidence; a real
+      report only claims it when one actually did.
+
+    Never used to build a `ConformanceReport` — a capability is not evidence,
+    and conflating the two is what produced the defect this function exists
+    to close. It answers one question only: "may this wiring be allowed to
+    declare `assurance.min_level: X` before serving traffic?"
+    """
+    is_langgraph = adapter == "langgraph"
+    # LangGraph never reaches RAGEngine's audit emission, human-review
+    # queueing, or generation token/cost metrics; governance.audit_sink,
+    # review_queue and feedback_sink are themselves rejected for this adapter
+    # below, so these are structurally unreachable rather than merely unwired.
+    return (
+        EvidenceEntry(
+            EvidenceKind.IDENTITY_TENANT,
+            EvidenceStatus.ENFORCED if tenant_policy_usable else EvidenceStatus.UNSUPPORTED,
+        ),
+        EvidenceEntry(EvidenceKind.RETRIEVAL_PROVENANCE, EvidenceStatus.VERIFIED),
+        EvidenceEntry(
+            EvidenceKind.EGRESS_DECISION,
+            EvidenceStatus.ENFORCED if egress_policy_usable else EvidenceStatus.UNSUPPORTED,
+        ),
+        EvidenceEntry(
+            EvidenceKind.POLICY_DECISION,
+            EvidenceStatus.ENFORCED
+            if (guard_usable or (policy_engine_usable and not is_langgraph))
+            else EvidenceStatus.UNSUPPORTED,
+        ),
+        EvidenceEntry(
+            EvidenceKind.AUDIT_COMPLETION,
+            EvidenceStatus.ENFORCED
+            if (audit_sink_usable and not is_langgraph)
+            else EvidenceStatus.UNSUPPORTED,
+        ),
+        EvidenceEntry(
+            EvidenceKind.USAGE_COST,
+            EvidenceStatus.OBSERVED
+            if (meter_usable and not is_langgraph)
+            else EvidenceStatus.UNSUPPORTED,
+        ),
+        EvidenceEntry(
+            EvidenceKind.FEEDBACK_REVIEW_ROUTING,
+            EvidenceStatus.ENFORCED
+            if (review_queue_usable and not is_langgraph)
+            else EvidenceStatus.UNSUPPORTED,
+        ),
+        EvidenceEntry(
+            EvidenceKind.STREAMING_PREVALIDATION,
+            EvidenceStatus.ENFORCED
+            if (is_langgraph and (guard_usable or egress_policy_usable))
+            else EvidenceStatus.UNSUPPORTED,
+        ),
+    )
+
+
+def _declared_capability_evidence(
+    manifest: PipelineManifest, adapter: str
+) -> tuple[EvidenceEntry, ...]:
+    """Pre-construction capability profile, from raw manifest fields only.
+
+    Advisory and deliberately optimistic: nothing is constructed yet, so a
+    declared role is taken at face value. `validate_capabilities()` is a
+    dry-run by definition (`mrag validate` never builds a component), so this
+    is the strongest check available there -- it is necessary, not sufficient.
+    `ComponentRegistry.wire()` re-checks the same requirement against the
+    *constructed* components (`_wired_capability_evidence()` below), which is
+    the authoritative gate; a manifest that passes here can still be rejected
+    there when a declared role turns out not to satisfy its Protocol
+    (Codex review pass 1, HIGH-002).
+    """
+    governance = manifest.governance
+    observability = manifest.observability
+    return _capability_evidence(
+        adapter=adapter,
+        tenant_policy_usable=governance is not None and governance.tenant_policy is not None,
+        guard_usable=manifest.security is not None,
+        policy_engine_usable=governance is not None and governance.policy_engine is not None,
+        egress_policy_usable=governance is not None and governance.egress_policy is not None,
+        audit_sink_usable=governance is not None and governance.audit_sink is not None,
+        review_queue_usable=governance is not None and governance.review_queue is not None,
+        meter_usable=observability is not None and observability.meter is not None,
+    )
+
+
+def _wired_capability_evidence(container: Container, adapter: str) -> tuple[EvidenceEntry, ...]:
+    """Post-construction capability profile, from the components `wire()`
+    actually built -- the authoritative input to the `assurance.min_level`
+    gate.
+
+    A role counts only when it satisfies its contract Protocol. Codex review
+    pass 1 (HIGH-002) reproduced the gap this closes: registering a plain
+    `object()` as guard/tenant_policy/egress_policy/audit_sink passed an
+    `assurance.min_level: l2` manifest, reported L2, and then failed the very
+    first request with `AttributeError`. `isinstance()` against a
+    `runtime_checkable` Protocol is a pure in-memory structural check -- the
+    same mechanism this module already applies to `VectorIndexer` (ADR-0009),
+    with no network call and nothing instantiated.
+
+    **What this gate does not promise** (Codex review pass 2, HIGH-002;
+    accepted as a documented risk by the maintainer on 2026-09-11, ADR-0017
+    §9). `runtime_checkable` validates method *presence* only -- never a
+    signature, and never enforcement behaviour. A registered control that
+    implements the expected names and does nothing (an `enforce_query()` that
+    returns `None` for a missing tenant) still satisfies
+    `assurance.min_level: l2` here. This is a limit of the mechanism, not an
+    oversight: no startup-time check can prove a component enforces anything
+    without executing it, and a gate that ran real governance decisions during
+    `wire()` would be a different, far more invasive contract.
+
+    The gate therefore answers exactly one question -- *are the controls this
+    level requires declared and structurally wired?* -- and every document
+    describing it says so in those words. Proving a control actually enforces
+    is the job of the behavioural conformance harness
+    (`tests/contract/test_engine_conformance.py`), which refuses to certify a
+    claim at `ENFORCED` unless a denied or failing control demonstrably stops
+    the request. Operators running third-party controls at L2 must run that
+    harness against them; the startup gate alone is not evidence of
+    enforcement.
+    """
+    return _capability_evidence(
+        adapter=adapter,
+        tenant_policy_usable=isinstance(container.tenant_policy, TenantPolicy),
+        guard_usable=isinstance(container.guard, SecurityGuard),
+        # Container.policy_engine is typed `Any` -- no PolicyEngine Protocol
+        # exists -- so validate the one method RAGEngine._run_steps() calls.
+        policy_engine_usable=callable(getattr(container.policy_engine, "enforce_query", None)),
+        egress_policy_usable=isinstance(container.egress_policy, EgressPolicy),
+        audit_sink_usable=isinstance(container.audit_sink, AuditSink),
+        review_queue_usable=isinstance(container.review_queue, ReviewQueue),
+        meter_usable=isinstance(container.meter, Meter),
+    )
+
+
+def _assurance_level_error(
+    achievable: AssuranceLevel, minimum: AssuranceLevel, adapter: str, *, constructed: bool
+) -> str:
+    stage = "the components it wired" if constructed else "this manifest"
+    return (
+        f"assurance.min_level={minimum.value!r} is not achievable by {stage} under "
+        f"engine.adapter={adapter!r}: the strongest level this wiring can guarantee is "
+        f"{achievable.value!r}. Configure the governance/observability roles this level "
+        "requires, or lower assurance.min_level."
+    )
 
 
 def runtime_manifest_errors(manifest: PipelineManifest) -> list[str]:
@@ -182,6 +366,21 @@ def runtime_manifest_errors(manifest: PipelineManifest) -> list[str]:
                     f"{path} is not consumed by engine.adapter='langgraph'; "
                     "remove it or select the native engine"
                 )
+
+    # Lot 21 (ADR-0017, Accepted 2026-09-10): "A manifest requiring an unavailable
+    # assurance level or mandatory control is rejected before any request is served."
+    # This is the *dry-run* half, reachable from validate_capabilities()/`mrag validate`
+    # where nothing is constructed, so it can only take a declared role at face value
+    # (see _declared_capability_evidence's docstring). ComponentRegistry.wire() re-runs
+    # the same requirement against the components it actually built, which is the
+    # authoritative gate -- Codex review pass 1, HIGH-002.
+    min_level = manifest.assurance.min_level if manifest.assurance else None
+    if min_level is not None:
+        achievable = compute_achieved_level(_declared_capability_evidence(manifest, adapter))
+        if assurance_level_rank(achievable) < assurance_level_rank(min_level):
+            errors.append(
+                _assurance_level_error(achievable, min_level, adapter, constructed=False)
+            )
     return errors
 
 
@@ -310,6 +509,24 @@ class ComponentRegistry:
         # invariant; see ADR-0009).
         if embedder is not None and isinstance(store, VectorIndexer):
             store.bind_embedder(embedder)
+
+        # Lot 21 (Codex review pass 1, HIGH-002): the authoritative
+        # assurance.min_level gate. runtime_manifest_errors() above already
+        # rejected a manifest that *declares* too little, but that check runs
+        # before anything is constructed and therefore cannot tell a real
+        # TenantPolicy from a plain object(). This one inspects what was
+        # actually built, so a role that does not satisfy its contract
+        # Protocol can no longer satisfy a declared minimum level and then
+        # fail the first request instead.
+        min_level = manifest.assurance.min_level if manifest.assurance else None
+        if min_level is not None:
+            adapter = manifest.engine.adapter if manifest.engine else "native"
+            achievable = compute_achieved_level(_wired_capability_evidence(container, adapter))
+            if assurance_level_rank(achievable) < assurance_level_rank(min_level):
+                raise RegistryError(
+                    "Invalid runtime manifest: "
+                    + _assurance_level_error(achievable, min_level, adapter, constructed=True)
+                )
 
         log.info("registry.wired", pipeline_id=manifest.id)
         return container
