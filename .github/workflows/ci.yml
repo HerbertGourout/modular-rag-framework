@@ -104,9 +104,17 @@ jobs:
           python-version: "3.12"
           cache: "pip"
       - name: Install dependencies
+        # langgraph is required here for the same reason test-unit above needs it,
+        # and since Lot 21 for a second one: tests/contract/test_engine_conformance.py
+        # runs the shared assurance harness against *every* shipped DocumentEngine,
+        # LangGraphEngineAdapter included, which lazy-imports the real langgraph
+        # package on its first run() (.claude/.instructions.md SS4). Skipping those
+        # parametrizations instead would defeat the harness's own purpose -- it
+        # exists to prove no shipped adapter overclaims, so an adapter silently
+        # absent from CI is exactly the gap it was written to close.
         run: |
           pip install --upgrade pip
-          pip install --extra-index-url https://download.pytorch.org/whl/cpu -c .github/constraints-ci.txt -e .[v1,v4,dev]
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -c .github/constraints-ci.txt -e .[v1,v4,langgraph,dev]
       - name: Run contract conformance tests
         run: pytest tests/contract/ -v --tb=short
 
