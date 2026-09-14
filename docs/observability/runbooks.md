@@ -132,8 +132,9 @@ structural* gaps, not normal variance.
 **Inactive reference signal:** no `MRAGUnready` rule is shipped. The current readiness gauge can
 retain an old `unready=1` series after recovery because other state labels are not reset.
 
-**What it means:** A critical dependency (`generator`, `audit_sink`, or both `indexer` and
-`retriever` simultaneously) is failing its health probe. An orchestrator should already be routing
+**What it means:** A critical dependency (`generator`, `audit_sink`, `egress_policy` when it
+probes a decision service such as OPA, or both `indexer` and `retriever` simultaneously) is
+failing its health probe. An orchestrator should already be routing
 traffic away from this pod (HTTP 503).
 
 **First checks:**

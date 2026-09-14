@@ -60,6 +60,16 @@ log = structlog.get_logger(__name__)
 #   `check_health()` (see those files) — a real, authenticated,
 #   non-generative, cached probe against the specific configured model,
 #   never a generation call.
+# - "egress_policy": added 2026-09-14 with `OpaEgressPolicy`
+#   (`adapters/policy/opa_egress_policy.py`). Every egress checkpoint
+#   (`RAGEngine`'s embed/rerank/generate, `LangGraphEngineAdapter`'s handoff)
+#   raises `EgressDeniedError` on a denial, and a policy that cannot reach its
+#   decision service denies every remote call by design (fail-closed), so an
+#   unreachable OPA fails `/answer` for a remote-provider pipeline exactly like
+#   a down audit sink. Only a policy implementing `check_health()` is ever
+#   probed: `ManifestEgressPolicy` has nothing external to check and is
+#   unaffected, and `OpaEgressPolicy` reports no dependency at all when every
+#   declared provider is local.
 #
 # Deliberately *not* critical under this standard:
 # - "indexer" (Qdrant): not read directly by `answer()`/`retrieve()` at all —
@@ -82,7 +92,7 @@ log = structlog.get_logger(__name__)
 # configuration — `Container` has no visibility into a retriever's internal
 # composition beyond the registered component itself, so this cannot be
 # detected generically here.
-_CRITICAL_ROLES = frozenset({"audit_sink", "generator"})
+_CRITICAL_ROLES = frozenset({"audit_sink", "egress_policy", "generator"})
 
 # Codex review HIGH-002 (Lot 6): "would this raise an unhandled exception"
 # is necessary but not sufficient for readiness — a pod with zero usable

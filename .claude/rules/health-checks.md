@@ -35,7 +35,7 @@ that is the whole point of the file existing.
 Every `check_health()` — existing or new — must satisfy all of these. Current implementers:
 `QdrantStore`, `QdrantSparseStore`, `PostgresLifecycleLedger`, `PostgresAuditSink`,
 `OpenAIGenerator`, `AnthropicGenerator`, `PersistentSparseRetriever`, `HybridRetriever`
-(delegates to whichever lexical backend is wired).
+(delegates to whichever lexical backend is wired), `OpaEgressPolicy`.
 
 ### 1. Single attempt, no retry
 

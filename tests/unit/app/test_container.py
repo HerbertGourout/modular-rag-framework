@@ -157,6 +157,20 @@ def test_check_readiness_is_unready_when_the_generator_is_unhealthy():
     assert report.status == ReadinessState.UNREADY
 
 
+def test_check_readiness_is_unready_when_a_wired_egress_policy_is_unhealthy():
+    """"egress_policy" is critical when it has something to probe: a policy
+    that cannot reach its decision service (`OpaEgressPolicy` against a down
+    OPA) denies every remote call fail-closed, so /answer already fails for a
+    remote-provider pipeline. DEGRADED would misreport "still serving
+    traffic"."""
+    container = _container()
+    container.register("egress_policy", _unhealthy("opa"))
+
+    report = container.check_readiness()
+
+    assert report.status == ReadinessState.UNREADY
+
+
 def test_check_readiness_is_degraded_when_a_non_critical_component_is_unhealthy():
     """"lifecycle_ledger" is never read on the query path
     (answer()/retrieve()) — its own failure degrades ingestion only."""

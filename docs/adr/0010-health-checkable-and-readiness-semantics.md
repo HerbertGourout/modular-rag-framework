@@ -60,7 +60,15 @@ test: **would this role's failure produce an unhandled exception on the query-se
 "is this component used somewhere," not "does it feel important" — verified against real code
 each time (`RAGEngine._audit()`'s missing try/except around `audit_sink.record()`;
 `RAGEngine._run_steps()`'s missing try/except around `generator.generate()`). Currently:
-`audit_sink` (when wired) and `generator` (always required).
+`audit_sink` (when wired), `generator` (always required), and `egress_policy` (when wired).
+
+`egress_policy` was added on 2026-09-14 with `OpaEgressPolicy`, under the same evidence test:
+`RAGEngine._enforce_egress()` records its evidence and re-raises `EgressDeniedError` before the
+guarded query-time embed, rerank and generate calls, with no surrounding try/except, and a policy
+that cannot reach its decision service denies every remote call fail-closed. An unreachable OPA
+therefore fails `answer()` for any remote-provider pipeline. Only a policy implementing
+`check_health()` is ever probed, so `ManifestEgressPolicy`, which has nothing external to check,
+is unaffected.
 
 `indexer` and `retriever` are deliberately **not** individually critical —
 `HybridRetriever._safe_retrieve()` already catches a failure on either leg and degrades

@@ -149,9 +149,9 @@ def test_default_registry_has_the_documented_builtin_type_names() -> None:
     assert set(reg._factories["tenant_policy"]) == {"tenant-isolation"}
     assert set(reg._factories["policy_engine"]) == {"inline"}
     assert set(reg._factories["redactor"]) == {"patterns"}
-    # Lot 20 (docs/refactoring-plan.md): new optional governance role, one built-in
-    # implementation (ManifestEgressPolicy).
-    assert set(reg._factories["egress_policy"]) == {"manifest"}
+    # Lot 20 (docs/refactoring-plan.md): new optional governance role. Built-in
+    # implementations: ManifestEgressPolicy, and OpaEgressPolicy (2026-09-14).
+    assert set(reg._factories["egress_policy"]) == {"manifest", "opa"}
     assert set(reg._factories["review_queue"]) == {"human-review", "postgres-human-review"}
     assert set(reg._factories["audit_sink"]) == {"in-memory", "postgres"}
     # ADR-0014 (Batch 14): new optional governance role, same in-memory/postgres

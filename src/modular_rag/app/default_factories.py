@@ -155,6 +155,7 @@ def register_defaults(reg: ComponentRegistry) -> None:
     from modular_rag.adapters.embeddings.hf_embedder import HuggingFaceEmbedder
     from modular_rag.adapters.embeddings.openai_embedder import OpenAIEmbedder
     from modular_rag.adapters.lifecycle.postgres_ledger import PostgresLifecycleLedger
+    from modular_rag.adapters.policy.opa_egress_policy import OpaEgressPolicy
     from modular_rag.adapters.vectorstores.qdrant_store import QdrantStore
     from modular_rag.core.models.policy import Policy
     from modular_rag.generation.synthesizers.anthropic_gen import AnthropicGenerator
@@ -204,6 +205,7 @@ def register_defaults(reg: ComponentRegistry) -> None:
     )
     reg.register("redactor", "patterns", lambda cfg: PatternRedactor())
     reg.register("egress_policy", "manifest", lambda cfg: ManifestEgressPolicy(**cfg.config))
+    reg.register("egress_policy", "opa", lambda cfg: OpaEgressPolicy(**cfg.config))
     reg.register("review_queue", "human-review", lambda cfg: HumanReviewGate(**cfg.config))
     reg.register("review_queue", "postgres-human-review", _build_postgres_review_queue)
     reg.register("audit_sink", "in-memory", lambda cfg: InMemoryAuditSink())
