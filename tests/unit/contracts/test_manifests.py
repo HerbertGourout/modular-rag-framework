@@ -6,7 +6,9 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from modular_rag.contracts.assurance import AssuranceLevel
 from modular_rag.contracts.manifests import (
+    AssuranceSection,
     ComponentConfig,
     EngineSelection,
     GovernanceSection,
@@ -40,6 +42,7 @@ def test_v1_manifest_without_v2_sections_still_validates() -> None:
     assert manifest.governance is None
     assert manifest.quality is None
     assert manifest.observability is None
+    assert manifest.assurance is None
 
 
 def test_v2_manifest_with_engine_section_validates() -> None:
@@ -75,3 +78,38 @@ def test_governance_section_accepts_a_configured_egress_policy() -> None:
     assert governance.egress_policy.type == "manifest"
     providers = governance.egress_policy.config["providers"]
     assert providers["openai"]["max_classification"] == "internal"
+
+
+def test_assurance_section_min_level_defaults_to_none() -> None:
+    """Lot 21 (ADR-0017, Accepted 2026-09-10): additive, optional — a
+    manifest with no assurance.min_level is unaffected by this section
+    existing, same optionality pattern as governance.egress_policy above."""
+    assert AssuranceSection().min_level is None
+
+
+def test_assurance_section_accepts_a_real_assurance_level() -> None:
+    section = AssuranceSection(min_level=AssuranceLevel.L2)
+    assert section.min_level == AssuranceLevel.L2
+
+
+def test_assurance_section_rejects_an_unrecognized_level_at_parse_time() -> None:
+    """Typed directly as AssuranceLevel (not a plain str re-validated
+    later) — a typo'd level fails immediately, the same early-failure
+    property every other typed manifest field already has."""
+    with pytest.raises(ValidationError):
+        AssuranceSection(min_level="l99")  # type: ignore[arg-type]
+
+
+def test_assurance_section_rejects_unknown_fields() -> None:
+    with pytest.raises(ValidationError):
+        AssuranceSection(min_level=AssuranceLevel.L1, unexpected=True)  # type: ignore[call-arg]
+
+
+def test_pipeline_manifest_accepts_an_assurance_section() -> None:
+    manifest = PipelineManifest(
+        id="assurance-pipeline",
+        version="2.0",
+        assurance=AssuranceSection(min_level=AssuranceLevel.L1),
+    )
+    assert manifest.assurance is not None
+    assert manifest.assurance.min_level == AssuranceLevel.L1

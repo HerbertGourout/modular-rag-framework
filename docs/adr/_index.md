@@ -324,11 +324,11 @@ and enforce, and mandatory unsupported controls must fail before traffic is serv
 - **ADR-0015**: Portable assurance levels and external-application boundary. Accepted.
 - **ADR-0016**: Provider data-egress control boundary (Lot 20). Accepted 2026-09-09 — drafted in
   response to Codex review pass 1's HIGH-004 finding.
-- **ADR-0017**: Engine-independent assurance contract and conformance report (Lot 21). Proposed —
-  drafted 2026-09-09 as Lot 21's required focused contract ADR, per ADR-0015 §4 and
-  `docs/refactoring-plan.md`'s dependency gate; not yet accepted.
+- **ADR-0017**: Engine-independent assurance contract and conformance report (Lot 21). Accepted
+  2026-09-10 — drafted 2026-09-09 as Lot 21's required focused contract ADR, per ADR-0015 §4 and
+  `docs/refactoring-plan.md`'s dependency gate.
 
-Sixteen ADRs are Accepted as of this writing, plus one Proposed (ADR-0017). Future ADRs will be
+Seventeen ADRs are Accepted as of this writing. Future ADRs will be
 added as new major decisions arise; per this project's own rule
 ([CLAUDE.md §07](../../CLAUDE.md#07--security-rules)), any new top-level module, layer boundary,
 or contract modification requires one.

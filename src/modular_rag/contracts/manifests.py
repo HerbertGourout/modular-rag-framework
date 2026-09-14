@@ -4,6 +4,8 @@ from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from modular_rag.contracts.assurance import AssuranceLevel
+
 MANIFEST_SCHEMA_VERSIONS = ("1.0", "2.0")
 
 
@@ -94,6 +96,32 @@ class LifecycleSection(BaseModel):
     ledger: ComponentConfig | None = None
 
 
+class AssuranceSection(BaseModel):
+    """Lot 21 (ADR-0017, Accepted 2026-09-10): an optional minimum assurance
+    level a manifest requires from whichever `DocumentEngine` it selects.
+
+    `min_level` is typed directly as `AssuranceLevel` (not a `ComponentConfig`)
+    on purpose — unlike `governance.egress_policy`/`observability.tracer`,
+    this is a threshold checked against a computed `contracts.assurance.
+    ConformanceReport.achieved_level`, not a pluggable component with its own
+    registered factory; there is nothing to select by `type:` here. Typing it
+    directly (rather than a plain `str` re-validated later) rejects an
+    unrecognized level at manifest-parse time, the same early-failure
+    property every other typed manifest field already has — cross-contract
+    imports inside `contracts/` are established precedent
+    (`contracts/indexing.py` imports `contracts/embeddings.py`;
+    `contracts/meter.py` imports `contracts/tracing.py`), so this adds no new
+    layering exception. Absent means no minimum is required — the same
+    optionality every other governance/observability section in this
+    manifest already has; a manifest with no `assurance` section behaves
+    exactly as it did before this lot.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    min_level: AssuranceLevel | None = None
+
+
 class PipelineManifest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -118,6 +146,7 @@ class PipelineManifest(BaseModel):
     quality: QualitySection | None = None
     observability: ObservabilitySection | None = None
     lifecycle: LifecycleSection | None = None
+    assurance: AssuranceSection | None = None
 
 
 @runtime_checkable

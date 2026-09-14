@@ -7,7 +7,10 @@ from __future__ import annotations
 
 import pytest
 
+from modular_rag.contracts.assurance import AssuranceLevel
+from modular_rag.contracts.egress import EgressDecision
 from modular_rag.contracts.manifests import (
+    AssuranceSection,
     ComponentConfig,
     EngineSelection,
     GovernanceSection,
@@ -15,6 +18,7 @@ from modular_rag.contracts.manifests import (
     PipelineManifest,
     QualitySection,
 )
+from modular_rag.contracts.security import GuardResult
 from modular_rag.core.errors import ConfigurationError, RegistryError
 from modular_rag.orchestration.registry import ComponentRegistry
 
@@ -474,6 +478,206 @@ def test_wire_rejects_egress_policy_covering_the_wired_reranker_type_too() -> No
 
     with pytest.raises(RegistryError, match="fake-reranker"):
         reg.wire(manifest)
+
+
+# ---------------------------------------------------------------------------
+# Lot 21 (Codex review pass 1, HIGH-002): the assurance.min_level gate is now
+# checked against the *constructed* components, so these fixtures must really
+# satisfy their contract Protocols. A plain object() no longer counts -- that
+# was precisely the reproduced defect (wired L2, then AttributeError on the
+# first request).
+# ---------------------------------------------------------------------------
+
+
+class _ProtocolTenantPolicy:
+    def enforce_query(self, query) -> None:  # type: ignore[no-untyped-def]
+        return None
+
+    def enforce_ingest(self, tenant_id) -> None:  # type: ignore[no-untyped-def]
+        return None
+
+    def filter_chunks(self, tenant_id, chunks):  # type: ignore[no-untyped-def]
+        return chunks
+
+    def name(self) -> str:
+        return "protocol-tenant-policy"
+
+
+class _ProtocolGuard:
+    def check_query(self, query):  # type: ignore[no-untyped-def]
+        return GuardResult(allowed=True)
+
+    def check_answer(self, answer):  # type: ignore[no-untyped-def]
+        return GuardResult(allowed=True)
+
+    def name(self) -> str:
+        return "protocol-guard"
+
+
+class _ProtocolEgressPolicy:
+    def check(self, *, classification, provider, operation):  # type: ignore[no-untyped-def]
+        return EgressDecision(
+            allowed=True,
+            reason="allowed",
+            classification=classification,
+            provider=provider,
+            operation=operation,
+        )
+
+    def name(self) -> str:
+        return "protocol-egress-policy"
+
+
+class _ProtocolAuditSink:
+    def record(self, event) -> None:  # type: ignore[no-untyped-def]
+        return None
+
+    async def arecord(self, event) -> None:  # type: ignore[no-untyped-def]
+        return None
+
+    def name(self) -> str:
+        return "protocol-audit-sink"
+
+
+class _ProtocolReviewQueue:
+    def should_review(self, answer) -> bool:  # type: ignore[no-untyped-def]
+        return False
+
+    def enqueue(self, item) -> None:  # type: ignore[no-untyped-def]
+        return None
+
+    def resolve(self, item_id, resolution):  # type: ignore[no-untyped-def]
+        return None
+
+    def name(self) -> str:
+        return "protocol-review-queue"
+
+
+def _fully_governed_manifest(**overrides: object) -> PipelineManifest:
+    """A manifest with guard, tenant_policy, egress_policy (covering both
+    wired provider types), and audit_sink all wired — the native-engine
+    configuration that should reach AssuranceLevel.L2. Individual tests
+    override/omit fields to exercise a lower achieved level."""
+    defaults: dict[str, object] = {
+        "security": ComponentConfig(type="fake-guard"),
+        "governance": GovernanceSection(
+            tenant_enforcement=True,
+            tenant_policy=ComponentConfig(type="fake-tenant-policy"),
+            audit_sink=ComponentConfig(type="fake-audit-sink"),
+            review_queue=ComponentConfig(type="fake-review-queue"),
+            egress_policy=ComponentConfig(
+                type="fake-egress-policy",
+                config={
+                    "providers": {
+                        "fake-embedder": {"local": True},
+                        "fake-generator": {"local": True},
+                    }
+                },
+            ),
+        ),
+    }
+    defaults.update(overrides)
+    return _minimal_manifest(**defaults)
+
+
+def _registry_for_full_governance() -> ComponentRegistry:
+    """Registers components that genuinely satisfy their Protocols — required
+    since the min_level gate now validates what was actually constructed."""
+    reg = _fake_registry()
+    reg.register("guard", "fake-guard", lambda cfg: _ProtocolGuard())
+    reg.register("tenant_policy", "fake-tenant-policy", lambda cfg: _ProtocolTenantPolicy())
+    reg.register("audit_sink", "fake-audit-sink", lambda cfg: _ProtocolAuditSink())
+    reg.register("review_queue", "fake-review-queue", lambda cfg: _ProtocolReviewQueue())
+    reg.register("egress_policy", "fake-egress-policy", lambda cfg: _ProtocolEgressPolicy())
+    return reg
+
+
+def test_wire_accepts_a_fully_governed_manifest_declaring_min_level_l2() -> None:
+    """Lot 21 (ADR-0017, Accepted 2026-09-10): the positive case — every
+    governed-stage role L2 requires is wired, so the manifest-only
+    pre-flight prediction matches what the real adapter would later report."""
+    reg = _registry_for_full_governance()
+    manifest = _fully_governed_manifest(assurance=AssuranceSection(min_level=AssuranceLevel.L2))
+
+    container = reg.wire(manifest)
+
+    assert container.generator is not None
+
+
+def test_wire_rejects_min_level_l2_when_nothing_is_governed() -> None:
+    reg = _fake_registry()
+    manifest = _minimal_manifest(assurance=AssuranceSection(min_level=AssuranceLevel.L2))
+
+    with pytest.raises(RegistryError, match="assurance.min_level.*'l2'"):
+        reg.wire(manifest)
+
+
+def test_wire_rejects_min_level_l2_under_langgraph_since_audit_completion_is_unsupported() -> (
+    None
+):
+    """The concrete scenario ADR-0017 §6 exists to catch: LangGraph never
+    reaches RAGEngine._audit() at all (Lot 15's own documented scope
+    boundary; governance.audit_sink is itself rejected under this adapter),
+    so AUDIT_COMPLETION is structurally UNSUPPORTED — L2 must stay
+    unreachable for this adapter even with guard/tenant/egress all wired."""
+    reg = _fake_registry()
+    reg.register("guard", "fake-guard", lambda cfg: _ProtocolGuard())
+    reg.register("tenant_policy", "fake-tenant-policy", lambda cfg: _ProtocolTenantPolicy())
+    reg.register("egress_policy", "fake-egress-policy", lambda cfg: _ProtocolEgressPolicy())
+    manifest = _minimal_manifest(
+        security=ComponentConfig(type="fake-guard"),
+        governance=GovernanceSection(
+            tenant_enforcement=True,
+            tenant_policy=ComponentConfig(type="fake-tenant-policy"),
+            egress_policy=ComponentConfig(
+                type="fake-egress-policy",
+                config={
+                    "providers": {
+                        "fake-embedder": {"local": True},
+                        "fake-generator": {"local": True},
+                    }
+                },
+            ),
+        ),
+        engine=EngineSelection(adapter="langgraph"),
+        assurance=AssuranceSection(min_level=AssuranceLevel.L2),
+    )
+
+    with pytest.raises(RegistryError, match="assurance.min_level.*'l2'"):
+        reg.wire(manifest)
+
+
+def test_wire_accepts_min_level_l1_under_langgraph_with_only_tenant_policy_wired() -> None:
+    """L1 only requires retrieval provenance (always VERIFIED) and identity
+    at least OBSERVED — tenant_policy alone (ENFORCED) clears that bar,
+    unlike L2's stricter requirement above."""
+    reg = _fake_registry()
+    reg.register("tenant_policy", "fake-tenant-policy", lambda cfg: _ProtocolTenantPolicy())
+    manifest = _minimal_manifest(
+        governance=GovernanceSection(
+            tenant_enforcement=True,
+            tenant_policy=ComponentConfig(type="fake-tenant-policy"),
+        ),
+        engine=EngineSelection(adapter="langgraph"),
+        assurance=AssuranceSection(min_level=AssuranceLevel.L1),
+    )
+
+    container = reg.wire(manifest)
+
+    assert container.generator is not None
+
+
+def test_wire_with_no_assurance_section_is_unaffected_by_governance_shape() -> None:
+    """Absent assurance.min_level: no minimum-level check runs at all — the
+    same optionality every other governance/observability section already
+    has. An otherwise-ungoverned manifest, which would fail any non-trivial
+    min_level, still wires successfully."""
+    reg = _fake_registry()
+
+    container = reg.wire(_minimal_manifest())
+
+    assert container.generator is not None
+    assert container.tenant_policy is None
 
 
 def test_postgres_audit_sink_and_lifecycle_ledger_are_manifest_activatable() -> None:

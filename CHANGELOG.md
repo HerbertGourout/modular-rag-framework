@@ -5,6 +5,58 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added — engine-independent assurance contract and conformance report (Lot 21, 2026-09-10)
+
+- `contracts/assurance.py` (new): `AssuranceLevel` (`L0`/`L1`/`L2`, matching
+  [ADR-0015](docs/adr/0015-portable-assurance-and-external-application-boundary.md) §3's table),
+  `EvidenceStatus` (`unsupported`/`observed`/`verified`/`enforced`), an eight-kind `EvidenceKind`
+  catalog (identity/tenant, retrieval provenance, egress decision, policy decision, audit
+  completion, usage/cost, feedback/review routing, streaming prevalidation), and
+  `ConformanceReport` — `achieved_level` is a **computed property**, not a constructor field, so
+  no adapter can assert its own level.
+- `DocumentEngine.conformance_report(context) -> ConformanceReport` (new, additive method).
+  Implemented truthfully by both shipped adapters — `RAGEngine.conformance_report()` (native) and
+  `LangGraphEngineAdapter.conformance_report()` — from two separate sources: control-surface
+  evidence, where a wired role counts only if it also satisfies its contract Protocol (a plain
+  object registered as a tenant policy earns nothing), and execution evidence recorded while
+  actually serving that request. `RETRIEVAL_PROVENANCE` is earned only when the framework's own
+  grounding check (`classify_provenance()`) confirms every returned citation against the chunk it
+  names — the passage really appears in that chunk's text, and the page and source match —
+  `Generator` requires nothing about citations, so a generator returning none, unrelated ones, or
+  a fabricated passage on a genuinely retrieved chunk id never yields a provenance claim. A report
+  for a request that has not executed cannot exceed L0, and a reused request id never inherits an
+  earlier attempt's evidence.
+- LangGraph's own documented scope boundary (it never emits `RAGEngine`'s audit events) now shows
+  up as a concrete, honest `AUDIT_COMPLETION: unsupported` in its report — capping it below `L2`
+  even when tenant isolation, guard, and egress are all wired, rather than manufacturing
+  native-equivalent parity it cannot back.
+- New optional manifest field `assurance.min_level` — a manifest requiring an unmeetable minimum
+  level fails before any request is served. Because a startup gate has no execution evidence, it
+  is checked against a *capability* profile: advisory at `mrag validate` time (nothing is
+  constructed there) and authoritatively at the end of `wire()`, against the components actually
+  built and their Protocol conformance. That gate promises only that the required controls are
+  **declared, wired and structurally conformant** — Protocol membership cannot prove enforcement,
+  so a structurally valid no-op control passes it. Recorded as an accepted risk in
+  [ADR-0017 §9](docs/adr/0017-engine-independent-assurance-contract.md); enforcement is certified
+  behaviourally by the conformance harness instead, and operators wiring third-party controls at
+  `l2` must run it against them.
+- `tests/contract/test_engine_conformance.py` gained one reusable, **status-aware** harness run
+  against the fake *and* both real shipped adapters: for every evidence kind a report claims above
+  `unsupported`, the suite must own a behavioural probe *at the claimed strength* and that probe —
+  plus every weaker one — must pass, so neither a claim nothing verifies nor a claim promoted up
+  the ladder without evidence can survive. `enforced` requires a denied or failing control to
+  actually stop the request (a failing audit sink or review queue must fail it); `verified`
+  requires the framework to reject fabricated evidence. Deliberately overclaiming, weakly probed
+  and fabricating engines are fed through that same harness as negative inputs.
+- [ADR-0017](docs/adr/0017-engine-independent-assurance-contract.md) — Accepted 2026-09-10 — is
+  the contract ADR for this work, per [ADR-0015](docs/adr/0015-portable-assurance-and-external-application-boundary.md)
+  §4's own requirement that one exist before implementation, not after.
+- **Not delivered in this pass**: no on-disk exported "golden" report fixture (determinism proven
+  by direct test assertions instead); the multi-engine quality/portability benchmark
+  (`docs/guides/offline-evaluation.md`) remains unimplemented Lot 22 planning content this lot's
+  evidence feeds, not delivers; wrapping an arbitrary existing client application is still Lot 22,
+  not this lot.
+
 ### Added — data classification and provider-egress control (Lot 20, 2026-09-08)
 
 - `Document.classification`/`Chunk.classification` (`core.enums.DataClassification`), propagated

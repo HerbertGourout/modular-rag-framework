@@ -1,3 +1,15 @@
+from modular_rag.contracts.assurance import (
+    ASSURANCE_CONTRACT_VERSION,
+    AssuranceLevel,
+    ConformanceReport,
+    EvidenceEntry,
+    EvidenceKind,
+    EvidenceStatus,
+    assurance_level_rank,
+    compute_achieved_level,
+    evidence_status_rank,
+    meets_minimum_level,
+)
 from modular_rag.contracts.audit import (
     ALLOWED_PAYLOAD_KEYS,
     AUDIT_SCHEMA_VERSION,
@@ -58,6 +70,9 @@ from modular_rag.contracts.telemetry import Telemetry
 from modular_rag.contracts.tracing import AttributeValue, Span, Tracer
 
 __all__ = [
+    "ASSURANCE_CONTRACT_VERSION", "AssuranceLevel", "ConformanceReport", "EvidenceEntry",
+    "EvidenceKind", "EvidenceStatus", "assurance_level_rank", "compute_achieved_level",
+    "evidence_status_rank", "meets_minimum_level",
     "ALLOWED_PAYLOAD_KEYS", "AUDIT_SCHEMA_VERSION", "AuditEvent", "AuditEventType", "AuditSink",
     "Chunker",
     "EgressDecision", "EgressOperation", "EgressPolicy",

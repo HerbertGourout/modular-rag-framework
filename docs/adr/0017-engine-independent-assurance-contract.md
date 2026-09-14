@@ -1,12 +1,16 @@
 # ADR-0017 — Engine-Independent Assurance Contract and Conformance Report
 
-**Status:** Proposed — drafted 2026-09-09 as Lot 21's required focused contract ADR
-(`docs/refactoring-plan.md`, `docs/refactoring/lot-21-engine-independent-assurance-contract.md`).
-Not self-accepted. Acceptance, revision, or rejection is Herbert Gourout's decision, per
-[`docs/refactoring/lot-0-baseline.md`](../refactoring/lot-0-baseline.md) §2's sole decision
-authority — the same convention [ADR-0016](0016-provider-egress-control.md) followed for Lot 20.
+**Status:** Accepted — accepted 2026-09-10 by Herbert Gourout ("I accept ADR-0017 as proposed on
+2026-09-10"), per [`docs/refactoring/lot-0-baseline.md`](../refactoring/lot-0-baseline.md) §2's
+sole decision authority — the same convention [ADR-0016](0016-provider-egress-control.md)
+followed for Lot 20. Drafted Proposed 2026-09-09 as Lot 21's required focused contract ADR
+(`docs/refactoring-plan.md`, `docs/refactoring/lot-21-engine-independent-assurance-contract.md`);
+not self-accepted at draft time. Acceptance also explicitly confirms, unchanged from the draft:
+the per-request `conformance_report(context)` design (§7, Open decision item 1) and the initial
+eight `EvidenceKind` values (§4, Open decision item 3) — both accepted as proposed, not revised.
+This acceptance unblocks Lot 21 implementation.
 
-**Date:** 2026-09-09.
+**Date:** drafted 2026-09-09, accepted 2026-09-10.
 
 **Authors:** Drafted by Claude Code, at explicit user instruction, before any Lot 21
 implementation — per this repository's own rule that public-contract/structural changes get an
@@ -194,6 +198,49 @@ checks). `wire()` fails before serving a single request if the selected engine's
 `conformance_report()` cannot reach the declared minimum — the same fail-closed-before-traffic
 discipline ADR-0016 established, not a new philosophy.
 
+### 9. What the startup gate promises — and what it does not
+
+*Added 2026-09-11, after the Codex review of the Lot 21 implementation (pass 2, HIGH-002).
+This narrows §8's promise; it does not change the accepted decision.*
+
+The §8 gate answers exactly one question:
+
+> **are the controls this assurance level requires declared, wired, and structurally conformant
+> to their contract Protocol?**
+
+It does **not** certify that those controls enforce anything. `runtime_checkable` Protocol
+membership — the mechanism `wire()` uses — validates method *presence* only: not signatures, and
+not behaviour. A registered `tenant_policy` whose `enforce_query()` returns `None` for a missing
+tenant therefore passes `assurance.min_level: l2`, as do an egress policy that allows everything
+and a review queue that routes nothing.
+
+This is a limit of startup-time validation itself, not an implementation defect: proving a
+control enforces requires executing it against a denial, which `wire()` deliberately does not do
+(§8's "never constructs a domain-module object" rule, and the readiness/probe-safety discipline
+of [ADR-0010](0010-health-checkable-and-readiness-semantics.md)). A gate that ran real governance
+decisions during wiring would be a materially different and far more invasive contract.
+
+**The division of labour is therefore explicit:**
+
+| Question | Answered by | When |
+|---|---|---|
+| Are the required controls declared and wired? | `wire()`'s `assurance.min_level` gate | before the first request, fail-closed |
+| Does a denied or failing control actually stop a request? | the behavioural conformance harness, `tests/contract/test_engine_conformance.py` | in CI, per adapter |
+
+The harness is the authority on `ENFORCED`: it refuses to certify any claim at that strength
+unless a denying or failing control demonstrably fails the request, and refuses `VERIFIED` unless
+the framework independently rejects fabricated evidence. The startup gate is a wiring check.
+
+**Accepted risk (maintainer decision, 2026-09-11).** An operator who registers a third-party or
+in-house control and relies on `assurance.min_level: l2` alone has evidence that the control is
+*present*, not that it is *effective*. Running the conformance harness against that wiring is the
+operator's responsibility, and every document describing the gate must use the narrowed wording
+above rather than implying certified enforcement. The alternatives — restricting level-bearing
+controls to a framework-shipped allowlist, or introducing an explicit trusted-capability
+registration mechanism — were considered and deliberately not taken in Lot 21: the first breaks
+the extension model this framework exists to provide, and the second is new public contract
+surface that belongs to its own decision, not to a corrective pass.
+
 ## Out of scope for this contract
 
 - **Wrapping an arbitrary existing client application without rebuilding its graph** — that is
@@ -289,19 +336,16 @@ discipline ADR-0016 established, not a new philosophy.
 
 ## Open decision
 
-**This ADR's own Status (Proposed) is the primary open decision** — accept, revise, or reject is
-Herbert Gourout's to make, per the same sole-decision-authority convention ADR-0016 followed.
-Candidate revision points, named explicitly rather than silently pre-decided:
+**Resolved by acceptance, 2026-09-10.** The three candidate revision points below were presented
+alongside this ADR; all three are accepted as originally drafted, not revised:
 
-1. Whether `conformance_report()` takes `ExecutionContext` (per-request, as drafted above) or is
-   adapter-level/manifest-level only (computed once at `wire()` time) — the per-request shape
-   costs more to compute but can reflect a governance hook only present on some requests; the
-   manifest-level shape is cheaper but coarser. This ADR proposes per-request; a coarser
-   alternative is a legitimate revision.
-2. The exact per-`AssuranceLevel` required-`EvidenceKind` mapping (§6) — deliberately left as
-   "Lot 21 implementation detail, proven by negative tests" rather than fixed inline here, since
-   getting it wrong is a testable-and-fixable implementation bug, not a contract-shape decision
-   this ADR needs to pre-commit to.
-3. Whether `EvidenceKind` needs an initial ninth value for something this draft's minimum-useful-
-   set omitted — the Lot 21 planning doc calls its own list "the minimum useful set," not
-   exhaustive.
+1. `conformance_report()` takes `ExecutionContext` (per-request, as drafted above) — accepted.
+   Manifest-level-only (computed once at `wire()` time) was the named alternative; not adopted.
+2. The exact per-`AssuranceLevel` required-`EvidenceKind` mapping (§6) remains a Lot 21
+   implementation detail, proven by negative/overclaim tests rather than fixed inline in this ADR
+   — accepted as originally scoped. It must remain a pure function of normalized evidence,
+   independent of which adapter produced it, and must never let an adapter assert its own
+   `achieved_level` directly.
+3. The initial eight `EvidenceKind` values (§4) are accepted as the minimum useful set for this
+   implementation pass — not claimed exhaustive. A ninth (or further) kind may be added later,
+   additively, per the Compatibility section's own policy, without requiring a new ADR.

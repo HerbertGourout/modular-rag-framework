@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
 
+from modular_rag.contracts.assurance import ConformanceReport
 from modular_rag.core.models.answer import Citation
 from modular_rag.core.models.query import Query
 
@@ -178,3 +179,24 @@ class DocumentEngine(Protocol):
     def name(self) -> str: ...
 
     def engine_version(self) -> str: ...
+
+    def conformance_report(self, context: ExecutionContext) -> ConformanceReport:
+        """Lot 21 (ADR-0017, Accepted 2026-09-10) — additive to this Protocol,
+        per `docs/architecture/document-engine-contract.md`'s own
+        compatibility policy (a new method is a breaking Protocol change;
+        ADR-0017 is that change's ADR). Report this adapter's actually-
+        achieved assurance level and evidence for `context`, given the
+        manifest it was wired from.
+
+        Must reflect real, checked state — never a static per-adapter
+        constant, and never an adapter-asserted `achieved_level` (that field
+        is a computed property on `ConformanceReport`, not a constructor
+        argument an adapter can set). An honestly `UNSUPPORTED` capability
+        is a correct report, not a failure; silently promoting an
+        `OBSERVED` or self-reported fact to `VERIFIED`/`ENFORCED` without
+        the framework's own code actually checking/enforcing it is the
+        specific overclaim this contract exists to make impossible to ship
+        silently — see `tests/contract/test_engine_conformance.py`'s
+        capability-aware conformance suite, which exercises this rather than
+        only trusting the report."""
+        ...

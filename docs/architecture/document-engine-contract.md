@@ -2,13 +2,16 @@
 
 **Source:** [`src/modular_rag/contracts/engine.py`](../../src/modular_rag/contracts/engine.py)
 **Governing decisions:** [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) §5.2
-(what's delegated), [ADR-0006](../adr/0006-external-engine-selection.md) (LangGraph selected)
+(what's delegated), [ADR-0006](../adr/0006-external-engine-selection.md) (LangGraph selected),
+[ADR-0017](../adr/0017-engine-independent-assurance-contract.md) (Lot 21, assurance/conformance)
 **Established:** Lot 7, `docs/refactoring-plan.md`
 
-> **Current limit:** this contract normalizes execution, results, steps, errors, and a small set of
-> generic capabilities. It is not an assurance certification, and the current LangGraph adapter
-> builds a fixed graph rather than wrapping an existing client application. ADR-0015 plans a
-> future extension; nothing in this document should be read as if that proposal already shipped.
+> **Current limit:** this contract normalizes execution, results, steps, errors, generic
+> capabilities, and — since Lot 21 — a machine-readable, per-request assurance report
+> (`conformance_report()`, see below). It is still not a regulatory certification, and the current
+> LangGraph adapter still builds a fixed graph rather than wrapping an existing client
+> application: that remains Lot 22, planned but not implemented — nothing in this document should
+> be read as if that part of ADR-0015 already shipped.
 
 ## What this contract is for
 
@@ -107,17 +110,102 @@ generic mechanism any `DocumentEngine` caller can rely on regardless of which ad
 governance path is `RAGEngine`'s direct calls into `Container.guard`/`policy_engine`/
 `tenant_policy`, which predate the `DocumentEngine` port entirely.
 
-## Planned assurance evolution (ADR-0015)
+## Assurance evolution — implemented (Lot 21, ADR-0017 Accepted 2026-09-10)
 
-Under accepted ADR-0015, Lot 21 must define a separate, versioned assurance schema that says which
-facts are merely supplied by an engine, which the framework can verify independently, and which
-stages it can block. Candidate evidence includes citations/retrieval, tenant filtering, provider
-egress, audit completion, usage/cost, feedback/review routing, and streaming prevalidation.
+`contracts/assurance.py` (new) defines the versioned assurance schema ADR-0015 §4 called for:
+`AssuranceLevel` (`L0`/`L1`/`L2`, matching ADR-0015 §3's table exactly — this module does not
+redefine what the levels mean, only how an adapter proves which one it achieves),
+`EvidenceStatus` (`UNSUPPORTED`/`OBSERVED`/`VERIFIED`/`ENFORCED` — keeping "the adapter says so"
+strictly distinct from "the framework's own code independently checked/can block it"),
+`EvidenceKind` (the eight-kind minimum-useful-set ADR-0017 §4 names: identity/tenant, retrieval
+provenance, egress decision, policy decision, audit completion, usage/cost, feedback/review
+routing, streaming prevalidation), and `ConformanceReport` — whose `achieved_level` is a
+**computed `@property`**, not a constructor parameter, so no adapter can assert its own level;
+`compute_achieved_level()` is the sole, pure, adapter-independent function that ever produces one.
 
-The intended profiles are L0 (opaque request/response), L1 (evidence-aware), and L2 (governed
-stages). Exact types and enum values are deliberately absent here: adding them requires the
-contract ADR, compatibility analysis, and conformance tests described in Lot 21. Existing
-`EngineCapability` flags must not be relabelled as these assurance levels without that work.
+`DocumentEngine` gained exactly one additive method for this, per the "what requires a new ADR"
+rule above — ADR-0017 is that ADR:
+
+```python
+def conformance_report(self, context: ExecutionContext) -> ConformanceReport: ...
+```
+
+Both shipped adapters implement it truthfully from their own actually-wired `Container` roles and
+what they recorded while serving the request —
+`orchestration/engine.py::RAGEngine.conformance_report()` (delegated to by `NativeEngineAdapter`)
+and `adapters/llms/langgraph_engine.py::LangGraphEngineAdapter.conformance_report()`. The two
+reports are **not** required to agree: LangGraph's own documented Lot 15 scope boundary (it never
+reaches `RAGEngine._audit()`, and `governance.audit_sink` is itself rejected under
+`engine.adapter='langgraph'`) makes `AUDIT_COMPLETION` structurally `UNSUPPORTED` for that
+adapter always — which caps it below `L2` even with tenant/guard/egress all wired, honestly,
+rather than manufacturing native-equivalent parity it cannot back.
+
+`tests/contract/test_engine_conformance.py` owns the shared, capability-aware harness
+(`assert_claims_match_behaviour()`), run against `FakeDocumentEngine`, `NativeEngineAdapter`, and
+`LangGraphEngineAdapter` alike. Its rule: **for every evidence kind a report claims above
+`UNSUPPORTED`, the suite must own a behavioural probe, and that probe must pass** — so a claim
+nothing can verify is itself a conformance failure, and an adapter cannot quietly add one. An
+honestly `UNSUPPORTED` kind is skipped, never punished. `_OverclaimingFakeDocumentEngine` is fed
+through that same harness as a negative input, proving it rejects a false claim rather than
+asserting the claim is false by hand.
+
+### Evidence vs capability — two deliberately separate things
+
+A `ConformanceReport` answers "what was true for **this request**". Two of its kinds can only be
+earned by an execution, never by configuration:
+
+- `RETRIEVAL_PROVENANCE` is `VERIFIED` only when the framework's own grounding check
+  (`contracts.assurance.classify_provenance()`, shared by both engines) confirmed that every
+  citation the generator returned names a chunk that was actually retrieved for that request.
+  `contracts.generation.Generator` requires nothing about citations at all, so a custom or
+  defective generator returning none — or returning unrelated ones — must never yield a
+  provenance claim. Citations present but ungrounded report `OBSERVED`; none at all report
+  `UNSUPPORTED`.
+- `USAGE_COST` is `OBSERVED` only when a `Meter` is wired **and** the generator actually produced
+  a token-bearing `TraceStep` for that request. LangGraph reports it `UNSUPPORTED` always:
+  `mrag.generation.tokens` is emitted only inside `RAGEngine`, which that adapter never calls.
+
+Every other kind is control-surface evidence, and a wired role counts only when it also satisfies
+its contract Protocol — a plain `object()` registered as `tenant_policy` is not a tenant policy.
+`isinstance()` against a `runtime_checkable` Protocol is the same pure structural check
+`registry.wire()` already applies to `VectorIndexer` (ADR-0009).
+
+An optional manifest field, `assurance.min_level`, lets a manifest require a minimum level before
+serving traffic. Because a startup gate by definition has no execution evidence, it is checked
+against a **capability profile** — "what could this wiring earn for a request it serves" — which
+is computed by two clearly separate functions in `orchestration/registry.py`, never by calling an
+adapter's `conformance_report()`:
+
+- `_declared_capability_evidence()` runs inside `runtime_manifest_errors()`, reachable from
+  `validate_capabilities()`/`mrag validate` where nothing is constructed. It can only take a
+  declared role at face value, so it is advisory: **necessary, not sufficient**.
+- `_wired_capability_evidence()` runs at the end of `ComponentRegistry.wire()`, against the
+  components actually built, with the Protocol validation above. This is the authoritative gate:
+  a manifest that passes the dry-run can still be rejected here.
+
+Neither is ever used to build a `ConformanceReport` — a capability is not evidence, and
+conflating the two is exactly what an earlier version of this lot got wrong. `orchestration/` may
+import only `core/`+`contracts/`+`orchestration/` (ADR-0007 §6), so it cannot construct
+`LangGraphEngineAdapter` (in `adapters/`) in any case. Absent `assurance.min_level`, no check
+runs — the same optionality every other governance/observability section already has.
+
+### What the gate promises, precisely
+
+`assurance.min_level` answers **"are the controls this level requires declared, wired, and
+structurally conformant?"** — nothing more. Protocol membership validates method *presence*, not
+signatures and not behaviour, so a control that implements the right names and enforces nothing
+(an `enforce_query()` that returns `None` for a missing tenant) passes the gate. That limit is
+inherent to startup-time validation, which must not execute governance decisions during `wire()`,
+and is an [ADR-0017 §9](../adr/0017-engine-independent-assurance-contract.md) accepted risk
+recorded on 2026-09-11 — not a defect to route around.
+
+Proving a control *enforces* is the conformance harness's job, not the gate's:
+`tests/contract/test_engine_conformance.py` certifies a claim at `ENFORCED` only when a denied or
+failing control demonstrably fails the request, and at `VERIFIED` only when the framework itself
+rejects fabricated evidence. **An operator wiring a third-party control at L2 must run that
+harness against it**; a green startup gate is evidence of wiring, not of enforcement.
+
+Full evidence: `docs/refactoring/lot-21-engine-independent-assurance-contract.md`.
 
 ## Cancellation, concretely
 
