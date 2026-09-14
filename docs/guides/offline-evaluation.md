@@ -205,6 +205,129 @@ use (not a new CI service) and uploads `latest.json`/`latest.md` as a workflow a
 (`if: always()` — the report is useful even when the gate fails). A significant regression past
 `baseline.json` (tolerance `0.02` by default, `--tolerance` to override) fails the job.
 
+## Planned multi-engine assurance benchmark (Lots 21-22; not implemented)
+
+The current Batch 13 benchmark answers a deliberately narrow question: did the shipped native
+reference pipeline regress on a small deterministic golden set? It does **not** yet demonstrate
+that the framework is portable across engines or that it reduces the work required to govern an
+existing application. Those remain product hypotheses. The Lot 21 assurance contract they depend
+on is now implemented and merged ([ADR-0017](../adr/0017-engine-independent-assurance-contract.md),
+PR #8); what is still missing is the Lot 22 external-application pilot the paired comparison needs.
+
+The future benchmark must answer three separate questions rather than collapse them into one
+score:
+
+1. **Quality:** for comparable inputs and resources, does adding the assurance layer preserve
+   retrieval and answer quality within a pre-declared non-inferiority margin?
+2. **Assurance:** does each integration enforce and evidence the controls it declares, including
+   tenant isolation, egress decisions, audit completeness, and provenance?
+3. **Portability and effort:** how much engine-specific work is required to obtain the same
+   assurance outcome on another stack?
+
+### Comparison design
+
+Every external stack must be evaluated in a paired comparison: the application or engine with
+its native controls, then the **same** application or engine behind the framework assurance
+boundary. The native reference engine is evaluated as the executable reference for the
+framework contracts, not presented as a neutral baseline for every vendor feature.
+
+Two result tracks must remain separate:
+
+| Track | What is held constant | Question answered |
+|---|---|---|
+| Controlled components | corpus snapshot, queries, embedding/generation models where possible, retrieval limits, policy inputs, and scoring | What overhead or behavior change is attributable to the framework boundary? |
+| Stack-native optimized | each stack may use its normal recommended components and tuning; dataset and acceptance scenarios remain fixed | What outcome can a realistic implementation deliver, including its platform-specific work? |
+
+The first comparison set is the native adapter, the current LangGraph adapter, and the existing
+LangChain/LangGraph application selected by Lot 22. Additional frameworks or managed-cloud
+engines are added only after that pilot proves that the protocol and normalized evidence are
+useful. An unsupported capability is not counted as a failure when the adapter declares it
+honestly; a capability that is declared but not honoured is a conformance failure.
+
+### Dataset portfolio
+
+Use a versioned portfolio rather than one aggregate leaderboard. Each imported snapshot must
+record its source version, licence, checksum, transformation script, included subsets, and known
+limitations. Public or sanitized data is required; real client data must not enter the repository
+or shared benchmark artifacts.
+
+The intended progression is:
+
+- **Initial text-RAG qualification:** curated RAGBench subsets for retrieval, answer quality, and
+  attribution; one financial/table task such as FinanceBench or TAT-QA; and one multi-hop task
+  such as HotpotQA or MuSiQue.
+- **Dynamic and graph-aware qualification:** CRAG or an equivalent snapshot only when a tested
+  web/knowledge-graph retrieval path exists. Until then it is a future candidate, not evidence
+  for V3 GraphRAG support.
+- **Multilingual and multimodal qualification:** Open RAG Benchmark, ViDoRe, Double-Bench, or
+  equivalent datasets only when the corresponding V5 ingestion, retrieval, and evidence paths
+  exist. Text-only adapters must not be penalized for capabilities they do not claim.
+
+Scores must be stratified by dataset, domain, question type, hop count, evidence modality,
+language, and relevant capability where labels permit. Empty or underrepresented strata must be
+reported instead of being hidden by a global average, following
+[DIGEST-evaluation.md](../research/DIGEST-evaluation.md)'s coverage guidance.
+
+### Assurance scenario corpus
+
+Public QA datasets do not test the framework's main product hypothesis by themselves. A separate,
+deterministic assurance corpus must run the same scenarios against every compatible integration:
+
+- normal request and citation/provenance verification;
+- tenant A attempting to retrieve tenant B's content;
+- prompt injection or poisoned instructions embedded in a document;
+- PII, secrets, restricted classification, and denied provider egress;
+- low-confidence evidence requiring abstention or review;
+- provider error, timeout, retry, cancellation, and partial failure;
+- document update/deletion and proof that stale evidence is no longer returned;
+- model/provider change and a deliberately introduced quality regression;
+- streaming or tool execution attempting to bypass a declared prevalidation control.
+
+Each scenario needs an expected policy outcome and expected evidence, not merely an expected final
+answer. Lot 21's `ConformanceReport` is the normalized source for what was observed, verified, or
+enforced; vendor traces may supplement it but cannot silently upgrade an assurance claim.
+
+### Metrics and evidence
+
+The comparison report must keep these metric families separate:
+
+| Family | Minimum evidence |
+|---|---|
+| RAG quality | recall/precision/MRR/NDCG, answer correctness, faithfulness, citation precision/recall, abstention accuracy, results per stratum |
+| Governance | correct block/allow rate, cross-tenant leaks, forbidden egress calls, mandatory audit-field completeness, provenance coverage, false positives/negatives, achieved assurance level |
+| Portability | conformance checks passed by adapter and capability, framework-owned reusable assets versus engine-specific assets, manifest/policy reuse rate |
+| Integration effort | person-hours, elapsed time for defined tasks, application lines changed, configuration and test files added, engine-specific code, and required specialist interventions |
+| Operations | framework-added latency, end-to-end latency, token/cost coverage, failure recovery, incident reproduction time, and change-of-provider time |
+
+Integration effort must be measured from predefined tasks -- for example add one policy, switch
+provider, reproduce one incident, and produce one conformance report -- with start/end rules and
+reviewable change evidence. A subjective estimate after implementation is not sufficient.
+
+Every run must record the dataset snapshot, engine and adapter versions, model and embedding
+versions, manifest and policy hashes, random seed, environment, resource limits, timestamps,
+cold/warm state, repetition count, and missing measurements. Provider latency and model cost must
+be reported separately from framework-added overhead. Failed or absent measurements remain
+explicit and must never be coerced to zero.
+
+### Gates and interpretation
+
+Thresholds are calibrated from pilot evidence before they become blocking CI gates. The initial
+hard invariants are qualitative: zero cross-tenant leakage, zero forbidden outbound call, no
+content before a required streaming approval, and complete mandatory conformance evidence. Quality
+non-inferiority margins, acceptable latency overhead, and the target reduction in integration
+effort must be proposed from repeated runs and approved as versioned baselines; this document does
+not invent those numbers in advance.
+
+The resulting matrix supports a defensible statement of the form: *for comparable RAG quality,
+the framework delivered these verified controls with this measured amount of reusable and
+engine-specific work*. It must not be converted into a generic claim that the framework has
+better orchestration, connectors, models, or cloud-native features than the underlying stacks.
+
+Lot 21 owns the status-aware conformance contract and real-adapter suite
+(`tests/contract/test_engine_conformance.py`). Lot 22 owns the
+paired existing-application pilot, effort measurement, and continue/stop decision. This guide is
+the shared evaluation protocol; it does not change either lot's dependency gate.
+
 ## Explicitly out of scope for this Batch
 
 - **LLM-as-judge metrics** (RAGAS/ARES/TRACe) — would need a real, paid, non-deterministic LLM
@@ -213,7 +336,8 @@ use (not a new CI service) and uploads `latest.json`/`latest.md` as a workflow a
 - **Stratified/per-cluster golden-set coverage**
   ([docs/research/DIGEST-evaluation.md](../research/DIGEST-evaluation.md) #2, `[2604.20763]`) — the
   task asked for "a small... golden dataset," not a corpus-coverage audit; a future Batch can add
-  stratification once a real corpus (not 6 synthetic passages) exists to stratify.
+  stratification once a real corpus (not 6 synthetic passages) exists to stratify. The planned
+  multi-engine protocol above requires this later; the current script does not implement it.
   Non-anonymized/production-scale golden sets, a `/metrics`-style live dashboard for benchmark
   history, and per-tenant benchmark segmentation are likewise out of scope.
 - **Real LLM-backed generators in CI** — the benchmark's default manifest is deterministic-only;

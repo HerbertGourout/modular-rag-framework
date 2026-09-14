@@ -5,6 +5,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added — SQuAD experiment script and planned multi-engine benchmark protocol (2026-09-14)
+
+- `scripts/prepare_squad_experiment.py` (new): converts a SQuAD 1.1 JSON file into a deterministic
+  golden-set YAML (one paragraph per corpus chunk, first annotated answer per question, `--limit`
+  cases) that `scripts/run_benchmark.py --dataset` consumes unchanged. It is an experiment tool,
+  not a CI golden set: the SQuAD data and generated YAML are not committed, and `benchmark-gate`
+  still runs `core_v1.yaml`.
+- [docs/guides/offline-evaluation.md](docs/guides/offline-evaluation.md) gains a **planned, not
+  implemented** multi-engine assurance benchmark protocol: paired native-versus-framework
+  comparisons, separate quality/governance/portability/effort/operations metric families, a
+  deterministic assurance scenario corpus, and reproducibility requirements. Lot 22's scope and
+  acceptance evidence, and `docs/refactoring-plan.md`, now point to it.
+- **Known limitations:** the script has no unit test yet; it does not detect two article titles
+  that normalize to the same slug (the second paragraph would be dropped while its questions still
+  reference the first); its output records no source checksum or licence, which the planned
+  protocol requires for imported snapshots; and most datasets named in the protocol are not yet
+  backed by the research digests.
+
 ### Added — engine-independent assurance contract and conformance report (Lot 21, 2026-09-10)
 
 - `contracts/assurance.py` (new): `AssuranceLevel` (`L0`/`L1`/`L2`, matching
