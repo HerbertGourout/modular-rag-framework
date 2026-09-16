@@ -16,14 +16,7 @@
       "Edit(src/modular_rag/eval/**)",
       "Write(src/modular_rag/eval/**)",
       "Edit(src/modular_rag/memory/**)",
-      "Write(src/modular_rag/memory/**)",
-      "PowerShell(powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare_review.ps1 -Task \"OPA-backed provider-egress policy \\(OpaEgressPolicy\\)\" -Base origin/main -ReviewPass 2 -CorrectiveBase 42f609f -RiskLevel HIGH -PremiumReason \"Security boundary \\(provider egress decisions\\) and /ready readiness semantics change\"; Get-Content \".review/handoff.md\" -TotalCount 40)",
-      "Bash(git merge-tree *)",
-      "Bash(echo \"git diff --check exit=$?\")",
-      "Bash(python -m ruff check src/modular_rag tests)",
-      "Bash(grep -E \"\\\\.\\(py|ya?ml|toml|cfg|txt\\)$|^.. \\(src|tests|manifests|\\\\.github\\)/\")",
-      "Bash(python -c ' *)",
-      "Bash(python -m ruff check src/modular_rag/contracts/)"
+      "Write(src/modular_rag/memory/**)"
     ],
     "deny": [
       "Read(**/.env*)",

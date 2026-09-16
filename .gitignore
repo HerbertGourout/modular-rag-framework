@@ -16,6 +16,9 @@ credentials/
 # Local Claude Code preferences (user-specific)
 .claude.local.md
 CLAUDE.local.md
+# Per-machine command approvals. Session "don't ask again" grants belong here, never in the
+# shared .claude/settings.json, where they would auto-approve commands for every clone.
+.claude/settings.local.json
 
 # Local Claude Code <-> Codex review handoff
 .review/codex-review.md
