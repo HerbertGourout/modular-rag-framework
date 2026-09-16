@@ -327,9 +327,12 @@ and enforce, and mandatory unsupported controls must fail before traffic is serv
 - **ADR-0017**: Engine-independent assurance contract and conformance report (Lot 21). Accepted
   2026-09-10 — drafted 2026-09-09 as Lot 21's required focused contract ADR, per ADR-0015 §4 and
   `docs/refactoring-plan.md`'s dependency gate.
+- **ADR-0018**: Existing-application adapter boundary and control-point declaration (Lot 22).
+  Accepted 2026-09-16 — drafted and revised the same day as Lot 22's required focused contract
+  ADR, per ADR-0015 §4's second adoption path. Unblocks Lot 22 implementation.
 
-Seventeen ADRs are Accepted as of this writing. Future ADRs will be
-added as new major decisions arise; per this project's own rule
+Eighteen ADRs are Accepted as of this writing. Future ADRs will
+be added as new major decisions arise; per this project's own rule
 ([CLAUDE.md §07](../../CLAUDE.md#07--security-rules)), any new top-level module, layer boundary,
 or contract modification requires one.
 
