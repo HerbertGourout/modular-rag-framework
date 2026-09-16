@@ -245,7 +245,9 @@ entry (`CVE-2026-85091` on `zlib1g`, accepted 2026-09-06) is different again: `f
 not `wont-fix` — a fresh CVE with no patch anywhere yet (neither Debian nor upstream zlib), narrow
 attack surface (`gzprintf`/`gzvprintf` misuse this project's own code never exercises), tracked to
 be removed once a fix ships rather than folded into the blanket won't-fix rule. All entries are
-dated and reviewed; see the file's own header comment for the acceptance record.
+dated and reviewed; see the file's own header comment for the acceptance record. A finding that
+*does* have an available fix is never handled here — see "When Debian ships a fix the pinned digest
+does not carry yet" below.
 
 ## Base image: digest-pinned, refresh procedure
 
@@ -274,6 +276,50 @@ put this on a recurring calendar reminder, not only "when something breaks"):
 2. Update `python:3.12-slim@sha256:...` in **both** `Dockerfile` stages together — a
    builder/runtime split on different digests defeats the point.
 3. Rerun the full validation sequence below, including an actual `docker build` if at all possible.
+
+### When Debian ships a fix the pinned digest does not carry yet: explicit `apt` revision pins
+
+Refreshing the digest is the *first* remediation path, but it only works when the floating
+`python:3.12-slim` tag has already moved forward. On 2026-09-15 it had not: the tag still resolved
+to the digest pinned above, while Debian had already published fixed revisions for every
+`HIGH`/`CRITICAL` Grype finding in that image. Re-pinning would have changed nothing. The runtime
+stage therefore upgrades exactly those packages, by exact revision:
+
+```dockerfile
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends --only-upgrade \
+        gzip=1.13-1+deb13u1 \
+        libc-bin=2.41-12+deb13u4 \
+        libc6=2.41-12+deb13u4 \
+        libpcre2-8-0=10.46-1~deb13u2 \
+        libsqlite3-0=3.46.1-7+deb13u2 \
+        perl-base=5.40.1-6+deb13u1 && \
+    rm -rf /var/lib/apt/lists/*
+```
+
+**Why exact revisions and not `apt-get upgrade`**: a blanket upgrade would make a supposedly
+immutable image depend on whichever repository state happened to exist at build time — the same
+defect digest-pinning exists to prevent, reintroduced one layer higher. An exact version is a
+declaration of what the image contains, verifiable by reading the Dockerfile.
+
+**The intended failure mode**: Debian removes a superseded revision from the repository when it
+publishes the next one, so this `RUN` eventually fails with `Version '...' for '...' was not
+found`. That is the designed signal, not a regression — it forces a deliberate decision instead of
+silently producing a different runtime image. When it happens, prefer refreshing the base digest
+(step 1–3 above); if the tag still has not moved, bump these revisions to the ones Grype's own
+`FIXED IN` column names and record the date here.
+
+**Relationship to `.grype.yaml`**: the two mechanisms cover disjoint cases and must not be
+confused. `.grype.yaml` accepts findings this project *cannot* act on (`fix-state: wont-fix`, or a
+fix that exists only on a Python line this project does not run). This `apt` pin closes findings it
+*can* act on. A fixable `HIGH`/`CRITICAL` belongs here, never in the ignore list — adding it there
+would convert a solvable problem into a permanently accepted risk.
+
+This block closed the 2026-09-15 CI gate failure: `CVE-2026-5450`/`CVE-2026-5928` (`libc6`,
+`libc-bin`), seven `perl-base` findings led by `CVE-2026-8376`, `CVE-2026-41992` (`gzip`),
+`CVE-2026-86145`/`CVE-2026-89161` (`libpcre2-8-0`), and `CVE-2026-11822`/`CVE-2026-11824`
+(`libsqlite3-0`). The builder stage is deliberately left alone: it ships nothing, only the wheel
+it produces crosses into the runtime image.
 
 ## Build backend (Hatchling and the whole build toolchain): pinned, refresh procedure
 

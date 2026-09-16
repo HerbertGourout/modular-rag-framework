@@ -78,6 +78,22 @@ COPY src/ src/
 RUN python -m build --wheel --no-isolation
 
 FROM python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea AS runtime
+# The official 3.12-slim tag still resolved to the pinned digest above on
+# 2026-09-15, but Debian had already published fixes for the HIGH/CRITICAL
+# findings that Grype reports in that image. Install only those fixed package
+# revisions, explicitly pinned: a blanket `apt-get upgrade` would make the
+# supposedly immutable image depend on whichever repository state happened to
+# exist at build time. Exact versions make a future repository change fail the
+# build instead of silently producing a different runtime image.
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends --only-upgrade \
+        gzip=1.13-1+deb13u1 \
+        libc-bin=2.41-12+deb13u4 \
+        libc6=2.41-12+deb13u4 \
+        libpcre2-8-0=10.46-1~deb13u2 \
+        libsqlite3-0=3.46.1-7+deb13u2 \
+        perl-base=5.40.1-6+deb13u1 && \
+    rm -rf /var/lib/apt/lists/*
 RUN useradd --create-home --uid 1000 mrag && \
     mkdir -p /home/mrag/.cache/huggingface && \
     chown -R mrag:mrag /home/mrag/.cache
