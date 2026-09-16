@@ -593,6 +593,12 @@ actually support, test streaming/tools/failure/bypass paths, and measure integra
 the application's native platform tooling. Full scope:
 [lot-22-external-application-adapters-and-conformance.md](refactoring/lot-22-external-application-adapters-and-conformance.md).
 
+The shared, paired benchmark protocol for quality, assurance, portability, and measured
+integration effort is defined in
+[offline-evaluation.md](guides/offline-evaluation.md#planned-multi-engine-assurance-benchmark-lots-21-22-not-implemented).
+It remains planned work: the current Batch 13 benchmark evaluates only the native reference
+pipeline on its deterministic golden set.
+
 The decision gate after Lot 22 is explicit: if the pilot does not show material portable
 assurance or reuse at acceptable cost, do not expand into a broad adapter programme.
 

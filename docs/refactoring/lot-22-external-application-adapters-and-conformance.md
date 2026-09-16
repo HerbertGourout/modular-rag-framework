@@ -30,6 +30,14 @@ components, then assessed at the assurance level its available hooks genuinely s
    platform tooling alone.
 8. Publish an adapter-author guide and a second fake/reference adapter fixture to show that the
    contract is not specific to one client graph.
+9. Run the paired, capability-aware protocol defined in
+   [offline-evaluation.md](../guides/offline-evaluation.md#planned-multi-engine-assurance-benchmark-lots-21-22-not-implemented):
+   the unchanged application with native controls, then the same application behind the framework
+   boundary. Report controlled-component and stack-native-optimized results separately.
+10. Combine a versioned public RAG-quality portfolio with the deterministic assurance scenarios;
+    do not infer tenant, egress, audit, or provenance guarantees from QA accuracy alone.
+11. Record reproducibility metadata and measure the predefined portability tasks: add a policy,
+    change provider, reproduce an incident, and generate a conformance report.
 
 ## Security requirements
 
@@ -54,13 +62,20 @@ components, then assessed at the assurance level its available hooks genuinely s
 - the Lot 21 conformance report is produced and its claimed level passes all mandatory checks;
 - negative bypass, cross-tenant, egress, streaming, tool-call, and partial-failure tests pass;
 - unsupported controls are visible before deployment;
-- measured person-days, changed application lines, reusable assets, and residual platform-specific
-  work are recorded against the native-tooling baseline;
+- quality, governance, portability, effort, and operations are reported as separate metric
+  families; aggregate quality must not hide an uncovered dataset stratum or capability;
+- measured person-hours and task elapsed time, changed application lines, configuration/test files,
+  reusable framework assets, engine-specific code, and residual platform-specific work are
+  recorded against the native-tooling baseline with reviewable change evidence;
+- dataset, engine, adapter, model, manifest, policy, environment, run, and missing-measurement
+  metadata make the comparison reproducible;
 - a human architecture/security decision confirms whether the pilot justifies further adapters.
 
 ## Decision gate
 
 Do not generalize the adapter programme unless the pilot demonstrates meaningful assurance or
-reuse beyond the selected platform's native capabilities at acceptable integration cost. If it
-does not, retain the native engine and assurance contracts as an internal accelerator rather than
-claiming a general external-application product.
+reuse beyond the selected platform's native capabilities at acceptable integration cost while
+preserving quality within an approved non-inferiority margin. The decision must cite the paired
+measurements, not a feature checklist or marketing comparison. If the pilot does not support the
+hypothesis, retain the native engine and assurance contracts as an internal accelerator rather
+than claiming a general external-application product.
