@@ -1,3 +1,17 @@
+from modular_rag.contracts.application import (
+    APPLICATION_CONTRACT_VERSION,
+    ApplicationProfile,
+    ApplicationProfileProvider,
+    ControlPoint,
+    ControlPointBinding,
+    ControlPointSupport,
+    EgressPath,
+    EgressPathKind,
+    ExpectedAuditEvent,
+    control_point_support_rank,
+    evidence_ceiling,
+    required_audit_events,
+)
 from modular_rag.contracts.assurance import (
     ASSURANCE_CONTRACT_VERSION,
     AssuranceLevel,
@@ -70,6 +84,10 @@ from modular_rag.contracts.telemetry import Telemetry
 from modular_rag.contracts.tracing import AttributeValue, Span, Tracer
 
 __all__ = [
+    "APPLICATION_CONTRACT_VERSION", "ApplicationProfile", "ApplicationProfileProvider",
+    "ControlPoint", "ControlPointBinding", "ControlPointSupport", "EgressPath", "EgressPathKind",
+    "ExpectedAuditEvent", "control_point_support_rank", "evidence_ceiling",
+    "required_audit_events",
     "ASSURANCE_CONTRACT_VERSION", "AssuranceLevel", "ConformanceReport", "EvidenceEntry",
     "EvidenceKind", "EvidenceStatus", "assurance_level_rank", "compute_achieved_level",
     "evidence_status_rank", "meets_minimum_level",
