@@ -1,20 +1,5 @@
 {
-  "description": "Claude Code settings for Modular RAG Framework. Schema follows the real Claude Code permissions/hooks model — see docs/guides/CLAUDE-CODE-COMPLETE-GUIDE.md for the narrative explanation of the 7-layer security strategy this enforces.",
-  "version": "2.0",
-  "lastUpdated": "2026-06-22",
   "permissions": {
-    "deny": [
-      "Read(**/.env*)",
-      "Edit(**/.env*)",
-      "Write(**/.env*)",
-      "Read(**/*.local.md)",
-      "Edit(manifests/production/**)",
-      "Write(manifests/production/**)",
-      "Edit(.gitlab/**)",
-      "Write(.gitlab/**)",
-      "Edit(benchmarks/**)",
-      "Write(benchmarks/**)"
-    ],
     "allow": [
       "Edit(tests/**)",
       "Write(tests/**)",
@@ -31,7 +16,20 @@
       "Edit(src/modular_rag/eval/**)",
       "Write(src/modular_rag/eval/**)",
       "Edit(src/modular_rag/memory/**)",
-      "Write(src/modular_rag/memory/**)"
+      "Write(src/modular_rag/memory/**)",
+      "PowerShell(powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare_review.ps1 -Task \"OPA-backed provider-egress policy \\(OpaEgressPolicy\\)\" -Base origin/main -ReviewPass 2 -CorrectiveBase 42f609f -RiskLevel HIGH -PremiumReason \"Security boundary \\(provider egress decisions\\) and /ready readiness semantics change\"; Get-Content \".review/handoff.md\" -TotalCount 40)"
+    ],
+    "deny": [
+      "Read(**/.env*)",
+      "Edit(**/.env*)",
+      "Write(**/.env*)",
+      "Read(**/*.local.md)",
+      "Edit(manifests/production/**)",
+      "Write(manifests/production/**)",
+      "Edit(.gitlab/**)",
+      "Write(.gitlab/**)",
+      "Edit(benchmarks/**)",
+      "Write(benchmarks/**)"
     ],
     "ask": [
       "Edit(.claude/rules/**)",
@@ -80,6 +78,9 @@
       }
     ]
   },
+  "description": "Claude Code settings for Modular RAG Framework. Schema follows the real Claude Code permissions/hooks model — see docs/guides/CLAUDE-CODE-COMPLETE-GUIDE.md for the narrative explanation of the 7-layer security strategy this enforces.",
+  "version": "2.0",
+  "lastUpdated": "2026-09-16",
   "notes": {
     "permissionStrategy": "Real Claude Code 3-bucket model: deny (always blocked, no prompt) > ask (prompts every time) > allow (auto-approved, no prompt). Paths not matched by any rule fall back to Claude Code's defaultMode behavior.",
     "tier_mapping": "deny == old 'denylist' (secrets, production configs, benchmarks). allow == old 'dontAsk'+'acceptEdits' tiers merged (tests/examples/docs + safe domain modules — both are 'no prompt' in the real model, there's no separate dontAsk vs acceptEdits distinction). ask == old 'restrictedPaths' (contracts, orchestration, security, adapters/embeddings, adapters/vectorstores, adapters/llms, adapters/graphstores, adapters/search, adapters/auth, core, .claude/rules, and a few root config files). Per ADR-0005 (2026-08-04), adapters/llms|graphstores|search moved from deny to ask: they are now delegation-adapter targets for Lots 6/7/15, not V2+/V3+ reserved namespaces. Per Lot 11b (2026-08-05, docs/refactoring-plan.md), adapters/auth also moved from deny to ask: identity/tenant propagation is now load-bearing work (Keycloak OIDC verifier), matching CLAUDE.md's own instruction to revisit at Lot 11b rather than opening it speculatively. .claude/rules/** moved from deny to ask so Lot 2's realignment edits (and future ones) are possible with confirmation, not hard-blocked.",

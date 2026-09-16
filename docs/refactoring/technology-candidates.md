@@ -25,7 +25,7 @@ here. This file is never itself a source of truth once that happens.
 
 | Domain | Candidate | Rationale | Gated on | Target lot |
 |---|---|---|---|---|
-| Policy | OPA | Open item since ADR-0003; one policy engine is enough at this team size | ADR-0005 accepted | 11b |
+| Policy | OPA | Open item since ADR-0003; one policy engine is enough at this team size. **Adopted for provider egress only** (2026-09-14): `OpaEgressPolicy` delegates `EgressPolicy` decisions to OPA. Putting OPA behind `PolicyEngine` remains ADR-0003's open V4 item, since no `PolicyEngine` Protocol exists | ADR-0005 accepted | 11b |
 | Secrets | OpenBao | Secret-reference resolution needed by the manifest v2 schema | — | 9 |
 | Observability | OpenTelemetry + Prometheus + Grafana Loki + Grafana Tempo | `TraceStep` should emit OTel-compatible spans instead of a proprietary format | — | 10 |
 | LLM observability | Langfuse (self-hosted) | Ready-made sink for the audit trail instead of a hand-built event store | deployment topology | 10 |

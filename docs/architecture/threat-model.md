@@ -86,7 +86,9 @@ open gap — see §5 below.
 
 Output redaction occurs after model generation and cannot by itself prevent raw query/context or
 embedding input from crossing Boundary 3. Lot 20 (`security.policies.egress_policy.
-ManifestEgressPolicy`, `contracts/egress.py`) closes this for the boundary's owned adapters when
+ManifestEgressPolicy` or, since 2026-09-14, `adapters.policy.opa_egress_policy.OpaEgressPolicy`
+delegating the decision to OPA; `contracts/egress.py`) closes this for the boundary's owned
+adapters when
 `governance.egress_policy` is configured: a deny-by-default, classification-aware decision runs
 before `Embedder.embed()` — both document/chunk ingestion and query-time embedding at retrieval,
 the latter closed in Codex review pass 1 (HIGH-002) — `Reranker.rerank()`, and

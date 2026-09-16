@@ -62,7 +62,8 @@ to happen automatically — see the distinction above.
 still only processes answer text after generation and selected stored feedback/audit text — it
 does not classify or block raw queries, retrieved chunks, documents, or embedding inputs before a
 remote adapter call. Lot 20 closes that specific gap with a separate control:
-`governance.egress_policy` (`security.policies.egress_policy.ManifestEgressPolicy`) checks
+`governance.egress_policy` (`security.policies.egress_policy.ManifestEgressPolicy`, or
+`adapters.policy.opa_egress_policy.OpaEgressPolicy` to delegate the decision to OPA) checks
 `Chunk.classification` (or, for query-time embedding at retrieval, the policy's own
 `default_classification` — `Query` itself carries no classification field) against a
 manifest-declared provider profile before `Embedder.embed()`, `Reranker.rerank()`, and

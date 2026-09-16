@@ -23,6 +23,49 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   protocol requires for imported snapshots; and most datasets named in the protocol are not yet
   backed by the research digests.
 
+### Added — OPA-backed provider-egress policy (2026-09-14)
+
+- `adapters/policy/opa_egress_policy.py` (new): `OpaEgressPolicy`, a second `EgressPolicy`
+  implementation selected with `governance.egress_policy.type: opa`, which delegates the
+  classification-versus-provider decision to an Open Policy Agent server through its data API.
+  No contract changes: `EgressPolicy` and its `EGRESS_DECISION` evidence already existed
+  ([ADR-0016](docs/adr/0016-provider-egress-control.md),
+  [ADR-0017](docs/adr/0017-engine-independent-assurance-contract.md)).
+- Two decisions stay local by construction: a provider missing from `providers` is denied, and a
+  `local: true` provider is allowed, both without calling OPA, so the port's invariants never
+  depend on the Rego policy being correct. OPA receives only `{classification, provider,
+  operation}`, never content.
+- Fail-closed: an undefined result (no rule matched), a malformed result, a non-200 status, a
+  timeout, a transport error or an open circuit breaker all deny. `reason` is built locally from
+  the decision's own fields and never copied from the policy. Definitive decisions are cached per
+  (classification, provider, operation) for `cache_ttl_seconds` (default 30, at most 300, 0
+  disables); failures are never cached. A `max_classification` under `type: opa` is rejected at
+  construction, since nothing would enforce it.
+- `egress_policy` is now a critical readiness role (`orchestration/container.py`,
+  [ADR-0010](docs/adr/0010-health-checkable-and-readiness-semantics.md) §3):
+  `OpaEgressPolicy.check_health()` evaluates the **configured decision document**, the same path
+  real traffic uses, not OPA's `/health`. An unreachable OPA, an absent or unauthorized decision
+  path, and a malformed answer all return a 503 from `/ready` instead of a misleading 200; a
+  well-formed allow *or* deny is healthy, since a policy that answers is a working policy.
+  `ManifestEgressPolicy` has no health check and is unaffected, and an OPA policy declaring only
+  local providers reports no dependency.
+- A bearer `token`, or credentials embedded in the URL, require an `https://` endpoint or a
+  loopback host (`localhost`, `127.0.0.1`, `::1`) for a sidecar deployment. Anything else is
+  refused at construction rather than sending a credential that guards the egress boundary over
+  cleartext HTTP (maintainer decision, 2026-09-15).
+- Configuration is fully validated at construction: numbers must be finite (a YAML `.nan` is no
+  longer accepted), the URL must parse with a scheme, a valid host and a valid port, and the
+  `circuit_breaker`, `transport` and `clock` test-injection parameters are rejected when supplied
+  through manifest configuration. Every URL failure — a malformed IPv6 host, an invalid or
+  out-of-range port, a netloc Python rejects under NFKC normalization — becomes the same
+  sanitized `ConfigurationError`, raised `from None` so that no parser message reaches a startup
+  log: Python's own netloc error quotes the offending netloc, credentials included.
+- CI: the `test-integration` job starts OPA 1.20.2, pinned by digest, with a test policy
+  (`tests/integration/fixtures/opa/egress.rego`). It runs as a step rather than a service,
+  because GitHub Actions services cannot pass container arguments.
+- **Not delivered**: OPA behind `PolicyEngine` (no Protocol exists; ADR-0003's open V4 item),
+  management of OPA bundles or decision logs, and pseudonymization.
+
 ### Added — engine-independent assurance contract and conformance report (Lot 21, 2026-09-10)
 
 - `contracts/assurance.py` (new): `AssuranceLevel` (`L0`/`L1`/`L2`, matching

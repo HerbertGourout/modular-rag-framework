@@ -1,14 +1,21 @@
 """Semantic conformance tests for the EgressPolicy port (contracts/egress.py,
 Lot 20, docs/refactoring-plan.md). Parametrized over every registered
-implementation — currently only `ManifestEgressPolicy`.
+implementation: `ManifestEgressPolicy` and `OpaEgressPolicy`.
 """
 from __future__ import annotations
 
+import httpx
 import pytest
 
+from modular_rag.adapters.policy.opa_egress_policy import OpaEgressPolicy
 from modular_rag.contracts.egress import EgressDecision, EgressOperation, EgressPolicy
 from modular_rag.core.enums import DataClassification
 from modular_rag.security.policies.egress_policy import ManifestEgressPolicy
+
+
+def _opa_allowing_everything(request: httpx.Request) -> httpx.Response:
+    return httpx.Response(200, json={"result": {"allowed": True}})
+
 
 POLICY_FACTORIES = [
     lambda: ManifestEgressPolicy(
@@ -16,7 +23,15 @@ POLICY_FACTORIES = [
             "sentence-transformers": {"local": True},
             "openai": {"local": False, "max_classification": "confidential"},
         }
-    )
+    ),
+    # An OPA that allows *everything*: the invariants below (local always
+    # allowed, unknown provider denied) must still hold, because this adapter
+    # decides both locally and never asks the policy about them.
+    lambda: OpaEgressPolicy(
+        url="http://opa.test:8181",
+        providers={"sentence-transformers": {"local": True}, "openai": {"local": False}},
+        transport=httpx.MockTransport(_opa_allowing_everything),
+    ),
 ]
 
 

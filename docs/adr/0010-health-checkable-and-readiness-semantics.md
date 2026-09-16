@@ -60,7 +60,22 @@ test: **would this role's failure produce an unhandled exception on the query-se
 "is this component used somewhere," not "does it feel important" — verified against real code
 each time (`RAGEngine._audit()`'s missing try/except around `audit_sink.record()`;
 `RAGEngine._run_steps()`'s missing try/except around `generator.generate()`). Currently:
-`audit_sink` (when wired) and `generator` (always required).
+`audit_sink` (when wired), `generator` (always required), and `egress_policy` (when wired).
+
+`egress_policy` was added on 2026-09-14 with `OpaEgressPolicy`, under the same evidence test:
+`RAGEngine._enforce_egress()` records its evidence and re-raises `EgressDeniedError` before the
+guarded query-time embed, rerank and generate calls, with no surrounding try/except, and a policy
+that cannot reach its decision service denies every remote call fail-closed. An unreachable OPA
+therefore fails `answer()` for any remote-provider pipeline. Only a policy implementing
+`check_health()` is ever probed, so `ManifestEgressPolicy`, which has nothing external to check,
+is unaffected.
+
+Its probe evaluates the *configured decision document*, not OPA's `/health` (Codex review pass 1,
+HIGH-001): a process-healthy OPA whose decision path is absent, unauthorized or broken denies
+every remote call while a liveness probe stays green. A well-formed allow or deny is healthy —
+a policy that answers is working — while undefined, malformed and error answers are not. This is
+now `.claude/rules/health-checks.md` rule 12, generalized from the same discipline already behind
+`QdrantStore`'s collection validation and the generators' configured-model probe.
 
 `indexer` and `retriever` are deliberately **not** individually critical —
 `HybridRetriever._safe_retrieve()` already catches a failure on either leg and degrades

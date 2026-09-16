@@ -190,7 +190,32 @@ jobs:
           done
           echo "::error::Qdrant did not become ready within the timeout"
           exit 1
-      - name: Run integration tests (real Qdrant + PostgreSQL)
+      - name: Start OPA with the integration-test egress policy
+        # OPA cannot be a `services:` entry like Qdrant and PostgreSQL above:
+        # GitHub Actions services accept no container arguments, and OPA's
+        # image only serves with `run --server <policy>`, which also needs the
+        # test policy mounted from the checked-out repository -- so it starts
+        # here, after checkout. Pinned by digest for the same reason as the
+        # services (Codex review MEDIUM-001): openpolicyagent/opa:1.20.2, digest
+        # resolved from Docker Hub's v2 API on 2026-09-14, two independent
+        # fetches returning the identical value. Refresh with the same
+        # procedure: https://hub.docker.com/v2/repositories/openpolicyagent/opa/tags/<tag>.
+        run: |
+          docker run -d --name opa -p 8181:8181 \
+            -v "${{ github.workspace }}/tests/integration/fixtures/opa:/policies:ro" \
+            openpolicyagent/opa:1.20.2@sha256:7b15f9d96345dfa639322ad97f65a0b38260f95efcdd7f5c24e284228708f06c \
+            run --server --addr=0.0.0.0:8181 /policies
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8181/health; then
+              echo "OPA ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::OPA did not become ready within the timeout"
+          docker logs opa || true
+          exit 1
+      - name: Run integration tests (real Qdrant + PostgreSQL + OPA)
         timeout-minutes: 10
         run: pytest tests/integration/ -v -m integration --tb=long -ra
       - name: Dump service container logs on failure
@@ -200,6 +225,8 @@ jobs:
           docker logs ${{ job.services.qdrant.id }} || true
           echo "--- PostgreSQL logs ---"
           docker logs ${{ job.services.postgres.id }} || true
+          echo "--- OPA logs ---"
+          docker logs opa || true
 
   e2e-deterministic:
     # Batch 10: runs tests/e2e/test_secure_preset_e2e.py specifically (the
