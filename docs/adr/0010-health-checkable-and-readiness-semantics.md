@@ -70,6 +70,13 @@ therefore fails `answer()` for any remote-provider pipeline. Only a policy imple
 `check_health()` is ever probed, so `ManifestEgressPolicy`, which has nothing external to check,
 is unaffected.
 
+Its probe evaluates the *configured decision document*, not OPA's `/health` (Codex review pass 1,
+HIGH-001): a process-healthy OPA whose decision path is absent, unauthorized or broken denies
+every remote call while a liveness probe stays green. A well-formed allow or deny is healthy —
+a policy that answers is working — while undefined, malformed and error answers are not. This is
+now `.claude/rules/health-checks.md` rule 12, generalized from the same discipline already behind
+`QdrantStore`'s collection validation and the generators' configured-model probe.
+
 `indexer` and `retriever` are deliberately **not** individually critical —
 `HybridRetriever._safe_retrieve()` already catches a failure on either leg and degrades
 gracefully — but `Container.check_readiness()` escalates the specific combination of **both**

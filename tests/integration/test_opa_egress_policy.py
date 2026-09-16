@@ -66,9 +66,25 @@ def test_an_undefined_decision_path_denies():
 
 @pytest.mark.integration
 def test_health_is_healthy_against_a_real_opa():
+    """The probe evaluates the configured decision document. The fixture policy
+    denies `restricted` content, and a deny is a healthy answer: a policy that
+    answers is a working policy."""
     [health] = _policy().check_health()
 
     assert health.healthy is True
+
+
+@pytest.mark.integration
+def test_health_is_unhealthy_when_the_configured_decision_path_is_missing():
+    """Codex review pass 1, HIGH-001, against a real OPA: the process answers
+    `/health` perfectly while the configured document does not exist, and in
+    that state every remote call is denied."""
+    policy = _policy(decision_path="modular_rag/egress/does_not_exist")
+
+    assert _check(policy, DataClassification.PUBLIC).allowed is False
+    [health] = policy.check_health()
+    assert health.healthy is False
+    assert health.detail == "decision path returned no decision"
 
 
 @pytest.mark.integration

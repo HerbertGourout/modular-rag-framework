@@ -41,9 +41,24 @@ chunk, so an uncached policy would make one HTTP call per embedded chunk.
 Failures and undefined or malformed answers are never cached: a transient
 network blip must not deny traffic for a whole TTL. The TTL is also the upper
 bound on how long a tightened policy can take to apply, hence its ceiling.
+
+Credential transport (Codex review pass 1, HIGH-002; maintainer decision
+2026-09-15): a bearer `token`, or credentials embedded in the URL, require an
+`https://` endpoint. The single, explicit exception is a loopback host
+(`localhost`, `127.0.0.1`, `::1`) for the usual sidecar deployment. Anything
+else is refused at construction rather than sending a credential that guards a
+security boundary over cleartext HTTP.
+
+Readiness (Codex review pass 1, HIGH-001): `check_health()` probes the
+*configured decision document*, not OPA's `/health`. An OPA process can be
+perfectly healthy while the decision path is absent, unauthorized or broken,
+and in that state every remote call is denied while `/ready` would otherwise
+stay green -- the exact false signal this critical readiness role exists to
+prevent.
 """
 from __future__ import annotations
 
+import math
 import re
 import threading
 import time
@@ -51,6 +66,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 import structlog
@@ -81,6 +97,9 @@ _DECISION_PATH = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:/[A-Za-z_][A-Za-z0-9_]*)*
 # A profile under `type: opa` carries only the local/remote flag. Anything else,
 # notably `max_classification`, would be a ceiling that nothing enforces.
 _PROFILE_KEYS = frozenset({"local"})
+# The only hosts where a credential may travel without TLS (HIGH-002): a
+# sidecar on the pod's own loopback interface, never an arbitrary hostname.
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 
 
 class _Outcome(StrEnum):
@@ -106,6 +125,61 @@ class _CacheEntry:
     expires_at: float
 
 
+@dataclass(frozen=True)
+class _Endpoint:
+    """A validated OPA endpoint. `secure` means "may carry a credential":
+    TLS, or a loopback host (HIGH-002)."""
+
+    url: str
+    host: str
+    secure: bool
+    has_userinfo: bool
+
+
+def _parse_endpoint(value: object) -> _Endpoint:
+    """Full URL validation, not a prefix test (Codex review pass 1,
+    MEDIUM-001): `"http://"` alone used to pass and was then stored as
+    `"http:"`, so every request would have failed at traffic time instead of
+    at wiring time.
+
+    Every rejection raises the same sanitized `ConfigurationError`, and does so
+    `from None` so no parser message survives in the traceback either (Codex
+    review pass 2, MEDIUM-001). Three parser behaviours make that necessary:
+    `urlsplit` raises a bare `ValueError` for a malformed IPv6 host; it defers
+    port validation until `.port` is *read*, so an invalid or out-of-range port
+    otherwise surfaced only at the first request; and its netloc check embeds
+    the offending netloc verbatim in the message
+    (`netloc 'user:SECRET@…' contains invalid characters under NFKC
+    normalization`), which would put a credential straight into startup logs.
+    `httpx.URL()` is exercised here too, so a URL this parser accepts but the
+    client would reject fails at wiring time rather than under traffic.
+    """
+    raw = str(value)
+    error = ConfigurationError(
+        f"{_CONFIG}.url must be an http:// or https:// URL with a valid host and port, for "
+        "example https://opa.internal:8181 (the value is not echoed, since a URL may embed "
+        "credentials)."
+    )
+    try:
+        parts = urlsplit(raw)
+        hostname, port = parts.hostname, parts.port
+        username, password = parts.username, parts.password
+        httpx.URL(raw)
+    except (ValueError, httpx.InvalidURL):
+        raise error from None
+    if parts.scheme not in ("http", "https") or not hostname:
+        raise error
+    if port is not None and not 0 < port <= 65535:
+        raise error
+    host = hostname.lower()
+    return _Endpoint(
+        url=raw.rstrip("/"),
+        host=host,
+        secure=parts.scheme == "https" or host in _LOOPBACK_HOSTS,
+        has_userinfo=bool(username or password),
+    )
+
+
 def _parse_classification(value: object) -> DataClassification:
     expected = [level.value for level in DataClassification]
     error = ConfigurationError(
@@ -125,6 +199,11 @@ def _parse_bounded(value: object, *, name: str, allow_zero: bool, maximum: float
     if isinstance(value, bool) or not isinstance(value, int | float):
         raise ConfigurationError(f"{where} must be a number, got {value!r}.")
     number = float(value)
+    # `math.isfinite` first (Codex review pass 1, MEDIUM-001): every comparison
+    # with NaN is false, so a YAML `.nan` slipped through both bounds below and
+    # became a NaN timeout that only surfaced under real traffic.
+    if not math.isfinite(number):
+        raise ConfigurationError(f"{where} must be a finite number, got {value!r}.")
     if (number < 0 if allow_zero else number <= 0) or number > maximum:
         lower = ">= 0" if allow_zero else "> 0"
         raise ConfigurationError(f"{where} must be {lower} and <= {maximum:g}, got {number:g}.")
@@ -165,6 +244,17 @@ def _parse_token(value: object) -> str | None:
             f"{_CONFIG}.token must be a non-empty string when set (its value is never echoed)."
         )
     return value
+
+
+def _injection_only(name: str, expected: str) -> ConfigurationError:
+    """Codex review pass 1, MEDIUM-001: the factory forwards every manifest key
+    to this constructor, so a YAML `clock: not-callable` reached the instance
+    and failed only on the first request. These three parameters are test
+    injection points, never manifest settings."""
+    return ConfigurationError(
+        f"{_CONFIG}.{name} is a programmatic injection point for tests, not a manifest "
+        f"setting. It must be {expected}."
+    )
 
 
 def _parse_decision(response: httpx.Response) -> _Outcome:
@@ -208,22 +298,23 @@ def _elapsed_ms(t0: float) -> float:
 
 class OpaEgressPolicy:
     """`EgressPolicy` backed by an Open Policy Agent server. See this module's
-    docstring for what is decided locally, what OPA decides, and why every
-    failure denies.
+    docstring for what is decided locally, what OPA decides, why every failure
+    denies, and the credential-transport rule.
 
     Configuration (`governance.egress_policy`, `type: opa`):
 
     ```yaml
     config:
-      url: http://opa:8181
-      decision_path: modular_rag/egress/decision   # POST /v1/data/<decision_path>
-      providers:                                    # same coverage rule as type: manifest
+      url: https://opa.internal:8181                # http:// only without credentials,
+                                                     # or on a loopback host
+      decision_path: modular_rag/egress/decision     # POST /v1/data/<decision_path>
+      providers:                                     # same coverage rule as type: manifest
         sentence-transformers: {local: true}
         openai: {local: false}
-      default_classification: restricted            # applied to unclassified content
+      default_classification: restricted             # applied to unclassified content
       timeout_seconds: 1.0
-      cache_ttl_seconds: 30                         # 0 disables caching
-      token: ${OPA_TOKEN}                           # optional bearer token
+      cache_ttl_seconds: 30                          # 0 disables caching
+      token: ${OPA_TOKEN}                            # optional; requires https:// or loopback
     ```
 
     The policy must define `{"allowed": true|false}` at `decision_path` for the
@@ -231,8 +322,8 @@ class OpaEgressPolicy:
     keys in the result are ignored; in particular a policy-authored `reason` is
     never surfaced (ADR-0016 §4).
 
-    `circuit_breaker`, `transport` and `clock` are injection points for tests,
-    not manifest settings.
+    `circuit_breaker`, `transport` and `clock` are injection points for tests.
+    They are rejected when supplied through manifest configuration.
     """
 
     def __init__(
@@ -249,21 +340,38 @@ class OpaEgressPolicy:
         transport: httpx.BaseTransport | None = None,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
-        base_url = str(url)
-        if not base_url.startswith(("http://", "https://")):
-            raise ConfigurationError(
-                f"{_CONFIG}.url must be an http:// or https:// URL (the value is not echoed, "
-                "since a URL may embed credentials)."
-            )
+        if circuit_breaker is not None and not isinstance(circuit_breaker, CircuitBreaker):
+            raise _injection_only("circuit_breaker", "a core.resilience.CircuitBreaker")
+        if transport is not None and not isinstance(transport, httpx.BaseTransport):
+            raise _injection_only("transport", "an httpx.BaseTransport")
+        if not callable(clock):
+            raise _injection_only("clock", "a callable returning a float")
+
+        endpoint = _parse_endpoint(url)
         path = str(decision_path).strip("/")
         if not _DECISION_PATH.fullmatch(path):
             raise ConfigurationError(
                 f"{_CONFIG}.decision_path must be slash-separated Rego package and rule names "
                 f"such as 'modular_rag/egress/decision', got {decision_path!r}."
             )
-        self._url = base_url.rstrip("/")
+        parsed_token = _parse_token(token)
+        if not endpoint.secure and (parsed_token is not None or endpoint.has_userinfo):
+            # Maintainer decision, 2026-09-15 (Codex review pass 1, HIGH-002).
+            raise ConfigurationError(
+                f"{_CONFIG}: a token, or credentials embedded in the URL, require an https:// "
+                "endpoint or a loopback host (localhost, 127.0.0.1, ::1) for a sidecar "
+                "deployment. Refusing to send a credential guarding the egress boundary over "
+                "cleartext HTTP. Neither the URL nor the token is echoed here."
+            )
+
+        self._url = endpoint.url
         self._decision_url = f"/v1/data/{path}"
         self._local = _parse_local_flags({} if providers is None else providers)
+        # The provider `check_health()` asks OPA about: a declared remote one,
+        # chosen deterministically. `None` means nothing on the request path
+        # depends on OPA, so there is no dependency to report.
+        remote_providers = sorted(name for name, local in self._local.items() if not local)
+        self._probe_provider = remote_providers[0] if remote_providers else None
         self._default_classification = _parse_classification(default_classification)
         self._timeout = _parse_bounded(
             timeout_seconds, name="timeout_seconds", allow_zero=False, maximum=_MAX_TIMEOUT_SECONDS
@@ -274,7 +382,6 @@ class OpaEgressPolicy:
             allow_zero=True,
             maximum=_MAX_CACHE_TTL_SECONDS,
         )
-        parsed_token = _parse_token(token)
         self._headers = {"Authorization": f"Bearer {parsed_token}"} if parsed_token else {}
         self._transport = transport
         # Constructing an httpx.Client opens no connection: nothing touches the
@@ -335,6 +442,20 @@ class OpaEgressPolicy:
             operation=operation,
         )
 
+    def _input_body(
+        self, effective: DataClassification, provider: str, operation: EgressOperation
+    ) -> dict[str, Any]:
+        """The complete payload OPA ever receives: three enum/config strings,
+        no caller content. Shared by the request path and the health probe so
+        they cannot drift apart."""
+        return {
+            "input": {
+                "classification": effective.value,
+                "provider": provider,
+                "operation": operation.value,
+            }
+        }
+
     def _decide(
         self, effective: DataClassification, provider: str, operation: EgressOperation
     ) -> _Outcome:
@@ -355,13 +476,7 @@ class OpaEgressPolicy:
     def _query(
         self, effective: DataClassification, provider: str, operation: EgressOperation
     ) -> _Outcome:
-        body = {
-            "input": {
-                "classification": effective.value,
-                "provider": provider,
-                "operation": operation.value,
-            }
-        }
+        body = self._input_body(effective, provider, operation)
         try:
             response = self._circuit.call(lambda: self._post(body))
         except CircuitBreakerOpenError:
@@ -393,34 +508,58 @@ class OpaEgressPolicy:
             raise _OpaStatusError(response.status_code)
         return response
 
+    def _unhealthy(self, detail: str, t0: float) -> DependencyHealth:
+        """Hand-written, content-free details only — `/ready` is unauthenticated
+        (health-checks.md rule 9)."""
+        return DependencyHealth(
+            name=self.name(), healthy=False, detail=detail, latency_ms=_elapsed_ms(t0)
+        )
+
     def check_health(self) -> list[DependencyHealth]:
         """`contracts.health.HealthCheckable`, written against
-        `.claude/rules/health-checks.md`:
+        `.claude/rules/health-checks.md`.
 
-        - reports nothing when every declared provider is local: no request path
-          then depends on OPA, and `egress_policy` is a critical readiness role;
-        - one attempt (rule 1) against OPA's read-only `GET /health` (rule 2), with
-          the probe's own short timeout (rule 4);
-        - a dedicated, throwaway client closed on every exit path, never the shared
-          request-path client (rule 5);
-        - reads the circuit breaker's state and never calls through it (rule 8), so
-          a probe can neither reset real-traffic failure accounting nor take the
-          half-open trial slot;
-        - failures surface through `unhealthy_dependency()` or hand-written details,
-          never raw exception text (rule 9).
+        **What it probes, and why (Codex review pass 1, HIGH-001).** The probe
+        evaluates the *configured decision document* — the exact path real
+        traffic uses — not OPA's `/health`. An OPA process answers `/health`
+        happily while its decision path is absent, misspelled, unauthorized or
+        broken, and in that state `check()` denies every remote call. Reporting
+        that pod healthy is the precise false signal this critical readiness
+        role exists to prevent (`orchestration/container.py::_CRITICAL_ROLES`).
+
+        A well-formed boolean is healthy whether it allows or denies: a policy
+        that answers is a working policy, and the probe must not assert what an
+        operator's rules ought to decide. Undefined, malformed, non-200 and
+        transport failures are unhealthy.
+
+        Against the rules:
+
+        - reports nothing when every declared provider is local, since no
+          request path then depends on OPA;
+        - one attempt (rule 1), read-only (rule 2 — a policy evaluation has no
+          side effect beyond OPA's own decision log), with the probe's own
+          short timeout (rule 4);
+        - a dedicated, throwaway client closed on every exit path, never the
+          shared request-path client, and the result is deliberately **not**
+          written to the decision cache (rule 5);
+        - reads the circuit breaker's state and never calls through it (rule 8),
+          so a probe can neither reset real-traffic failure accounting nor take
+          the half-open trial slot;
+        - failures surface through `unhealthy_dependency()` or hand-written
+          details, never raw exception text (rule 9).
+
+        Deliberately uncached (rule 10 applies to *costly* probes): a Rego
+        evaluation on a local sidecar is sub-millisecond, so an unauthenticated
+        `/ready` cannot use it to exhaust anything.
         """
-        if all(self._local.values()):
+        if self._probe_provider is None:
             return []
         t0 = time.perf_counter()
         if self._circuit.state == CircuitState.OPEN:
-            return [
-                DependencyHealth(
-                    name=self.name(),
-                    healthy=False,
-                    detail="circuit open",
-                    latency_ms=_elapsed_ms(t0),
-                )
-            ]
+            return [self._unhealthy("circuit open", t0)]
+        body = self._input_body(
+            self._default_classification, self._probe_provider, EgressOperation.GENERATE
+        )
         try:
             with httpx.Client(
                 base_url=self._url,
@@ -428,20 +567,21 @@ class OpaEgressPolicy:
                 headers=self._headers,
                 transport=self._transport,
             ) as probe:
-                response = probe.get("/health")
+                response = probe.post(self._decision_url, json=body)
         except Exception as exc:
             return [unhealthy_dependency(self.name(), exc, _elapsed_ms(t0))]
         if response.status_code != 200:
+            return [self._unhealthy(f"http {response.status_code}", t0)]
+        outcome = _parse_decision(response)
+        if outcome in (_Outcome.ALLOW, _Outcome.DENY):
             return [
                 DependencyHealth(
-                    name=self.name(),
-                    healthy=False,
-                    detail=f"http {response.status_code}",
-                    latency_ms=_elapsed_ms(t0),
+                    name=self.name(), healthy=True, detail="ok", latency_ms=_elapsed_ms(t0)
                 )
             ]
-        return [
-            DependencyHealth(
-                name=self.name(), healthy=True, detail="ok", latency_ms=_elapsed_ms(t0)
-            )
-        ]
+        detail = (
+            "decision path returned no decision"
+            if outcome is _Outcome.UNDEFINED
+            else "decision path returned a malformed decision"
+        )
+        return [self._unhealthy(detail, t0)]

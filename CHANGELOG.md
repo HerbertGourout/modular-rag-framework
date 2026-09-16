@@ -43,9 +43,23 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   construction, since nothing would enforce it.
 - `egress_policy` is now a critical readiness role (`orchestration/container.py`,
   [ADR-0010](docs/adr/0010-health-checkable-and-readiness-semantics.md) §3):
-  `OpaEgressPolicy.check_health()` probes OPA's `/health`, so an unreachable OPA returns a 503
-  from `/ready` instead of a misleading 200. `ManifestEgressPolicy` has no health check and is
-  unaffected, and an OPA policy declaring only local providers reports no dependency.
+  `OpaEgressPolicy.check_health()` evaluates the **configured decision document**, the same path
+  real traffic uses, not OPA's `/health`. An unreachable OPA, an absent or unauthorized decision
+  path, and a malformed answer all return a 503 from `/ready` instead of a misleading 200; a
+  well-formed allow *or* deny is healthy, since a policy that answers is a working policy.
+  `ManifestEgressPolicy` has no health check and is unaffected, and an OPA policy declaring only
+  local providers reports no dependency.
+- A bearer `token`, or credentials embedded in the URL, require an `https://` endpoint or a
+  loopback host (`localhost`, `127.0.0.1`, `::1`) for a sidecar deployment. Anything else is
+  refused at construction rather than sending a credential that guards the egress boundary over
+  cleartext HTTP (maintainer decision, 2026-09-15).
+- Configuration is fully validated at construction: numbers must be finite (a YAML `.nan` is no
+  longer accepted), the URL must parse with a scheme, a valid host and a valid port, and the
+  `circuit_breaker`, `transport` and `clock` test-injection parameters are rejected when supplied
+  through manifest configuration. Every URL failure — a malformed IPv6 host, an invalid or
+  out-of-range port, a netloc Python rejects under NFKC normalization — becomes the same
+  sanitized `ConfigurationError`, raised `from None` so that no parser message reaches a startup
+  log: Python's own netloc error quotes the offending netloc, credentials included.
 - CI: the `test-integration` job starts OPA 1.20.2, pinned by digest, with a test policy
   (`tests/integration/fixtures/opa/egress.rego`). It runs as a step rather than a service,
   because GitHub Actions services cannot pass container arguments.

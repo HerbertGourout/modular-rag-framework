@@ -1,8 +1,8 @@
 """Unit tests for adapters/policy/opa_egress_policy.py — OpaEgressPolicy.
 
 No OPA server is involved: every HTTP exchange goes through
-`httpx.MockTransport`. The real dialogue with OPA (Rego evaluation, `/health`)
-is covered by tests/integration/test_opa_egress_policy.py.
+`httpx.MockTransport`. The real dialogue with OPA (Rego evaluation, a live
+decision path) is covered by tests/integration/test_opa_egress_policy.py.
 """
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from typing import Any
 
 import httpx
 import pytest
+import yaml
 
 from modular_rag.adapters.policy.opa_egress_policy import OpaEgressPolicy
 from modular_rag.contracts.egress import EgressOperation, EgressPolicy
@@ -27,6 +28,7 @@ from modular_rag.orchestration.engine import RAGEngine
 
 _URL = "http://opa.test:8181"
 _PROVIDERS = {"sentence-transformers": {"local": True}, "openai": {"local": False}}
+_DECISION_PATH = "/v1/data/modular_rag/egress/decision"
 
 Responder = Callable[[httpx.Request], httpx.Response]
 
@@ -64,6 +66,11 @@ def _answer(allowed: object, **extra: object) -> Responder:
     return lambda request: httpx.Response(
         200, json={"result": {"allowed": allowed, **extra}}
     )
+
+
+def _undefined(request: httpx.Request) -> httpx.Response:
+    """OPA's answer when nothing defines the requested document."""
+    return httpx.Response(200, json={})
 
 
 def _status(code: int) -> Responder:
@@ -135,7 +142,7 @@ def test_opa_receives_only_content_free_fields() -> None:
 
     request = fake.requests[0]
     assert request.method == "POST"
-    assert request.url.path == "/v1/data/modular_rag/egress/decision"
+    assert request.url.path == _DECISION_PATH
     assert json.loads(request.content) == {
         "input": {"classification": "internal", "provider": "openai", "operation": "generate"}
     }
@@ -155,7 +162,7 @@ def test_unclassified_content_is_sent_as_the_default_classification() -> None:
 @pytest.mark.parametrize(
     "responder",
     [
-        pytest.param(lambda request: httpx.Response(200, json={}), id="undefined-result"),
+        pytest.param(_undefined, id="undefined-result"),
         pytest.param(lambda request: httpx.Response(200, json={"result": True}), id="bare-bool"),
         pytest.param(_answer("true"), id="string-allowed"),
         pytest.param(lambda request: httpx.Response(200, json={"result": {}}), id="no-allowed"),
@@ -188,7 +195,7 @@ def test_a_policy_authored_reason_is_never_surfaced() -> None:
 def test_a_bearer_token_is_sent_when_configured() -> None:
     fake = _FakeOpa(_answer(True))
 
-    _check(_policy(fake, token="s3cret"))
+    _check(_policy(fake, url="https://opa.internal:8181", token="s3cret"))
 
     assert fake.requests[0].headers["Authorization"] == "Bearer s3cret"
 
@@ -235,7 +242,7 @@ def test_the_cache_is_keyed_by_classification_provider_and_operation() -> None:
     "failure",
     [
         pytest.param(_status(500), id="http-500"),
-        pytest.param(lambda request: httpx.Response(200, json={}), id="undefined"),
+        pytest.param(_undefined, id="undefined"),
     ],
 )
 def test_a_failure_is_never_cached(failure: Responder) -> None:
@@ -267,6 +274,8 @@ def test_an_open_circuit_denies_without_calling_opa() -> None:
     ("overrides", "fragment"),
     [
         ({"url": "opa.test:8181"}, "url"),
+        ({"url": "http://"}, "url"),
+        ({"url": "https://"}, "url"),
         ({"decision_path": "../etc/passwd"}, "decision_path"),
         ({"decision_path": "modular_rag/egress?pretty=true"}, "decision_path"),
         ({"decision_path": ""}, "decision_path"),
@@ -280,9 +289,15 @@ def test_an_open_circuit_denies_without_calling_opa() -> None:
         ({"timeout_seconds": 0}, "timeout_seconds"),
         ({"timeout_seconds": 31}, "timeout_seconds"),
         ({"timeout_seconds": True}, "timeout_seconds"),
+        ({"timeout_seconds": float("nan")}, "finite"),
+        ({"timeout_seconds": float("inf")}, "timeout_seconds"),
         ({"cache_ttl_seconds": -1}, "cache_ttl_seconds"),
         ({"cache_ttl_seconds": 301}, "cache_ttl_seconds"),
+        ({"cache_ttl_seconds": float("nan")}, "finite"),
         ({"token": ""}, "token"),
+        ({"circuit_breaker": "not-a-breaker"}, "circuit_breaker"),
+        ({"transport": "not-a-transport"}, "transport"),
+        ({"clock": "not-callable"}, "clock"),
     ],
 )
 def test_invalid_configuration_is_rejected_at_construction(
@@ -301,36 +316,172 @@ def test_a_rejected_url_is_never_echoed() -> None:
     assert "hunter2" not in str(excinfo.value)
 
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        pytest.param("http://[::1", id="malformed-ipv6"),
+        pytest.param("http://host:bad", id="non-numeric-port"),
+        pytest.param("http://host:99999", id="port-out-of-range"),
+        pytest.param("http://host:0", id="port-zero"),
+        pytest.param("http://ex／ample.com", id="nfkc-invalid-netloc"),
+    ],
+)
+def test_a_malformed_url_is_a_sanitized_configuration_error(url: str) -> None:
+    """Codex review pass 2, MEDIUM-001: these escaped as a bare `ValueError` or
+    `httpx.InvalidURL` — and the out-of-range port was accepted outright, since
+    `urlsplit` only validates a port when `.port` is read."""
+    with pytest.raises(ConfigurationError, match="url"):
+        OpaEgressPolicy(url=url, providers=_PROVIDERS)
+
+
+def test_a_malformed_credential_bearing_url_never_echoes_its_secret() -> None:
+    """Python's own netloc error embeds the netloc verbatim, so neither the
+    message nor the exception chain may carry it to a startup log."""
+    with pytest.raises(ConfigurationError) as excinfo:
+        OpaEgressPolicy(url="http://user:SECRET@ex／ample.com", providers=_PROVIDERS)
+
+    assert "SECRET" not in str(excinfo.value)
+    assert excinfo.value.__cause__ is None
+    assert excinfo.value.__suppress_context__ is True
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        pytest.param("url: https://opa.internal:8181\ntimeout_seconds: .nan\n", id="nan-timeout"),
+        pytest.param("url: https://opa.internal:8181\ncache_ttl_seconds: .nan\n", id="nan-ttl"),
+        pytest.param("url: 'http://'\n", id="url-without-host"),
+        pytest.param("url: https://opa.internal:8181\nclock: not-callable\n", id="clock"),
+        pytest.param("url: https://opa.internal:8181\ntransport: http\n", id="transport"),
+        pytest.param("url: https://opa.internal:8181\ncircuit_breaker: default\n", id="breaker"),
+    ],
+)
+def test_a_yaml_manifest_cannot_smuggle_an_invalid_value_past_construction(document: str) -> None:
+    """Codex review pass 1, MEDIUM-001. PyYAML parses `.nan` as a float, and
+    the factory forwards every manifest key to the constructor, so each of
+    these reached a live adapter and failed only under real traffic."""
+    config: dict[str, Any] = yaml.safe_load(document)
+    config["providers"] = _PROVIDERS
+
+    with pytest.raises(ConfigurationError):
+        OpaEgressPolicy(**config)
+
+
+# --- credential transport (HIGH-002, maintainer decision 2026-09-15) -----------
+
+
+@pytest.mark.parametrize(
+    ("url", "token"),
+    [
+        pytest.param("https://opa.internal:8181", "s3cret", id="token-over-tls"),
+        pytest.param("http://localhost:8181", "s3cret", id="token-on-loopback-name"),
+        pytest.param("http://127.0.0.1:8181", "s3cret", id="token-on-loopback-ip"),
+        pytest.param("https://admin:hunter2@opa.internal:8181", None, id="userinfo-over-tls"),
+        pytest.param("http://opa.internal:8181", None, id="cleartext-without-credential"),
+    ],
+)
+def test_credentials_are_accepted_over_tls_or_loopback(url: str, token: str | None) -> None:
+    policy = OpaEgressPolicy(url=url, providers=_PROVIDERS, token=token)
+
+    assert isinstance(policy, EgressPolicy)
+
+
+@pytest.mark.parametrize(
+    ("url", "token"),
+    [
+        pytest.param("http://opa.internal:8181", "s3cret", id="bearer-over-cleartext"),
+        pytest.param("http://admin:hunter2@opa.internal:8181", None, id="userinfo-over-cleartext"),
+    ],
+)
+def test_credentials_are_refused_over_cleartext_http(url: str, token: str | None) -> None:
+    """A credential guarding the egress boundary must not travel in the clear."""
+    with pytest.raises(ConfigurationError) as excinfo:
+        OpaEgressPolicy(url=url, providers=_PROVIDERS, token=token)
+
+    message = str(excinfo.value)
+    assert "https" in message
+    assert "s3cret" not in message
+    assert "hunter2" not in message
+
+
 # --- health --------------------------------------------------------------------
 
 
-def _health_ok(request: httpx.Request) -> httpx.Response:
-    return httpx.Response(200, json={})
-
-
 def test_health_reports_no_dependency_when_every_provider_is_local() -> None:
-    fake = _FakeOpa(_health_ok)
+    fake = _FakeOpa(_answer(True))
     policy = _policy(fake, providers={"sentence-transformers": {"local": True}})
 
     assert policy.check_health() == []
     assert fake.requests == []
 
 
-def test_health_is_healthy_when_opa_answers() -> None:
-    fake = _FakeOpa(_health_ok)
+@pytest.mark.parametrize("allowed", [True, False])
+def test_health_probes_the_configured_decision_path_and_accepts_either_answer(
+    allowed: bool,
+) -> None:
+    """A policy that answers is a working policy: the probe must not assert
+    what an operator's rules ought to decide."""
+    fake = _FakeOpa(_answer(allowed))
 
     [health] = _policy(fake).check_health()
 
     assert health.healthy is True
     assert health.name == "opa"
-    assert fake.requests[0].url.path == "/health"
+    assert fake.requests[-1].method == "POST"
+    assert fake.requests[-1].url.path == _DECISION_PATH
+    assert fake.input_of(-1) == {
+        "classification": "restricted",
+        "provider": "openai",
+        "operation": "generate",
+    }
 
 
-def test_health_is_unhealthy_on_a_non_200() -> None:
-    [health] = _policy(_FakeOpa(_status(503))).check_health()
+@pytest.mark.parametrize(
+    ("responder", "detail"),
+    [
+        pytest.param(_undefined, "decision path returned no decision", id="undefined"),
+        pytest.param(
+            _answer("true"), "decision path returned a malformed decision", id="malformed"
+        ),
+        pytest.param(_status(401), "http 401", id="unauthorized"),
+        pytest.param(_status(500), "http 500", id="server-error"),
+    ],
+)
+def test_health_is_unhealthy_when_the_decision_path_cannot_serve(
+    responder: Responder, detail: str
+) -> None:
+    """Codex review pass 1, HIGH-001: OPA can be process-healthy while the
+    configured decision document is absent, unauthorized or broken — and in
+    that state `check()` denies every remote call."""
+    [health] = _policy(_FakeOpa(responder)).check_health()
 
     assert health.healthy is False
-    assert health.detail == "http 503"
+    assert health.detail == detail
+
+
+def test_health_never_contradicts_the_decision_path_it_shares() -> None:
+    """The exact contradiction Codex reproduced: a denied request path with a
+    green readiness probe."""
+    policy = _policy(_FakeOpa(_undefined))
+
+    decision = _check(policy)
+    [health] = policy.check_health()
+
+    assert decision.allowed is False
+    assert health.healthy is False
+
+
+def test_the_health_probe_does_not_populate_the_decision_cache() -> None:
+    """health-checks.md rule 5: a probe must not mutate state the request path
+    depends on — including seeding a cached allow."""
+    fake = _FakeOpa(_answer(True))
+    policy = _policy(fake, cache_ttl_seconds=30)
+
+    policy.check_health()
+    before = len(fake.requests)
+    _check(policy, classification=DataClassification.RESTRICTED)
+
+    assert len(fake.requests) == before + 1
 
 
 def test_health_never_leaks_exception_text() -> None:
@@ -357,7 +508,7 @@ def test_a_health_probe_never_resets_real_traffic_failure_accounting() -> None:
     """health-checks.md rule 8. Two failures open this circuit. A probe that
     went through the breaker would reset the count between them, and the
     fourth check below would reach OPA again."""
-    fake = _FakeOpa(_status(500), _health_ok, _status(500))
+    fake = _FakeOpa(_status(500), _answer(True), _status(500))
     policy = _policy(fake, circuit_breaker=CircuitBreaker(failure_threshold=2, reset_timeout=60))
 
     _check(policy)

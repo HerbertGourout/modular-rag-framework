@@ -157,6 +157,24 @@ Protocol (`Embedder`, `Indexer`, etc.). A Protocol change needs its own ADR per 
 a narrow, probe-only duck-typed extension does not, and this is the same pattern
 `HealthCheckable` itself already uses relative to `Indexer`/`Retriever`/`Generator`.
 
+### 12. Probe the dependency's configured usage path, not merely its liveness
+
+A probe must exercise the same resource real traffic uses — the configured collection, the
+configured decision document, the configured model — never a generic liveness endpoint that
+proves only that a process is running.
+
+Discovered in `OpaEgressPolicy` (Codex review pass 1, HIGH-001): `check_health()` called OPA's
+`GET /health`, which answers happily while the configured decision path is absent, misspelled,
+unauthorized or broken. In that state every remote call is denied fail-closed while `/ready`
+stays green — exactly the false signal a critical readiness role exists to prevent. The same
+invariant already drove two earlier fixes without being written down: `QdrantStore` validating
+the configured *collection* rather than "the server answers" (rule 2's history), and both
+generators retrieving *the configured model* rather than listing models (rule 10).
+
+Where the usage path has several legitimate answers, accept any well-formed one: an OPA policy
+that denies is a working policy, and a probe must not assert what an operator's rules ought to
+decide. Undefined, malformed and error answers remain unhealthy.
+
 ## Process: how to avoid a repeat of Lot 6's five-round cycle
 
 1. **Before writing a new `check_health()` (or editing an existing one), re-read the 11 rules
