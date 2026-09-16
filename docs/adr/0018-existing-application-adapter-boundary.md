@@ -1,16 +1,37 @@
 # ADR-0018 — Existing-Application Adapter Boundary and Control-Point Declaration
 
-**Status:** **Proposed.** Lot 22's required focused contract ADR (`docs/refactoring-plan.md` §5
-Phase F, `docs/refactoring/lot-22-external-application-adapters-and-conformance.md`). **No Lot 22
-implementation may begin until this ADR is accepted**, and acceptance is the sole decision
-authority's per [`docs/refactoring/lot-0-baseline.md`](../refactoring/lot-0-baseline.md) §2 — the
-same convention [ADR-0016](0016-provider-egress-control.md) and
-[ADR-0017](0017-engine-independent-assurance-contract.md) followed. Nothing described below is
-built: there is no `contracts/application.py`, no `adapters/applications/`, and no change to
-`DocumentEngine`, `contracts/assurance.py` or `orchestration/registry.py` in this repository
-today. Every code block here is a proposal.
+**Status:** **Accepted** — accepted 2026-09-16 by Herbert Gourout, per
+[`docs/refactoring/lot-0-baseline.md`](../refactoring/lot-0-baseline.md) §2's sole decision
+authority, the same convention [ADR-0016](0016-provider-egress-control.md) and
+[ADR-0017](0017-engine-independent-assurance-contract.md) followed. Lot 22's required focused
+contract ADR (`docs/refactoring-plan.md` §5 Phase F,
+`docs/refactoring/lot-22-external-application-adapters-and-conformance.md`); this acceptance
+unblocks Lot 22 implementation.
 
-**Date:** 2026-09-16.
+Accepted after two Codex review passes and one bounded final remediation. Pass 1 raised four HIGH
+findings; pass 2 closed two of them plus the MEDIUM, and reopened `HIGH-004` — the audit-coverage
+denominator was still chosen by the adapter itself. That was corrected before acceptance, not
+accepted as a risk: `required_audit_events()` (§5) now derives the floor from the profile's own
+structure. `HIGH-001` — the repository asserting `Accepted` and `Proposed` in different files — is
+closed by this acceptance, which makes the index and the delivery plan correct as they stand.
+
+Acceptance also confirms, as drafted and not revised, the four items under "Decisions requiring
+human authority": the companion-Protocol design, the initial `ControlPoint`/`EgressPathKind` member
+sets, the `integration_fingerprint` recipe, and the narrow adapter construction boundary.
+
+*Corrected 2026-09-16, after acceptance:* a re-run closure review found that
+`required_audit_events()` had been specified with a third `capabilities` argument that
+`ApplicationProfile` has no field to supply and that none of §5's six derivation rows reads. The
+parameter is removed so the accepted invariant is executable. This changes no decision — the
+derivation table, the floor it defines and every ceiling built on it are unchanged — but it is
+recorded here rather than edited in silently, because an accepted ADR is a contract.
+
+**Nothing described below is built yet.** There is no `contracts/application.py`, no
+`adapters/applications/`, and no change to `DocumentEngine`, `contracts/assurance.py` or
+`orchestration/registry.py` in this repository today. Every code block here specifies what Lot 22
+must implement; none of it is a description of existing code.
+
+**Date:** drafted, revised and accepted 2026-09-16.
 
 **Authors:** Drafted by Claude Code, at explicit user instruction, before any Lot 22
 implementation — per this repository's own rule that public-contract and structural changes get an
@@ -145,12 +166,13 @@ together; a reviewer must know to look in a second module; and, as §14 sets out
 only be read once the adapter instance exists, which is later in startup than the two gates
 ADR-0016 and ADR-0017 extended.
 
-**Proposed: Option B.** The deciding argument is that Option A's cost falls on code that has
+**Selected: Option B.** The deciding argument is that Option A's cost falls on code that has
 nothing to do with the feature — two framework-owned adapters and their fixtures — while Option
 B's cost falls on the new adapters that actually have a profile to declare. Optional structure
 discovered by `runtime_checkable` is an established pattern here, not a new one.
 
-This is a design proposal, not an accepted decision; see "Decisions requiring human authority".
+Accepted as drafted on 2026-09-16; the rejected alternative is recorded above so a future reader
+sees what was weighed, not only what was chosen.
 
 ### 3. `ControlPoint` — where a control can attach
 
@@ -224,6 +246,25 @@ class ExpectedAuditEvent:
     event_type: AuditEventType                # contracts.audit — referenced, not redefined
     mandatory: bool                           # mandatory: failing to persist it blocks the result
 
+def required_audit_events(
+    bindings: tuple[ControlPointBinding, ...],
+    egress_paths: tuple[EgressPath, ...],
+) -> frozenset[AuditEventType]:
+    """The audit events an integration of THIS declared shape must record.
+
+    A pure function of two fields `ApplicationProfile` already carries, so
+    `__post_init__` can call it — never of the adapter's opinion about what
+    is worth auditing. This is the floor that `expected_audit_events` must
+    cover; an adapter may add optional events above it and may never declare
+    below it.
+
+    Deliberately takes no `EngineCapability` set. None of the five shipped
+    capabilities (streaming, cancellation, tool use, multi-turn, governance
+    intercept) implies an `AuditEventType` that the bindings and egress paths
+    do not already imply, and a parameter the derivation never reads could
+    not be supplied by a frozen dataclass that has no such field.
+    """
+
 @dataclass(frozen=True)
 class ApplicationProfile:
     application_name: str
@@ -258,12 +299,32 @@ Five construction-time invariants, enforced in `__post_init__` so a malformed pr
    and misses the second is declared `ENFORCED` on one path and `OBSERVED`/`UNAVAILABLE` on the
    other, and §9 requires a probe per *path*, not per binding — so the second path cannot inherit
    the first one's proof.
-4. **`expected_audit_events` is a closed declaration, duplicate-free**, naming every
-   `AuditEventType` this integration's declared capabilities and control points imply for a served
-   request, each marked mandatory or optional. It is the denominator of the `AUDIT_COMPLETION`
-   claim in §6: a claim can never cover an event the profile did not expect, and a smaller declared
-   set yields a smaller, honest claim rather than a silent one. An empty tuple is permitted and
-   caps `AUDIT_COMPLETION` at `OBSERVED` — there is no coverage to verify.
+4. **`expected_audit_events` is duplicate-free and must cover the derived floor.**
+   `__post_init__` computes `required_audit_events(self.bindings, self.egress_paths)` and
+   rejects the profile if any derived event is absent or is declared `mandatory=False`. The adapter
+   may add further events as optional; it can neither omit a derived one nor demote it.
+
+   The derivation is fixed by this ADR, from structure the profile already declares elsewhere:
+
+   | Derived event | Required when |
+   |---|---|
+   | `QUERY_RECEIVED` | always — invariant 2 guarantees the adapter sees the request |
+   | `RUN_SUCCEEDED` **and** `RUN_FAILED` | always — the adapter sees both outcomes, so a failed run cannot go unaudited |
+   | `RETRIEVAL_PERFORMED` | `RETRIEVAL_RESULT` is bound above `UNAVAILABLE` |
+   | `GENERATION_PERFORMED` | any declared `EgressPath` has `kind == MODEL` |
+   | `GUARD_DECISION` | `REQUEST_ADMISSION` or `RESULT_ADMISSION` is `ENFORCED` |
+   | `EGRESS_DECISION` | any declared `EgressPath` is bound above `UNAVAILABLE` |
+
+   **Why derived rather than declared.** The first version of this invariant let the adapter choose
+   its own denominator and called a smaller set "a smaller, honest claim". That was wrong, and a
+   reviewer caught it: a profile declaring only `RUN_SUCCEEDED` would pass a full-coverage probe, a
+   mandatory-event-failure probe, and reach `AUDIT_COMPLETION = ENFORCED` — the same status L2
+   requires — while omitting retrieval, generation, policy and egress entirely. Capping the empty
+   case closed only the empty case, not under-declaration. Honesty now comes from the *bindings*,
+   which §9's probes independently falsify, rather than from a free choice of what to be measured
+   against: an application whose retrieval really is opaque declares `RETRIEVAL_RESULT:
+   UNAVAILABLE`, and the derivation drops `RETRIEVAL_PERFORMED` structurally — while also capping
+   `IDENTITY_TENANT` per §6, which is the honest cost of that opacity.
 5. **`integration_fingerprint` is mandatory, content-free and reproducible**: a stable digest over
    the inputs that can change this profile — application version, adapter version, which hooks the
    deployment enabled, and the adapter configuration selecting them. Two deployments with different
@@ -312,7 +373,7 @@ is the highest `EvidenceStatus` the integration surface permits; it never grants
 | `RETRIEVAL_PROVENANCE` | `RESULT_ADMISSION` ≥ `OBSERVED` | `RETRIEVAL_RESULT` ≥ `OBSERVED` | `RETRIEVAL_RESULT` ≥ `OBSERVED` **and** `RESULT_ADMISSION` = `ENFORCED` |
 | `EGRESS_DECISION` | `egress_ceiling` ≥ `OBSERVED` | `egress_ceiling` ≥ `OBSERVED` | `egress_ceiling` = `ENFORCED` (§5 — every declared path) |
 | `POLICY_DECISION` | `REQUEST_ADMISSION` ≥ `OBSERVED` | same | `REQUEST_ADMISSION` = `ENFORCED` **and** `RESULT_ADMISSION` = `ENFORCED` |
-| `AUDIT_COMPLETION` | `REQUEST_ADMISSION` **and** `RESULT_ADMISSION` ≥ `OBSERVED` | every event in the profile's **expected audit-event set** (below) is observable | the `VERIFIED` requirement **and** `RESULT_ADMISSION` = `ENFORCED`, so a failure to persist any *mandatory* event blocks the result |
+| `AUDIT_COMPLETION` | `REQUEST_ADMISSION` **and** `RESULT_ADMISSION` ≥ `OBSERVED` | every event in `required_audit_events(...)` (§5) is observable — the **derived** floor, not the declared set | the `VERIFIED` requirement **and** `RESULT_ADMISSION` = `ENFORCED`, so a failure to persist any derived-required event blocks the result |
 | `USAGE_COST` | `RESULT_ADMISSION` ≥ `OBSERVED` | `egress_ceiling` = `ENFORCED` (the framework owns every model call, so it can measure rather than believe) | **unreachable by construction** |
 | `FEEDBACK_REVIEW_ROUTING` | `RESULT_ADMISSION` ≥ `OBSERVED` | same | `RESULT_ADMISSION` = `ENFORCED` |
 | `STREAMING_PREVALIDATION` | `STREAM_CHUNK` ≥ `OBSERVED` | same | `STREAM_CHUNK` = `ENFORCED` |
@@ -330,15 +391,16 @@ Reading it:
   result (`RESULT_ADMISSION` = `ENFORCED`) when that content is out of tenant scope. §9 makes a
   two-tenant negative probe mandatory for any claim above `OBSERVED`; the existing missing-tenant
   admission probe may remain, but is not the isolation proof.
-- **`AUDIT_COMPLETION` is about coverage, not about one final write.**
+- **`AUDIT_COMPLETION` is about coverage, measured against a floor the adapter does not choose.**
   `contracts/assurance.py` defines this kind as `AuditEventType` *coverage*, and ADR-0015's L2 row
-  promises stage-level audit. A single fail-closed write at the end satisfies neither. The profile
-  therefore declares an **expected audit-event set** — the events its declared capabilities and
-  control points imply for a served request, each marked mandatory or optional — and the claim has
-  two halves: every expected event is actually recorded for the request (`VERIFIED`), and failure
-  to persist any mandatory one blocks release of the result (`ENFORCED`). An application whose
-  internal stages are opaque declares a smaller expected set and earns a correspondingly smaller
-  claim, which is the honest outcome; it does not earn `ENFORCED` for the stages it cannot see.
+  promises stage-level audit. A single fail-closed write at the end satisfies neither, and neither
+  does full coverage of a denominator the adapter picked for itself. The floor is
+  `required_audit_events(...)` (§5), derived from the profile's own bindings and egress paths. The
+  claim then has two halves: every derived-required event is actually
+  recorded for the request (`VERIFIED`), and failing to persist any of them blocks release of the
+  result (`ENFORCED`). Because the floor moves with the declared structure, an adapter cannot
+  shrink it without also declaring weaker bindings — which §9's probes test and §6's other rows
+  independently penalise.
 - **`USAGE_COST` can never be `ENFORCED`**, whatever the profile: there is no stage to block. Cost
   is reported by the application (`OBSERVED`) or measured by a framework-owned model call
   (`VERIFIED`). This matches the shipped `_capability_evidence()`, which caps `USAGE_COST` at
@@ -422,10 +484,12 @@ proves the thing it exercises and nothing adjacent to it.
    (`tests/contract/test_engine_conformance.py`'s `identity_enforced()`, which denies a request
    with `tenant_id=None`) may remain, but it proves admission, not isolation, and may not stand in
    for this.
-4. **Audit-coverage probes, for any `AUDIT_COMPLETION` claim above `OBSERVED`.** One probe showing
-   every event in the profile's `expected_audit_events` is recorded for a served request, and one
-   missing-event probe per mandatory entry showing that failing to persist it blocks the result. A
-   single final sink-failure probe is not sufficient.
+4. **Audit-coverage probes, for any `AUDIT_COMPLETION` claim above `OBSERVED`.** The probes run
+   against `required_audit_events(...)` — the derived floor — never against the adapter's own
+   declared list, so an adapter cannot narrow what it is measured on. One probe shows every derived
+   event is recorded for a served request; one missing-event probe per derived event shows that
+   failing to persist it blocks the result. A single final sink-failure probe is not sufficient,
+   and neither is full coverage of a self-selected set.
 
 Independently of all four, **a closed-world isolation probe is mandatory for every profile**,
 including one declaring `egress_paths=()`: a representative run under network isolation must
@@ -542,7 +606,7 @@ by `(role, type_name)`, never `DocumentEngine` factories. Leaving this undecided
 implementer pick a hard-coded branch, a repurposed component registry, or a new plugin registry —
 three materially different architectures with different validation behaviour.
 
-*Proposed, deliberately minimal:* **one explicit branch in the composition root**, beside the two
+*Selected, deliberately minimal:* **one explicit branch in the composition root**, beside the two
 that exist, naming the single pilot adapter. It is the smallest change that makes the gate
 reachable; it keeps `ComponentRegistry` unpolluted by engine adapters; and it makes adding a second
 application adapter a visible, reviewed edit rather than a configuration act — appropriate while
@@ -655,10 +719,13 @@ credible.
   hooks. A hostile or frozen one is out of reach, and the contract says so by yielding `UNAVAILABLE`
   everywhere rather than failing loudly.
 
-## Decisions requiring human authority
+## Decisions requiring human authority — ratified 2026-09-16
 
-Acceptance of this ADR ratifies all of the above. Three points are called out because each is a
-judgement made ahead of the evidence that would settle it, and each has a real alternative:
+Acceptance ratified all of the above. The four points below are kept on the record because each was
+a judgement made ahead of the evidence that would settle it, and each had a real alternative.
+**Each was accepted as drafted, not revised.** Revisiting one is a deliberate contract change under
+the lifecycle rules above — never an implementation detail, and never a widening of what a profile
+may claim.
 
 1. **Profile exposure (§2).** *Recommended:* a companion `ApplicationProfileProvider` Protocol,
    leaving `DocumentEngine` unchanged. *Alternative:* add `application_profile()` to
@@ -679,4 +746,6 @@ judgement made ahead of the evidence that would settle it, and each has a real a
    a manifest identifier now. The recommendation keeps plugin infrastructure unbuilt until a pilot
    has shown the contract is worth generalizing, at the cost of a later migration if it is.
 
-**This ADR is Proposed. Lot 22 implementation is blocked until a human accepts it.**
+**This ADR is Accepted as of 2026-09-16. Lot 22 implementation is unblocked, and every rule above
+is binding on it — a Lot 22 change that cannot satisfy one of them needs a new ADR, not an
+exception.**
