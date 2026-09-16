@@ -1,16 +1,28 @@
 # ADR-0018 — Existing-Application Adapter Boundary and Control-Point Declaration
 
-**Status:** Proposed — drafted 2026-09-16 as Lot 22's required focused contract ADR
-(`docs/refactoring-plan.md` §5 Phase F, `docs/refactoring/lot-22-external-application-adapters-and-conformance.md`).
-**Revised 2026-09-16** after Herbert Gourout's review of the first draft, which returned "revise
-before acceptance, without changing its direction" and seven specific corrections; §2, §5, §6, §7
-and the lifecycle rule are materially different from that draft, and three of its four open
-decisions are now closed. Not self-accepted: acceptance is the sole decision authority's, per
-[`docs/refactoring/lot-0-baseline.md`](../refactoring/lot-0-baseline.md) §2 — the same convention
-[ADR-0016](0016-provider-egress-control.md) and [ADR-0017](0017-engine-independent-assurance-contract.md)
-followed. No Lot 22 implementation may begin before acceptance.
+**Status:** Accepted — accepted 2026-09-16 by Herbert Gourout ("je valide l'ADR 0018"), per
+[`docs/refactoring/lot-0-baseline.md`](../refactoring/lot-0-baseline.md) §2's sole decision
+authority — the same convention [ADR-0016](0016-provider-egress-control.md) and
+[ADR-0017](0017-engine-independent-assurance-contract.md) followed. Drafted Proposed the same day
+as Lot 22's required focused contract ADR (`docs/refactoring-plan.md` §5 Phase F,
+`docs/refactoring/lot-22-external-application-adapters-and-conformance.md`); not self-accepted at
+draft time.
 
-**Date:** drafted 2026-09-16, revised 2026-09-16.
+Acceptance followed the same authority's review of the first draft, which returned "revise before
+acceptance, without changing its direction" and seven specific corrections. §2, §5, §6, §7 and the
+lifecycle rule are materially different from that first draft, and three of its four open
+decisions were closed by that review: the profile is reached through `ApplicationProfileProvider`
+(§2), `uncontrolled_egress` is computed from a closed egress-path declaration (§5), and a missing
+negative test fails the build rather than downgrading a runtime report (§7).
+
+Acceptance also explicitly confirms, unchanged from the revised draft, the two items still listed
+under "Open decisions": the initial six `ControlPoint` and three `EgressPathKind` members, and the
+`configuration_fingerprint` recipe as reproducible-within-one-adapter rather than comparable across
+adapters. Both are **accepted as drafted, not revised** — Lot 22 may refine them only within the
+lifecycle rules stated below, never by widening what a profile may claim. This acceptance unblocks
+Lot 22 implementation.
+
+**Date:** drafted 2026-09-16, revised 2026-09-16, accepted 2026-09-16.
 
 **Authors:** Drafted by Claude Code, at explicit user instruction, before any Lot 22
 implementation — per this repository's own rule that public-contract and structural changes get
@@ -441,15 +453,22 @@ demonstrated to be general.
 
 ## Open decisions
 
-Three of the first draft's four open items are closed above: the profile is exposed through
-`ApplicationProfileProvider` (§2), `uncontrolled_egress` is computed from declared egress paths
-(§5), and a missing negative test fails the build rather than downgrading a runtime report (§7).
-What remains genuinely open:
+Three of the first draft's four open items were closed by review, before acceptance: the profile is
+exposed through `ApplicationProfileProvider` (§2), `uncontrolled_egress` is computed from declared
+egress paths (§5), and a missing negative test fails the build rather than downgrading a runtime
+report (§7).
+
+The two below were **accepted as drafted** on 2026-09-16 rather than left undecided. They remain
+listed because each is a judgement made ahead of the evidence that would settle it, and Lot 22 is
+that evidence. Refining either is a deliberate contract change under the lifecycle rules above —
+never an implementation detail, and never a widening of what a profile may claim:
 
 1. **The six initial `ControlPoint` members**, and the three `EgressPathKind` members beside them.
    Both sets are shaped by a pilot that has not been written. The lifecycle rule makes growth safe;
-   it does not make the initial choice right.
+   it does not make the initial choice right. Lot 22 should record which members the real
+   integration actually needed, and which were never used.
 2. **The `configuration_fingerprint` recipe** — which inputs, which digest, and whether it must be
-   comparable across adapters or only reproducible within one. Drafted as reproducible-within-one;
-   cross-adapter comparability is a stronger and more useful property if Lot 22 can define it
-   without over-fitting to the first integration.
+   comparable across adapters or only reproducible within one. Accepted as
+   reproducible-within-one-adapter: the weaker property, but the one that cannot be wrong.
+   Cross-adapter comparability is stronger and more useful, and Lot 22 may propose it once it can
+   define the recipe without over-fitting to the first integration.
