@@ -116,7 +116,8 @@ established earlier.
 
 ### Batch 0 — Baseline and documentation truth map
 
-**Status:** `NOT_STARTED`
+**Status:** `COMPLETE` — see
+[`docs/onboarding-baseline-audit-2026-09-17.md`](onboarding-baseline-audit-2026-09-17.md)
 
 **Purpose:** Establish a verified baseline before rewriting navigation or onboarding prose.
 
@@ -462,7 +463,7 @@ validation output, or merged pull request rather than relying on a narrative cla
 
 | Batch | Status | Owner | Reviewer | Evidence | Notes / blockers |
 |---|---|---|---|---|---|
-| 0 — Baseline and truth map | `NOT_STARTED` | — | — | — | — |
+| 0 — Baseline and truth map | `COMPLETE` | Claude Code | Codex (pass 1: `CHANGES_REQUIRED`; pass 2: `READY_FOR_FINAL_VALIDATION`, all findings closed) | [`docs/onboarding-baseline-audit-2026-09-17.md`](onboarding-baseline-audit-2026-09-17.md), `.review/handoff.md` | Inventory covers every in-scope cluster; 10 stale status claims, 1 canonical-source contradiction, 2 conflicting precedence declarations, 3 factual/formatting defects, 3 knowledge gaps. None corrected here — assigned to Batches 1, 2, 4, 5, 6, 7, 8 (audit §8) |
 | 1 — Canonical navigation | `NOT_STARTED` | — | — | — | Depends on Batch 0 |
 | 2 — Vision and status | `NOT_STARTED` | — | — | — | Depends on Batch 0 |
 | 3 — Architecture and code | `NOT_STARTED` | — | — | — | Depends on Batches 1–2 |
