@@ -22,6 +22,13 @@ new dependency beyond the project's core PyYAML requirement, with a non-zero exi
    may contain it (a preset that says BLUEPRINT is either mislabeled or misplaced).
 4. Observability consistency: active alert names, runbook anchors, SLO references, and the cost
    projection formula must agree across `alerts.yaml`, `slo.md`, and `runbooks.md`.
+5. Style warnings (non-blocking): deterministic layout checks derived from
+   `docs/guides/documentation-style-guide.md` — merged metadata lines, missing or repeated `#`
+   titles, skipped heading levels, dead same-document anchors, tables not
+   separated by blank lines, dense table cells, long paragraphs, long prose lines, and `<br>`
+   tags. They never change the exit code: a summary is printed, and `--style-report` lists every
+   warning. Judgment-based rules of the guide (idea per paragraph, section roles) stay with the
+   `/review-documentation-quality` skill.
 """
 
 from __future__ import annotations
@@ -85,6 +92,27 @@ FORBIDDEN_TERMS = [
 # word "BLUEPRINT" (explaining a manifest's history) doesn't trip the preset-side check.
 BLUEPRINT_MARKER = "Status: BLUEPRINT"
 
+# Style warnings (check 5). Thresholds are deliberately looser than the style guide's targets
+# ("about 100 characters", "two to four sentences") so that only clear outliers are reported.
+STYLE_GUIDE_PATH = "docs/guides/documentation-style-guide.md"
+MAX_PROSE_LINE_CHARS = 120
+MAX_PARAGRAPH_LINES = 10
+MAX_TABLE_CELL_CHARS = 200
+METADATA_FIELD_PATTERN = re.compile(r"^\*\*[^*\n]{1,60}:\*\*")
+HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
+FENCE_OPEN_PATTERN = re.compile(r"^\s*(```|~~~)")
+LIST_ITEM_PATTERN = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s")
+TABLE_DELIMITER_CELL_PATTERN = re.compile(r"^:?-+:?$")
+ANCHOR_LINK_PATTERN = re.compile(r"\]\(#([^)\s]+)\)")
+HTML_ID_PATTERN = re.compile(r"""\bid=["']([^"']+)["']""")
+BR_TAG_PATTERN = re.compile(r"<br\s*/?>", re.IGNORECASE)
+THEMATIC_BREAK_PATTERN = re.compile(r"^(?:-{3,}|\*{3,}|_{3,})$")
+MARKDOWN_LINK_TEXT_PATTERN = re.compile(r"\[([^\]]*)\]\([^)]*\)")
+# A sentence boundary inside a table cell: end punctuation, whitespace, then a capital letter.
+# Common abbreviations are masked first so "e.g. Foo" or "vs. Bar" do not count.
+SENTENCE_BOUNDARY_PATTERN = re.compile(r"[.!?]\s+[A-Z]")
+ABBREVIATION_PATTERN = re.compile(r"\b(?:e\.g|i\.e|vs|etc|cf|approx)\.", re.IGNORECASE)
+
 
 @dataclass(frozen=True)
 class Finding:
@@ -96,6 +124,15 @@ class Finding:
     def render(self) -> str:
         rel_path = self.path.relative_to(PROJECT_ROOT).as_posix()
         return f"{rel_path}:{self.line}: {self.message}"
+
+
+@dataclass(frozen=True)
+class StyleWarning:
+    """A non-blocking layout warning; ``rule`` is a stable identifier used for summaries."""
+
+    line: int
+    rule: str
+    message: str
 
 
 def main() -> int:
@@ -124,6 +161,23 @@ def main() -> int:
         "--show-baseline",
         action="store_true",
         help="Print baseline forbidden-term findings even when they are accepted.",
+    )
+    parser.add_argument(
+        "--skip-style",
+        action="store_true",
+        help="Skip the non-blocking style warnings.",
+    )
+    parser.add_argument(
+        "--style-report",
+        action="store_true",
+        help="List every style warning instead of only the per-rule summary.",
+    )
+    parser.add_argument(
+        "--style-path",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help="Limit style warnings to this Markdown file (repeatable). Implies --style-report.",
     )
     args = parser.parse_args()
 
@@ -165,6 +219,8 @@ def main() -> int:
             if args.show_baseline:
                 for finding in baseline_terms:
                     print(finding.render())
+        if not args.skip_style:
+            _print_style_warnings(md_files, args.style_path, args.style_report)
         return 0
 
     print("Documentation issues found:")
@@ -173,7 +229,340 @@ def main() -> int:
     if baseline_terms and not args.strict:
         print(f"\nAccepted baseline forbidden-term mentions not shown: {len(baseline_terms)}")
     print(f"\n{len(findings)} issue(s) across {len(md_files)} markdown files scanned.")
+    if not args.skip_style:
+        _print_style_warnings(md_files, args.style_path, args.style_report)
     return 1
+
+
+def _print_style_warnings(md_files: list[Path], style_paths: list[str], report: bool) -> None:
+    """Print style warnings. Never affects the exit code (check 5 is advisory only)."""
+    if style_paths:
+        targets = [Path(raw).resolve() for raw in style_paths]
+        report = True
+    else:
+        targets = [path for path in md_files if not _is_historical(path)]
+
+    per_file: list[tuple[Path, list[StyleWarning]]] = []
+    for path in targets:
+        if not path.is_file():
+            print(f"Style warnings: skipped missing path {path}")
+            continue
+        warnings = _check_style_text(path.read_text(encoding="utf-8"))
+        if warnings:
+            per_file.append((path, warnings))
+
+    total = sum(len(warnings) for _, warnings in per_file)
+    if total == 0:
+        print("Style warnings (non-blocking): none.")
+        return
+
+    counts: dict[str, int] = {}
+    for _, warnings in per_file:
+        for warning in warnings:
+            counts[warning.rule] = counts.get(warning.rule, 0) + 1
+    summary = ", ".join(f"{rule} {count}" for rule, count in sorted(counts.items()))
+    print(
+        f"Style warnings (non-blocking, see {STYLE_GUIDE_PATH}): {total} in "
+        f"{len(per_file)} file(s): {summary}."
+    )
+    if not report:
+        print("Run with --style-report to list them, or --style-path <file> for one document.")
+        return
+    for path, warnings in per_file:
+        display = _display_path(path)
+        for warning in warnings:
+            print(f"{display}:{warning.line}: [{warning.rule}] {warning.message}")
+
+
+def _display_path(path: Path) -> str:
+    try:
+        return path.relative_to(PROJECT_ROOT).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def _check_style_text(text: str) -> list[StyleWarning]:
+    """Return deterministic layout warnings for one Markdown document.
+
+    Fenced code blocks are ignored. Each rule maps to a section of the documentation style guide.
+    """
+    warnings: list[StyleWarning] = []
+    lines = text.splitlines()
+    first_content_line = _skip_front_matter(lines)
+    table_lines = _table_line_numbers(lines, first_content_line)
+
+    headings: list[tuple[int, int, str]] = []  # (line number, level, text)
+    explicit_ids: set[str] = set()
+    anchor_links: list[tuple[int, str]] = []
+
+    in_fence = False
+    fence_marker = ""
+    previous_kind = "blank"  # blank | heading | table | list | prose | fence
+    paragraph_start = 0
+    paragraph_lines = 0
+    paragraph_fields = 0
+    previous_hard_break = False
+
+    def close_paragraph() -> None:
+        nonlocal paragraph_lines, paragraph_fields
+        if paragraph_lines > MAX_PARAGRAPH_LINES:
+            warnings.append(
+                StyleWarning(
+                    paragraph_start,
+                    "long-paragraph",
+                    f"paragraph spans {paragraph_lines} source lines (guide section 3.1)",
+                )
+            )
+        paragraph_lines = 0
+        paragraph_fields = 0
+
+    for lineno, line in enumerate(lines, start=1):
+        if lineno < first_content_line:
+            continue
+        fence_match = FENCE_OPEN_PATTERN.match(line)
+        if in_fence:
+            if fence_match and fence_match.group(1) == fence_marker:
+                in_fence = False
+                previous_kind = "fence"
+            continue
+        if fence_match:
+            close_paragraph()
+            in_fence = True
+            fence_marker = fence_match.group(1)
+            continue
+
+        stripped = line.strip()
+        explicit_ids.update(HTML_ID_PATTERN.findall(line))
+        anchor_links.extend(
+            (lineno, anchor) for anchor in ANCHOR_LINK_PATTERN.findall(_mask_code(line))
+        )
+        if BR_TAG_PATTERN.search(_mask_code(line)):
+            warnings.append(StyleWarning(lineno, "br-tag", "<br> tag (guide section 3.6)"))
+
+        if not stripped or THEMATIC_BREAK_PATTERN.match(stripped):
+            close_paragraph()
+            previous_kind = "blank"
+            continue
+
+        heading_match = HEADING_PATTERN.match(line)
+        if heading_match:
+            close_paragraph()
+            headings.append((lineno, len(heading_match.group(1)), heading_match.group(2)))
+            previous_kind = "heading"
+            continue
+
+        if lineno in table_lines or stripped.startswith("|"):
+            close_paragraph()
+            if previous_kind in ("prose", "list"):
+                warnings.append(
+                    StyleWarning(
+                        lineno,
+                        "table-spacing",
+                        "table not preceded by a blank line (guide section 3.4)",
+                    )
+                )
+            if not _is_delimiter_row(stripped):
+                _check_table_row(lineno, stripped, warnings)
+            previous_kind = "table"
+            continue
+
+        if previous_kind == "table":
+            warnings.append(
+                StyleWarning(
+                    lineno, "table-spacing", "text directly after a table row (guide section 3.4)"
+                )
+            )
+
+        if LIST_ITEM_PATTERN.match(line) or (previous_kind == "list" and line[:1].isspace()):
+            close_paragraph()
+            previous_kind = "list"
+            _check_line_length(lineno, line, warnings)
+            continue
+
+        # Prose line (a paragraph, or a lazy continuation of one).
+        if previous_kind != "prose":
+            paragraph_start = lineno
+            previous_hard_break = False
+        paragraph_lines += 1
+        if METADATA_FIELD_PATTERN.match(stripped):
+            # A field after a Markdown hard break (two trailing spaces or a backslash) renders on
+            # its own line, so it does not count towards a merged block.
+            paragraph_fields = 1 if previous_hard_break else paragraph_fields + 1
+            if paragraph_fields == 2:
+                warnings.append(
+                    StyleWarning(
+                        lineno,
+                        "merged-metadata",
+                        "consecutive **Field:** lines render as one paragraph (guide section 3.3)",
+                    )
+                )
+        _check_line_length(lineno, line, warnings)
+        previous_hard_break = line.endswith(("  ", "\\"))
+        previous_kind = "prose"
+
+    close_paragraph()
+    warnings.extend(_check_headings(headings))
+
+    slugs = _heading_slugs(headings) | explicit_ids
+    for lineno, anchor in anchor_links:
+        if anchor.lower() not in slugs:
+            warnings.append(
+                StyleWarning(lineno, "dead-anchor", f"no heading matches #{anchor} (guide section 3.5)")
+            )
+
+    return sorted(warnings, key=lambda warning: (warning.line, warning.rule))
+
+
+def _table_line_numbers(lines: list[str], first_content_line: int) -> set[int]:
+    """Line numbers belonging to a GFM table, with or without outer pipes.
+
+    A table is a header row followed by a delimiter row with the same number of cells (as GFM
+    requires); it continues while lines are non-blank and still contain a pipe. Rows written
+    `A | B` without leading pipes are valid GFM and are recognized here too.
+    """
+    table_lines: set[int] = set()
+    in_fence = False
+    fence_marker = ""
+    for index, line in enumerate(lines):
+        lineno = index + 1
+        if lineno < first_content_line:
+            continue
+        fence_match = FENCE_OPEN_PATTERN.match(line)
+        if in_fence:
+            if fence_match and fence_match.group(1) == fence_marker:
+                in_fence = False
+            continue
+        if fence_match:
+            in_fence = True
+            fence_marker = fence_match.group(1)
+            continue
+        if lineno in table_lines or not _is_delimiter_row(line.strip()):
+            continue
+        header = lines[index - 1].strip() if index else ""
+        if not header or "|" not in _mask_code(header):
+            continue
+        if len(_split_row_cells(header)) != len(_split_row_cells(line.strip())):
+            continue  # GFM requires the header and delimiter rows to have equal cell counts
+        table_lines.add(lineno - 1)
+        table_lines.add(lineno)
+        for follower_index in range(index + 1, len(lines)):
+            follower = lines[follower_index].strip()
+            if not follower or "|" not in _mask_code(follower):
+                break
+            table_lines.add(follower_index + 1)
+    return table_lines
+
+
+def _is_delimiter_row(line: str) -> bool:
+    if "|" not in line:
+        return False
+    cells = _split_row_cells(line)
+    return bool(cells) and all(TABLE_DELIMITER_CELL_PATTERN.match(cell) for cell in cells)
+
+
+def _split_row_cells(row: str) -> list[str]:
+    """Split one table row into cells, ignoring escaped pipes and pipes inside inline code."""
+    masked = _mask_code(row).replace("\\|", "xx")
+    return [cell.strip() for cell in masked.strip().strip("|").split("|")]
+
+
+def _skip_front_matter(lines: list[str]) -> int:
+    """Return the first line number after a leading YAML front-matter block (1 when absent)."""
+    if not lines or lines[0].strip() != "---":
+        return 1
+    for index, line in enumerate(lines[1:], start=2):
+        if line.strip() == "---":
+            return index + 1
+    return 1
+
+
+def _mask_code(line: str) -> str:
+    return INLINE_CODE_PATTERN.sub(lambda match: "x" * len(match.group(0)), line)
+
+
+def _check_line_length(lineno: int, line: str, warnings: list[StyleWarning]) -> None:
+    if len(line) <= MAX_PROSE_LINE_CHARS:
+        return
+    if "](" in line or "http://" in line or "https://" in line:
+        return  # links and URLs are exempt (guide section 3.6)
+    if max(len(token) for token in line.split()) > MAX_PROSE_LINE_CHARS // 2:
+        return  # a long path or identifier cannot be wrapped
+    warnings.append(
+        StyleWarning(
+            lineno,
+            "long-line",
+            f"prose line of {len(line)} characters (guide section 3.6)",
+        )
+    )
+
+
+def _check_table_row(lineno: int, row: str, warnings: list[StyleWarning]) -> None:
+    for cell in _split_row_cells(row):
+        prose = ABBREVIATION_PATTERN.sub("abbr", cell)
+        if len(cell) > MAX_TABLE_CELL_CHARS or SENTENCE_BOUNDARY_PATTERN.search(prose):
+            warnings.append(
+                StyleWarning(
+                    lineno,
+                    "dense-table-cell",
+                    "table cell holds more than one sentence or a long list (guide section 3.4)",
+                )
+            )
+            return
+
+
+def _check_headings(headings: list[tuple[int, int, str]]) -> list[StyleWarning]:
+    warnings: list[StyleWarning] = []
+    titles = [heading for heading in headings if heading[1] == 1]
+    if not headings or headings[0][1] != 1:
+        warnings.append(
+            StyleWarning(
+                headings[0][0] if headings else 1,
+                "missing-title",
+                "document does not start with a single # title (guide section 3.5)",
+            )
+        )
+    for lineno, _level, _text in titles[1:]:
+        warnings.append(
+            StyleWarning(lineno, "multiple-titles", "more than one # title (guide section 3.5)")
+        )
+
+    previous_level = 0
+    for lineno, level, _text in headings:
+        if previous_level and level > previous_level + 1:
+            warnings.append(
+                StyleWarning(
+                    lineno,
+                    "heading-skip",
+                    f"heading level jumps from {previous_level} to {level} (guide section 3.5)",
+                )
+            )
+        previous_level = level
+    return warnings
+
+
+def _heading_slugs(headings: list[tuple[int, int, str]]) -> set[str]:
+    """GitHub-style anchors, including the -1, -2 suffixes given to repeated headings.
+
+    Each anchor is allocated against every anchor already taken, so a heading literally named
+    "Topic-1" occupies `#topic-1` and a later repeat of "Topic" becomes `#topic-2`.
+    """
+    slugs: set[str] = set()
+    for _lineno, _level, text in headings:
+        base = _slugify(text)
+        candidate = base
+        suffix = 0
+        while candidate in slugs:
+            suffix += 1
+            candidate = f"{base}-{suffix}"
+        slugs.add(candidate)
+    return slugs
+
+
+def _slugify(text: str) -> str:
+    text = MARKDOWN_LINK_TEXT_PATTERN.sub(r"\1", text)
+    text = text.strip().lower()
+    text = re.sub(r"[^\w\- ]", "", text)
+    return text.replace(" ", "-")
 
 
 def _iter_markdown_files() -> list[Path]:

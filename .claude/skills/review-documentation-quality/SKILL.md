@@ -37,7 +37,13 @@ section it applies.
 
 ## 3. Check each document
 
-Read each document in full. Look for:
+Start with the deterministic warnings, then read each document in full:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\check_docs.py --style-path <path>
+```
+
+The script covers only the mechanical rules. Look for:
 
 | Problem | How to detect it | Style guide |
 |---|---|---|
