@@ -250,7 +250,9 @@ Before handing a document over for review:
 1. Run `/review-documentation-quality` on the file or the diff, and apply the minimal fixes.
 2. Run `/verify-documentation-truth` when the document states capabilities, counts, paths, or
    commands.
-3. Run `scripts/check_docs.py` and `git diff --check`.
+3. Run `scripts/check_docs.py` and `git diff --check`. The script also prints non-blocking style
+   warnings for the deterministic rules of this guide; `--style-path <file>` lists them for one
+   document.
 4. Look at the rendered view: the GitHub pull request preview, or the Markdown preview in your
    editor (`Ctrl+Shift+V` in VS Code) as a local approximation.
 
