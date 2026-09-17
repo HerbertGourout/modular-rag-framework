@@ -16,6 +16,7 @@ full V1 → V5 journey in plain language.
 | You want to... | Go to |
 |---|---|
 | Understand what the framework can do, without technical jargon | [onboarding.md](onboarding.md), section 3 |
+| Track the developer-onboarding documentation overhaul | [onboarding-overhaul-plan.md](onboarding-overhaul-plan.md) |
 | Evaluate the product hypothesis and evidence needed before commercial claims | [business-case.md](business-case.md) |
 | See what's delivered vs. planned, version by version | [../ROADMAP.md](../ROADMAP.md) |
 | Track the engine-agnostic refactoring programme | [refactoring-plan.md](refactoring-plan.md) |
