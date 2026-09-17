@@ -33,6 +33,7 @@ break every existing link into this directory), but the tables below keep them a
 | Set up an MCP server integration | [mcp-integrations.md](mcp-integrations.md) |
 | Read a guided tour of the actual codebase | [code-walkthrough.md](code-walkthrough.md) |
 | A full business + technical overview, with role-based quick starts | [framework-overview-onboarding.md](framework-overview-onboarding.md) |
+| Write, restructure, or review any documentation in this repository | [documentation-style-guide.md](documentation-style-guide.md) |
 
 ## Claude Code tooling guides — by intent
 
