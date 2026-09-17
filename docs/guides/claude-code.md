@@ -29,7 +29,7 @@ Official references:
 
 ## Available Workflows
 
-`.claude/skills/` currently holds 19 skills, not just the 5 validation-tier ones — the table
+`.claude/skills/` currently holds 22 skills, not just the 5 validation-tier ones — the table
 below is the complete list (a previous version of this table stopped at 5, which undersold what's
 actually invokable):
 
@@ -54,6 +54,9 @@ actually invokable):
 | `/optimize-chunking` | Analyze and optimize document chunking for retrieval quality. | No |
 | `/prepare-evaluation` | Create evaluation datasets, metrics, and test scenarios. | No |
 | `/parallel-feature-analysis` | Parallel analysis across retrieval/generation/security features. | No |
+| `/write-documentation` | Create or rewrite one document by applying [the documentation style guide](documentation-style-guide.md): form changes preserve every fact; content corrections change only the claims the task names. | No |
+| `/review-documentation-quality` | Read-only review of document form (`--file`, `--diff`, `--onboarding`); proposes minimal fixes. | No |
+| `/verify-documentation-truth` | Read-only check of documented claims against code, manifests, tests, CI, and ADRs; Claude Code's pre-handoff self-check, never a substitute for Codex review. | No |
 
 Use `/qa-v1` before opening a GitHub PR. Use `/run-simple-qa` or `/release` only when Qdrant is
 available on `localhost:6333` and the required LLM API key is set.

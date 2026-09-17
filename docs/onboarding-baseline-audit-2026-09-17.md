@@ -99,7 +99,7 @@ supporting material, not the source of truth. `Redirect` — intentionally forwa
 |---|---|---|
 | [`docs/onboarding.md`](onboarding.md) | "Who reads what" map across reader profiles, plus the plain-language V1→V5 journey | **Canonical** entry point (declared by `docs/_index.md:7-10` and `CONTRIBUTING.md:12`), but **Stale** — §4.1 S5, S6, F1 |
 | [`docs/_index.md`](_index.md) | By-intent navigation for all of `docs/` | **Canonical** index |
-| [`docs/guides/_index.md`](guides/_index.md) | By-intent navigation for `docs/guides/`, split into framework and Claude Code tooling guides | **Canonical** index for its directory; defers to `docs/_index.md` (`:61-62`) |
+| [`docs/guides/_index.md`](guides/_index.md) | By-intent navigation for `docs/guides/`, split into framework and Claude Code tooling guides | **Canonical** index for its directory; defers to `docs/_index.md` (`:62-63`) |
 | [`README.md`](../README.md) | Project pitch, vision, status table | **Canonical** pitch |
 | [`ROADMAP.md`](../ROADMAP.md) | Checkbox-per-feature delivery state | **Canonical** status source |
 | [`CHANGELOG.md`](../CHANGELOG.md) | Dated narrative of changes | **Historical** per entry |

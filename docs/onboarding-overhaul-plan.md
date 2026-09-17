@@ -143,6 +143,43 @@ established earlier.
 - Every material capability claim is backed by a repository reference.
 - No implementation file is modified.
 
+### Batch 0.5 — Documentation foundation
+
+**Status:** `COMPLETE` — see
+[`docs/guides/documentation-style-guide.md`](guides/documentation-style-guide.md)
+
+**Purpose:** Establish one shared documentation standard, and the project skills that apply it,
+before any onboarding document is rewritten, so later batches do not reproduce the current
+dense layout.
+
+**Work:**
+
+- Write a style guide covering readability, fidelity, the capability status vocabulary, and
+  references to other files.
+- Add three project skills that execute the guide: writing, editorial form review, and
+  pre-handoff truth verification.
+- Keep form review and truth verification as separate responsibilities; truth verification is
+  the writer's self-check and never replaces Codex review.
+- Reference the guide from this plan's per-batch handoff template.
+
+**Expected files:**
+
+- `docs/guides/documentation-style-guide.md`
+- `.claude/skills/write-documentation/SKILL.md`
+- `.claude/skills/review-documentation-quality/SKILL.md`
+- `.claude/skills/verify-documentation-truth/SKILL.md`
+- `docs/guides/_index.md` and `docs/guides/claude-code.md`, for navigation and the skill list
+- this plan
+
+**Acceptance criteria:**
+
+- The style guide exists and itself complies with its rules.
+- The three skills reference the guide instead of copying its rules.
+- Every later batch's handoff applies the guide.
+
+Editorial warnings in `scripts/check_docs.py` are a separately authorized follow-up; they are not
+part of this batch.
+
 ### Batch 1 — Canonical onboarding navigation
 
 **Status:** `NOT_STARTED`
@@ -464,8 +501,9 @@ validation output, or merged pull request rather than relying on a narrative cla
 | Batch | Status | Owner | Reviewer | Evidence | Notes / blockers |
 |---|---|---|---|---|---|
 | 0 — Baseline and truth map | `COMPLETE` | Claude Code | Codex (pass 1: `CHANGES_REQUIRED`; pass 2: `READY_FOR_FINAL_VALIDATION`, all findings closed) | [`docs/onboarding-baseline-audit-2026-09-17.md`](onboarding-baseline-audit-2026-09-17.md), `.review/handoff.md` | Inventory covers every in-scope cluster; 10 stale status claims, 1 canonical-source contradiction, 2 conflicting precedence declarations, 3 factual/formatting defects, 3 knowledge gaps. None corrected here — assigned to Batches 1, 2, 4, 5, 6, 7, 8 (audit §8) |
-| 1 — Canonical navigation | `NOT_STARTED` | — | — | — | Depends on Batch 0 |
-| 2 — Vision and status | `NOT_STARTED` | — | — | — | Depends on Batch 0 |
+| 0.5 — Documentation foundation | `COMPLETE` | Claude Code | Codex (pass 1: `CHANGES_REQUIRED`, two HIGH; pass 2: `READY_FOR_FINAL_VALIDATION`, all findings closed) | [`docs/guides/documentation-style-guide.md`](guides/documentation-style-guide.md), `.review/handoff.md` | Style guide and three documentation skills; editorial warnings in `scripts/check_docs.py` follow as a separate change |
+| 1 — Canonical navigation | `NOT_STARTED` | — | — | — | Depends on Batches 0 and 0.5 |
+| 2 — Vision and status | `NOT_STARTED` | — | — | — | Depends on Batches 0 and 0.5 |
 | 3 — Architecture and code | `NOT_STARTED` | — | — | — | Depends on Batches 1–2 |
 | 4 — Local environment | `NOT_STARTED` | — | — | — | Depends on Batch 1 |
 | 5 — Claude Code | `NOT_STARTED` | — | — | — | Depends on Batch 1 |
@@ -503,6 +541,7 @@ Required validation:
 - prepare `.review/handoff.md` for Codex pass 1
 
 Constraints:
+- apply docs/guides/documentation-style-guide.md
 - preserve unrelated working-tree changes
 - use one writer
 - do not commit or push without explicit authorization
