@@ -14,7 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 01 — Project purpose
 
 Pre-alpha portable assurance and delivery framework for Document AI use cases, built around
-three current elements and one proposed direction:
+three current elements and one partially implemented direction:
 - A **bounded native engine** (hybrid retrieval, generation, security — the V1 pipeline,
   `NativeEngineAdapter`).
 - An **owned control plane** (governance, audit, offline evaluation, config/manifests, tenant
@@ -22,9 +22,16 @@ three current elements and one proposed direction:
 - **Delegated external engines** for generic multi-agent orchestration and GraphRAG traversal
   (LangGraph today, selected via [ADR-0006](docs/adr/0006-external-engine-selection.md), reached
   through the `DocumentEngine` port).
-- An **accepted portable assurance direction** (ADR-0015): explicit L0/L1/L2 guarantees and an
-  adapter path for existing applications. This is not implemented or authorized while the ADR is
-  Proposed; never invent its contracts ahead of the decision/Lot 21.
+- A **portable assurance direction** (ADR-0015, Accepted), implemented in stages:
+  - **Lot 20 — implemented** (ADR-0016, Accepted): classification-aware provider-egress control,
+    mandatory for the framework's known remote provider types (`openai`, `anthropic`,
+    `openai-embeddings`).
+  - **Lot 21 — implemented** (ADR-0017, Accepted): the L0/L1/L2 assurance contract
+    (`contracts/assurance.py`) and a computed conformance report on both shipped adapters.
+  - **Lot 22 — in progress, contract only** (ADR-0018, Accepted): `contracts/application.py`
+    defines the existing-application boundary. **No existing-application adapter or pilot exists**:
+    there is no `adapters/applications/`, and no manifest can select one. Wrapping an existing
+    application is not a current capability — never describe it as operational.
 
 The historical "V1 Core RAG → V2 Agentic → V3 Graph Memory → V4 Governance → V5 Multimodal"
 progression in block 09 still organizes the detailed roadmap, but per
@@ -35,8 +42,9 @@ no longer map to "built natively in that version" — see block 09 for the curre
 split, which is reconciled with the ADRs, not an interim marker awaiting a future rewrite.
 
 **Non-negotiable priority**: preserve the native end-to-end reference path and existing public
-contracts. Lot 20 provider-egress protection precedes proposed assurance/external-application
-work. New graph, governance, or multimodal work must not break `examples/simple_qa/`, unit tests,
+contracts. The remaining Lot 22 work (behavioural fixture, pilot adapter, comparative pilot) must
+build on the shipped egress and assurance contracts, not weaken them. New graph, governance, or
+multimodal work must not break `examples/simple_qa/`, unit tests,
 contract tests, or the layering audit.
 
 ---
@@ -266,9 +274,12 @@ A change to a contract (`contracts/`) requires updating the matching `tests/cont
 > (multimodal execution)** are delegated to a selected external engine via the `DocumentEngine`
 > port ([ADR-0006](docs/adr/0006-external-engine-selection.md), LangGraph), not built natively.
 >
-> **ADR-0015 is Accepted:** the L0/L1/L2 direction and existing-application path are approved.
-> Do not invent their public types before Lot 20 and the focused contract ADR/work in Lots 21–22.
-> Documentation must still describe these capabilities as planned until they are implemented.
+> **ADR-0015 is Accepted and partly implemented:** Lot 20 (provider egress, ADR-0016) and Lot 21
+> (L0/L1/L2 assurance contract and conformance report, ADR-0017) are implemented. Lot 22 has
+> shipped only its contract (`contracts/application.py`, ADR-0018); the existing-application
+> adapter, its behavioural fixture and the comparative pilot are not built. Describe those three
+> as planned until they are implemented, and never infer from the contract that an existing
+> application can already be wrapped.
 
 Strategic roadmap for a native reference engine plus portable control/evidence capabilities. Its
 commercial value is a hypothesis to validate through measured pilots, not an irreplaceability
@@ -343,7 +354,9 @@ See [ROADMAP.md](ROADMAP.md) for complete timeline and success criteria per vers
   - Inline manifest rules evaluated before execution: shipped
   - Multi-tenant isolation (tenant A cannot see tenant B): shipped
   - Caller roles propagated but RBAC decisions (analyst vs director): not implemented
-  - Classification vocabulary exists but runtime/egress enforcement: Lot 20, not implemented
+  - Classification-aware provider-egress enforcement: shipped (Lot 20, ADR-0016,
+    `governance.egress_policy`); `PolicyEngine`/`TenantIsolationPolicy` still do not themselves
+    branch on `DataClassification` — that remains open, unassigned to any lot
 - **Key difference vs V1**: Governance is now proactive (prevent bad queries) not just reactive
 - **Success**: Policies enforced, multi-tenant isolation works, violations logged
 
@@ -441,9 +454,9 @@ engine or a specific vendor SDK.
 |------|--------|---------|-------|
 | `tests/integration/` | ✅ Exists | V1 | Run: `pytest tests/integration -m integration` |
 | `tests/e2e/` | ✅ Exists | V1 | Run: `pytest tests/e2e -m e2e` (full pipeline) |
-| `tests/benchmark/` | 🚫 Empty | V3 | Performance baselines added in V3 |
-| `tests/policy/` | 🚫 Empty | V2 | Policy conformance tests in V2 |
-| `tests/multimodal/` | 🚫 Empty | V5 | Multimodal tests in V5 |
+| `tests/benchmark/` | 🚫 Not created yet | V3 | Performance baselines added in V3 |
+| `tests/policy/` | 🚫 Not created yet | V2 | Policy conformance tests in V2 |
+| `tests/multimodal/` | 🚫 Not created yet | V5 | Multimodal tests in V5 |
 
 **Rule**: Create test modules in the version that introduces the feature.
 
@@ -474,8 +487,8 @@ V2 — V2.0 (V2.1 delegated, not built — see above)
 V3 — V3.0 (delegated) → V3.1 → V3.2 (native reporting/drift-detection portions)
 V4 — V4.0 → V4.1 (complete V4 before V5)
 V5 — V5.0 (delegated — see above)
-Next — Lot 20 egress → Lot 21 contract ADR and assurance contract → Lot 22
-existing-application pilot
+Assurance — Lot 20 egress (implemented) → Lot 21 assurance contract (implemented) → Lot 22
+contract (implemented) → Lot 22 adapter and pilot (not started)
 ```
 
 Why sequences matter:
@@ -485,8 +498,10 @@ Why sequences matter:
 - V3.1's cost/latency reporting and V3.2's drift detection don't depend on V3.0's (delegated)
   GraphRAG — they're independent native features that happen to share a version number
 - V4.1 (Multi-Lang) depends on V4.0 (governance framework)
-- Planned Lot 21 cannot start before Lot 20 and its focused contract ADR; Lot 22 cannot start
-  before Lot 21 conformance evidence. ADR-0015 acceptance does not pre-approve public schemas.
+- Lots 20 and 21 are complete, and Lot 22's contract is in place; its remaining scope and
+  acceptance evidence are defined in
+  `docs/refactoring/lot-22-external-application-adapters-and-conformance.md`. ADR-0015 acceptance
+  still does not pre-approve any public schema beyond what ADRs 0016–0018 define.
 
 ---
 
@@ -502,7 +517,7 @@ Why sequences matter:
 
 **"When do I implement Policy Engine?"**
 → The inline `PolicyEngine` and tenant isolation already ship. Extend them only through an
-accepted lot/ADR; RBAC and classification-aware egress do not yet ship.
+accepted lot/ADR. Classification-aware provider egress ships (Lot 20); RBAC decisions do not.
 
 **"Do I need multi-language in V1?"**
 → No blanket language count is promised. Define the deployment's required-language matrix and
@@ -518,7 +533,8 @@ external MLOps tooling, not built in this repo at any version.
 checks; native governance, audit, feedback/drift, and offline evaluation have specific remaining
 gaps listed in `ROADMAP.md`. Multi-agent orchestration (V2.1), GraphRAG traversal (V3.0), fine-tuning
 execution (V3.2), and multimodal execution (V5.0) are delegated to a selected external engine
-per ADR-0005. ADR-0015 plans portable assurance around external applications; it is not built.
+per ADR-0005. ADR-0015's assurance contract and provider-egress control are implemented (Lots
+20–21); wrapping an existing external application is not — only its contract exists (Lot 22).
 
 **"What about benchmarks?"**
 → The offline golden-set benchmark and CI quality gate already ship. Production calibration,

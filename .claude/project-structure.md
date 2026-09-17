@@ -30,9 +30,11 @@ The selected engine boundary is real: `NativeEngineAdapter` wraps `RAGEngine`, w
 does not currently implement planning, tool use, query decomposition or collaborative agents;
 those behaviours remain delegated targets under ADR-0005.
 
-It does not wrap an existing LangChain/LangGraph application. Accepted ADR-0015 defines that
-boundary and L0/L1/L2 assurance direction; both remain unimplemented pending Lots 21–22. Lot 20
-provider-egress enforcement is also planned, not current.
+It does not wrap an existing LangChain/LangGraph application — that boundary (ADR-0015, ADR-0018)
+is Lot 22: its contract (`contracts/application.py`) is implemented, but no adapter
+(`adapters/applications/`) exists yet. Lot 20 (classification-aware provider-egress control,
+ADR-0016) and Lot 21 (engine-independent assurance contract, `conformance_report()`, ADR-0017)
+are both COMPLETE and active today.
 
 `adapters/auth/` contains the real `KeycloakTokenVerifier`. `adapters/graphstores/` and
 `adapters/search/` remain empty extension targets.

@@ -41,8 +41,11 @@ LLM-backed scenario scheduled separately; V1.1 and V1.2 are partially built. In 
 a substantial slice of V2 native scope — policy-as-code enforcement, fail-closed tenant isolation,
 compliance audit events, redaction, and human-in-the-loop review — is real, wired, and covered by
 tests today, not merely designed. Feedback, durable review, and offline drift also ship through
-the native control path (ADR-0014). What remains a target includes provider-egress enforcement
-(Lot 20), the planned assurance/existing-application boundary (ADR-0015/Lots 21–22), and the *delegated* capabilities
+the native control path (ADR-0014). Provider-egress enforcement (Lot 20) and the
+engine-independent assurance conformance report (Lot 21) also ship today. What remains a target
+is the existing-application adapter (ADR-0015/Lot 22 — its contract exists,
+`contracts/application.py`, but no adapter under `adapters/applications/` does), and the
+*delegated* capabilities
 (generic multi-agent orchestration, GraphRAG traversal, multimodal execution — see
 [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md)) and a handful of specific
 native gaps each document calls out explicitly where they exist (e.g. `AdversarialDetector`

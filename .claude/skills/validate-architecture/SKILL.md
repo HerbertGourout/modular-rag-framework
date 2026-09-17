@@ -72,8 +72,10 @@ subset and must declare capabilities honestly. A new or changed control needs ei
 for every adapter claiming it or fail-fast rejection for unsupported combinations.
 
 Do not recreate generic routing/flow compilation in the native engine: ADR-0005 delegates it
-through `DocumentEngine`. Do not implement ADR-0015's external-application assurance hooks before
-Lot 20 and the focused contract design. Lot 20 provider egress is planned, not shipped.
+through `DocumentEngine`. Do not implement ADR-0015's existing-application adapter
+(`adapters/applications/`, Lot 22) opportunistically — its contract (`contracts/application.py`,
+ADR-0018) already exists but the adapter does not. Lot 20 provider egress (ADR-0016) and Lot 21
+assurance conformance (ADR-0017) are both shipped, not planned.
 
 ## 6. Verify observability and failure behavior
 

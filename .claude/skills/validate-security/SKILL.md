@@ -15,10 +15,12 @@ List each source, transformation, storage target, log/trace/report, and external
 by the diff. Confirm that free text, document content, answers, and corrections are treated as
 potentially sensitive. Record any control that remains deployment-owned.
 
-Current limitation: classification-aware, deny-by-default provider egress is planned for Lot 20
-and is not implemented. A current external-provider path therefore cannot be reported as protected
-by that future control. Require an approved external gateway/policy or a local provider where the
-deployment needs this guarantee.
+Classification-aware, deny-by-default provider egress shipped in Lot 20
+(`governance.egress_policy`, ADR-0016) and is mandatory the moment a manifest wires a known
+remote provider type (`openai`/`anthropic`/`openai-embeddings`). Verify it is configured with a
+real (not `max_classification: restricted`-only) ceiling before treating an external-provider path
+as protected, and require an approved external gateway/policy or a local provider for any provider
+type this control does not yet cover.
 
 ## 2. Run deterministic repository checks
 

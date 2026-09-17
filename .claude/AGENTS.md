@@ -162,7 +162,7 @@ Should I switch to GPT-4? Use few-shot? Add chain-of-thought?
 ✅ Prompt injection detection and prevention  
 ✅ Redaction strategies (masking, replacement, removal)  
 ✅ Technical-control mapping for compliance assessment (not certification)
-✅ Provider-egress boundary analysis (Lot 20 is planned, not shipped)
+✅ Provider-egress boundary analysis (Lot 20 shipped and mandatory for known remote providers; ADR-0016)
 ✅ Safety vs Security distinction (filter vs policy)  
 
 ### When to Use

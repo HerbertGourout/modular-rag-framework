@@ -41,8 +41,11 @@ Confirm with `scripts/check_layering.py --strict`; do not rely on a hand-built i
 - `DocumentEngine` is the vendor-neutral execution port.
 - LangGraph is an optional adapter with an explicitly bounded control subset.
 - Generic planning/routing is delegated per ADR-0005.
-- ADR-0015 external-application assurance is accepted direction, not implemented capability.
-- Lot 20 classification-aware provider egress is planned, not implemented.
+- ADR-0015 external-application assurance: the conformance contract (Lot 21, ADR-0017) and
+  provider-egress control (Lot 20, ADR-0016) are both implemented; only the existing-application
+  adapter (Lot 22, `adapters/applications/`) remains unimplemented, though its contract
+  (`contracts/application.py`, ADR-0018) already exists.
+- Lot 20 classification-aware provider egress is shipped and mandatory for known remote providers.
 
 Do not report planned capabilities as missing bugs unless the reviewed task accepted them. Do not
 claim full engine parity when capability validation intentionally rejects unsupported controls.

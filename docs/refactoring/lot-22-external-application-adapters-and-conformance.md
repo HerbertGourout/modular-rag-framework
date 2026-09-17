@@ -1,6 +1,8 @@
 # Lot 22 — Existing-Application Adapters and Cross-Engine Conformance
 
-**Status:** PLANNED — depends on completed Lots 20–21
+**Status:** IN PROGRESS — contract layer shipped (`contracts/application.py`,
+ADR-0018-conformant: `ApplicationProfileProvider`, `ControlPoint`, `required_audit_events()`);
+no adapter under `adapters/applications/` exists yet.
 
 **Priority:** P1 after the assurance contract
 

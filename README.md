@@ -103,10 +103,10 @@ prototype to a multi-tenant enterprise deployment without rewriting the core.
 
 Reach for it when your project's hard requirements include: provable per-tenant data isolation,
 a queryable audit trail, controlled provider egress, or offline evaluation gates that block a
-measured regression before release. The accepted assurance-level direction for external applications
-is documented in
-[ADR-0015](docs/adr/0015-portable-assurance-and-external-application-boundary.md) and is not yet
-implemented.
+measured regression before release. Assurance levels for pipelines built with this framework are
+implemented ([ADR-0017](docs/adr/0017-engine-independent-assurance-contract.md)); extending them to
+existing external applications is not yet usable — only the boundary contract exists
+([ADR-0018](docs/adr/0018-existing-application-adapter-boundary.md)), with no adapter.
 
 Skip it, or defer adopting it, when your project is a single-tenant prototype with no compliance
 requirement and no plan to reuse the pipeline across engagements. The overhead of learning the
@@ -357,9 +357,10 @@ combination of policy, evidence, and conformance across engines.
 
 That uniformity is a target, not the current state. The native path consumes the broadest control
 set; the shipped LangGraph adapter currently consumes guard, tenant isolation, and redaction and
-rejects unsupported policy/audit/review/telemetry combinations at startup. ADR-0015 plans
-explicit assurance levels so this difference becomes a testable contract rather than a marketing
-generalization.
+rejects unsupported policy/audit/review/telemetry combinations at startup. The assurance contract
+(Lot 21, ADR-0017) makes that difference a testable contract rather than a marketing
+generalization: each adapter's conformance report states the level its evidence actually supports,
+and the LangGraph adapter reports lower where it cannot back a claim.
 
 ### How a request actually flows — a concrete walk-through
 
@@ -394,10 +395,15 @@ when its component is not wired, so a minimal `local-hybrid-rag.yaml` manifest w
 - Provide a **native reference RAG engine** with inspectable, local-first semantics — current.
 - Own portable policy, evidence, evaluation, tenant, feedback, and review contracts while
   delegating generic orchestration to the selected engine — partially implemented.
-- Support both framework-built pipelines and existing external applications through explicit
-  L0/L1/L2 assurance levels — accepted direction in ADR-0015, planned but not implemented.
-- Make data classification and deny-by-default provider egress part of the assurance boundary —
-  planned as Lot 20.
+- Make data classification and provider egress part of the assurance boundary — **implemented**
+  (Lot 20, ADR-0016): classification-aware egress control is mandatory whenever one of the
+  framework's known remote providers (`openai`, `anthropic`, `openai-embeddings`) is configured.
+- Express framework-built pipelines through explicit L0/L1/L2 assurance levels — **implemented**
+  (Lot 21, ADR-0017): a computed conformance report on both shipped engine adapters.
+- Extend those assurance levels to existing external applications — **in progress, contract only**
+  (Lot 22, ADR-0018). The boundary contract (`contracts/application.py`) exists; no
+  existing-application adapter, behavioural fixture or pilot exists yet, so an existing
+  application **cannot** be wrapped today.
 - Extend provenance to multilingual and multimodal evidence without building a competing VLM or
   agent runtime — planned.
 

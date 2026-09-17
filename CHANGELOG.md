@@ -5,6 +5,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added — Lot 22 contract layer: existing-application adapter boundary (ADR-0018, 2026-09-17)
+
+- `contracts/application.py` (new): `ApplicationProfileProvider`, `ControlPoint`,
+  `ControlPointSupport`, `ApplicationProfile`, `required_audit_events()` — implements
+  [ADR-0018](docs/adr/0018-existing-application-adapter-boundary.md)'s accepted design (Option B
+  companion Protocol; `integration_fingerprint`; audit-coverage floor derived from the profile's
+  own structure rather than adapter-chosen). Exported from `contracts/__init__.py`.
+- `tests/unit/contracts/test_application.py` and `tests/contract/test_application_conformance.py`
+  (new): unit and conformance coverage for the ceiling computation and profile invariants.
+- **Not delivered in this pass**: no adapter under `adapters/applications/`; no manifest can
+  select an existing-application adapter today. See
+  `docs/refactoring/lot-22-external-application-adapters-and-conformance.md` for current status.
+
 ### Added — SQuAD experiment script and planned multi-engine benchmark protocol (2026-09-14)
 
 - `scripts/prepare_squad_experiment.py` (new): converts a SQuAD 1.1 JSON file into a deterministic

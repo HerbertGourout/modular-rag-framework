@@ -150,14 +150,15 @@
 > 2026-09-10** — `contracts/assurance.py`, `DocumentEngine.conformance_report()` on both shipped
 > adapters, and the optional `assurance.min_level` manifest gate are all implemented and tested;
 > see [lot-21-engine-independent-assurance-contract.md](refactoring/lot-21-engine-independent-assurance-contract.md).
-> **Lot 22 (planned, 2026-09-02):** accepted [ADR-0015](adr/0015-portable-assurance-and-external-application-boundary.md)
-> proposes support for wrapping an existing external application without rebuilding its graph.
-> **PLANNED, dependency-gated implementation**: Lot 22 requires Lot 21 evidence, now available.
-> Its own focused contract work is complete —
-> [ADR-0018](adr/0018-existing-application-adapter-boundary.md), **Accepted 2026-09-16**: the
+> **Lot 22 (planned 2026-09-02; IN PROGRESS since 2026-09-17, contract only):** accepted
+> [ADR-0015](adr/0015-portable-assurance-and-external-application-boundary.md) proposes support for
+> wrapping an existing external application without rebuilding its graph. Its focused contract ADR,
+> [ADR-0018](adr/0018-existing-application-adapter-boundary.md), was **Accepted 2026-09-16**: the
 > adapter implements the existing `DocumentEngine` port rather than a second one, and declares a
-> falsifiable control-point profile that caps the assurance level it can compute. **Every Lot 22
-> dependency is now closed**; the lot is unblocked and not started.
+> falsifiable control-point profile that caps the assurance level it can compute. The contract
+> layer is **shipped** (`contracts/application.py`, exported from `contracts/__init__.py`, 43
+> tests). The behavioural fixture, the existing-application adapter and the comparative pilot are
+> **not built**: there is no `adapters/applications/`, and no manifest can select such an adapter.
 > **Target outcome:** Deploy compliant, measurable document-AI solutions faster, independently
 > of the underlying execution engine.
 > **Migration principle:** Incremental, evidence-based, reversible, and releasable after every
@@ -350,7 +351,7 @@ stated otherwise.
 | 19 | Layer-boundary correction and control-plane activation (ADR-0007) | P0 | L (1.5-2wk) | COMPLETE (engineering scope) — sign-off pending, see [lot-19-layer-boundary-stabilization.md](refactoring/lot-19-layer-boundary-stabilization.md), [ADR-0007](adr/0007-layer-boundaries-and-control-plane-activation.md), and [capability-matrix.md](architecture/capability-matrix.md) | 18 |
 | 20 | Data classification and fail-closed LLM/embedding egress control | P0 | M-L (1-2wk) | COMPLETE — [ADR-0016](adr/0016-provider-egress-control.md) Accepted 2026-09-09; see [lot-20-data-classification-egress-control.md](refactoring/lot-20-data-classification-egress-control.md) | 11a, 11c, 19; approved ADR before contract/structural changes |
 | 21 | Engine-independent assurance contract, levels, and conformance report | P0 | L (2-3wk; re-estimate after spike) | COMPLETE — [ADR-0017](adr/0017-engine-independent-assurance-contract.md) Accepted 2026-09-10; see [lot-21-engine-independent-assurance-contract.md](refactoring/lot-21-engine-independent-assurance-contract.md) | 20; accepted [ADR-0017](adr/0017-engine-independent-assurance-contract.md) |
-| 22 | Existing-application adapter and measured cross-engine pilot | P1 | L-XL (3-5wk, time-boxed) | READY TO START — Lot 21 evidence available and [ADR-0018](adr/0018-existing-application-adapter-boundary.md) **Accepted 2026-09-16**; every dependency is closed. Not started. | 21; accepted [ADR-0018](adr/0018-existing-application-adapter-boundary.md) |
+| 22 | Existing-application adapter and measured cross-engine pilot | P1 | L-XL (3-5wk, time-boxed) | IN PROGRESS — contract layer (`contracts/application.py`) shipped, ADR-0018-conformant; adapter (`adapters/applications/`) not started. | 21; accepted [ADR-0018](adr/0018-existing-application-adapter-boundary.md) |
 
 Ranges (e.g. `8-10`) list the earliest and latest lot whose evidence is required via the
 dependency chain, not necessarily every intermediate lot as a direct predecessor. `16a` and
@@ -579,11 +580,14 @@ general-purpose enterprise DLP platform, or binding the framework to one cloud/p
 
 ---
 
-### Phase F — Portable assurance and existing-application adoption (planned Lots 21–22)
+### Phase F — Portable assurance and existing-application adoption (Lot 21 complete; Lot 22 in progress)
 
-This phase is authorized in direction by ADR-0015 but remains dependency-gated. It must not start
-by changing contracts first: Lot 20 closes the provider-egress boundary, then Lot 21 approves and implements
-the assurance schema, then Lot 22 tests the thesis with an existing application.
+This phase is authorized in direction by ADR-0015 and was sequenced so that no contract changed
+ahead of its decision: Lot 20 closed the provider-egress boundary (complete), Lot 21 approved and
+implemented the assurance schema (complete), and Lot 22 tests the thesis with an existing
+application. **Status as of 2026-09-17:** Lot 22's contract layer is shipped; its behavioural
+fixture, adapter and comparative pilot are not, so the existing-application path is not
+operational.
 
 **Lot 21: Engine-Independent Assurance Contract and Conformance Report.** Define versioned
 L0/L1/L2 profiles; separate observable, independently verifiable, and enforceable capabilities;
@@ -640,7 +644,7 @@ assurance or reuse at acceptable cost, do not expand into a broad adapter progra
 | Lot 19 | Strict layering and application facade are enforced; configured governance/audit/quality sections are either activated or rejected before execution. |
 | Lot 20 | **Met.** [ADR-0016](adr/0016-provider-egress-control.md) Accepted 2026-09-09. Every owned generator/embedder (document/chunk ingestion and query-time embedding at retrieval — Codex review pass 1, HIGH-002) and the LangGraph delegated-engine retrieve/generate handoffs are guarded before transmission; denied or unclassified content produces zero adapter calls (proven by `_RecordingEmbedder`/`_FakeGenerator` call-count assertions in `tests/unit/orchestration/test_engine.py`); content-free evidence reaches `AuditEvent`/`mrag.egress.{allowed,denied}` for both allowed and denied decisions (MEDIUM-001), never raw prompt/chunk/response text; a `local: true` profile completes with no network egress or fails closed otherwise; a manifest wiring one of this framework's own known remote provider types with no provider profile covering it is rejected before `wire()` succeeds — mandatory, not opt-in (Codex review pass 1, HIGH-001, `orchestration.registry.runtime_manifest_errors()`); a classified chunk's classification round-trips through both Qdrant adapters intact (HIGH-003). **Deliberately out of scope, not a gap**: no pseudonymization/reversible token mapping; the known-remote-type list is scoped to this framework's own three built-in adapters, not arbitrary third-party providers (see ADR-0016 §3, Consequences). |
 | Lot 21 | **Met.** [ADR-0017](adr/0017-engine-independent-assurance-contract.md) Accepted 2026-09-10; versioned L0/L1/L2 profiles (`contracts.assurance.AssuranceLevel`), observable/verifiable/enforceable distinctions (`EvidenceStatus`), deterministic conformance reports for both native and LangGraph (`achieved_level` computed, never adapter-asserted); overclaim, missing-evidence, and policy-bypass tests fail closed (`tests/contract/test_engine_conformance.py`'s capability-aware suite, run against real adapters, not only a fake). **Deliberately out of scope, not a gap**: no on-disk exported report fixture (proven via direct assertions instead); the multi-engine quality/portability benchmark remains Lot 22 planning content this lot's evidence feeds, not delivers. |
-| Lot 22 (planned) | An existing application runs without graph reconstruction; declared assurance level passes; egress/tenant/streaming/tool bypass tests pass; measured integration evidence supports a human continue/stop decision. |
+| Lot 22 (in progress — contract only; **not yet met**) | An existing application runs without graph reconstruction; declared assurance level passes; egress/tenant/streaming/tool bypass tests pass; measured integration evidence supports a human continue/stop decision. |
 
 ---
 
@@ -707,8 +711,8 @@ record dataset version, engine/model version, configuration, environment, and co
 - [ ] Manifests are strict, versioned, migratable, capability-aware, and secret-safe.
 - [ ] Tenant isolation, policy failures, redaction, and audit are enforced end to end.
 - [ ] Model and embedding egress is deny-by-default, classification-aware, leak-tested, and able to remain fully local.
-- [ ] Each adapter states an assurance level and distinguishes observed, verified, and enforced evidence (accepted ADR-0015; planned Lot 21).
-- [ ] One existing external application is wrapped without graph reconstruction and passes its declared conformance profile (proposed Lot 22).
+- [x] Each adapter states an assurance level and distinguishes observed, verified, and enforced evidence (Lot 21 complete; ADR-0017).
+- [ ] One existing external application is wrapped without graph reconstruction and passes its declared conformance profile (Lot 22 in progress: contract shipped, adapter and pilot not built).
 - [ ] Document update/deletion and vector/lexical reconciliation are proven.
 - [ ] Index and audit migrations have verified backup, restore, and rollback paths.
 - [ ] Metrics have correct names/formulas and cannot hide infrastructure failures.
@@ -821,6 +825,7 @@ scope change, or an approved architecture decision — never as a silent in-plac
 | 2026-09-14 | OPA-backed provider-egress policy, approved by Herbert Gourout: `adapters/policy/opa_egress_policy.py` (`OpaEgressPolicy`, `governance.egress_policy.type: opa`). OPA decides only remote provider x classification x operation; unknown providers are denied and local providers allowed without calling OPA; every undefined, malformed, failed or timed-out decision denies. Two design decisions taken with it: `egress_policy` becomes a critical readiness role (ADR-0010 §3), and OPA runs in CI's `test-integration` job, pinned by digest. This brings forward, for `EgressPolicy` only, the OPA integration ADR-0003 lists as a V4 item; OPA behind `PolicyEngine` stays open because no `PolicyEngine` Protocol exists. No new ADR: no contract changes, and ADR-0016 §4 already anticipates further `EgressPolicy` implementations. | COMPLETE (engineering scope) — integration tests not yet run locally; CI is their first real execution |
 | 2026-09-16 | Drafted [ADR-0018](adr/0018-existing-application-adapter-boundary.md) as Lot 22's required focused contract ADR, before any implementation. Core decisions proposed: an existing-application adapter implements the **existing** `DocumentEngine` port (no second execution port); a new `contracts/application.py` declares a `ControlPoint`/`ControlPointSupport` profile describing where the framework can actually attach to a foreign application; only `REQUEST_ADMISSION` and `RESULT_ADMISSION` are structurally guaranteed, since the adapter owns the call and nothing else; a control point's support caps the `EvidenceStatus` it can back, so an uninterceptable application computes a lower `achieved_level` arithmetically; an `ENFORCED` binding without a passing negative bypass test degrades to `OBSERVED`; and a mandatory `uncontrolled_egress` flag forces an unreachable provider call to appear in the report as an absence rather than as nothing. Four open decisions were listed for the acceptance conversation rather than settled silently. **Revised the same day** after Herbert Gourout's review ("revise before acceptance, without changing its direction"), which closed three of those four: the profile is now reachable by the registry through a narrow `ApplicationProfileProvider` introspection Protocol (a held value could not be validated at startup); `uncontrolled_egress` is computed from a closed `egress_paths` declaration instead of being an unverifiable mandatory bool; and the "no negative test means treat as OBSERVED" rule — which the runtime cannot evaluate, since it cannot know which CI tests ran — becomes a build gate, with a missing or failing negative test failing the build. The review also added the normative `EvidenceKind` x `ControlPoint` ceiling table the first draft only asserted existed, totality/duplicate/never-UNAVAILABLE invariants on `bindings`, a mandatory `configuration_fingerprint`, and a corrected lifecycle rule so a new `ControlPoint` member cannot silently lower a deployed profile's level. | ACCEPTED |
 | 2026-09-16 | Accepted [ADR-0018](adr/0018-existing-application-adapter-boundary.md), after two Codex review passes and one bounded final remediation on the same day. Core decisions: an existing-application adapter implements the **existing** `DocumentEngine` port, with a companion `ApplicationProfileProvider` introspection Protocol rather than a breaking Protocol change; only `REQUEST_ADMISSION` and `RESULT_ADMISSION` are structurally guaranteed, since the adapter owns the call and nothing else; a normative table gives every `EvidenceKind` a control-point ceiling, applied per entry **before** ADR-0017's `compute_achieved_level()`, which is untouched; certification is per attachment, so two egress paths sharing one hook need two probes; `IDENTITY_TENANT` above `OBSERVED` requires retrieval visibility and a mandatory two-tenant probe, because admission proves refusal, not isolation; `AUDIT_COMPLETION` is measured against `required_audit_events()`, derived from the profile's own structure rather than chosen by the adapter; an `ENFORCED` claim without a passing negative probe fails the delivery gate; and the pilot adapter is constructed by one explicit branch in the composition root, with a general engine-adapter registry left to its own future ADR. Review history: pass 1 returned four HIGH and one MEDIUM; pass 2 closed `HIGH-002`, `HIGH-003` and `MEDIUM-001` and reopened `HIGH-004` (the adapter still chose its own audit denominator), which was **corrected before acceptance rather than accepted as a risk**. Four judgements made ahead of the pilot evidence were ratified as drafted and remain listed in the ADR: the companion-Protocol design, the initial `ControlPoint`/`EgressPathKind` member sets, the `integration_fingerprint` recipe as reproducible-within-one-adapter, and the narrow construction boundary. **This closes the last Lot 22 dependency.** | Lot 22: READY TO START, not started |
+| 2026-09-17 | Lot 22 contract layer shipped: `contracts/application.py` (`ApplicationProfileProvider`, `ControlPoint`, `ControlPointSupport`, `ApplicationProfile`, `required_audit_events()`), exported from `contracts/__init__.py`, covered by `tests/unit/contracts/test_application.py` and `tests/contract/test_application_conformance.py`. No adapter exists yet under `adapters/applications/`; no manifest can select an application adapter today. | Lot 22: IN PROGRESS — contract shipped, adapter not started |
 | Pending | Decide final product/package name | Non-blocking |
 | Pending | Validate the business case with measured pilots rather than assumed project volume | Lot 22 decision gate |
 
