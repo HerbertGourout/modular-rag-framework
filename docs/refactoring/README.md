@@ -3,10 +3,9 @@
 This is the index for the original 18-lot engine-agnostic control-plane refactoring programme
 and its follow-on lots (`docs/refactoring-plan.md`). Lots 0-18 were executed 2026-08-03 through
 2026-08-05; Lot 19 followed, Lot 20 shipped 2026-09-08 and is now fully complete (ADR-0016
-Accepted 2026-09-09), and
-Lots 21–22 are planned by accepted ADR-0015; Lot 21's Lot-20 dependency is now satisfied and its
-own contract ADR ([ADR-0017](../adr/0017-engine-independent-assurance-contract.md)) is drafted,
-but not yet accepted — implementation has not started. It answers: **what
+Accepted 2026-09-09), Lot 21 is complete (ADR-0017 Accepted and implemented 2026-09-10), and
+Lot 22 is in progress at the contract-only stage (ADR-0018 Accepted 2026-09-16; its contract
+shipped, no adapter or pilot yet). It answers: **what
 happened, in what order, why, and where's the proof** — for anyone reading this repository
 after the fact, whether that's a new team member, a reviewer, or a future Claude Code session
 picking the work back up.
@@ -147,9 +146,9 @@ comparison that found a *second* governance-parity bug the per-lot tests had mis
 | 17 | Removed the dead agent/routing/planning prototype cluster | [lot-17-prototype-retirement.md](lot-17-prototype-retirement.md) |
 | 18 | Pilot comparison, CI hardening, programme closure | [lot-18-pilot-and-closure.md](lot-18-pilot-and-closure.md) |
 | 19 | Layer-boundary correction (`Container`/factories moved, facade enforced) and control-plane manifest activation (ADR-0007) | [lot-19-layer-boundary-stabilization.md](lot-19-layer-boundary-stabilization.md) |
-| 20 | **Planned:** fail-closed data classification and LLM/embedding egress control | [authoritative scope and acceptance criteria](../refactoring-plan.md#phase-e--data-protection-and-controlled-model-egress-lot-20) |
-| 21 | **Planned:** engine-independent assurance levels and conformance report | [lot-21-engine-independent-assurance-contract.md](lot-21-engine-independent-assurance-contract.md) |
-| 22 | **Proposed:** wrap and measure an existing external application | [lot-22-external-application-adapters-and-conformance.md](lot-22-external-application-adapters-and-conformance.md) |
+| 20 | **Complete:** fail-closed data classification and LLM/embedding egress control (ADR-0016) | [lot-20-data-classification-egress-control.md](lot-20-data-classification-egress-control.md) |
+| 21 | **Complete:** engine-independent assurance levels and conformance report (ADR-0017) | [lot-21-engine-independent-assurance-contract.md](lot-21-engine-independent-assurance-contract.md) |
+| 22 | **In progress — contract only:** wrap and measure an existing external application (ADR-0018). Contract shipped; behavioural fixture, adapter and pilot not built | [lot-22-external-application-adapters-and-conformance.md](lot-22-external-application-adapters-and-conformance.md) |
 
 A follow-on audit after Lot 18's closure found two structural gaps Lots 0-18 hadn't
 caught: the published dependency direction didn't match the real one (`orchestration/`
@@ -172,12 +171,17 @@ manifest data, not hardcoded vendor logic). All three shipped presets now config
 [ADR-0016](../adr/0016-provider-egress-control.md) is Accepted (2026-09-09) — see the evidence
 doc for the complete list of what did and did not ship.
 
-Lots 21–22 are planned scope documents, not implementation evidence. They become actionable only
-after their dependencies are complete: Lot 20's own sign-off/ADR gap is now closed (ADR-0016
-Accepted 2026-09-09); Lot 21's own focused contract ADR
-([ADR-0017](../adr/0017-engine-independent-assurance-contract.md)) is drafted, defining honest
-assurance levels and reports, but not yet accepted — implementation starts only once it is, then
-Lot 22 tests them by wrapping an existing application without reconstructing it.
+Lot 21 is complete: [ADR-0017](../adr/0017-engine-independent-assurance-contract.md) was accepted
+and implemented (`contracts/assurance.py`, a computed conformance report on both shipped
+adapters); its evidence is in
+[lot-21-engine-independent-assurance-contract.md](lot-21-engine-independent-assurance-contract.md).
+
+Lot 22 is in progress, and only its contract layer exists. Its scope document is still largely a
+plan, not implementation evidence: `contracts/application.py`
+([ADR-0018](../adr/0018-existing-application-adapter-boundary.md)) is shipped and tested, but the
+behavioural fixture, the adapter that would wrap an existing application without reconstructing
+it, and the comparative pilot that measures it are not built. No existing application can be
+wrapped today.
 
 ---
 

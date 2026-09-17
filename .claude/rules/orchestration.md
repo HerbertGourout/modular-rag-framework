@@ -60,9 +60,11 @@ Generic multi-agent planning and arbitrary application orchestration are delegat
 engine boundary per ADR-0005. Do not recreate the retired `QueryRouter` or `FlowCompiler` without
 a new accepted decision and a concrete consumer.
 
-ADR-0015's L0/L1/L2 external-application assurance boundary is accepted but not implemented. Do
-not add hooks before Lot 20 and the focused Lot 21 contract ADR. Provider-egress authorization is
-planned for Lot 20 and is not currently enforced by this layer.
+ADR-0015's L0/L1/L2 external-application assurance boundary is accepted; its cross-engine
+conformance report (Lot 21, ADR-0017) and provider-egress authorization (Lot 20, ADR-0016) are
+both implemented and enforced. Only the existing-application adapter itself (Lot 22 —
+`adapters/applications/`) remains unimplemented; its contract (`contracts/application.py`)
+already exists.
 
 ## 4. Tracing, metrics, and audit
 

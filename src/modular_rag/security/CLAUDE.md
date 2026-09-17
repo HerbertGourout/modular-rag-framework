@@ -11,11 +11,12 @@ import sibling domains such as `retrieval/`, `generation/`, `ingestion/`, `agent
 `eval/`. Concrete composition belongs in `app/default_factories.py` and selection belongs in YAML
 manifests.
 
-The currently implemented controls are useful safeguards, not a compliance certification. In
-particular, the framework does not yet enforce classification-aware, deny-by-default provider
-egress. That boundary is planned as Lot 20. Until then, deployments that send content to external
-LLM or embedding APIs need an external gateway/control or must restrict themselves to approved
-local providers.
+The currently implemented controls are useful safeguards, not a compliance certification.
+Classification-aware, deny-by-default provider egress shipped in Lot 20
+(`governance.egress_policy`, ADR-0016) and is mandatory the moment a manifest wires a known
+remote provider type (`openai`/`anthropic`/`openai-embeddings`). Deployments sending content to
+any other external LLM or embedding API still need an external gateway/control or must restrict
+themselves to approved local providers.
 
 ADR-0015 accepts a broader portable assurance direction. It is not authority to add or change a
 Protocol until the separate contract-change work is approved.
@@ -116,7 +117,8 @@ or end-to-end tests without confirmed services and credentials.
 - [ ] No raw sensitive content or secrets in logs, traces, reports, or exceptions.
 - [ ] Declared controls fail closed and have negative-path tests.
 - [ ] Contract, factory, manifest, and documentation changes agree.
-- [ ] Claims distinguish implemented safeguards, deployment responsibility, and planned Lot 20.
+- [ ] Claims distinguish implemented safeguards (including Lot 20 provider egress), deployment
+      responsibility, and the unbuilt Lot 22 existing-application adapter.
 - [ ] A Protocol change has an accepted ADR and migration/conformance coverage.
 
 ## References

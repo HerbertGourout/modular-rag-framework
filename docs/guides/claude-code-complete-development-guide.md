@@ -22,10 +22,11 @@ Before editing:
 4. distinguish current behavior from roadmap proposals;
 5. read the applicable accepted ADR.
 
-ADR-0015 is accepted, but its engine-independent assurance levels and external-application
-boundary are not implemented APIs. Lot 20 provider-egress enforcement and planned Lots 21–22
-must not be implemented opportunistically inside unrelated work; Lot 21 also requires its focused
-contract ADR.
+ADR-0015 is accepted. Its engine-independent assurance levels (Lot 21, `contracts/assurance.py`)
+and provider-egress control (Lot 20, `contracts/egress.py`) are implemented APIs; only the
+existing-application adapter (Lot 22, `adapters/applications/`) remains unbuilt — its contract
+(`contracts/application.py`, ADR-0018) already exists. Do not implement a Lot 22 adapter
+opportunistically inside unrelated work.
 
 ## 2. Preserve the architecture
 

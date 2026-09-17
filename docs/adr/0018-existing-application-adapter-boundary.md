@@ -31,6 +31,13 @@ recorded here rather than edited in silently, because an accepted ADR is a contr
 `orchestration/registry.py` in this repository today. Every code block here specifies what Lot 22
 must implement; none of it is a description of existing code.
 
+*Note added 2026-09-17, after this ADR's own acceptance:* `contracts/application.py` has since
+been implemented, matching this ADR's accepted design (Option B — `ApplicationProfileProvider`;
+`integration_fingerprint`; `required_audit_events()`). `adapters/applications/` still does not
+exist. The "nothing built yet" statement above described this ADR's own state at acceptance time
+and no longer describes the current repository — see
+`docs/refactoring/lot-22-external-application-adapters-and-conformance.md` for current status.
+
 **Date:** drafted, revised and accepted 2026-09-16.
 
 **Authors:** Drafted by Claude Code, at explicit user instruction, before any Lot 22

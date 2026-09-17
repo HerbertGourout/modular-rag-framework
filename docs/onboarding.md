@@ -263,9 +263,10 @@ manifest components. The current LangGraph adapter supports tenant isolation, gu
 redaction, but rejects audit, policy-engine, review-queue and telemetry controls it cannot honor.
 
 **Status**: 🟡 core primitives (inline policy, tenant isolation, redaction, audit, durable feedback
-and review) are real and manifest-activatable on the native path. Multi-environment layering, OPA,
-risk profiles, formatted compliance reporting, uniform external-engine controls, and Lot 20 data
-egress remain. Suitability for a regulated deployment requires deployment-specific technical and
+and review) are real and manifest-activatable on the native path, and Lot 20 classification-aware
+provider egress ships (including an OPA-backed `EgressPolicy`). Multi-environment layering, OPA
+behind the general `PolicyEngine`, risk profiles, formatted compliance reporting, and uniform
+external-engine controls remain. Suitability for a regulated deployment requires deployment-specific technical and
 legal qualification; this status alone does not establish it.
 
 ### V5 — Multimodal evidence: beyond text
@@ -318,10 +319,14 @@ writing:
   do not exist in the current runtime. Graph and multimodal manifests are blueprints, not presets.
 - Feedback, durable review, and offline drift detection do exist (ADR-0014), but production drift
   thresholds are uncalibrated and no external retraining workflow consumes the advisory flag.
-- Classification-aware provider egress (Lot 20), assurance levels/reports (proposed Lot 21), and
-  wrapping an existing external application (proposed Lot 22) do not exist.
-- RBAC/classification-aware enforcement, OPA, environment promotion and formatted compliance
-  reports are not implemented, even though core tenant/policy/audit/review primitives ship.
+- Classification-aware provider egress (Lot 20, ADR-0016) and L0/L1/L2 assurance levels with
+  conformance reports (Lot 21, ADR-0017) **are implemented**. Wrapping an existing external
+  application (Lot 22) is **not**: only its contract exists (`contracts/application.py`,
+  ADR-0018), with no adapter and no manifest able to select one.
+- RBAC decisions, classification-aware *policy-engine* enforcement (the `PolicyEngine` and tenant
+  policy do not branch on `DataClassification`; only provider egress does), OPA behind
+  `PolicyEngine`, environment promotion and formatted compliance reports are not implemented,
+  even though core tenant/policy/audit/review primitives ship.
 - `adapters/llms/` and `adapters/auth/` are implemented; only `adapters/graphstores/` and
   `adapters/search/` remain empty extension targets.
 - Integration and e2e suites are real. The main CI provisions Qdrant/PostgreSQL for live tests;

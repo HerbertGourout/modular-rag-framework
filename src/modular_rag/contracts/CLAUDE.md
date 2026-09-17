@@ -20,9 +20,10 @@ capability-negotiation, migration, and conformance consequences. Preserve the na
 the reference implementation; do not make LangChain, LangGraph, or a cloud SDK a contract-layer
 dependency.
 
-Current feedback, review, evaluation, and engine contracts are real but do not yet constitute the
-planned cross-engine assurance API. Likewise, Lot 20's provider-egress enforcement is planned,
-not part of today's contract surface.
+Current feedback and review contracts are real. `contracts/egress.py` (Lot 20, ADR-0016) and
+`contracts/assurance.py` (Lot 21, ADR-0017, `conformance_report()`) are also real and active —
+not planned. `contracts/application.py` (Lot 22, ADR-0018) is implemented as a contract only: no
+adapter under `adapters/applications/` exists yet, so no manifest can select it today.
 
 ---
 

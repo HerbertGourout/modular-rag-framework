@@ -48,8 +48,8 @@ the two in the same file.
 - Adding a documented content-safety or policy control
 
 Do not use a new guard as a substitute for provider-egress authorization. Guards inspect content;
-Lot 20's planned classification-aware egress decision is a separate boundary. A guard also does
-not, by itself, establish regulatory compliance.
+Lot 20's classification-aware egress decision (`governance.egress_policy`, ADR-0016, shipped) is
+a separate boundary. A guard also does not, by itself, establish regulatory compliance.
 
 ## Guard Types
 

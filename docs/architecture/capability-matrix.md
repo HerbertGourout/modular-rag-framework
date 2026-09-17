@@ -1,8 +1,8 @@
 # Capability Matrix — Current Operational Truth
 
 **Baseline snapshot date:** 2026-08-07 (before ADR-0007's Étapes 4-8 landed).
-**Last updated:** 2026-09-11 (Lot 21 — engine-independent assurance contract and conformance
-report, corrected after Codex review pass 1).
+**Last updated:** 2026-09-17 (Lot 20 OPA-backed egress policy, Lot 22 contract layer
+`contracts/application.py`; test-count refresh below).
 **Scope:** current repository state, including the ADR-0007 boundary correction and
 ADR-0012/ADR-0013/ADR-0014 observability and governance ports.
 
@@ -22,9 +22,10 @@ Markdown files. Compilation passed and the local service-free suite reported 548
 717 service-free tests (608 unit + 109 contract). These numbers are retained only as historical
 "before" evidence. The 2026-08-26 alignment audit executed the current service-free suite:
 **1,185 passed** (1,058 unit + 127 contract); it also collected 69 integration and 15 e2e tests
-without running those service-dependent suites. Run
-`pytest tests/unit tests/contract --collect-only -q` for the live count rather than treating any
-snapshot as a permanent badge.
+without running those service-dependent suites. As of 2026-09-17 (after Lots 20-22's contract
+work), `pytest tests/unit tests/contract --collect-only -q` collects **1,690 tests** — this
+number, like the ones before it, is a point-in-time snapshot, not a permanent badge. Run the same
+command for the live count rather than trusting any number in this file.
 
 Built-in manifest factories, current as of this update:
 
@@ -82,7 +83,7 @@ factory) were removed from `ComponentRegistry` in Étape 8.
 | Native ingestion, retrieval and generation | **Operational** | V1 manifest → `load_pipeline()` → `ComponentRegistry.wire()` → `RAGEngine` | `manifests/presets/local-hybrid-rag.yaml`; `tests/e2e/test_simple_qa_pipeline.py` (service-dependent). |
 | Engine-neutral native adapter | **Operational** | `load_native_engine()` or `load_engine()` with `engine.adapter: native` | `app/bootstrap.py`; engine conformance tests. |
 | LangGraph adapter | **Operational** | `load_engine()` or `load_application()` with `engine.adapter: langgraph`, including `manifests/presets/langgraph-rag.yaml` | Unit/conformance coverage; API and CLI honor the selected adapter. The current graph is a fixed route → retrieve → guard → generate flow, not a multi-agent planner. Raw retrieval remains a native application use case because `DocumentEngine` intentionally exposes answer orchestration, not retrieval-only execution. |
-| Existing external-application wrapper | **Planned** | None | Accepted ADR-0015 schedules this for Lot 22. The current LangGraph adapter reconstructs a fixed graph from framework components; it does not wrap an arbitrary existing LangChain/LangGraph application. |
+| Existing external-application wrapper | **Planned** | None | Accepted ADR-0015/ADR-0018 schedule this for Lot 22. `contracts/application.py` (`ApplicationProfileProvider`, `ControlPoint`) shipped 2026-09-17, but no adapter exists under `adapters/applications/` and no manifest can select one — still **not operational** by this matrix's own definition. The current LangGraph adapter reconstructs a fixed graph from framework components; it does not wrap an arbitrary existing LangChain/LangGraph application. |
 | L0/L1/L2 assurance report | **Operational (Lot 21)** | `DocumentEngine.conformance_report(context)` — implemented by both `NativeEngineAdapter` (delegates to `RAGEngine.conformance_report()`) and `LangGraphEngineAdapter`; optional manifest `assurance.min_level` rejects an unmeetable minimum before `wire()` succeeds | `contracts/assurance.py`: `AssuranceLevel`/`EvidenceStatus`/`EvidenceKind`/`ConformanceReport`, per [ADR-0017](../adr/0017-engine-independent-assurance-contract.md) (Accepted 2026-09-10). `achieved_level` is a computed property, never adapter-asserted. **Evidence, not wiring** (Codex review pass 1): a wired role counts only if it satisfies its contract Protocol, and `RETRIEVAL_PROVENANCE`/`USAGE_COST` are earned only by an actual execution — a report for a request that has not run cannot exceed L0. The `assurance.min_level` startup gate necessarily evaluates a separate *capability* profile (it runs before any request), authoritatively re-checked against the constructed components at the end of `wire()`. That gate promises only that the required controls are **declared, wired and structurally conformant** — Protocol membership cannot prove enforcement, so a structurally valid no-op control passes it ([ADR-0017 §9](../adr/0017-engine-independent-assurance-contract.md), accepted risk 2026-09-11). Enforcement is certified behaviourally instead, by `tests/contract/test_engine_conformance.py`, which grants `ENFORCED` only when a denied or failing control demonstrably fails the request and `VERIFIED` only when fabricated evidence is rejected. LangGraph's own documented Lot 15 audit-emission gap (`AUDIT_COMPLETION` structurally `UNSUPPORTED`) caps it below L2 even with tenant/guard/egress fully wired — honest, not native-equivalent parity. See `docs/refactoring/lot-21-engine-independent-assurance-contract.md` for full scope and residual gaps (Lot 22's existing-application wrapping remains separately planned). |
 | Manifest YAML validation | **Operational** | `load_manifest()` / `PipelineManifest.model_validate()` | Unknown top-level fields are rejected (`extra="forbid"`). Legacy fields (`planner`/`agents`/`graph_store`/old-style `policies`/`modalities`) now hard-fail validation instead of being silently ignored (Étape 7). |
 | Environment layering, `${VAR}` and `secret://` | **Operational** for `mrag validate` and `load_pipeline()` | `resolve_manifest()`, called by both `mrag validate` and `load_pipeline()` | Verified end-to-end on `secure-enterprise-rag.yaml` (Étape 7): `${QDRANT_URL}`, `secret://QDRANT_API_KEY`, `secret://AUDIT_DATABASE_URL` all resolve. |

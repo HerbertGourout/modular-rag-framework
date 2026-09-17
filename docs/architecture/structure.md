@@ -161,9 +161,10 @@ repository at any version — this document previously described those as native
 ("V2.0 → V2 complete (agents, adaptive routing)"), which no longer matches either ADR-0005's
 decision or the actual code.
 
-The roadmap also records Lot 20 (planned provider-egress control) and planned Lots 21–22
-(assurance contract and existing-application pilot). Those entries are future scope, not
-directories or APIs that exist in the current structure.
+The roadmap also records Lot 20 (provider-egress control, shipped) and Lot 21 (assurance
+contract, shipped) — both are part of the current structure (`contracts/egress.py`,
+`contracts/assurance.py`). Only Lot 22 (existing-application pilot) remains future scope for the
+*adapter*; its contract (`contracts/application.py`) already exists under `contracts/`.
 
 ---
 

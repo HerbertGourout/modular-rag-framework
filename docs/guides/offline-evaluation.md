@@ -205,14 +205,22 @@ use (not a new CI service) and uploads `latest.json`/`latest.md` as a workflow a
 (`if: always()` — the report is useful even when the gate fails). A significant regression past
 `baseline.json` (tolerance `0.02` by default, `--tolerance` to override) fails the job.
 
-## Planned multi-engine assurance benchmark (Lots 21-22; not implemented)
+<a id="planned-multi-engine-assurance-benchmark-lots-21-22-not-implemented"></a>
+
+## Multi-engine assurance benchmark (planned for Lot 22; not implemented)
 
 The current Batch 13 benchmark answers a deliberately narrow question: did the shipped native
 reference pipeline regress on a small deterministic golden set? It does **not** yet demonstrate
 that the framework is portable across engines or that it reduces the work required to govern an
-existing application. Those remain product hypotheses. The Lot 21 assurance contract they depend
-on is now implemented and merged ([ADR-0017](../adr/0017-engine-independent-assurance-contract.md),
-PR #8); what is still missing is the Lot 22 external-application pilot the paired comparison needs.
+existing application. Those remain product hypotheses until Lot 22 measures them.
+
+What this benchmark depends on is partly in place. The Lot 21 assurance contract is **implemented**
+and merged ([ADR-0017](../adr/0017-engine-independent-assurance-contract.md), PR #8), and Lot 22's
+existing-application contract is **implemented** (`contracts/application.py`,
+[ADR-0018](../adr/0018-existing-application-adapter-boundary.md)). What is still missing, and what
+the paired comparison needs, is everything that would make that contract operational: the
+behavioural fixture, an existing-application adapter, and the Lot 22 pilot itself. The benchmark
+below therefore remains **unimplemented**.
 
 The future benchmark must answer three separate questions rather than collapse them into one
 score:

@@ -385,7 +385,7 @@ What each package's `__init__.py` actually exports (verified directly, not infer
 
 | Package | Public exports |
 |---|---|
-| `contracts/` | Contract exports for retrieval/generation/security, `Feedback`/`FeedbackRating`/`FeedbackSink`, `ReviewItem`/`ReviewQueue`, audit/lifecycle/reconciliation, manifests, `DocumentEngine`, tracing, and metrics. Verify the exact current export list in `contracts/__init__.py`; the assurance types planned by accepted ADR-0015 do not exist yet. |
+| `contracts/` | Contract exports for retrieval/generation/security, `Feedback`/`FeedbackRating`/`FeedbackSink`, `ReviewItem`/`ReviewQueue`, audit/lifecycle/reconciliation, manifests, `DocumentEngine`, tracing, metrics, egress (`egress.py`, Lot 20), assurance (`assurance.py`, Lot 21), and the existing-application contract (`application.py`, Lot 22 — contract only, no adapter yet). Verify the exact current export list in `contracts/__init__.py`. |
 | `core/` | The four *submodules* `enums`, `errors`, `ids`, `models` — not individual names (see the module tree note above) |
 | `core/models/` | `Document`, `Chunk`, `Query`, `RetrievedChunk`, `RetrievalResult`, `Citation`, `Answer`, `TraceStep`, `Trace`, `PolicyRule`, `Policy`, `Metrics` |
 | `core/enums` | `Modality`, `RetrievalMethod`, `PolicyAction`, `DataClassification`, `PIICategory` |

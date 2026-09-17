@@ -29,9 +29,12 @@ direction for Document AI assurance, built around four pillars:
    [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md), generic multi-agent
    orchestration is delegated to that external engine, not built as a native specialized-agent
    runtime.
-4. **Portable assurance (accepted direction, planned implementation)** — ADR-0015 defines L0/L1/L2 profiles that distinguish what
-   an adapter can observe, verify, and enforce, including a path for wrapping an existing external
-   application without rebuilding its graph. This is target architecture, not current capability.
+4. **Portable assurance (accepted direction, partially implemented)** — ADR-0015 defines L0/L1/L2
+   profiles that distinguish what an adapter can observe, verify, and enforce. Provider-egress
+   control (Lot 20) and the assurance contract with its computed conformance report on both
+   shipped adapters (Lot 21) are **implemented**. Wrapping an existing external application without
+   rebuilding its graph (Lot 22) has only its **contract** (`contracts/application.py`); no adapter
+   exists, so that path is target architecture, not current capability.
 
 **Who this document is for.** Anyone about to modify `orchestration/`, `contracts/`, or the
 manifest schema itself; anyone reviewing a pull request that touches layer boundaries; anyone
@@ -353,12 +356,20 @@ rather than replacing it.
   audio/video timecodes), classification, and egress evidence may remain native if a future ADR
   supports it — undecided.
 
-### Planned next phase — portable assurance
+### Portable assurance — current phase
 
-[ADR-0015](../adr/0015-portable-assurance-and-external-application-boundary.md) defines a planned
-sequence after Lot 20: define L0/L1/L2 assurance/conformance contracts (Lot 21), then wrap and
-measure an existing external application without rebuilding its workflow (Lot 22). Neither lot is
-implemented or authorized while the ADR remains Proposed.
+[ADR-0015](../adr/0015-portable-assurance-and-external-application-boundary.md) defines the
+sequence; its status as of 2026-09-17:
+
+| Lot | Scope | Status |
+|---|---|---|
+| 20 | Classification-aware provider egress ([ADR-0016](../adr/0016-provider-egress-control.md)) | **Complete** — mandatory for the known remote provider types `openai`, `anthropic`, `openai-embeddings` |
+| 21 | L0/L1/L2 assurance contract and conformance report ([ADR-0017](../adr/0017-engine-independent-assurance-contract.md)) | **Complete** — `contracts/assurance.py`; implemented by `NativeEngineAdapter` and `LangGraphEngineAdapter` |
+| 22 | Wrap and measure an existing external application ([ADR-0018](../adr/0018-existing-application-adapter-boundary.md)) | **In progress — contract only.** `contracts/application.py` defines the boundary; the behavioural fixture, the pilot adapter and the comparative pilot are not built |
+
+The Lot 22 contract does not make the external-application path operational: there is no
+`adapters/applications/` package, `app/bootstrap.py` constructs only the `native` and `langgraph`
+adapters, and no manifest can select an existing-application adapter.
 
 ---
 
@@ -463,7 +474,10 @@ current full set and superseding relationships):
 - [ADR-0003](../adr/0003-security-and-governance.md) — Safety vs Security, policy-as-code
 - [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) — Owned-vs-delegated product boundary (accepted 2026-08-04); partially supersedes [ADR-0004](../adr/0004-strategic-features-v1-v5.md)
 - [ADR-0006](../adr/0006-external-engine-selection.md) — LangGraph selected as the external `DocumentEngine` adapter target
-- [ADR-0015](../adr/0015-portable-assurance-and-external-application-boundary.md) — accepted assurance direction and existing-application boundary; implementation planned
+- [ADR-0015](../adr/0015-portable-assurance-and-external-application-boundary.md) — accepted assurance direction and existing-application boundary; partially implemented through ADRs 0016–0018
+- [ADR-0016](../adr/0016-provider-egress-control.md) — Provider data-egress control (Lot 20, implemented)
+- [ADR-0017](../adr/0017-engine-independent-assurance-contract.md) — Engine-independent assurance contract and conformance report (Lot 21, implemented)
+- [ADR-0018](../adr/0018-existing-application-adapter-boundary.md) — Existing-application adapter boundary (Lot 22; contract implemented, adapter and pilot not built)
 - [ADR-0007](../adr/0007-layer-boundaries-and-control-plane-activation.md) — The concrete dependency model and activation path that makes ADR-0005 operational: a capability is not delivered merely because its class exists, it must be reachable, wired, and tested
 - [ADR-0008](../adr/0008-offline-evaluation-and-engine-activation.md) — Offline evaluation is separated from online answer execution (§3's Evaluation plane above); runtime engine capability gaps fail startup rather than silently no-opping
 - [ADR-0009](../adr/0009-vector-indexer-dimension-reconciliation.md) — The `VectorIndexer` sub-protocol (§6) and the embedder/store dimension-reconciliation policy
