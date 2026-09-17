@@ -51,6 +51,8 @@
       "Write(src/modular_rag/adapters/search/**)",
       "Edit(src/modular_rag/adapters/auth/**)",
       "Write(src/modular_rag/adapters/auth/**)",
+      "Edit(src/modular_rag/adapters/applications/**)",
+      "Write(src/modular_rag/adapters/applications/**)",
       "Edit(src/modular_rag/core/**)",
       "Write(src/modular_rag/core/**)",
       "Edit(pyproject.toml)",

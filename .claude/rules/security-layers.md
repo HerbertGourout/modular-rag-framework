@@ -70,6 +70,7 @@ speculatively.
 | `src/modular_rag/adapters/llms/**` | Engine-delegation adapter target (Lots 6/7/15) — protected, not blocked |
 | `src/modular_rag/adapters/graphstores/**` | Engine-delegation adapter target (Lots 6/7/15) — protected, not blocked |
 | `src/modular_rag/adapters/search/**` | Engine-delegation adapter target (Lots 6/7/15) — protected, not blocked |
+| `src/modular_rag/adapters/applications/**` | Existing-application adapter target (Lot 22, ADR-0018) — protected, not blocked |
 | `src/modular_rag/core/**` | Core models, exceptions, utilities protected |
 | `pyproject.toml` | Dependencies, versions, build config protected |
 | `CONTRIBUTING.md` | Development guidelines protected |
@@ -181,6 +182,7 @@ src/modular_rag/
 │   ├── graphstores/          ← Engine-delegation adapter target (ask, Lots 6/7/15)
 │   ├── search/               ← Engine-delegation adapter target (ask, Lots 6/7/15)
 │   ├── auth/                 ← Keycloak OIDC token verification (ask, Lot 11b)
+│   ├── applications/         ← Existing-application adapter target (ask, Lot 22, ADR-0018)
 │   └── ...
 ├── security/                 ← Filters, policies, guards (ask)
 ├── ingestion/                ← Chunkers, parsers (allow)
