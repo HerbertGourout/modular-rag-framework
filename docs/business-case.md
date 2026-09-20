@@ -135,8 +135,14 @@ Before expanding orchestration breadth, investment should prioritize:
 5. two or more measured pilots that test reuse and integration cost.
 
 The accepted direction is recorded in
-[ADR-0015](adr/0015-portable-assurance-and-external-application-boundary.md). These priorities are
-committed architecture direction but remain unimplemented, dependency-gated roadmap work.
+[ADR-0015](adr/0015-portable-assurance-and-external-application-boundary.md). Priorities 1 and 2
+are implemented: provider egress control ships (Lot 20,
+[ADR-0016](adr/0016-provider-egress-control.md)) and so does the engine-independent assurance
+contract with its conformance report (Lot 21,
+[ADR-0017](adr/0017-engine-independent-assurance-contract.md)). Priority 3 exists only as a
+contract (Lot 22, [ADR-0018](adr/0018-existing-application-adapter-boundary.md)): no adapter, no
+selectable manifest, so no application can be wrapped today. Priorities 4 and 5 remain open, and
+the pilots in priority 5 are what the decision gate below depends on.
 
 ## Decision gate
 

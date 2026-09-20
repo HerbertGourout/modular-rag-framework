@@ -160,9 +160,9 @@ Every in-scope cluster is listed member by member. Where members share one purpo
 | [`ROADMAP.md`](../ROADMAP.md) | Checkbox-per-feature delivery state | **Canonical** status source |
 | [`CHANGELOG.md`](../CHANGELOG.md) | Dated narrative of changes | **Historical** per entry |
 | [`CONTRIBUTING.md`](../CONTRIBUTING.md) | Git workflow, PR checklist, setup, validation, component recipe | **Canonical** contribution guide — §5.2 gap |
-| [`docs/business-case.md`](business-case.md) | Product hypothesis, target users, decision gate | **Canonical** for its subject, but **Stale** — §4.1 S4 |
+| [`docs/business-case.md`](business-case.md) | Product hypothesis, target users, decision gate | **Canonical** for its subject; was **Stale** — §4.1 S4, resolved by Batch 2 |
 | [`docs/glossary.md`](glossary.md) | Term definitions | **Canonical**, but **Stale** — §4.1 S2, S3 |
-| [`docs/guides/framework-overview-onboarding.md`](guides/framework-overview-onboarding.md) | Business and technical overview with role-based quick starts | Precedence declared by Batch 1 (§3.8 A); still **Stale** — §4.1 S1 and S7 (including S7's internal contradiction) |
+| [`docs/guides/framework-overview-onboarding.md`](guides/framework-overview-onboarding.md) | Business and technical overview with role-based quick starts | Precedence declared by Batch 1 (§3.8 A); was **Stale** — §4.1 S1 and S7, both resolved by Batch 2 |
 | [`docs/documentation-alignment-audit-2026-08-12.md`](documentation-alignment-audit-2026-08-12.md) | Prior documentation audit | **Historical**, superseded by this document |
 | [`docs/onboarding-overhaul-plan.md`](onboarding-overhaul-plan.md) | The batch plan this audit executes | **Canonical** process document |
 
@@ -187,7 +187,7 @@ Every in-scope cluster is listed member by member. Where members share one purpo
 
 | Document | Purpose | Status |
 |---|---|---|
-| [`docs/guides/getting-started.md`](guides/getting-started.md) | Clone to first query | **Canonical** first-run guide, but **Stale** — §4.1 F2, F3 |
+| [`docs/guides/getting-started.md`](guides/getting-started.md) | Clone to first query | **Canonical** first-run guide; F2 resolved by Batch 2, still **Stale** — §4.1 F3 |
 | [`docs/guides/installation.md`](guides/installation.md) | Python environment and extras | **Canonical**; every extras group verified against `pyproject.toml` |
 | [`docs/guides/plugin-development.md`](guides/plugin-development.md) | Four-step component recipe | **Canonical** |
 | [`docs/guides/code-walkthrough.md`](guides/code-walkthrough.md) | Progressive reading guide through the codebase | **Reference** |
@@ -273,7 +273,7 @@ Members of the grouped rows:
 | [`docs/guides/troubleshooting.md`](guides/troubleshooting.md) | Common first-week errors | **Canonical**; spot-checked references verified |
 | [`docs/adr/_index.md`](adr/_index.md) | ADR index | **Canonical** index; was **Stale** — §4.1 F1, resolved by Batch 1 |
 | `docs/adr/0001` … `0018` (18 files) | Architecture decisions | **Historical** records; status per file header — 17 Accepted, ADR-0004 Superseded (partial) |
-| [`docs/refactoring-plan.md`](refactoring-plan.md) | Refactoring programme and dated decision log | **Canonical** for the programme; dated rows **Historical**. §1.3 heading still says "Proposed assurance levels" (§4.1 S10) |
+| [`docs/refactoring-plan.md`](refactoring-plan.md) | Refactoring programme and dated decision log | **Canonical** for the programme; dated rows **Historical**. §1.3 heading corrected by Batch 2 (§4.1 S10) |
 | Group 1 (below) | Per-lot scope and evidence | README **Canonical** index; lot files **Historical**, except `lot-22-*.md`, which is the **Canonical** scope of the in-progress lot |
 | Group 2 (below) | Distilled research for design decisions | **Canonical** (required by `CLAUDE.md` rule 05.8) |
 | [`docs/archive/README.md`](archive/README.md) and its five archived documents | Superseded material | **Historical** |
@@ -347,12 +347,15 @@ same outcome per batch.
 
 #### S1
 
-- **Location:** `docs/guides/framework-overview-onboarding.md:93-95`, `:103`, `:130`, `:308`
+- **Location:** `docs/guides/framework-overview-onboarding.md:93-101`, `:109`, `:136`, `:317`
 - **Claim:** ADR-0015 "proposes" L0/L1/L2; cross-engine assurance "proposed, not yet implemented"
 - **Verified truth:** Lot 21 is implemented: `contracts/assurance.py` exported;
   `conformance_report()` in `orchestration/native_engine.py` and
   `adapters/llms/langgraph_engine.py`. Only the Lot 22 adapter is unbuilt.
 - **Found by:** pass 1 (`:94-95`, `:308`); sweep (`:103`, `:130`)
+- **Resolved:** Batch 2, 2026-09-20 — the four locations now state that Lot 21 assurance levels
+  are implemented on both shipped adapters and that the Lot 22 existing-application boundary is
+  contract-only.
 - **Batch:** 2
 
 #### S2
@@ -377,12 +380,14 @@ same outcome per batch.
 
 #### S4
 
-- **Location:** `docs/business-case.md:131-139`
+- **Location:** `docs/business-case.md:131-145`
 - **Claim:** Lot 20, the assurance contract, and application wrapping are "committed architecture
   direction but remain unimplemented."
 - **Verified truth:** Lots 20 and 21 are implemented; only the Lot 22 adapter and pilot remain.
 - **Found by:** pass 1
 - **Batch:** 2
+- **Resolved:** Batch 2, 2026-09-20 — the section now marks priorities 1 and 2 implemented,
+  priority 3 contract-only with no way to wrap an application today, and priorities 4 and 5 open.
 
 #### S5
 
@@ -412,12 +417,15 @@ same outcome per batch.
 
 #### S7
 
-- **Location:** `docs/guides/framework-overview-onboarding.md:207`
+- **Location:** `docs/guides/framework-overview-onboarding.md:214`
 - **Claim:** "live Qdrant/LLM validation remains pending"
 - **Verified truth:** `CLAUDE.md` §09 V1.0 and `.github/workflows/ci.yml` (`test-integration`,
   `e2e-deterministic`) run live Qdrant/PostgreSQL; the LLM-backed scenario runs in
   `.github/workflows/nightly.yml`. The same file says "live-validated" at `:11`.
 - **Found by:** pass 1 (`:207`); sweep (internal contradiction with `:11`)
+- **Resolved:** Batch 2, 2026-09-20 — the "Current Status" paragraph now states that V1.0 is
+  live-validated in CI, naming the integration, deterministic end-to-end and nightly LLM runs, so
+  it agrees with `:11`.
 - **Batch:** 2
 
 #### S8
@@ -448,6 +456,8 @@ same outcome per batch.
   only the heading is stale.
 - **Found by:** sweep
 - **Batch:** 2
+- **Resolved:** Batch 2, 2026-09-20 — the heading now reads "1.3 Assurance levels (implemented in
+  Lot 21)".
 
 ### 4.2 Contradictions between canonical sources
 
@@ -503,6 +513,8 @@ same outcome per batch.
 - **Defect:** `secure-enterprise-rag.yaml` "does not yet enforce Lot 20 provider-egress policy."
 - **Evidence:** The manifest declares `governance.egress_policy` at `:132` (S3 evidence).
 - **Batch:** 2
+- **Resolved:** Batch 2, 2026-09-20 — the preset row now states that the manifest declares a
+  `governance.egress_policy`, so Lot 20 control applies.
 
 #### F3
 
@@ -639,7 +651,7 @@ still exist. Later batches that rewrite a document must read it in full regardle
 | Batch | Findings |
 |---|---|
 | 1 — Canonical navigation | §3.8 A; S5; S6; F1 — all resolved by Batch 1, 2026-09-20 |
-| 2 — Vision and status | S1; S4; S7; S10; F2 |
+| 2 — Vision and status | S1; S4; S7; S10; F2 — all resolved by Batch 2, 2026-09-20 |
 | 4 — Local environment | F3 |
 | 5 — Claude Code | §3.8 B, C, D; S8; S9; P1; P2; §5.1; §5.3 |
 | 6 — Codex and AI delivery | §3.8 D; C1 |

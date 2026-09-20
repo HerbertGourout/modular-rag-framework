@@ -237,6 +237,22 @@ is not an isolated module: it depends on the one before it, and there is no shor
 can't jump to V3 without V1 working, because V3's knowledge graph builds on the retrieval
 pipeline already built in V1).
 
+**Read each status below in four states, never two.** A capability is:
+
+- *implemented* — usable today through a documented entry point, with a test that exercises it;
+- *partial* — a real, tested capability whose materially advertised missing scope is named
+  explicitly;
+- *contract-only* — its contract ships, but nothing implements it, so it cannot be used;
+- *planned* — not usable today by any path here, including through the selected external engine.
+
+Any of these may also be *delegated*: the capability is meant to come from the selected external
+engine rather than from this repository, which says nothing about whether that engine provides it
+today. The per-capability truth, with its evidence, is in
+[architecture/capability-matrix.md](architecture/capability-matrix.md); today the assurance levels
+are implemented, cost/latency evidence is partial, the existing-application boundary is
+contract-only, and multi-agent orchestration, GraphRAG traversal and multimodal execution are
+`planned (delegated)`.
+
 ```mermaid
 %%{init: {"theme": "base"}}%%
 flowchart LR

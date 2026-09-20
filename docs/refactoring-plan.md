@@ -214,7 +214,7 @@ internals, not the cross-engine abstraction.
 The current `LangGraphEngineAdapter` is a fixed graph built from framework components. The
 `Existing application adapter` node is a planned target from ADR-0015, not current capability.
 
-### 1.3 Proposed assurance levels
+### 1.3 Assurance levels (implemented in Lot 21)
 
 Under accepted ADR-0015, compatibility must state an assurance level rather than imply uniform
 governance across engines:
