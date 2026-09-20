@@ -71,10 +71,51 @@ factory) were removed from `ComponentRegistry` in Étape 8.
 | **Programmatic only** | Implemented and tested, but requires direct Python construction or injection. |
 | **Construction only** | The manifest builds an object, but the normal request path does not consume it. |
 | **Blueprint** | Design input only; not expected to execute successfully or completely. |
+| **Contract-only** | A `contracts/` module ships and is tested, but nothing implements it: no registered factory, no manifest value, no adapter. |
 | **Delegated** | Owned by an external engine/tool behind a repository contract or adapter. |
 | **Decision open** | Retention or ownership is unresolved and must not be presented as committed. |
 | **Proposed** | Documented future direction awaiting an architecture/maintainer decision; no implementation claim. |
 | **Not built** | No implementation exists yet, regardless of what design docs describe. |
+
+### Mapping to the onboarding vocabulary
+
+Onboarding documents use the two-axis vocabulary defined in
+[`docs/onboarding-baseline-audit-2026-09-17.md`](../onboarding-baseline-audit-2026-09-17.md#2-controlled-vocabulary-for-capability-states):
+availability (`implemented`, `partial`, `contract-only`, `planned`) and ownership (`native`,
+`delegated`), written `<availability>` or `<availability> (delegated)`.
+
+| This matrix | Onboarding vocabulary |
+|---|---|
+| Operational | `implemented` |
+| Operational, with a known gap; Partially operational | `partial`, naming the missing scope |
+| CI-gated CLI script | `implemented`, with the script and CI job named as the entry point |
+| Programmatic only | Read the row: `implemented` when its supported entry point is Python construction or injection and a test exercises that path; `partial` when only part of the advertised scope is reachable |
+| Construction only | Never `implemented`: the manifest builds the object but no request path consumes it, so it is `partial` when another supported path delivers the behaviour and `planned` otherwise |
+| Contract-only | `contract-only` |
+| Delegated | `planned (delegated)`, until the selected engine provides it |
+| Proposed; Not built; Blueprint; Removed | `planned` |
+
+The onboarding vocabulary grants `implemented` only to a capability reachable through a supported
+entry point and covered by a test that exercises that path. A row whose object is built but never
+consumed does not qualify, whatever its wiring looks like.
+
+### Headline status, in the onboarding vocabulary
+
+| Capability | Status |
+|---|---|
+| Native ingestion, retrieval, generation (V1 path) | `implemented` |
+| Engine selection behind `DocumentEngine` (native or LangGraph) | `implemented` |
+| Lot 20 — classification-aware provider egress | `implemented` |
+| Lot 21 — L0/L1/L2 assurance contract and conformance report | `implemented` |
+| Lot 22 — existing-application boundary | `contract-only` |
+| Lot 22 — behavioural fixture, pilot adapter, comparative pilot | `planned` |
+| Offline evaluation, benchmark and quality gate | `implemented` (script and CI job, not manifest-activated) |
+| Governance reporting (formatted compliance reports, lineage artifact) | `planned` |
+| Cost/latency evidence reporting (V3.1) | `partial` — aggregate request latency, token and estimated-cost metrics ship; per-query, per-user and per-month attribution and anomaly detection do not |
+| V2.1 multi-agent orchestration; V3.0 GraphRAG traversal; V5.0 multimodal execution | `planned (delegated)` |
+| Multilingual quality and jurisdiction-aware governance | `planned` |
+
+Each row's evidence is in the detailed tables below.
 
 ## Runtime and configuration
 
@@ -83,7 +124,7 @@ factory) were removed from `ComponentRegistry` in Étape 8.
 | Native ingestion, retrieval and generation | **Operational** | V1 manifest → `load_pipeline()` → `ComponentRegistry.wire()` → `RAGEngine` | `manifests/presets/local-hybrid-rag.yaml`; `tests/e2e/test_simple_qa_pipeline.py` (service-dependent). |
 | Engine-neutral native adapter | **Operational** | `load_native_engine()` or `load_engine()` with `engine.adapter: native` | `app/bootstrap.py`; engine conformance tests. |
 | LangGraph adapter | **Operational** | `load_engine()` or `load_application()` with `engine.adapter: langgraph`, including `manifests/presets/langgraph-rag.yaml` | Unit/conformance coverage; API and CLI honor the selected adapter. The current graph is a fixed route → retrieve → guard → generate flow, not a multi-agent planner. Raw retrieval remains a native application use case because `DocumentEngine` intentionally exposes answer orchestration, not retrieval-only execution. |
-| Existing external-application wrapper | **Planned** | None | Accepted ADR-0015/ADR-0018 schedule this for Lot 22. `contracts/application.py` (`ApplicationProfileProvider`, `ControlPoint`) shipped 2026-09-17, but no adapter exists under `adapters/applications/` and no manifest can select one — still **not operational** by this matrix's own definition. The current LangGraph adapter reconstructs a fixed graph from framework components; it does not wrap an arbitrary existing LangChain/LangGraph application. |
+| Existing external-application wrapper | **Contract-only** | None | Accepted ADR-0015/ADR-0018 schedule this for Lot 22. `contracts/application.py` (`ApplicationProfileProvider`, `ControlPoint`) shipped 2026-09-17, but no adapter exists under `adapters/applications/` and no manifest can select one — still **not operational** by this matrix's own definition. The current LangGraph adapter reconstructs a fixed graph from framework components; it does not wrap an arbitrary existing LangChain/LangGraph application. |
 | L0/L1/L2 assurance report | **Operational (Lot 21)** | `DocumentEngine.conformance_report(context)` — implemented by both `NativeEngineAdapter` (delegates to `RAGEngine.conformance_report()`) and `LangGraphEngineAdapter`; optional manifest `assurance.min_level` rejects an unmeetable minimum before `wire()` succeeds | `contracts/assurance.py`: `AssuranceLevel`/`EvidenceStatus`/`EvidenceKind`/`ConformanceReport`, per [ADR-0017](../adr/0017-engine-independent-assurance-contract.md) (Accepted 2026-09-10). `achieved_level` is a computed property, never adapter-asserted. **Evidence, not wiring** (Codex review pass 1): a wired role counts only if it satisfies its contract Protocol, and `RETRIEVAL_PROVENANCE`/`USAGE_COST` are earned only by an actual execution — a report for a request that has not run cannot exceed L0. The `assurance.min_level` startup gate necessarily evaluates a separate *capability* profile (it runs before any request), authoritatively re-checked against the constructed components at the end of `wire()`. That gate promises only that the required controls are **declared, wired and structurally conformant** — Protocol membership cannot prove enforcement, so a structurally valid no-op control passes it ([ADR-0017 §9](../adr/0017-engine-independent-assurance-contract.md), accepted risk 2026-09-11). Enforcement is certified behaviourally instead, by `tests/contract/test_engine_conformance.py`, which grants `ENFORCED` only when a denied or failing control demonstrably fails the request and `VERIFIED` only when fabricated evidence is rejected. LangGraph's own documented Lot 15 audit-emission gap (`AUDIT_COMPLETION` structurally `UNSUPPORTED`) caps it below L2 even with tenant/guard/egress fully wired — honest, not native-equivalent parity. See `docs/refactoring/lot-21-engine-independent-assurance-contract.md` for full scope and residual gaps (Lot 22's existing-application wrapping remains separately planned). |
 | Manifest YAML validation | **Operational** | `load_manifest()` / `PipelineManifest.model_validate()` | Unknown top-level fields are rejected (`extra="forbid"`). Legacy fields (`planner`/`agents`/`graph_store`/old-style `policies`/`modalities`) now hard-fail validation instead of being silently ignored (Étape 7). |
 | Environment layering, `${VAR}` and `secret://` | **Operational** for `mrag validate` and `load_pipeline()` | `resolve_manifest()`, called by both `mrag validate` and `load_pipeline()` | Verified end-to-end on `secure-enterprise-rag.yaml` (Étape 7): `${QDRANT_URL}`, `secret://QDRANT_API_KEY`, `secret://AUDIT_DATABASE_URL` all resolve. |

@@ -356,8 +356,9 @@ someone hoped would run.
 **Why this is "owned," not delegated, per ADR-0005.** Multi-agent orchestration and GraphRAG
 traversal are delegated because mature frameworks already specialize in those mechanics.
 Governance, tracing, evaluation, and guardrails also exist in those ecosystems and in cloud
-platforms; this project does not claim otherwise. Its proposed differentiator is the portable
-combination of policy, evidence, and conformance across engines.
+platforms; this project does not claim otherwise. Its differentiator — a hypothesis to test in
+pilots, not a measured result — is the portable combination of policy, evidence, and conformance
+across engines.
 
 That uniformity is a target, not the current state. The native path consumes the broadest control
 set; the shipped LangGraph adapter currently consumes guard, tenant isolation, and redaction and
@@ -748,6 +749,9 @@ test. A separate scheduled/manual workflow runs the paid, LLM-backed end-to-end 
 | CLI | ✅ |
 | REST API | ✅ `/health`, `/ready`, `/retrieve`, `/answer`, and authenticated `/feedback` work; see [`docs/api/rest.md`](docs/api/rest.md) for feedback redaction/role constraints |
 | YAML manifest wiring | ✅ for all three `manifests/presets/*.yaml` (local-hybrid-rag, secure-enterprise-rag, langgraph-rag); `manifests/blueprints/` holds design sketches (GraphRAG, multimodal) that don't load — see [manifests/README.md](manifests/README.md) |
+| Provider egress control (Lot 20) | ✅ Mandatory whenever a known remote provider is configured, with manifest and OPA-backed policies, and declared by all three presets |
+| Assurance levels and conformance report (Lot 21) | ✅ `contracts/assurance.py`, a computed report on both shipped adapters, and an `assurance.min_level` startup gate |
+| Existing-application boundary (Lot 22) | 🟡 Contract only (`contracts/application.py`): no adapter, no selectable manifest, no fixture or pilot — **an existing application cannot be wrapped today** |
 | Unit + contract tests | ✅ passing — run `./scripts/check.sh full` for the current count (changes too often for a static number to stay accurate). This suite requires no external services and is the one category in this table verified on every change. |
 | Integration tests (Qdrant + PostgreSQL for the full directory) | ✅ Implemented and marked `@pytest.mark.integration`, and **now run in CI** (`.github/workflows/ci.yml`'s `test-integration` job, against real Qdrant/PostgreSQL service containers). Qdrant covers vector-store/retrieval tests; PostgreSQL covers audit/lifecycle adapters. Provision both locally to run the full directory yourself. |
 | E2E tests (Qdrant, one scenario also PostgreSQL) | ✅ / 🟡 The deterministic scenario (`tests/e2e/test_secure_preset_e2e.py`, no LLM key needed — deterministic embedder/generator, exercises tenant isolation/audit/restart persistence) **now runs in CI** (`ci.yml`'s `e2e-deterministic` job). The LLM-backed scenario (`tests/e2e/test_simple_qa_pipeline.py`) still runs outside the main pipeline, in a separate scheduled/manual `.github/workflows/nightly.yml`, since it needs a real paid LLM key the main pipeline deliberately does not require. `./scripts/check.sh e2e` still requires Qdrant, PostgreSQL, *and* an LLM key up front for a full local run — see that script for the exact prerequisite check. |

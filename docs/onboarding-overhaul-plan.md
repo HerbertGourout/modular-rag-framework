@@ -210,7 +210,8 @@ part of this batch.
 
 ### Batch 2 — Current vision, capability status, and limits
 
-**Status:** `NOT_STARTED`
+**Status:** `COMPLETE` — see
+[`docs/architecture/capability-matrix.md`](architecture/capability-matrix.md)
 
 **Purpose:** Explain the project as it exists now, without requiring knowledge of its refactoring
 history.
@@ -503,7 +504,7 @@ validation output, or merged pull request rather than relying on a narrative cla
 | 0 — Baseline and truth map | `COMPLETE` | Claude Code | Codex (pass 1: `CHANGES_REQUIRED`; pass 2: `READY_FOR_FINAL_VALIDATION`, all findings closed) | [`docs/onboarding-baseline-audit-2026-09-17.md`](onboarding-baseline-audit-2026-09-17.md), `.review/handoff.md` | Inventory covers every in-scope cluster; 10 stale status claims, 1 canonical-source contradiction, 2 conflicting precedence declarations, 3 factual/formatting defects, 3 knowledge gaps. None corrected here — assigned to Batches 1, 2, 4, 5, 6, 7, 8 (audit §8) |
 | 0.5 — Documentation foundation | `COMPLETE` | Claude Code | Codex (pass 1: `CHANGES_REQUIRED`, two HIGH; pass 2: `READY_FOR_FINAL_VALIDATION`, all findings closed) | [`docs/guides/documentation-style-guide.md`](guides/documentation-style-guide.md), `.review/handoff.md` | Style guide and three documentation skills; editorial warnings in `scripts/check_docs.py` follow as a separate change |
 | 1 — Canonical navigation | `COMPLETE` | Claude Code | Codex (pass 1: `CHANGES_REQUIRED`, two HIGH and one MEDIUM; pass 2: `READY_FOR_FINAL_VALIDATION`, all closed) | [`docs/onboarding.md`](onboarding.md), `.review/handoff.md` | Entry point declared in five phases with per-profile depth; authority order aligned with §4; audit findings §3.8 A, S5, S6 and F1 resolved and recorded in the audit's lifecycle notes |
-| 2 — Vision and status | `NOT_STARTED` | — | — | — | Depends on Batches 0 and 0.5 |
+| 2 — Vision and status | `COMPLETE` | Claude Code | Codex (pass 1: `CHANGES_REQUIRED`, two HIGH; pass 2: `READY_FOR_FINAL_VALIDATION`, all closed) | [`docs/architecture/capability-matrix.md`](architecture/capability-matrix.md), `.review/handoff.md` | Audit findings S1, S4, S7, S10 and F2 resolved; four-state vocabulary in the onboarding hub and a bridge to it in the capability matrix |
 | 3 — Architecture and code | `NOT_STARTED` | — | — | — | Depends on Batches 1–2 |
 | 4 — Local environment | `NOT_STARTED` | — | — | — | Depends on Batch 1 |
 | 5 — Claude Code | `NOT_STARTED` | — | — | — | Depends on Batch 1 |

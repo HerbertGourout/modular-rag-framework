@@ -91,8 +91,14 @@ A reusable assurance and delivery layer that currently:
   unsupported control combinations before startup
 
 It does **not yet** wrap an arbitrary existing LangChain/LangGraph application or provide uniform
-governance across both engines. [ADR-0015](../adr/0015-portable-assurance-and-external-application-boundary.md)
-proposes that next boundary and L0/L1/L2 assurance levels.
+governance across both engines. The L0/L1/L2 assurance levels that
+[ADR-0015](../adr/0015-portable-assurance-and-external-application-boundary.md) opened are
+implemented (`contracts/assurance.py`, Lot 21,
+[ADR-0017](../adr/0017-engine-independent-assurance-contract.md)), and both shipped adapters
+compute a conformance report. The existing-application boundary is contract-only
+(`contracts/application.py`, Lot 22,
+[ADR-0018](../adr/0018-existing-application-adapter-boundary.md)): no adapter exists and no
+manifest can select one.
 
 ### Business Impact
 
@@ -100,7 +106,7 @@ proposes that next boundary and L0/L1/L2 assurance levels.
 |-----------|--------|
 | **Delivery** | Hypothesis: reduce repeated policy, evidence, and qualification work; measure in pilots |
 | **Reuse** | Apache-2.0 framework assets plus deployment-specific manifests, policies, tests, and adapters |
-| **Differentiation** | Proposed portable assurance contract across native and external engines |
+| **Differentiation** | Portable assurance contract across native and external engines, implemented for both shipped adapters |
 | **Regulation** | Controls and evidence that may support an assessment; never automatic certification |
 | **Knowledge** | Compounds across projects (adapters, manifests, policies) |
 
@@ -127,7 +133,8 @@ It **is**:
 - ✅ Security-first (see [architecture/security.md](../architecture/security.md))
 - ✅ Observable (`TraceStep`, `AuditEvent`)
 - ✅ Engine-selectable today, with explicit fail-closed capability differences per engine
-- 🟡 Intended to wrap existing external applications through declared assurance levels (proposed)
+- 🟡 Intended to wrap existing external applications through declared assurance levels — the
+  assurance levels ship (Lot 21); the application boundary is contract-only (Lot 22)
 
 ### Core concepts
 
@@ -204,7 +211,9 @@ configured), see `orchestration/CLAUDE.md` and
 
 ## Current Status
 
-V1.0's implementation is complete, while its live Qdrant/LLM validation remains pending. Tenant
+V1.0's implementation is complete and live-validated: the main CI runs integration and
+deterministic end-to-end scenarios against real Qdrant and PostgreSQL services, and the
+LLM-backed scenario runs in the scheduled nightly workflow. Tenant
 isolation, structured audit, document lifecycle, offline evaluation primitives, a hardened
 API/CLI, dependency/licence gates, and an immutable container build also exist — but they do not
 make the incomplete V1.1/V1.2 deliverables complete.
@@ -305,7 +314,7 @@ several execution environments.
 |---|---|---|
 | **Application orchestration** | Broad native chains, agents, graphs, connectors, and managed services | Delegate; do not rebuild a competing ecosystem. |
 | **Platform controls** | Strong within each platform's identity, network, tracing, evaluation, and governance model | Integrate with them and normalize only evidence that can be represented honestly. |
-| **Cross-engine assurance** | Usually platform-specific | Declare L0/L1/L2 guarantees and run shared conformance tests (proposed, not yet implemented). |
+| **Cross-engine assurance** | Usually platform-specific | Declare L0/L1/L2 guarantees and run shared conformance tests (implemented for the two shipped adapters; wrapping an existing application is not). |
 | **Native/local execution** | Varies by platform | Keep an inspectable reference RAG engine and contract-conformant local adapters. |
 | **Unsupported controls** | Platform-dependent | Fail validation when a mandatory declared control cannot be activated. |
 | **Portability** | Migration effort still depends on provider-specific features | Reduce coupling at owned boundaries; never claim zero lock-in or zero migration work. |
