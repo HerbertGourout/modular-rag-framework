@@ -1,5 +1,10 @@
 # Modular RAG Framework — Complete Overview & Onboarding
 
+> **Where this sits:** [`docs/onboarding.md`](../onboarding.md) is the repository's entry point
+> and owns the reading order per profile. This guide is the deeper product and architecture
+> overview it points to; read it after that document's section 3, or on its own when you already
+> know where you are going.
+
 **For**: All team members (developers, architects, product managers, stakeholders)
 **Purpose**: Understand what this framework is, why it exists, what it does now, and what's coming
 **Updated**: 2026-09-01 (product-positioning and implementation alignment)

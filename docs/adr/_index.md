@@ -331,7 +331,8 @@ and enforce, and mandatory unsupported controls must fail before traffic is serv
   Accepted 2026-09-16 — drafted and revised the same day as Lot 22's required focused contract
   ADR, per ADR-0015 §4's second adoption path. Unblocks Lot 22 implementation.
 
-Eighteen ADRs are Accepted as of this writing. Future ADRs will
+Eighteen ADRs exist; seventeen are Accepted, and ADR-0004 is Superseded (partial) by ADR-0005.
+Each file's own status header is authoritative. Future ADRs will
 be added as new major decisions arise; per this project's own rule
 ([CLAUDE.md §07](../../CLAUDE.md#07--security-rules)), any new top-level module, layer boundary,
 or contract modification requires one.

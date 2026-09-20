@@ -5,9 +5,10 @@ for a specific file, ask yourself *why* you're looking, not *where*. The table b
 you toward the right document based on your profile and your current need.
 
 **New to this project, or not sure where to start?** Read
-[onboarding.md](onboarding.md) first — it explains who should read what (developer, tech
-lead, delivery consultant, functional profile, security/compliance) and walks through the
-full V1 → V5 journey in plain language.
+[onboarding.md](onboarding.md) first — it is the repository's entry point. It gives the five-step
+path from "what is this?" to a first contribution, explains who should read what (developer, tech
+lead, delivery consultant, functional profile, security/compliance), says which documents are
+authoritative, and walks through the full V1 → V5 journey in plain language.
 
 ---
 
@@ -15,7 +16,10 @@ full V1 → V5 journey in plain language.
 
 | You want to... | Go to |
 |---|---|
+| Join the project and know what to read, in order | [onboarding.md](onboarding.md) |
 | Understand what the framework can do, without technical jargon | [onboarding.md](onboarding.md), section 3 |
+| Read a deeper product and architecture overview, by role | [guides/framework-overview-onboarding.md](guides/framework-overview-onboarding.md) |
+| Write or restructure documentation | [guides/documentation-style-guide.md](guides/documentation-style-guide.md) |
 | Track the developer-onboarding documentation overhaul | [onboarding-overhaul-plan.md](onboarding-overhaul-plan.md) |
 | Evaluate the product hypothesis and evidence needed before commercial claims | [business-case.md](business-case.md) |
 | See what's delivered vs. planned, version by version | [../ROADMAP.md](../ROADMAP.md) |
@@ -40,7 +44,7 @@ full V1 → V5 journey in plain language.
 
 ```
 docs/
-├── onboarding.md       ← Entry point: functional profiles + full journey
+├── onboarding.md       ← Entry point: reading path, functional profiles, full journey
 ├── business-case.md    ← Business case (management, delivery, commercial)
 ├── adr/                ← Accepted and proposed architecture decisions, with status and consequences
 ├── api/                ← REST API reference

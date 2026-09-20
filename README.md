@@ -37,6 +37,10 @@ configuration, engine-neutral contracts, governance evidence, and a native refer
 The project is designed to complement existing orchestration frameworks and cloud platforms, not
 replace their agent, graph, connector, or model-serving ecosystems.
 
+**Joining the project?** Start at [docs/onboarding.md](docs/onboarding.md). It is the entry point:
+a five-step path from "what is this?" to a first contribution, the reading order per profile, and
+which documents are authoritative. This README stays a project overview, not a reading order.
+
 ---
 
 ## Table of Contents
@@ -80,7 +84,7 @@ These concerns are often implemented differently in each engagement. The framewo
 test whether a shared assurance contract can reduce that repeated qualification work while still
 allowing teams to keep the execution engine that fits their application.
 
-→ [Full business case](docs/business-case.md) · [Onboarding by role — developer, tech lead, delivery, functional, security](docs/onboarding.md)
+→ [Full business case](docs/business-case.md) · [Onboarding — the entry point, with the reading order per role](docs/onboarding.md)
 
 ---
 
@@ -765,8 +769,11 @@ what you actually need without reading everything:
 
 | I want to… | Start here |
 |---|---|
+| **Join the project and know what to read, in order** | [`docs/onboarding.md`](docs/onboarding.md) — the entry point |
 | **Get running in 15 minutes** | [`docs/guides/getting-started.md`](docs/guides/getting-started.md), [`docs/guides/installation.md`](docs/guides/installation.md) |
-| **Understand my role's specific concerns** (developer, tech lead, delivery, security) | [`docs/onboarding.md`](docs/onboarding.md) |
+| **Understand my role's specific concerns** (developer, tech lead, delivery, security) | [`docs/onboarding.md`](docs/onboarding.md), section 2 |
+| **Read a deeper product and architecture overview, by role** | [`docs/guides/framework-overview-onboarding.md`](docs/guides/framework-overview-onboarding.md) |
+| **Write or restructure documentation** | [`docs/guides/documentation-style-guide.md`](docs/guides/documentation-style-guide.md) |
 | **Understand the full architecture, layer by layer** | [`docs/architecture/overview.md`](docs/architecture/overview.md), [`docs/architecture/module-model.md`](docs/architecture/module-model.md), [`docs/architecture/data-model.md`](docs/architecture/data-model.md), [`docs/architecture/runtime-flow.md`](docs/architecture/runtime-flow.md) |
 | **Understand *why* a structural decision was made** | [`docs/adr/`](docs/adr/) (`_index.md` for the index) — read these before proposing a structural change; several later ADRs partially supersede earlier ones, always check the index for current status |
 | **Extend the framework** (new chunker, retriever, generator, adapter) | [`docs/guides/plugin-development.md`](docs/guides/plugin-development.md), and the matching `.claude/skills/add-*` skill if you use Claude Code |

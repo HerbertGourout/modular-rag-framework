@@ -153,16 +153,16 @@ Every in-scope cluster is listed member by member. Where members share one purpo
 
 | Document | Purpose | Status |
 |---|---|---|
-| [`docs/onboarding.md`](onboarding.md) | "Who reads what" map across reader profiles, plus the plain-language V1→V5 journey | **Canonical** entry point (declared by `docs/_index.md:7-10` and `CONTRIBUTING.md:12`), but **Stale** — §4.1 S5, S6, F1 |
+| [`docs/onboarding.md`](onboarding.md) | "Who reads what" map across reader profiles, plus the plain-language V1→V5 journey | **Canonical** entry point (declared by `docs/_index.md:7-11` and `CONTRIBUTING.md:12`); was **Stale** — §4.1 S5, S6, F1, all resolved by Batch 1 |
 | [`docs/_index.md`](_index.md) | By-intent navigation for all of `docs/` | **Canonical** index |
-| [`docs/guides/_index.md`](guides/_index.md) | By-intent navigation for `docs/guides/`, split into framework and Claude Code tooling guides | **Canonical** index for its directory; defers to `docs/_index.md` (`:62-63`) |
+| [`docs/guides/_index.md`](guides/_index.md) | By-intent navigation for `docs/guides/`, split into framework and Claude Code tooling guides | **Canonical** index for its directory; defers to `docs/_index.md` (`:65-66`) |
 | [`README.md`](../README.md) | Project pitch, vision, status table | **Canonical** pitch |
 | [`ROADMAP.md`](../ROADMAP.md) | Checkbox-per-feature delivery state | **Canonical** status source |
 | [`CHANGELOG.md`](../CHANGELOG.md) | Dated narrative of changes | **Historical** per entry |
 | [`CONTRIBUTING.md`](../CONTRIBUTING.md) | Git workflow, PR checklist, setup, validation, component recipe | **Canonical** contribution guide — §5.2 gap |
 | [`docs/business-case.md`](business-case.md) | Product hypothesis, target users, decision gate | **Canonical** for its subject, but **Stale** — §4.1 S4 |
 | [`docs/glossary.md`](glossary.md) | Term definitions | **Canonical**, but **Stale** — §4.1 S2, S3 |
-| [`docs/guides/framework-overview-onboarding.md`](guides/framework-overview-onboarding.md) | Business and technical overview with role-based quick starts | **Conflicting** with `docs/onboarding.md` (§3.8 A) and **Stale** — §4.1 S1 and S7 (including S7's internal contradiction) |
+| [`docs/guides/framework-overview-onboarding.md`](guides/framework-overview-onboarding.md) | Business and technical overview with role-based quick starts | Precedence declared by Batch 1 (§3.8 A); still **Stale** — §4.1 S1 and S7 (including S7's internal contradiction) |
 | [`docs/documentation-alignment-audit-2026-08-12.md`](documentation-alignment-audit-2026-08-12.md) | Prior documentation audit | **Historical**, superseded by this document |
 | [`docs/onboarding-overhaul-plan.md`](onboarding-overhaul-plan.md) | The batch plan this audit executes | **Canonical** process document |
 
@@ -271,7 +271,7 @@ Members of the grouped rows:
 | [`docs/guides/model-routing.md`](guides/model-routing.md) | Provider and model-tier routing | **Canonical** |
 | [`.review/handoff.example.md`](../.review/handoff.example.md), [`.review/codex-review.example.md`](../.review/codex-review.example.md) | Review templates | **Canonical**; match the structure used in practice |
 | [`docs/guides/troubleshooting.md`](guides/troubleshooting.md) | Common first-week errors | **Canonical**; spot-checked references verified |
-| [`docs/adr/_index.md`](adr/_index.md) | ADR index | **Canonical** index, but **Stale** — §4.1 F1 |
+| [`docs/adr/_index.md`](adr/_index.md) | ADR index | **Canonical** index; was **Stale** — §4.1 F1, resolved by Batch 1 |
 | `docs/adr/0001` … `0018` (18 files) | Architecture decisions | **Historical** records; status per file header — 17 Accepted, ADR-0004 Superseded (partial) |
 | [`docs/refactoring-plan.md`](refactoring-plan.md) | Refactoring programme and dated decision log | **Canonical** for the programme; dated rows **Historical**. §1.3 heading still says "Proposed assurance levels" (§4.1 S10) |
 | Group 1 (below) | Per-lot scope and evidence | README **Canonical** index; lot files **Historical**, except `lot-22-*.md`, which is the **Canonical** scope of the in-progress lot |
@@ -293,8 +293,13 @@ Members of the grouped rows:
 
 `docs/guides/framework-overview-onboarding.md` states the same purpose as `docs/onboarding.md`
 for overlapping audiences. Neither links to the other or declares precedence. `docs/_index.md`
-routes to `onboarding.md`; `docs/guides/_index.md:35` routes to the other beside, not beneath,
+routes to `onboarding.md`; `docs/guides/_index.md:38` routes to the other beside, not beneath,
 it. **Batch 1.**
+
+**Resolved:** Batch 1, 2026-09-20 — precedence is now declared in both directions:
+`docs/onboarding.md` states it is the entry point and names the overview its companion, the
+overview carries a "Where this sits" note, and `docs/guides/_index.md:38` and `docs/_index.md`
+route accordingly.
 
 #### B — four overlapping Claude Code guides with conflicting precedence
 
@@ -331,16 +336,23 @@ Every row was re-verified against the cited file and line at the time of this re
 "pass 1" were found by Codex review pass 1; rows marked "sweep" were found by the systematic search
 this revision ran in response.
 
+**Lifecycle of a finding (amendment, 2026-09-20).** The **Claim**, **Defect** and **Verified
+truth** fields keep the wording recorded at the immutable base; the defective text itself is
+reproducible there (`git show 2150ce2:<file>`). **Location** is kept current, so a corrected
+finding points at the text that replaced it, and a **Resolved** line names the batch that fixed
+it. A finding with no **Resolved** line is still open. The plan's execution table records the
+same outcome per batch.
+
 ### 4.1 Stale current-state claims
 
 #### S1
 
-- **Location:** `docs/guides/framework-overview-onboarding.md:88-90`, `:98`, `:125`, `:303`
+- **Location:** `docs/guides/framework-overview-onboarding.md:93-95`, `:103`, `:130`, `:308`
 - **Claim:** ADR-0015 "proposes" L0/L1/L2; cross-engine assurance "proposed, not yet implemented"
 - **Verified truth:** Lot 21 is implemented: `contracts/assurance.py` exported;
   `conformance_report()` in `orchestration/native_engine.py` and
   `adapters/llms/langgraph_engine.py`. Only the Lot 22 adapter is unbuilt.
-- **Found by:** pass 1 (`:89-90`, `:303`); sweep (`:98`, `:125`)
+- **Found by:** pass 1 (`:94-95`, `:308`); sweep (`:103`, `:130`)
 - **Batch:** 2
 
 #### S2
@@ -374,32 +386,38 @@ this revision ran in response.
 
 #### S5
 
-- **Location:** `docs/onboarding.md:73-74`
+- **Location:** `docs/onboarding.md:134-135`
 - **Claim:** "fifteen accepted decisions… proposed assurance levels and existing-application
   support are not implementation."
 - **Verified truth:** 17 of 18 ADRs are Accepted; assurance levels are implemented.
   Existing-application support is indeed not implemented.
-- **Found by:** first draft (`:73`); sweep (`:74`)
+- **Found by:** first draft (`:134`); sweep (`:135`)
 - **Batch:** 1
+- **Resolved:** Batch 1, 2026-09-20 — the cited lines now read "eighteen decisions, seventeen of
+  them Accepted (ADR-0004 is Superseded in part)" and separate ADR status from implementation
+  status.
 
 #### S6
 
-- **Location:** `docs/onboarding.md:141-142`, `:150`
+- **Location:** `docs/onboarding.md:203-205`, `:213-214`
 - **Claim:** Security readers are pointed to "the open Lot 20 provider-egress boundary";
   "classification-aware model egress" is listed as undelivered.
 - **Verified truth:** Lot 20 is implemented (S3 evidence). The same file states this correctly at
-  `:322-325`, so it contradicts itself.
+  `:388-391`, so it contradicts itself.
 - **Found by:** pass 1
 - **Batch:** 1
+- **Resolved:** Batch 1, 2026-09-20 — both locations now state that classification-aware provider
+  egress ships with Lot 20, and the second one points to section 5 instead of repeating the
+  evidence.
 
 #### S7
 
-- **Location:** `docs/guides/framework-overview-onboarding.md:202`
+- **Location:** `docs/guides/framework-overview-onboarding.md:207`
 - **Claim:** "live Qdrant/LLM validation remains pending"
 - **Verified truth:** `CLAUDE.md` §09 V1.0 and `.github/workflows/ci.yml` (`test-integration`,
   `e2e-deterministic`) run live Qdrant/PostgreSQL; the LLM-backed scenario runs in
-  `.github/workflows/nightly.yml`. The same file says "live-validated" at `:6`.
-- **Found by:** pass 1 (`:202`); sweep (internal contradiction with `:6`)
+  `.github/workflows/nightly.yml`. The same file says "live-validated" at `:11`.
+- **Found by:** pass 1 (`:207`); sweep (internal contradiction with `:11`)
 - **Batch:** 2
 
 #### S8
@@ -473,8 +491,11 @@ this revision ran in response.
 - **Location:** `docs/adr/_index.md:334`
 - **Defect:** "Eighteen ADRs are Accepted."
 - **Evidence:** Status headers: 17 Accepted, ADR-0004 Superseded (partial). Contradicts
-  `onboarding.md:73` (S5) as well as the files themselves.
+  `onboarding.md:134` (S5) as well as the files themselves.
 - **Batch:** 1
+- **Resolved:** Batch 1, 2026-09-20 — the cited line now reads "Eighteen ADRs exist; seventeen are
+  Accepted, and ADR-0004 is Superseded (partial) by ADR-0005."
+
 
 #### F2
 
@@ -501,7 +522,7 @@ this revision ran in response.
 - `docs/architecture/_index.md:44-48`, `security.md:25`/`:84`/`:255-263`,
   `document-engine-contract.md:9-14`/`:113`, and `data-classification-policy.md:74` — Lot 20–22
   statements accurate.
-- `docs/onboarding.md:322-325` — Lot 20–22 statement accurate (but see S6).
+- `docs/onboarding.md:388-391` — Lot 20–22 statement accurate (but see S6).
 - `.claude/AGENTS.md` — eight subagent names match `.claude/agents/`.
 - `.review/*.example.md` — match the structure used in practice.
 - `ROADMAP.md`, `README.md`, `CLAUDE.md` §01/§09, `capability-matrix.md`, and `overview.md` —
@@ -617,7 +638,7 @@ still exist. Later batches that rewrite a document must read it in full regardle
 
 | Batch | Findings |
 |---|---|
-| 1 — Canonical navigation | §3.8 A; S5; S6; F1 |
+| 1 — Canonical navigation | §3.8 A; S5; S6; F1 — all resolved by Batch 1, 2026-09-20 |
 | 2 — Vision and status | S1; S4; S7; S10; F2 |
 | 4 — Local environment | F3 |
 | 5 — Claude Code | §3.8 B, C, D; S8; S9; P1; P2; §5.1; §5.3 |
