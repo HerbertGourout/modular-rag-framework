@@ -1,18 +1,46 @@
 # Onboarding — Functional Profiles and the Framework's Full Journey
 
-> This document answers a simple question that had no single answer anywhere in the repo:
-> **who should read what, in what order, and why** — whether you're a developer, a tech
-> lead, a client-engagement consultant, a functional product owner, or a security/compliance
-> officer. It complements [`docs/business-case.md`](business-case.md) (the "commercial why")
-> and [`ROADMAP.md`](../ROADMAP.md) (the "what, checked off as it ships") by answering
+> **This is the entry point for the repository.** It answers a simple question that had no
+> single answer anywhere in the repo: **who should read what, in what order, and why** —
+> whether you're a developer, a tech lead, a client-engagement consultant, a functional
+> product owner, or a security/compliance officer. It complements
+> [`docs/business-case.md`](business-case.md) (the "commercial why") and
+> [`ROADMAP.md`](../ROADMAP.md) (the "what, checked off as it ships") by answering
 > "who does what, and how to find your way around."
 >
-> **If you specifically want to understand the 2026-08 engine-agnostic control-plane
-> refactoring programme** (ADR-0005's owned-vs-delegated pivot, 18 lots, Phase A-D) rather
-> than the framework in general, go straight to
-> [docs/refactoring/README.md](refactoring/README.md) instead. The version summaries below use the
-> current owned/delegated boundary and distinguish a selectable adapter from capabilities that the
-> adapter does not yet implement.
+> Two documents cover nearby ground and are companions, not alternatives:
+> [`docs/guides/framework-overview-onboarding.md`](guides/framework-overview-onboarding.md)
+> is a role-based product and architecture overview — read it after section 3 if you want more
+> depth on positioning, and come back here for the reading order. To understand the 2026-08
+> engine-agnostic control-plane refactoring programme (ADR-0005's owned-vs-delegated pivot,
+> 18 lots, Phase A-D) rather than the framework in general, go to
+> [docs/refactoring/README.md](refactoring/README.md).
+
+## Start here — the path from "what is this?" to a first contribution
+
+Everyone follows the same five phases, in this order. Section 2 does not replace them: each
+profile list there is that profile's depth **inside** these phases, never an alternative
+end-to-end order.
+
+1. **Understand the product.** Section 3 of this document, in plain language, then
+   [business-case.md](business-case.md) if you need the commercial framing.
+2. **Check what actually exists today.** [ROADMAP.md](../ROADMAP.md) and
+   [docs/architecture/capability-matrix.md](architecture/capability-matrix.md). Section 5
+   lists what must not be promised.
+3. **Install and run it.** [guides/installation.md](guides/installation.md), then
+   [guides/getting-started.md](guides/getting-started.md).
+4. **Read the code and its rules.** [CLAUDE.md](../CLAUDE.md),
+   [architecture/module-model.md](architecture/module-model.md),
+   [guides/code-walkthrough.md](guides/code-walkthrough.md).
+5. **Change something and deliver it.** [CONTRIBUTING.md](../CONTRIBUTING.md),
+   [guides/plugin-development.md](guides/plugin-development.md),
+   [guides/validation-protocol.md](guides/validation-protocol.md), then
+   [guides/ai-engineering-workflow.md](guides/ai-engineering-workflow.md) when you deliver with
+   Claude Code and Codex.
+
+Phases 1 and 2 are required for every profile, including management and functional profiles.
+Phases 3 to 5 apply to anyone who runs or changes the code; a profile that does neither stops
+after phase 2.
 
 ---
 
@@ -27,6 +55,35 @@ that path.
 It replaces no existing document: it **indexes and contextualizes**. Every section points to
 the source document that is authoritative on the topic.
 
+### 1.1 Which documents are authoritative, and which only summarize
+
+**The authority order.** When two sources disagree, the one higher in this list wins, whatever
+the subject. Report the contradiction; never silently follow the lower source. This order is the
+one declared in
+[`docs/onboarding-overhaul-plan.md`](onboarding-overhaul-plan.md#4-sources-of-truth):
+
+1. executable code, manifests, tests, and CI workflows;
+2. accepted ADRs and public contracts (`src/modular_rag/contracts/`);
+3. [CLAUDE.md](../CLAUDE.md), [AGENTS.md](../AGENTS.md), path-specific rules in
+   `.claude/rules/`, and checked-in tool configuration;
+4. [ROADMAP.md](../ROADMAP.md) and [docs/refactoring-plan.md](refactoring-plan.md);
+5. guides and indexes, including this document;
+6. Git history, only when the current sources do not explain a still-relevant decision.
+
+**Where each subject is documented.** The table below says where to look first; it does not
+change the order above. When a summary contradicts the implementation or an accepted decision,
+the implementation and the decision prevail.
+
+| Subject | Look here first | Documents that only summarize it |
+|---|---|---|
+| What is implemented today | The code, its tests, and manifests | this document, `README.md` |
+| Capability status per feature | [ROADMAP.md](../ROADMAP.md), [architecture/capability-matrix.md](architecture/capability-matrix.md) | section 3 below, `README.md` "Project status" |
+| Architecture and boundaries | [architecture/_index.md](architecture/_index.md) and the documents it lists | `README.md` "Core concepts" |
+| Structural decisions | [adr/_index.md](adr/_index.md) and each ADR | every guide that cites them |
+| Repository rules for contributors | [CLAUDE.md](../CLAUDE.md), then [CONTRIBUTING.md](../CONTRIBUTING.md) for the workflow it does not cover | this document |
+| Delivery workflow with Claude Code and Codex | [AGENTS.md](../AGENTS.md), [guides/ai-engineering-workflow.md](guides/ai-engineering-workflow.md) | [guides/claude-code.md](guides/claude-code.md) |
+| Writing documentation | [guides/documentation-style-guide.md](guides/documentation-style-guide.md) | — |
+
 ---
 
 ## 2. The profiles that interact with the framework
@@ -36,6 +93,10 @@ and a different depth of technical involvement. Knowing which profile you belong
 which one you're writing for) saves you from reading 700 lines of Pydantic specification
 when a single page of YAML manifest would have done the job.
 
+**How to read these lists.** Each one refines the phases of "Start here": it names the documents
+that matter most for that profile, and the phase each belongs to. Phases 1 and 2 come first in
+every case, even when a list below starts at a phase-4 document.
+
 ### 2.1 Framework developer (contributes to the source code)
 
 Builds or extends internal components: a new chunker, a new retriever, a new generator, a
@@ -43,7 +104,7 @@ new policy. This profile touches `src/modular_rag/`, writes tests, and must resp
    inward hexagonal dependency rule (`cli`/`api` → `app` → `orchestration` → contracts/core;
    domain/adapters depend on inward contracts, never on outer interfaces).
 
-**What this profile should read, in order:**
+**After phases 1 and 2, this profile's depth in phases 4 and 5, in order:**
 1. [CLAUDE.md](../CLAUDE.md) — the non-negotiable rules (contracts first, no cross-domain
    imports, manifests as the source of truth).
 2. [CONTRIBUTING.md](../CONTRIBUTING.md) — local setup, step-by-step recipe for adding a
@@ -66,12 +127,14 @@ Decides on structural changes: new layer, new contract, a shifted boundary betwe
 Writes or approves ADRs. Arbitrates between "extend an existing contract" and "create a new
 one."
 
-**Priority reading:**
+**After phases 1 and 2, this profile's depth in phases 4 and 5:**
 1. [docs/architecture/overview.md](architecture/overview.md) — the complete technical
    specification, the system's six planes, the V1→V5 roadmap with the detail of what each
    version adds.
-2. [docs/adr/](adr/) — fifteen accepted decisions. Always check the
-   status: proposed assurance levels and existing-application support are not implementation.
+2. [docs/adr/](adr/) — eighteen decisions, seventeen of them Accepted (ADR-0004 is Superseded
+   in part). Always check each file's own status header, and check implementation separately:
+   the L0/L1/L2 assurance levels are implemented (Lot 21, ADR-0017), while existing-application
+   support is contract-only (Lot 22, ADR-0018).
 3. [docs/architecture/module-model.md](architecture/module-model.md) and
    [structure.md](architecture/structure.md) — the complete map of the code, file by file.
 4. [docs/archive/2026-05-20-initial-review.md](archive/2026-05-20-initial-review.md) — the
@@ -86,7 +149,7 @@ Configures a pipeline for a client via YAML manifests, without necessarily touch
 code. Needs to know which preset to choose, how to adapt it (LLM model, security level,
 retrieval depth), and how to demonstrate a proof of concept quickly.
 
-**Priority reading:**
+**After phases 1 and 2, this profile's depth in phases 3 and 5:**
 1. [docs/guides/getting-started.md](guides/getting-started.md) — from clone to first
    answer, in five steps.
 2. [manifests/_index.md](../manifests/_index.md) — which preset to choose depending on the
@@ -108,7 +171,7 @@ tool can do today and what it will be able to do tomorrow**, in order to scope a
 or a user story. This is the profile most often forgotten in technical documentation — which
 is exactly why this document exists.
 
-**Priority reading:**
+**After phases 1 and 2, this profile stops there; the useful detail is:**
 1. Section 3 below ("The full journey, explained without technical jargon").
 2. [docs/business-case.md](business-case.md) — the product hypothesis and decision gate; it does
    not claim measured ROI or automatic regulatory coverage.
@@ -129,7 +192,7 @@ Needs to assess whether the framework meets regulatory constraints (GDPR, DORA, 
 sector-specific rules) before a regulated client adopts it. Doesn't code, but needs concrete
 proof — not marketing promises.
 
-**Priority reading:**
+**After phases 1 and 2, this profile's depth in phase 2, plus:**
 1. [docs/architecture/security.md](architecture/security.md) — the attack surfaces
    covered, the guard chain, the exact PII redaction patterns (regexes, data types covered).
 2. [docs/adr/0003-security-and-governance.md](adr/0003-security-and-governance.md) — the
@@ -138,8 +201,8 @@ proof — not marketing promises.
 3. [docs/business-case.md](business-case.md) — assurance hypothesis and explicit compliance/
    licensing caveats.
 4. [docs/architecture/data-classification-policy.md](architecture/data-classification-policy.md)
-   and [threat-model.md](architecture/threat-model.md) — especially the open Lot 20 provider-
-   egress boundary.
+   and [threat-model.md](architecture/threat-model.md) — including classification-aware provider
+   egress, which ships (Lot 20, [ADR-0016](adr/0016-provider-egress-control.md)).
 
 **Watch point to communicate to this profile without softening it**: corrected 2026-08-06 —
 this used to say policy-as-code governance, multi-tenancy, and the audit trail were "V4 items,
@@ -147,7 +210,8 @@ not yet delivered." That's no longer true: per [ADR-0005](adr/0005-document-ai-c
 (accepted 2026-08-04), the Policy Engine, fail-closed tenant isolation, and a structured audit
 trail are owned and shipped now (V2.0/Lot 10/Lot 11b-c), not deferred to V4. What genuinely
 remains undelivered per V4 is the *multi-environment* layering (dev/staging/prod overrides) and
-full regulatory reporting and classification-aware model egress — see [ROADMAP.md](../ROADMAP.md).
+full regulatory reporting — see [ROADMAP.md](../ROADMAP.md). Classification-aware provider egress
+is no longer in that list: it shipped with Lot 20 (see section 5).
 
 Still never present a capability as operational before checking its actual status here or in
 [docs/refactoring/README.md](refactoring/README.md) §5's honest "what's still open" list — this
@@ -158,8 +222,10 @@ review of 2026-05-20 flagged as the project's #1 risk (see
 
 ### 2.6 Management / commercial
 
-Only needs [docs/business-case.md](business-case.md) and the status table in
-[README.md](../README.md) ("Project status"). Nothing else is required at this level.
+Phases 1 and 2 apply here as well: section 3 for what the framework does, then
+[ROADMAP.md](../ROADMAP.md) for what is delivered. Beyond them, this profile needs only
+[docs/business-case.md](business-case.md) and the status table in
+[README.md](../README.md) ("Project status"); phases 3 to 5 do not apply.
 
 ---
 

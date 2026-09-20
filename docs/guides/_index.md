@@ -5,6 +5,9 @@ previous version of this index was dated June 2026, carried internally-contradic
 "Updated" dates, and duplicated `docs/_index.md`'s navigation role without staying in sync with
 it. This version follows `docs/_index.md`'s own terser, by-intent format.
 
+**Joining the project?** Start at [docs/onboarding.md](../onboarding.md), the repository's entry
+point; it says which of these guides to read, and when.
+
 This directory holds two genuinely different kinds of guide — **framework guides** (how to run,
 extend, deploy this RAG framework) and **Claude Code tooling guides** (how to use Claude Code
 itself on this repository). They aren't physically separated into different folders (that would
@@ -32,7 +35,7 @@ break every existing link into this directory), but the tables below keep them a
 | Measure Claude Code adoption on this project | [adoption-metrics.md](adoption-metrics.md) |
 | Set up an MCP server integration | [mcp-integrations.md](mcp-integrations.md) |
 | Read a guided tour of the actual codebase | [code-walkthrough.md](code-walkthrough.md) |
-| A full business + technical overview, with role-based quick starts | [framework-overview-onboarding.md](framework-overview-onboarding.md) |
+| A full business + technical overview, with role-based quick starts | [framework-overview-onboarding.md](framework-overview-onboarding.md) — the deeper companion to [docs/onboarding.md](../onboarding.md), which stays the entry point |
 | Write, restructure, or review any documentation in this repository | [documentation-style-guide.md](documentation-style-guide.md) |
 
 ## Claude Code tooling guides — by intent
