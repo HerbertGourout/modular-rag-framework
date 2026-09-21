@@ -244,7 +244,7 @@ history.
 
 ### Batch 3 — Architecture and code learning path
 
-**Status:** `NOT_STARTED`
+**Status:** `COMPLETE` — see [`docs/guides/code-walkthrough.md`](guides/code-walkthrough.md)
 
 **Purpose:** Let a developer move from the system view to the relevant source files safely.
 
@@ -505,7 +505,7 @@ validation output, or merged pull request rather than relying on a narrative cla
 | 0.5 — Documentation foundation | `COMPLETE` | Claude Code | Codex (pass 1: `CHANGES_REQUIRED`, two HIGH; pass 2: `READY_FOR_FINAL_VALIDATION`, all findings closed) | [`docs/guides/documentation-style-guide.md`](guides/documentation-style-guide.md), `.review/handoff.md` | Style guide and three documentation skills; editorial warnings in `scripts/check_docs.py` follow as a separate change |
 | 1 — Canonical navigation | `COMPLETE` | Claude Code | Codex (pass 1: `CHANGES_REQUIRED`, two HIGH and one MEDIUM; pass 2: `READY_FOR_FINAL_VALIDATION`, all closed) | [`docs/onboarding.md`](onboarding.md), `.review/handoff.md` | Entry point declared in five phases with per-profile depth; authority order aligned with §4; audit findings §3.8 A, S5, S6 and F1 resolved and recorded in the audit's lifecycle notes |
 | 2 — Vision and status | `COMPLETE` | Claude Code | Codex (pass 1: `CHANGES_REQUIRED`, two HIGH; pass 2: `READY_FOR_FINAL_VALIDATION`, all closed) | [`docs/architecture/capability-matrix.md`](architecture/capability-matrix.md), `.review/handoff.md` | Audit findings S1, S4, S7, S10 and F2 resolved; four-state vocabulary in the onboarding hub and a bridge to it in the capability matrix |
-| 3 — Architecture and code | `NOT_STARTED` | — | — | — | Depends on Batches 1–2 |
+| 3 — Architecture and code | `COMPLETE` | Claude Code | Codex (pass 1 and pass 2: `CHANGES_REQUIRED`, two HIGH each; closed by the bounded final remediation, not re-reviewed) | [`docs/guides/code-walkthrough.md`](guides/code-walkthrough.md), `.review/handoff.md` | Egress checkpoints added to both runtime diagrams; extension table per change type; `observability/` layering case documented |
 | 4 — Local environment | `NOT_STARTED` | — | — | — | Depends on Batch 1 |
 | 5 — Claude Code | `NOT_STARTED` | — | — | — | Depends on Batch 1 |
 | 6 — Codex and AI delivery | `NOT_STARTED` | — | — | — | Depends on Batch 5 |

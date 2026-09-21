@@ -30,6 +30,24 @@ Two things worth internalizing before reading the diagram:
 2. **`Telemetry.record_trace()` and the final `AuditSink.record()` both fire after the answer is
    fully validated**, not before — so the persisted trace and audit event are complete, reflecting
    what was actually returned to the caller, not an intermediate state.
+3. **The egress policy runs three times on this path**, always *before* the adapter call it
+   guards, so a denial produces zero provider calls (Lot 20,
+   [ADR-0016](../adr/0016-provider-egress-control.md)):
+   - before the query is embedded for retrieval, with `EgressOperation.EMBED`
+     (`engine.py:1202-1209`); a `Query` carries no classification, so the policy's own
+     `default_classification` applies;
+   - before reranking, with `EgressOperation.RERANK` and the combined classification of the
+     retrieved chunks (`engine.py:1033-1039`);
+   - before generation, with `EgressOperation.GENERATE` and the same combined classification
+     (`engine.py:1069-1075`), which covers the query text and the retrieved context together,
+     since both travel to the generator in one call.
+
+   A denial raises `EgressDeniedError`, a `SecurityError` that maps to HTTP 403 and CLI exit 3.
+   Both allowed and denied decisions produce content-free evidence through `_audit_egress()`,
+   which records an `AuditEvent` **only when an `audit_sink` is configured** and a meter counter
+   only when a `meter` is; with neither wired it returns silently. The steps are skipped only
+   when no `governance.egress_policy` is configured, which a manifest wiring a known remote
+   provider cannot do — startup rejects it.
 
 ```mermaid
 sequenceDiagram
@@ -42,6 +60,7 @@ sequenceDiagram
     participant RR as Reranker
     participant LLM as Generator
     participant Rd as Redactor
+    participant EP as EgressPolicy
     participant A as AuditSink
     participant T as Telemetry
 
@@ -58,15 +77,36 @@ sequenceDiagram
         E->>G: check_query(query)
         G-->>E: GuardResult(allowed=True)
     end
+    opt egress_policy configured
+        E->>EP: check(classification=None → policy default, provider=embedder.type, EMBED)
+        opt audit_sink configured
+            E->>A: record(AuditEvent(egress decision, allowed or denied, content-free))
+        end
+        EP-->>E: denied → EgressDeniedError after that record, no embedder call
+    end
     E->>R: retrieve(query, k=20)
     R-->>E: [RetrievedChunk × 20]
     opt tenant_policy configured
         E->>TP: filter_chunks(tenant_id, chunks)
         TP-->>E: chunks belonging to this tenant only
     end
+    opt egress_policy and reranker configured
+        E->>EP: check(classification=combined(chunks), provider=reranker.type, RERANK)
+        opt audit_sink configured
+            E->>A: record(AuditEvent(egress decision, allowed or denied, content-free))
+        end
+        EP-->>E: denied → EgressDeniedError after that record, no reranker call
+    end
     opt reranker configured
         E->>RR: rerank(query, chunks, k=5)
         RR-->>E: [RetrievedChunk × 5]
+    end
+    opt egress_policy configured
+        E->>EP: check(classification=combined(context), provider=generator.type, GENERATE)
+        opt audit_sink configured
+            E->>A: record(AuditEvent(egress decision, allowed or denied, content-free))
+        end
+        EP-->>E: denied → EgressDeniedError after that record, no generator call
     end
     E->>LLM: generate(query, context, trace)
     Note over LLM: LLM emits its own TraceStep(s) internally —<br/>RAGEngine does not wrap this call in a second one
@@ -119,6 +159,8 @@ sequenceDiagram
     participant Ctx as ContextualEnricher
     participant E as RAGEngine / ApplicationService
     participant TP as TenantPolicy
+    participant EP as EgressPolicy
+    participant A2 as AuditSink
     participant Emb as Embedder
     participant Idx as Indexer
     participant Lex as Lexical retriever (BM25Retriever or PersistentSparseRetriever)
@@ -139,6 +181,16 @@ sequenceDiagram
     opt tenant_policy configured
         E->>TP: enforce_ingest(chunk.tenant_id) for every chunk — fail-closed
     end
+    opt egress_policy configured
+        E->>EP: check(chunk.classification, provider=embedder.type, EMBED) for every chunk
+        opt audit_sink configured and decision allowed
+            E->>A2: record(allowed evidence, once per (classification, provider) pair)
+        end
+        opt audit_sink configured and decision denied
+            E->>A2: record(denied evidence for that chunk, immediately)
+        end
+        EP-->>E: any denial → EgressDeniedError after that record, stops the batch
+    end
     loop for each chunk with embedding=None
         E->>Emb: embed([chunk.embedding_text or chunk.content]) → list[float]
         Note over E: ONE call per chunk, not a single batched<br/>call across the whole document — see overview.md §10
@@ -150,6 +202,19 @@ sequenceDiagram
     Note over Lex: also feeds the lexical index — in-memory and lost on process<br/>exit for the bm25-memory default, persistent for sparse-qdrant<br/>(manifest retriever.config.lexical), see overview.md §3
     E-->>U: n_indexed
 ```
+
+**Egress control on this path.** When a `governance.egress_policy` is configured,
+`ingest_chunks()` checks every chunk before any embedding work starts, with
+`EgressOperation.EMBED` and that chunk's own `classification` (`engine.py:585-621`). The check
+sits beside the tenant check, for the same reason: a denial on chunk 50 of 100 must stop the
+batch before a single provider call.
+
+The two outcomes are audited differently. An allowed decision is recorded once per distinct
+`(classification, provider)` pair seen in the batch, so a large permitted ingest does not write
+one audit row per chunk. A denied decision goes through `_enforce_egress()`, which records that
+chunk's evidence immediately and then raises — the same helper the three query checkpoints use,
+which is why evidence and enforcement cannot drift apart. Both records require a configured
+`audit_sink`.
 
 `RAGEngine.ingest(documents: list[Document])` is a **third**, less commonly used entry point —
 it takes already-constructed `Document` objects (not a filesystem path) and internally calls the
