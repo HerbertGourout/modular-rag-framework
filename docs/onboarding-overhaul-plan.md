@@ -276,7 +276,7 @@ history.
 
 ### Batch 4 — Local environment and first execution
 
-**Status:** `NOT_STARTED`
+**Status:** `COMPLETE` — see [`docs/guides/installation.md`](guides/installation.md)
 
 **Purpose:** Provide reproducible setup from a clean supported workstation.
 
@@ -506,7 +506,7 @@ validation output, or merged pull request rather than relying on a narrative cla
 | 1 — Canonical navigation | `COMPLETE` | Claude Code | Codex (pass 1: `CHANGES_REQUIRED`, two HIGH and one MEDIUM; pass 2: `READY_FOR_FINAL_VALIDATION`, all closed) | [`docs/onboarding.md`](onboarding.md), `.review/handoff.md` | Entry point declared in five phases with per-profile depth; authority order aligned with §4; audit findings §3.8 A, S5, S6 and F1 resolved and recorded in the audit's lifecycle notes |
 | 2 — Vision and status | `COMPLETE` | Claude Code | Codex (pass 1: `CHANGES_REQUIRED`, two HIGH; pass 2: `READY_FOR_FINAL_VALIDATION`, all closed) | [`docs/architecture/capability-matrix.md`](architecture/capability-matrix.md), `.review/handoff.md` | Audit findings S1, S4, S7, S10 and F2 resolved; four-state vocabulary in the onboarding hub and a bridge to it in the capability matrix |
 | 3 — Architecture and code | `COMPLETE` | Claude Code | Codex (pass 1 and pass 2: `CHANGES_REQUIRED`, two HIGH each; closed by the bounded final remediation, not re-reviewed) | [`docs/guides/code-walkthrough.md`](guides/code-walkthrough.md), `.review/handoff.md` | Egress checkpoints added to both runtime diagrams; extension table per change type; `observability/` layering case documented |
-| 4 — Local environment | `NOT_STARTED` | — | — | — | Depends on Batch 1 |
+| 4 — Local environment | `COMPLETE` | Claude Code | Codex (pass 1: `CHANGES_REQUIRED`, three HIGH and one MEDIUM; pass 2: `CHANGES_REQUIRED`, one HIGH open plus one MEDIUM regression, both closed by the bounded final remediation, not re-reviewed) | [`docs/guides/installation.md`](guides/installation.md), `.review/handoff.md` | Clean-room checklist, per-run service/credential table, secrets handling, audit finding F3. `.env.example` is listed in the batch but is unreadable under the repository's own `deny(**/.env*)` rule; the human kept it out of scope |
 | 5 — Claude Code | `NOT_STARTED` | — | — | — | Depends on Batch 1 |
 | 6 — Codex and AI delivery | `NOT_STARTED` | — | — | — | Depends on Batch 5 |
 | 7 — Recipes and validation | `NOT_STARTED` | — | — | — | Depends on Batches 3–6 |
