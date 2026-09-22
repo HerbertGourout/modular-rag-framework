@@ -187,7 +187,7 @@ Every in-scope cluster is listed member by member. Where members share one purpo
 
 | Document | Purpose | Status |
 |---|---|---|
-| [`docs/guides/getting-started.md`](guides/getting-started.md) | Clone to first query | **Canonical** first-run guide; F2 resolved by Batch 2, still **Stale** — §4.1 F3 |
+| [`docs/guides/getting-started.md`](guides/getting-started.md) | Clone to first query | **Canonical** first-run guide; was **Stale** — §4.1 F2 resolved by Batch 2, F3 by Batch 4 |
 | [`docs/guides/installation.md`](guides/installation.md) | Python environment and extras | **Canonical**; every extras group verified against `pyproject.toml` |
 | [`docs/guides/plugin-development.md`](guides/plugin-development.md) | Four-step component recipe | **Canonical** |
 | [`docs/guides/code-walkthrough.md`](guides/code-walkthrough.md) | Progressive reading guide through the codebase | **Reference** |
@@ -518,11 +518,13 @@ same outcome per batch.
 
 #### F3
 
-- **Location:** `docs/guides/getting-started.md:122-131`
+- **Location:** `docs/guides/getting-started.md:122-128`
 - **Defect:** Two prose lines sit between rows of the preset table, splitting it; the two
   blueprint rows lose their header.
 - **Evidence:** Direct read. The prose itself is accurate.
 - **Batch:** 4
+- **Resolved:** Batch 4, 2026-09-21 — the two prose lines moved below the table, which now runs
+  from `:122` to `:128` with its blueprint rows under the same header.
 
 ### 4.5 Claims verified accurate (no correction needed)
 
@@ -613,7 +615,7 @@ Recorded so later batches need not re-derive the evidence. Written with the §2 
   Lot 17.
 - **V3.0 — GraphRAG traversal:** Delegated by ADR-0005 §5.2. No native graph capability (ADR-0007
   Étape 8); `manifests/blueprints/graph-memory-rag.yaml` is a blueprint, and the selected engine
-  does not provide it (`getting-started.md:130`).
+  does not provide it (`getting-started.md:127`).
 - **V5.0 — multimodal execution:** Delegated by ADR-0005 §5.2;
   `manifests/blueprints/multimodal-rag.yaml` is a blueprint; `embedder.type: multimodal` is not a
   registered factory.
@@ -652,7 +654,7 @@ still exist. Later batches that rewrite a document must read it in full regardle
 |---|---|
 | 1 — Canonical navigation | §3.8 A; S5; S6; F1 — all resolved by Batch 1, 2026-09-20 |
 | 2 — Vision and status | S1; S4; S7; S10; F2 — all resolved by Batch 2, 2026-09-20 |
-| 4 — Local environment | F3 |
+| 4 — Local environment | F3 — resolved by Batch 4, 2026-09-21 |
 | 5 — Claude Code | §3.8 B, C, D; S8; S9; P1; P2; §5.1; §5.3 |
 | 6 — Codex and AI delivery | §3.8 D; C1 |
 | 7 — Recipes and validation | §5.2 |

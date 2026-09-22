@@ -191,9 +191,25 @@ Delete branch
 git clone https://github.com/HerbertGourout/modular-rag-framework.git
 cd modular-rag-framework
 python -m venv .venv
+
 .venv\Scripts\activate        # Windows
-pip install -e .[v1,dev]
+source .venv/bin/activate     # Linux / macOS
+
+pip install -e ".[v1,dev]"    # quote the extras: zsh and some shells expand the brackets
 ```
+
+`.[v1,dev]` runs the framework. **To run the full unit and contract suites you also need the
+`v4` and `langgraph` extras** — they exercise the OpenTelemetry tracer and the real LangGraph
+adapter, which is why the CI test jobs install `.[v1,v4,langgraph,dev]`.
+
+Verify the install with `mrag version`, which should print `modular-rag 0.0.1`. For the full
+clean-room sequence — including how to skip activation entirely when PowerShell blocks
+`Activate.ps1` — follow the checklist in
+[docs/guides/installation.md](docs/guides/installation.md).
+
+Windows note: the repository ships both `scripts/check.ps1` and `scripts/check.sh`, and
+`scripts/install_git_hooks.ps1` alongside its `.sh` counterpart. Use the PowerShell versions on
+Windows; they are the ones exercised on this project's own development machines.
 
 ---
 

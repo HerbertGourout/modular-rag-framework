@@ -11,11 +11,15 @@ enough for your needs. All paths are clickable from an IDE.
 
 | Order | Document | What you learn |
 |---|---|---|
-| 1 | [README.md](../../README.md) | What the framework is, pre-alpha status |
-| 2 | [docs/guides/framework-overview-onboarding.md](framework-overview-onboarding.md) | Full V1→V5 vision, why it exists |
-| 3 | [ROADMAP.md](../../ROADMAP.md) | Where we are **today** (V1.0 checkboxes) |
-| 4 | [docs/architecture/overview.md](../architecture/overview.md) | Technical specification |
-| 5 | [CHANGELOG.md](../../CHANGELOG.md) | What changed recently |
+| 1 | [docs/onboarding.md](../onboarding.md) | The entry point: the five-phase path and what to read for your profile |
+| 2 | [README.md](../../README.md) | What the framework is, pre-alpha status |
+| 3 | [docs/guides/framework-overview-onboarding.md](framework-overview-onboarding.md) | Full V1→V5 vision, why it exists |
+| 4 | [ROADMAP.md](../../ROADMAP.md) | Where we are **today** (V1.0 checkboxes) |
+| 5 | [docs/architecture/capability-matrix.md](../architecture/capability-matrix.md) | Which capabilities are usable, with the evidence |
+| 6 | [docs/architecture/overview.md](../architecture/overview.md) | Technical specification |
+| 7 | [CHANGELOG.md](../../CHANGELOG.md) | What changed recently |
+
+This guide is phase 4 of that path ("read the code and its rules"); phases 1 and 2 come first.
 
 **The idea in one sentence**: a native reference RAG pipeline plus an engine-neutral boundary,
 whose runtime components are Protocol-backed and selected by YAML. Parser dispatch is the explicit exception: file parsers are tried from
@@ -168,10 +172,53 @@ Reading the test is often the fastest way to understand a file.
 
 ---
 
+## Level 5 — Where to put a change
+
+Each row names the three places a change of that kind touches: where the code goes, how it
+becomes reachable at runtime, and which test proves it. Paths are verified against the current
+tree.
+
+| I want to add… | Implementation | Wiring | Tests |
+|---|---|---|---|
+| A new capability contract | `src/modular_rag/contracts/<capability>.py`, exported from [`contracts/__init__.py`](../../src/modular_rag/contracts/__init__.py) | An accepted ADR first (see the contract rule below); then nothing more until an implementation exists | A new `tests/contract/test_<capability>_conformance.py`, parametrized over every implementation |
+| A change to an existing contract | The contract file itself | An accepted ADR first (see the contract rule below) | Update the matching `tests/contract/test_*_conformance.py` in the same change |
+| A domain component (chunker, retriever, generator, guard…) | The matching domain package, e.g. [`retrieval/retrievers/`](../../src/modular_rag/retrieval/retrievers/) | Register the factory in [`app/default_factories.py`](../../src/modular_rag/app/default_factories.py), then select it by `type:` in a manifest | `tests/unit/<same path>/test_<file>.py`, plus an entry in the capability's conformance test |
+| An adapter to an external system | [`adapters/<family>/`](../../src/modular_rag/adapters/), heavy imports inside the method | Same registry-plus-manifest path; `adapters/` never imports a domain module | `tests/unit/adapters/`, and `tests/integration/` when a real service is required |
+| A registered type for an existing role | The domain module or adapter above | One `reg.register(role, type, factory)` line in `app/default_factories.py` | The role's conformance test, plus a unit test for the new behaviour |
+| A manifest field | [`contracts/manifests.py`](../../src/modular_rag/contracts/manifests.py), where `extra="forbid"` rejects unknown fields | Read it in [`registry.py`](../../src/modular_rag/orchestration/registry.py); add dry-run coverage in [`config_resolution.py`](../../src/modular_rag/app/config_resolution.py) | `tests/unit/contracts/` for the schema, `tests/unit/app/` for validation |
+| A CLI command that answers or ingests | A `@app.command()` function in [`cli/__init__.py`](../../src/modular_rag/cli/__init__.py), next to `ingest` and `ask` | Reach the pipeline through `load_application()`, never `RAGEngine` directly | `tests/unit/cli/` |
+| A CLI command that inspects or administers | Same file, next to `validate`, `manifest-schema`, `version` and the `db`/`audit`/`feedback`/`review` sub-apps | The narrowest path that does the job — `resolve_manifest()` for schema and validation, an administrative DSN for database and retention commands — never a full application | `tests/unit/cli/` |
+| A data or business API route | A route on the `api` object inside `create_app()` in [`api/__init__.py`](../../src/modular_rag/api/__init__.py), next to `/answer`, `/retrieve`, `/feedback` | `Depends(_authenticate)` like its neighbours, with errors mapped through [`api/errors.py`](../../src/modular_rag/api/errors.py) | `tests/unit/api/` |
+| An operational probe route | Same file, next to `/health` and `/ready` | **No authentication dependency**: these are deployment probes and are deliberately public; keep the same split | `tests/unit/api/` |
+| A new engine adapter | A `DocumentEngine` implementation, e.g. under `adapters/llms/` | `load_engine()` in [`app/bootstrap.py`](../../src/modular_rag/app/bootstrap.py) selects it from `engine.adapter`; declare honestly which controls it cannot honour | [`tests/contract/test_engine_conformance.py`](../../tests/contract/test_engine_conformance.py), which grants an assurance level only on demonstrated behaviour |
+
+Three rules cut across the rows above.
+
+**Every contract change needs an ADR first**, whether you are adding a contract module or
+modifying one that exists. [CLAUDE.md](../../CLAUDE.md) §07 states the gate: any new top-level
+module, new layer boundary, or contract modification requires a new ADR under `docs/adr/`.
+Creating `contracts/<capability>.py` is both.
+
+**Online runtime pipeline components go through the registry and a manifest**, never direct
+Python wiring ([ADR-0002](../adr/0002-contracts-and-plugins.md)). [CLAUDE.md](../../CLAUDE.md)
+§05 names the exceptions, and they are the only ones: parser dispatch
+(`ingestion/pipelines/default.py::_PARSERS`), engine selection (`load_engine`) and API identity
+verification (`create_app(token_verifier=...)`). Offline evaluation is outside this rule
+entirely — [ADR-0008](../adr/0008-offline-evaluation-and-engine-activation.md) keeps evaluators
+and quality gates programmatic, and a manifest that declares them is rejected.
+
+**The layering script gates the dependency direction.** Run
+`python scripts/check_layering.py --strict` before assuming an import is allowed.
+
+---
+
 ## Verify and extend
 
 - **Validate after a change**: `PATH="$PWD/.venv/bin:$PATH" ./scripts/check.sh quick` (30 s)
   or `full` (unit + contract). Details: [docs/guides/validation.md](validation.md).
+- **Check the layer boundaries**: `python scripts/check_layering.py --strict`. The rules it
+  enforces are listed in [module-model.md](../architecture/module-model.md); the script is the
+  authority when prose and script disagree.
 - **Add a component**: follow [CONTRIBUTING.md](../../CONTRIBUTING.md) or the Claude Code skills
   (`/add-retriever`, `/add-generator`, `/add-security-guard`, `/add-component`) — each now
   requires reading the domain digest before any design choice.

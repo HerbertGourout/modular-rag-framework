@@ -354,6 +354,15 @@ flowchart BT
 > against `contracts.embeddings.Embedder` (ADR-0009). Trust the layering script over the prose
 > summary if the two ever seem to disagree — the script is what actually gates a change.
 
+> **Note on `observability/`.** The checker classifies the seven domain modules, `core`,
+> `contracts`, `adapters`, `orchestration`, `app`, `api` and `cli`. `observability/` is not one of
+> them: `app/` is explicitly allowed to import it, and an import made *from* `observability/`
+> matches no rule, so the script raises nothing. Its position is a convention, not an enforced
+> boundary — treat it like a domain module (`core` and `contracts` only) unless an ADR says
+> otherwise, and note that a domain module importing `observability/` **is** a violation
+> ("domain modules cannot import other domain modules" does not apply, but the domain rule only
+> permits `core`, `contracts` and the module itself).
+
 > Note: `orchestration/` imports only `contracts/` + `core/` (+ its own `orchestration/`
 > submodules) — it never imports `app/`. This matches [CLAUDE.md](../../CLAUDE.md) section 02
 > (`app/ → orchestration/ → contracts/ + core/`). A previous version of this document listed
