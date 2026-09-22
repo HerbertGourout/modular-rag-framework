@@ -6,7 +6,10 @@ version: "2.0"
 lastUpdated: "2026-08-06"
 ---
 
-# Règles — édition du module agents
+# Rules — editing the agents module
+
+*(Heading translated to English 2026-09-22, matching `contracts.md`, `security.md` and
+`tests.md`; the body was already English.)*
 
 Per [ADR-0005](../../docs/adr/0005-document-ai-control-plane-boundary.md) §5.2 (accepted
 2026-08-04), generic multi-agent orchestration is **delegated** to a selected external engine

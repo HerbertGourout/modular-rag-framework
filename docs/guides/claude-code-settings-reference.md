@@ -2,6 +2,11 @@
 
 Complete guide to Claude Code configuration system with all 100+ settings, scopes, and precedence rules.
 
+> **Scope.** This is general Claude Code reference material, not a description of this
+> repository's configuration. What this project actually sets lives in `.claude/settings.json`
+> and is described in [claude-code.md](claude-code.md). Do not assume a setting documented here
+> is enabled in this repository.
+
 **Table of Contents**
 1. [Configuration Scopes](#configuration-scopes) — 5-level hierarchy
 2. [Settings by Category](#settings-by-category) — Grouped reference

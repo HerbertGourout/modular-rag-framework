@@ -2,6 +2,10 @@
 
 Advanced topics: subagents, skills, path-scoped rules, hooks, sandbox, and authentication.
 
+> **Scope.** This is general Claude Code reference material. For what this repository actually
+> configures — its eight subagents, its skills, its single post-edit hook and its permission
+> boundaries — see [claude-code.md](claude-code.md).
+
 **Table of Contents**
 1. [Subagents](#subagents) — Specialized AI assistants
 2. [Skills Management](#skills-management) — Reusable workflows

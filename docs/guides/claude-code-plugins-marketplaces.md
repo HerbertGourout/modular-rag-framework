@@ -2,6 +2,9 @@
 
 Complete guide to Claude Code plugin system, marketplace discovery, and team distribution.
 
+> **Scope.** This is general Claude Code reference material. **This project defines no plugin and
+> no marketplace**; nothing here is active in this repository today.
+
 **Table of Contents**
 1. [Plugin System Overview](#plugin-system-overview) — What plugins are
 2. [Discovering Plugins](#discovering-plugins) — Finding & installing

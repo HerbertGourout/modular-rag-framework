@@ -510,7 +510,10 @@ well past the real file size; see `docs/archive/documentation-audit-2026-08.md`.
 | ↳ Debugging | 20 min | Common errors, root causes, fixes | All |
 | ↳ Anti-patterns | 15 min | What NOT to do, with corrections | All |
 
-**→ START HERE if you're building a feature or joining the team!**
+**→ Read this one when you are building a feature.** Joining the team starts elsewhere:
+[onboarding-claude-code.md](./onboarding-claude-code.md) for a first session, then
+[claude-code.md](./claude-code.md) for what is configured in this repository. That order is
+declared in [claude-code.md](./claude-code.md), "Which Claude Code guide to read".
 
 ### Advanced Configuration Guides (Reference)
 
@@ -537,14 +540,12 @@ well past the real file size; see `docs/archive/documentation-audit-2026-08.md`.
 
 ## The 5-Step Workflow
 
-**Universal workflow** that applies regardless of task type (feature, bugfix, refactor). This is
-the canonical scheme — the single source of truth for step names and ordering in this project.
-
-The steps below are a general task-planning aid. The authoritative repository workflow, including
-the bounded Claude/Codex review sequence, lives in
-[`claude-code-complete-development-guide.md`](claude-code-complete-development-guide.md) and
-[`ai-engineering-workflow.md`](ai-engineering-workflow.md). If this longer configuration guide
-conflicts with either, follow those current operational references and root `CLAUDE.md`.
+**A general task-planning aid**, applicable to any task type (feature, bugfix, refactor). It is
+**not** the authoritative workflow: that lives in
+[`claude-code-complete-development-guide.md`](claude-code-complete-development-guide.md) for
+implementation and in [`ai-engineering-workflow.md`](ai-engineering-workflow.md) for the bounded
+Claude/Codex review sequence. If this guide conflicts with either, or with root `CLAUDE.md`,
+follow them.
 
 ### Step 1️⃣: EXPLORE (Understand Before Acting)
 

@@ -6,7 +6,10 @@ version: "1.0"
 lastUpdated: "2026-06-19"
 ---
 
-# Règles — édition des adaptateurs (adapters/)
+# Rules — editing adapters (adapters/)
+
+*(Heading translated to English 2026-09-22, matching `contracts.md`, `security.md` and
+`tests.md`; the body was already English.)*
 
 The adapters layer is where external library dependencies live. This module implements Protocols defined in `contracts/` but always imports heavy third-party libraries lazily to keep domain modules lightweight and testable.
 
