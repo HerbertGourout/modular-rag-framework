@@ -39,8 +39,11 @@ LangGraph supports a bounded subset. Add parity tests for a control it claims, o
 manifest if it cannot consume that control. Never silently ignore governance configuration.
 
 Generic multi-agent routing is delegated via `DocumentEngine`; do not recreate retired native
-router/compiler prototypes. ADR-0015 assurance hooks and Lot 20 provider-egress controls remain
-proposed/planned and require their own accepted design before implementation.
+router/compiler prototypes. Lot 20 provider-egress control (ADR-0016) and the Lot 21 assurance
+contract with its conformance report (ADR-0017) are **implemented**: extend them, never
+reintroduce them as new designs. Lot 22's existing-application boundary is contract-only
+(`contracts/application.py`, ADR-0018) — no adapter exists, and building one requires its own
+authorized task.
 
 ## Completion criteria
 

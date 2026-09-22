@@ -4,6 +4,14 @@
 **Target:** V1.x (basic parallelization); native multi-agent orchestration is delegated per ADR-0005  
 **Updated:** 2026-08-06
 
+> **Scope, and its neighbour.** This guide mixes two subjects that are easy to confuse:
+> parallelism in the **tooling** you use to work on the repository, and parallelism in the
+> **framework's own runtime**, which is delegated to the selected engine. For running Claude Code
+> sub-agents in parallel as a development technique — the tooling half, and the one most readers
+> want — [subagents-parallelization.md](subagents-parallelization.md) is the dedicated guide.
+> Sections here that describe agent orchestration inside the framework describe an external
+> engine's work, not a native capability of this repository.
+
 > **Corrected 2026-08-06** (documentation-utility pass): §11 below used to claim
 > `.claude/settings.json` has a working `"parallelization": {"enabled": true, ...}` key. It
 > doesn't — that file's own `notes.removedFromV1` field says explicitly this key is
@@ -213,23 +221,28 @@ class HybridRetriever(Retriever):
 
 ---
 
-## 4. Agentic-Level Parallelization (V2+)
+## 4. Agentic-Level Parallelization — delegated, not a native design
 
-### Multi-Agent Orchestration
-
-**V2+ scope** - Not implemented in V1, but planned structure:
+> **Corrected 2026-09-22.** Earlier versions of this section presented a native `agents:`
+> manifest section (planner, retriever_agent, fact_checker) as "planned for V2". That design was
+> retired: [ADR-0005](../adr/0005-document-ai-control-plane-boundary.md) §5.2 delegates generic
+> multi-agent orchestration to the selected external engine, the native prototype was removed in
+> Lot 17, and `contracts/manifests.py` has no `agents` field — a manifest declaring one is
+> rejected by `extra="forbid"`. The YAML below is kept only as a description of what the
+> **external engine** may organize, never as something this repository's schema accepts.
 
 ```yaml
-# V2 manifest with agent orchestration
+# NOT a Modular RAG manifest section — an illustration of the work an external
+# engine may parallelize on its own side, behind the DocumentEngine port.
 agents:
   - name: planner
     role: decompose_tasks
-    
+
   - name: retriever_agent
     role: find_relevant_docs
     depends_on: [planner]
     parallelizable_with: [fact_checker]  # Can run in parallel
-    
+
   - name: fact_checker
     role: verify_facts
     depends_on: [planner]
@@ -626,10 +639,12 @@ See [`.claude/skills/design-retriever-fusion/SKILL.md`](../../.claude/skills/des
 
 See [`.claude/skills/parallel-feature-analysis/SKILL.md`](../../.claude/skills/parallel-feature-analysis/SKILL.md)
 
-### Example 3: Multi-Agent Orchestration (V2+)
+### Example 3: Multi-Agent Orchestration — delegated to the external engine
 
 ```
-# Planned for V2 - not available in V1
+# Not a manifest section here: the selected engine organizes this on its own side.
+# The shipped LangGraph adapter runs a fixed route → retrieve → guard → generate graph
+# and does none of the below today.
 agents:
   retriever_agent → find docs (parallel with fact_checker)
   fact_checker → verify facts (parallel with retriever_agent)

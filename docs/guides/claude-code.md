@@ -3,11 +3,44 @@
 This repository includes project-level Claude Code configuration to make day-to-day
 development safer and more repeatable.
 
+## Which Claude Code guide to read
+
+Four guides cover Claude Code on this project. They are not alternatives: each answers a
+different question, and this table is the declared order. When two disagree, the one higher in
+this list wins, and root `CLAUDE.md` outranks all four.
+
+| Read | When | It answers |
+|---|---|---|
+| [onboarding-claude-code.md](onboarding-claude-code.md) | Your first session on this project | Install, authenticate, run one bounded first task |
+| **This guide** | You need to know what is configured here | Files, permissions, hooks, skills, and the maintenance rule |
+| [claude-code-complete-development-guide.md](claude-code-complete-development-guide.md) | You are implementing a change | The day-to-day workflow, with worked examples |
+| [CLAUDE-CODE-COMPLETE-GUIDE.md](CLAUDE-CODE-COMPLETE-GUIDE.md) | You are looking at governance or a configuration topic in depth | The governance-level hub and the reference-guide index |
+
+The remaining `claude-code-*.md` files are reference material for one topic each. None is a
+starting point, and most describe Claude Code in general rather than this repository's setup:
+
+| Guide | Scope |
+|---|---|
+| [claude-code-settings-reference.md](claude-code-settings-reference.md) | General Claude Code settings reference; the settings this project actually sets are in `.claude/settings.json` and described below |
+| [claude-code-advanced-config.md](claude-code-advanced-config.md) | General reference for subagents, skills, rules and hooks; not a description of this repository's configuration |
+| [claude-code-plugins-marketplaces.md](claude-code-plugins-marketplaces.md) | General plugin and marketplace reference; this project defines no plugin or marketplace |
+| [claude-code-mcp-setup.md](claude-code-mcp-setup.md) | General MCP reference; self-declared generic, and no `.mcp.json` exists here |
+| [claude-code-enterprise-deployment.md](claude-code-enterprise-deployment.md) | Organization-wide deployment; self-declared as not configured in this project |
+
+Treat a statement in those files as describing this repository only when this guide,
+`.claude/settings.json` or a rule file confirms it.
+
+For the delivery workflow with Codex, the authority is
+[ai-engineering-workflow.md](ai-engineering-workflow.md) and [`AGENTS.md`](../../AGENTS.md), not
+these guides.
+
 ## Files and Responsibilities
 
 | Path | Role |
 |---|---|
 | `CLAUDE.md` | Main project memory: purpose, architecture rules, commands, workflow rules. |
+| `.claude/.instructions.md` | Imported by `CLAUDE.md` into every session: layering rules, wiring pattern, observability signals, product boundary. |
+| `.claude/.prompt.md` | Imported by `CLAUDE.md` into every session: response style and expected answer structure. |
 | `.claude/settings.json` | Shared Claude Code settings for the repository. |
 | `.claude/hooks/post-edit-quality.ps1` | Fast post-edit Ruff check used by the shared hook. |
 | `.claude/skills/*/SKILL.md` | Project workflows exposed as slash commands. |
@@ -15,6 +48,50 @@ development safer and more repeatable.
 | `CLAUDE.local.example.md` | Template for personal preferences. |
 | `CLAUDE.local.md` | Optional personal file, ignored by Git. |
 | `.claude/settings.local.json` | Optional local permissions, ignored by Git through the user's global Git ignore. |
+
+### Approving a command rewrites the shared settings file
+
+When you approve a command in Claude Code, the scope you pick decides which file records it.
+**Approving at project scope rewrites `.claude/settings.json`**, the file everyone shares: the
+command is appended to `permissions.allow`, so it is auto-approved for every contributor who
+pulls the change, and the `description` field of `hooks.PostToolUse[0]` is dropped in the
+rewrite.
+
+This is a mechanism, not a bug to report, and it recurred repeatedly during the documentation
+work of 2026-09. Three consequences follow:
+
+- **Approve at local scope** unless the whole team should inherit the grant. Local grants land in
+  `.claude/settings.local.json`, which is ignored by Git.
+- **Check `git diff -- .claude/settings.json` before committing.** An unexpected diff there is
+  almost always an approval that leaked into the shared file.
+- **Restore the hook description** if it disappeared, and move the grant to the local file. Doing
+  this as the last action of a session avoids a later approval reintroducing it.
+
+A grant that genuinely belongs to the team is a deliberate change: add it in its own commit, with
+the reason, rather than letting an approval prompt write it silently.
+
+### Two different files are called `AGENTS.md`
+
+They are unrelated, and "read AGENTS.md" is ambiguous unless the path is given:
+
+| Path | Subject | Audience |
+|---|---|---|
+| [`AGENTS.md`](../../AGENTS.md) (repository root) | Codex's reviewer role and operating rules | Codex, and anyone preparing a review |
+| [`.claude/AGENTS.md`](../../.claude/AGENTS.md) | The catalogue of the eight Claude Code subagents | Claude Code users |
+
+Neither is a rename candidate: the root file's name is the convention Codex looks for, and the
+`.claude/` one sits beside the `agents/` directory it describes. Always cite the full path.
+
+### What every session actually loads
+
+`CLAUDE.md` starts with `@.claude/.instructions.md` and `@.claude/.prompt.md`, so those two files
+are part of every session's instructions, not optional reading. A path-scoped file in
+`.claude/rules/` loads when a matching file is opened, and a module's own `CLAUDE.md` applies
+inside that module.
+
+That makes them a place where status drift is expensive: a stale sentence there reaches every
+session. When an instruction file disagrees with the code, the code wins, and the instruction is
+corrected in its own change — the same rule the onboarding guide states for documentation.
 
 Claude Code skills are used instead of legacy `.claude/commands/` because current
 Claude Code documentation treats skills as the recommended form for custom commands.

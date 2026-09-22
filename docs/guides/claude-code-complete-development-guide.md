@@ -12,6 +12,12 @@ This guide explains how to use the repository's existing instructions, contracts
 root, tests, and review handoff. It intentionally avoids duplicating complete component APIs;
 source contracts and module-level `CLAUDE.md` files are authoritative.
 
+> **Where this sits.** This is the implementation guide, the third of four Claude Code guides.
+> A first session starts at [onboarding-claude-code.md](onboarding-claude-code.md), and what is
+> configured in this repository is described in [claude-code.md](claude-code.md), which declares
+> the full order. For the Claude/Codex delivery sequence, follow
+> [ai-engineering-workflow.md](ai-engineering-workflow.md).
+
 ## 1. Establish the current scope
 
 Before editing:

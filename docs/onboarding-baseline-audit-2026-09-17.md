@@ -313,6 +313,9 @@ see §4.3.
 
 **Batch 5 must reconcile the existing declarations, not add another pointer.**
 
+**Resolved:** Batch 5, 2026-09-22 — `claude-code.md` declares the order of the four guides and
+their distinct questions; the other three reference that declaration.
+
 #### C — two parallelization guides
 
 Resolved on a full read of both opening sections: `subagents-parallelization.md` is about Claude
@@ -322,11 +325,18 @@ design (§4.1 S9).
 
 The split is genuine; the second file's scope is the problem. **Batch 5.**
 
+**Resolved:** Batch 5, 2026-09-22 — the orchestration guide's header now separates tooling
+parallelism from delegated runtime parallelism and routes readers to
+`subagents-parallelization.md` for the tooling half.
+
 #### D — identical filename, unrelated subjects
 
 Root `AGENTS.md` holds Codex instructions; `.claude/AGENTS.md` holds the Claude Code subagent
 catalogue. Their content is entirely disjoint. Anyone told to "read AGENTS.md" can open the wrong
 one. **Batch 5 or 6**; no rename in scope.
+
+**Resolved:** Batch 5, 2026-09-22 — `claude-code.md` carries a table of the two paths, their
+subjects and audiences, and states why neither is renamed.
 
 ---
 
@@ -430,23 +440,28 @@ same outcome per batch.
 
 #### S8
 
-- **Location:** `.claude/agents/orchestration-specialist.md:42-43`
+- **Location:** `.claude/agents/orchestration-specialist.md:42-46`
 - **Claim:** "ADR-0015 assurance hooks and Lot 20 provider-egress controls remain
   proposed/planned."
 - **Verified truth:** Lots 20 and 21 are implemented. This file instructs future Claude Code agent
   sessions, so the drift propagates into generated work.
 - **Found by:** sweep
 - **Batch:** 5
+- **Resolved:** Batch 5, 2026-09-22 — the instruction now states that Lots 20 and 21 are
+  implemented and must be extended rather than redesigned, and that Lot 22 is contract-only.
 
 #### S9
 
-- **Location:** `docs/guides/claude-code-parallelization-orchestration.md:216-234`, `:629-637`
+- **Location:** `docs/guides/claude-code-parallelization-orchestration.md:226-253`, `:642-652`
 - **Claim:** A native `agents:` manifest section (planner, retriever_agent, fact_checker) is
   "planned for V2."
 - **Verified truth:** Multi-agent orchestration is delegated (ADR-0005 §5.2); the native prototype
   was removed in Lot 17; `contracts/manifests.py` has no `agents` field.
 - **Found by:** sweep
 - **Batch:** 5
+- **Resolved:** Batch 5, 2026-09-22 — both blocks carry a dated correction stating that the
+  native design was retired and that the YAML illustrates an external engine's own work, which
+  this repository's schema rejects.
 
 #### S10
 
@@ -475,24 +490,29 @@ same outcome per batch.
 
 #### P1
 
-- **Location:** `docs/guides/CLAUDE-CODE-COMPLETE-GUIDE.md:503`, `:513`, `:529` vs.
-  `docs/guides/onboarding-claude-code.md:3`, `:93`
+- **Location:** `docs/guides/CLAUDE-CODE-COMPLETE-GUIDE.md:513` vs.
+  `docs/guides/onboarding-claude-code.md:10`
 - **Problem:** The largest guide labels `claude-code-complete-development-guide.md` the
   **CURRENT WORKFLOW** and says "START HERE if you're building a feature or joining the team."
   `onboarding-claude-code.md` presents itself as the guide for using Claude Code "for the first
   time" with its own "Files to read first." A new team member receives two different starting
   points. (Codex pass 1, MEDIUM-001.)
 - **Batch:** 5
+- **Resolved:** Batch 5, 2026-09-22 — one declared order now lives in `claude-code.md`, "Which
+  Claude Code guide to read", and the four guides point to it instead of each claiming the
+  start.
 
 #### P2
 
-- **Location:** `docs/guides/CLAUDE-CODE-COMPLETE-GUIDE.md:540-547`
+- **Location:** `docs/guides/CLAUDE-CODE-COMPLETE-GUIDE.md:543-548`
 - **Problem:** Line 541 calls its 5-step workflow "the canonical scheme — the single source of
   truth for step names and ordering." Lines 543-547 then say those steps are "a general
   task-planning aid" and that the authoritative workflow lives in
   `claude-code-complete-development-guide.md`, `ai-engineering-workflow.md`, and `CLAUDE.md`. The
   paragraph contradicts itself.
 - **Batch:** 5
+- **Resolved:** Batch 5, 2026-09-22 — the paragraph no longer calls itself the single source of
+  truth; it is a general task-planning aid and names the two authoritative workflows.
 
 ### 4.4 Other factual and formatting defects
 
@@ -563,6 +583,9 @@ None of `docs/guides/claude-code-settings-reference.md`, `claude-code.md`,
 (approve at local scope). The absence is checkable in the repository; the recurrence is session
 observation. **Batch 5.**
 
+**Resolved:** Batch 5, 2026-09-22 — `claude-code.md` documents the mechanism, the local-scope
+mitigation, the `git diff` check before committing, and the hook-description restoration.
+
 ### 5.2 Branch-naming table omits an in-use prefix
 
 `CONTRIBUTING.md:30-36` lists `feature/`, `fix/`, `docs/`, `refactor/`, `test/`. Recently merged
@@ -575,6 +598,10 @@ but not as a branch prefix. **Batch 7.**
 translated to English on 2026-08-06. `.claude/rules/adapters.md:9` ("Règles — édition des
 adaptateurs") and `.claude/rules/agents.md:9` ("Règles — édition du module agents") still have
 French headings. Whether the bodies are also untranslated was not verified. **Batch 5.**
+
+**Resolved:** Batch 5, 2026-09-22 — both headings are translated, each with a dated note; a
+repository-wide search found no other French heading under `.claude/rules/`, and both bodies
+were already English.
 
 ---
 
@@ -655,7 +682,7 @@ still exist. Later batches that rewrite a document must read it in full regardle
 | 1 — Canonical navigation | §3.8 A; S5; S6; F1 — all resolved by Batch 1, 2026-09-20 |
 | 2 — Vision and status | S1; S4; S7; S10; F2 — all resolved by Batch 2, 2026-09-20 |
 | 4 — Local environment | F3 — resolved by Batch 4, 2026-09-21 |
-| 5 — Claude Code | §3.8 B, C, D; S8; S9; P1; P2; §5.1; §5.3 |
+| 5 — Claude Code | §3.8 B, C, D; S8; S9; P1; P2; §5.1; §5.3 — all resolved by Batch 5, 2026-09-22 |
 | 6 — Codex and AI delivery | §3.8 D; C1 |
 | 7 — Recipes and validation | §5.2 |
 | 8 — Concepts | S2; S3 |

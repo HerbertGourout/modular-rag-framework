@@ -7,6 +7,12 @@ maintaining code quality and project standards.
 **Time estimate**: 20 minutes  
 **Required**: Claude Code (CLI or a supported editor extension), GitHub access, Python 3.11+
 
+> **Where this sits.** This is the first of four Claude Code guides, for your first session.
+> Afterwards, read [claude-code.md](claude-code.md) for what is configured in this repository,
+> then [claude-code-complete-development-guide.md](claude-code-complete-development-guide.md)
+> when you implement. The full order is declared in [claude-code.md](claude-code.md), "Which
+> Claude Code guide to read".
+
 ---
 
 ## Prerequisites
@@ -23,17 +29,24 @@ from this repository's root to start a session.
 
 ### 2. Clone and Set Up the Project
 
+Follow the clean-room checklist in
+[installation.md](installation.md) — it is the canonical sequence, with an expected result and a
+recovery note per step. In short:
+
 ```bash
 git clone https://github.com/HerbertGourout/modular-rag-framework.git
 cd modular-rag-framework
-
-# Create virtual environment
 python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
-# Install dependencies
-pip install -e ".[v1,dev]"
+# Install the dependency set the test jobs use. Call the interpreter by path: it works in
+# PowerShell, cmd.exe, Bash and zsh, and needs no activation.
+.venv/bin/python -m pip install -e ".[v1,v4,langgraph,dev]"      # Linux / macOS
+.venv\Scripts\python.exe -m pip install -e ".[v1,v4,langgraph,dev]"   # Windows
 ```
+
+`.[v1,dev]` runs the framework but cannot run the full unit and contract suites: they exercise
+the LangGraph adapter and the OpenTelemetry tracer, which live in the `langgraph` and `v4`
+extras.
 
 ### 3. Verify Your Setup
 
@@ -48,8 +61,9 @@ pip install -e ".[v1,dev]"
 
 If you see errors, check:
 - [ ] Python 3.11+ installed
-- [ ] Virtual environment activated
-- [ ] `pip install -e .[v1,dev]` ran successfully
+- [ ] You are calling the interpreter inside `.venv` by path — no activation is required
+- [ ] `pip install -e ".[v1,v4,langgraph,dev]"` ran successfully, quotes included
+- [ ] For anything else, the recovery notes in [installation.md](installation.md)
 
 ---
 
@@ -277,7 +291,9 @@ Each branch = one topic. This makes reviews clean and easy to revert if needed.
 | Command | Time | Checks | When to Use |
 |---------|------|--------|-----------|
 | `/quick-check` | ~30s | Syntax + imports (ruff E,F,I) | After code edits, before commit |
-| `/full-check` | 2-5m | Syntax + unit + contract tests + coverage | Before PR, before merge |
+| `/full-check` | 2-5m | Lint, compile, layering, type, manifest checks, unit and contract tests — **no coverage** | Before PR, before merge |
+
+Coverage is a separate CI job. Run `pytest --cov=src/modular_rag` yourself if you need the number.
 
 - Use **quick** while coding (fail-fast)
 - Use **full** before pushing (comprehensive validation)
