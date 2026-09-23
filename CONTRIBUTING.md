@@ -146,6 +146,8 @@ List affected modules:
 - [ ] No cross-domain imports introduced
 - [ ] New adapter registered in `app/default_factories.py`
 - [ ] `docs/` updated if applicable
+- [ ] Documentation impact answered against "Keeping the documentation true" — including
+      capability status, if this change moved one
 - [ ] ADR written if structural decision made
 - [ ] `CHANGELOG.md` updated
 
@@ -351,6 +353,40 @@ nothing documented it.
 **Validation you could not run is recorded as unavailable**, with its consequence — see
 [validation-protocol.md](docs/guides/validation-protocol.md), "Failed, skipped, unavailable".
 
+**A change that makes a capability real also changes what the repository says about it** — in the
+same pull request, not a follow-up. The next section says which file owns each kind of claim.
+
+---
+
+## Keeping the documentation true
+
+Documentation drifts when the change that invalidates a claim and the change that corrects it are
+two different pull requests. This table exists so the second one never has to happen.
+
+**Who does it: the author of the change.** There is no separate documentation maintainer and no
+review step that catches this for you. If your change makes a row below true, that row's file is
+part of your change's diff.
+
+| What your change did | What must change with it, in the same pull request |
+|---|---|
+| Changed a capability's availability (`implemented`, `partial`, `contract-only`, `planned`) or its ownership (`native`, `delegated`) | Its row in [capability-matrix.md](docs/architecture/capability-matrix.md), then the four summaries named below it |
+| Added, removed or renamed a CLI command, flag, or manifest field | The command's own guide, [manifests/_index.md](manifests/_index.md) for a manifest field, and any exercise in [first-week.md](docs/guides/first-week.md) that runs it |
+| Changed a validation command, tier, or CI job | [validation-protocol.md](docs/guides/validation-protocol.md)'s tier table and CI mapping, plus the affected recipe row above |
+| Changed what Claude Code loads or how it is configured | [claude-code.md](docs/guides/claude-code.md), and `.claude/.instructions.md` when the rule is one every session imports |
+| Gave a term a new meaning, or made an absent concept real | Its entry in [glossary.md](docs/glossary.md), including section 8 when something moves out of "never part of this project" |
+| Changed the output, prerequisites or evidence of a first-week exercise | The affected day in [first-week.md](docs/guides/first-week.md) |
+| Changed a contract, layer boundary, or structural decision | The ADR, [adr/_index.md](docs/adr/_index.md), and `docs/architecture/` |
+
+Four documents summarize capability status and therefore go stale together: `README.md`,
+`ROADMAP.md`, `CLAUDE.md` block 09, and [onboarding.md](docs/onboarding.md) section 5. The
+capability matrix is the canonical source; those four repeat it for a different audience each.
+
+Two habits keep this cheap. Run `python scripts/check_docs.py` before opening the pull request: it
+catches broken links, retired names and blueprint mislabelling, though it cannot tell whether a
+sentence is still true. And when a claim exists in more than one place, fix the canonical file and
+make the others link to it, rather than correcting the same sentence twice — the way
+`docs/guides/validation.md` is a redirect to `validation-protocol.md` and not a second copy.
+
 ---
 
 ## Adding a new component (example: new chunker)
@@ -395,4 +431,13 @@ flowchart LR
 - [ ] `docs/architecture/` updated if layering or contracts changed
 - [ ] ADR written if a structural decision was made
 - [ ] `CHANGELOG.md` updated under `[Unreleased]`
+- [ ] **Documentation impact answered**: every row of "Keeping the documentation true" that your
+      change makes true is in this diff — or you searched for the claim and are stating in the PR
+      that nothing documented it
+- [ ] **Capability status still accurate**: if this change altered a capability's availability
+      (`implemented`, `partial`, `contract-only`, `planned`) or its ownership (`native`,
+      `delegated`), the capability matrix and every summary that repeats the old status are updated
+      here. The two axes are independent and `delegated` never stands alone — see
+      [documentation-style-guide.md](docs/guides/documentation-style-guide.md), section 4
+- [ ] `python scripts/check_docs.py` passes if any Markdown changed
 - [ ] PR description filled (use template above)

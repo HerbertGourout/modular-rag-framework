@@ -156,7 +156,7 @@ Use the `/validate-security` and `/validate-architecture` skills for manual vers
 | Document | Purpose |
 |----------|---------|
 | [CONTRIBUTING.md](../../CONTRIBUTING.md) | Development workflow, branch strategy, MR checklist |
-| [docs/guides/validation.md](../../docs/guides/validation.md) | Validation command reference |
+| [docs/guides/validation-protocol.md](../../docs/guides/validation-protocol.md) | Validation command reference and CI mapping |
 | [docs/adr/](../../docs/adr/) | Architectural decisions (versions, contracts, security) |
 
 ---
@@ -451,7 +451,7 @@ MR #42: Add BM25Retriever adapter
 3. Changes made:
    - .gitlab-ci.yml: Updated ruff --select to include B
    - CLAUDE.md block 05: Document B rule requirement
-   - docs/guides/validation.md: Update ruff section
+   - docs/guides/validation-protocol.md: Update ruff section
    
 4. Commit: "feat: Add flake8-bugbear (B) to ruff linting"
    

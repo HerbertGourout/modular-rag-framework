@@ -387,5 +387,5 @@ Architecture violations: [graph] 2 → 1 → 0 (✅ perfect)
 
 - [CLAUDE.md](../../CLAUDE.md) — Project rules
 - [docs/guides/onboarding-claude-code.md](onboarding-claude-code.md) — Team onboarding
-- [docs/guides/validation.md](validation.md) — Validation commands
+- [docs/guides/validation-protocol.md](validation-protocol.md) — Validation commands and CI mapping
 - [CONTRIBUTING.md](../../CONTRIBUTING.md) — Git workflow

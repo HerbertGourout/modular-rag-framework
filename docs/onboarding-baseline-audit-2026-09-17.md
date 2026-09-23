@@ -237,7 +237,7 @@ Members of the grouped rows:
 | [`CLAUDE.local.example.md`](../CLAUDE.local.example.md) | Template for personal overrides | **Canonical** template |
 | Group 1 (below) | Path-scoped rules | **Canonical**; all eight referenced from other docs. `adapters.md` and `agents.md` keep French headings (§5.3) |
 | [`.claude/AGENTS.md`](../.claude/AGENTS.md) | Catalogue of eight specialized subagents | **Canonical** for the catalogue; the eight names match `.claude/agents/`. Filename collision with root `AGENTS.md` (§3.8 D) |
-| Group 2 (below) | Subagent definitions | **Canonical**; `orchestration-specialist.md` is **Stale** — §4.1 S8 |
+| Group 2 (below) | Subagent definitions | **Canonical**; `orchestration-specialist.md` was **Stale** — §4.1 S8, resolved by Batch 5 |
 | Group 3 (below) | Nineteen slash-command workflows | **Canonical** per skill; `delivery-loop`'s default-path status was §4.2 C1, resolved by Batch 6 |
 | [`docs/guides/claude-code.md`](guides/claude-code.md) | What is configured in this repository | **Conflicting** (§3.8 B) |
 | [`docs/guides/claude-code-complete-development-guide.md`](guides/claude-code-complete-development-guide.md) | Repository workflow with worked examples | **Conflicting** (§3.8 B); declared `START HERE` by the guide below |
@@ -249,7 +249,7 @@ Members of the grouped rows:
 | [`docs/guides/claude-code-plugins-marketplaces.md`](guides/claude-code-plugins-marketplaces.md) | Plugin and marketplace setup | **Reference** |
 | [`docs/guides/claude-code-enterprise-deployment.md`](guides/claude-code-enterprise-deployment.md) | Organization-wide deployment | **Reference** — self-declared not configured in this project |
 | [`docs/guides/subagents-parallelization.md`](guides/subagents-parallelization.md) | Using Claude Code sub-agents for parallel exploration | **Reference** (§3.8 C) |
-| [`docs/guides/claude-code-parallelization-orchestration.md`](guides/claude-code-parallelization-orchestration.md) | Parallelization at tool, component, and agentic level | **Stale** — §4.1 S9; mixes tooling and framework-runtime design (§3.8 C) |
+| [`docs/guides/claude-code-parallelization-orchestration.md`](guides/claude-code-parallelization-orchestration.md) | Parallelization at tool, component, and agentic level | Was **Stale** — §4.1 S9, resolved by Batch 5; the tooling/runtime mix (§3.8 C) was resolved by Batch 5 too |
 | [`docs/guides/mcp-integrations.md`](guides/mcp-integrations.md) | MCP integration governance for this repository | **Reference** |
 | [`docs/guides/audit-traceability.md`](guides/audit-traceability.md) | Session and change traceability | **Reference** |
 | [`docs/guides/adoption-metrics.md`](guides/adoption-metrics.md) | Claude Code adoption dashboard | **Reference** |

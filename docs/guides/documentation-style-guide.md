@@ -168,8 +168,13 @@ change.
 
 **Rule (b):** new documents cite a section heading plus a short quoted phrase, not a line number.
 
-For example, write: `docs/glossary.md`, section "Assurance level (proposed)", which says "These
-levels are not implemented today." Do not write `docs/glossary.md:15-18`.
+For example, write: `docs/glossary.md`, section "Assurance level", which says "An adapter cannot
+assert its own level." Do not write `docs/glossary.md:278-286`.
+
+That example is itself the reason for the rule. The section it cites used to be called "Assurance
+level (proposed)" and used to say the levels were not implemented; Batch 8 corrected both. A
+heading-plus-phrase citation survives an edit visibly — it stops matching, and the reader knows to
+look. A line number goes silently wrong.
 
 Line numbers remain acceptable in transient review artifacts, such as `.review/handoff.md` and
 Codex reports, which describe one immutable commit.

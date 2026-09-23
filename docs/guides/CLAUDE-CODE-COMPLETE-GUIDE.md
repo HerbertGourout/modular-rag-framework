@@ -482,8 +482,7 @@ coverage:      # pytest with coverage report
 | File | Purpose | Audience |
 |------|---------|----------|
 | [docs/guides/onboarding-claude-code.md](../../docs/guides/onboarding-claude-code.md) | Team onboarding (1-day productivity) | New developers |
-| [docs/guides/validation.md](../../docs/guides/validation.md) | Command reference | All developers |
-| [docs/guides/validation-protocol.md](../../docs/guides/validation-protocol.md) | Formal protocol definition | All developers |
+| [docs/guides/validation-protocol.md](../../docs/guides/validation-protocol.md) | Validation tiers, command reference and CI mapping — the canonical source; `validation.md` is only a redirect to it | All developers |
 | [docs/guides/adoption-metrics.md](../../docs/guides/adoption-metrics.md) | Success metrics + dashboards | Tech leads |
 | [docs/guides/mcp-integrations.md](../../docs/guides/mcp-integrations.md) | External tool integration process | Architecture team |
 | [docs/guides/subagents-parallelization.md](../../docs/guides/subagents-parallelization.md) | Advanced sub-agent patterns | Advanced users |
@@ -1204,7 +1203,7 @@ git push origin feature/xyz
 | Domain rules | [.claude/rules/](../../.claude/rules/) | 3,500 |
 | Git workflow | [CONTRIBUTING.md](../../CONTRIBUTING.md) | 300 |
 | Onboarding | [docs/guides/onboarding-claude-code.md](../../docs/guides/onboarding-claude-code.md) | 1,200 |
-| Validation | [docs/guides/validation.md](../../docs/guides/validation.md) | 600 |
+| Validation | [docs/guides/validation-protocol.md](../../docs/guides/validation-protocol.md) | 550 |
 | Metrics | [docs/guides/adoption-metrics.md](../../docs/guides/adoption-metrics.md) | 900 |
 | Sub-Agents | [docs/guides/subagents-parallelization.md](../../docs/guides/subagents-parallelization.md) | 850 |
 | MCP | [docs/guides/mcp-integrations.md](../../docs/guides/mcp-integrations.md) | 650 |

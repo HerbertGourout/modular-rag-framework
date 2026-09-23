@@ -39,7 +39,8 @@ The overhaul is complete only when a developer unfamiliar with the repository ca
 repository alone:
 
 1. explain the framework's current purpose, positioning, non-goals, and maturity;
-2. distinguish implemented, partial, contract-only, delegated, and planned capabilities;
+2. distinguish a capability's availability (`implemented`, `partial`, `contract-only`, `planned`)
+   from its ownership (`native`, `delegated`), the two axes being independent;
 3. install the supported local environment and verify it with documented expected results;
 4. run the native reference path and identify when external services or paid credentials are
    required;
@@ -467,7 +468,7 @@ and human delivery decisions fit together.
 
 ### Batch 10 — Deduplication, clean-room validation, and maintenance gate
 
-**Status:** `NOT_STARTED`
+**Status:** `IN_PROGRESS`
 
 **Purpose:** Remove contradictory routes, prove autonomy, and prevent documentation drift.
 
@@ -513,7 +514,7 @@ validation output, or merged pull request rather than relying on a narrative cla
 | 7 — Recipes and validation | `COMPLETE` | Claude Code | Codex (pass 1 and pass 2: `CHANGES_REQUIRED`; the pass-2 `HIGH` closed by the bounded final remediation, not re-reviewed) | [`CONTRIBUTING.md`](../CONTRIBUTING.md), [`docs/guides/validation-protocol.md`](guides/validation-protocol.md) | Audit findings F1, F2, F3 resolved; eight change-type recipes, the corrected 11-job CI mapping and the failed/skipped/unavailable distinction documented |
 | 8 — Concepts | `COMPLETE` | Claude Code | Codex (pass 1: `CHANGES_REQUIRED`; pass 2: `READY_FOR_FINAL_VALIDATION`, all four findings closed) | [`docs/glossary.md`](glossary.md), [`docs/onboarding.md`](onboarding.md) | Audit findings S2 and S3 resolved; the glossary regrouped into seven domains with nineteen entries added, and removed, absent and narrowly implemented terms separated |
 | 9 — Five-day path | `COMPLETE` | Claude Code | Codex (pass 1 and pass 2: `CHANGES_REQUIRED`; the last `HIGH` closed by the bounded final remediation, not re-reviewed) | [`docs/guides/first-week.md`](guides/first-week.md) | Five-day programme with per-day evidence and four deeper tracks; both service-backed exercises executed live on human authorization |
-| 10 — Final validation | `NOT_STARTED` | — | — | — | Depends on all prior batches |
+| 10 — Final validation | `IN_PROGRESS` | Claude Code | Codex | — | Documentation work delivered; stays `IN_PROGRESS` until the section 9bis clean-room run passes, which no agent can perform |
 
 ## 9. Per-Batch Handoff Template
 
@@ -551,6 +552,63 @@ Constraints:
 
 The standard prompts and review limits remain defined in
 `docs/guides/ai-engineering-workflow.md`; this plan does not duplicate or supersede them.
+
+## 9bis. Clean-Room Validation Record
+
+Section 2's thirteen success criteria are the only test of whether this overhaul worked, and the
+only honest way to run it is to put a developer who does not know the repository in front of a
+clean machine. **Claude Code cannot run this gate**: it already knows the answers, so its passing
+proves nothing. This section is the procedure, so the gate is executable rather than aspirational,
+and the record, so its state is never in doubt.
+
+**How to run it.** Give the tester the repository URL and nothing else — no walkthrough, no
+questions answered live. Ask them to work through
+[`docs/guides/first-week.md`](guides/first-week.md) and, for each criterion below, to fill in the
+record: what they produced, or the exact question they had to ask. **Every question they ask is a
+defect in the documentation, not a shortcoming of the tester.**
+
+Before the run, fill in the header so the result is reproducible:
+
+| Field | Value |
+|---|---|
+| Tester | *not yet run* |
+| Prior exposure to this repository | *not yet run* |
+| Operating system and Python version | *not yet run* |
+| Commit tested | *not yet run* |
+| Date started and finished | *not yet run* |
+
+Then the record itself. `Status` is one of `NOT_YET_RUN`, `PASSED`, or `FAILED`. A criterion is
+`PASSED` only when the tester reached it unaided; needing to ask makes it `FAILED`, whatever they
+eventually managed.
+
+| # | Success criterion (section 2) | Where it is covered | Status | Evidence produced, or the exact question asked | Corrective change |
+|---|---|---|---|---|---|
+| 1 | Purpose, positioning, non-goals, maturity | [`onboarding.md`](onboarding.md) sections 3 and 5 | `NOT_YET_RUN` | | |
+| 2 | Distinguish availability from ownership on the two capability axes | [`glossary.md`](glossary.md), [`capability-matrix.md`](architecture/capability-matrix.md) | `NOT_YET_RUN` | | |
+| 3 | Install and verify with documented expected results | [`installation.md`](guides/installation.md) steps 1 to 7 | `NOT_YET_RUN` | | |
+| 4 | Run the native path; know when services or paid credentials are needed | [`first-week.md`](guides/first-week.md) days 1 to 3 and its tier table | `NOT_YET_RUN` | | |
+| 5 | Trace ingestion and query execution through the code | [`code-walkthrough.md`](guides/code-walkthrough.md), [`runtime-flow.md`](architecture/runtime-flow.md) | `NOT_YET_RUN` | | |
+| 6 | Explain the boundaries and place a change correctly | [`code-walkthrough.md`](guides/code-walkthrough.md) level 5 | `NOT_YET_RUN` | | |
+| 7 | Identity, tenant, PII, classification, egress, audit, evidence, assurance, conformance | [`glossary.md`](glossary.md) sections 3 to 5, [`first-week.md`](guides/first-week.md) day 3 | `NOT_YET_RUN` | | |
+| 8 | Configure and use Claude Code and Codex per policy | [`claude-code.md`](guides/claude-code.md) and its declared guide order | `NOT_YET_RUN` | | |
+| 9 | Execute the bounded two-pass review workflow | [`ai-engineering-workflow.md`](guides/ai-engineering-workflow.md), [`first-week.md`](guides/first-week.md) day 4 | `NOT_YET_RUN` | | |
+| 10 | Select and run the right validation tier | [`validation-protocol.md`](guides/validation-protocol.md) | `NOT_YET_RUN` | | |
+| 11 | Prepare a compliant pull request without intervention | [`CONTRIBUTING.md`](../CONTRIBUTING.md), [`first-week.md`](guides/first-week.md) day 5 | `NOT_YET_RUN` | | |
+| 12 | Diagnose the common failures | [`troubleshooting.md`](guides/troubleshooting.md) | `NOT_YET_RUN` | | |
+| 13 | Know when a human decision is mandatory | [`ai-engineering-workflow.md`](guides/ai-engineering-workflow.md), [`CONTRIBUTING.md`](../CONTRIBUTING.md) | `NOT_YET_RUN` | | |
+
+**What Batch 10 could verify without a tester**, and did: every `mrag` subcommand named anywhere in
+the documentation exists; every `scripts/` path cited exists, the three apparent exceptions being
+documents that correctly state a script was never built; the documentation check passes across the
+whole repository; and the two service-backed first-week exercises were executed live during Batch
+9. None of that substitutes for criteria 1, 2, 5, 6, 7 and 13, which test comprehension rather
+than correctness and therefore need a person.
+
+**When this programme may be called complete.** Not before every row above reads `PASSED` and every
+`FAILED` row's corrective change has merged. Until then Batch 10 stays `IN_PROGRESS` in the
+execution table, and section 1's objective stays open — section 2 makes clean-room success a
+condition of completion, not a formality after it. Describing the overhaul as finished before that
+point contradicts this plan's own definition of done.
 
 ## 10. Change Control
 
