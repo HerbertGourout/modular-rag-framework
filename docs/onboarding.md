@@ -42,6 +42,35 @@ Phases 1 and 2 are required for every profile, including management and function
 Phases 3 to 5 apply to anyone who runs or changes the code; a profile that does neither stops
 after phase 2.
 
+### The concepts the rest of this document assumes
+
+Twelve terms carry most of the meaning in the documents above. Read this table once before
+phase 1; you do not need to learn the rest of the vocabulary first.
+
+| Term | The one thing to know |
+|---|---|
+| [Document](glossary.md#document) | What you ingest: a source, its content, an owning tenant, an optional sensitivity level. |
+| [Chunk](glossary.md#chunk) | A slice of a document; retrieval and citation both work at this granularity. |
+| [Query](glossary.md#query) | One caller question, carrying the tenant it runs on behalf of. |
+| [Answer](glossary.md#answer) | The generated text plus its citations and a trace identifier. |
+| [Citation](glossary.md#citation) | The pointer back to the chunk that supports a claim. |
+| [Contract](glossary.md#contract) | The Protocol a component must satisfy; it is written before any implementation. |
+| [Adapter](glossary.md#adapter) | A binding to an external library or service that satisfies a contract. |
+| [Manifest](glossary.md#manifest) | The YAML that selects which components run; it is the source of truth, not the Python. |
+| [Engine](glossary.md#engine-documentengine) | The port that executes a request, native or delegated, against the same wired components. |
+| [Tenant](glossary.md#tenant) | The isolation boundary every governed request runs inside. |
+| [Provider egress](glossary.md#provider-egress) | The classification-aware fail-closed check at the configured egress checkpoints, required for the framework's own known remote providers rather than for every outbound path. |
+| [Assurance level](glossary.md#assurance-level) | L0, L1 or L2 — computed from evidence, never self-declared by an adapter. |
+
+Two distinctions matter early because conflating them causes real mistakes: a
+[trace](glossary.md#trace--tracestep) is execution observability while an
+[audit event](glossary.md#audit-event) is compliance evidence, and *safety* controls
+([redaction](glossary.md#redaction), guards) are not *security* controls
+([tenant isolation](glossary.md#tenant-isolation), [policy](glossary.md#policy--policyengine)).
+
+The full vocabulary, including the terms this project deliberately does not use, is in
+[glossary.md](glossary.md).
+
 ---
 
 ## 1. Why this document exists
