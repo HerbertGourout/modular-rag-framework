@@ -439,7 +439,7 @@ and human delivery decisions fit together.
 
 ### Batch 9 — Five-day autonomous learning path
 
-**Status:** `NOT_STARTED`
+**Status:** `COMPLETE`
 
 **Purpose:** Turn the preceding references into a practical first-week programme.
 
@@ -512,7 +512,7 @@ validation output, or merged pull request rather than relying on a narrative cla
 | 6 — Codex and AI delivery | `COMPLETE` | Claude Code | Codex (pass 1 and pass 2: `CHANGES_REQUIRED`; closed by the bounded final remediation, not re-reviewed) | [`docs/guides/ai-engineering-workflow.md`](guides/ai-engineering-workflow.md), `.review/handoff.md` | Audit finding C1 resolved across three documents; review vocabulary and a working no-checkpoint corrective-base procedure documented |
 | 7 — Recipes and validation | `COMPLETE` | Claude Code | Codex (pass 1 and pass 2: `CHANGES_REQUIRED`; the pass-2 `HIGH` closed by the bounded final remediation, not re-reviewed) | [`CONTRIBUTING.md`](../CONTRIBUTING.md), [`docs/guides/validation-protocol.md`](guides/validation-protocol.md) | Audit findings F1, F2, F3 resolved; eight change-type recipes, the corrected 11-job CI mapping and the failed/skipped/unavailable distinction documented |
 | 8 — Concepts | `COMPLETE` | Claude Code | Codex (pass 1: `CHANGES_REQUIRED`; pass 2: `READY_FOR_FINAL_VALIDATION`, all four findings closed) | [`docs/glossary.md`](glossary.md), [`docs/onboarding.md`](onboarding.md) | Audit findings S2 and S3 resolved; the glossary regrouped into seven domains with nineteen entries added, and removed, absent and narrowly implemented terms separated |
-| 9 — Five-day path | `NOT_STARTED` | — | — | — | Depends on Batches 2–8 |
+| 9 — Five-day path | `COMPLETE` | Claude Code | Codex (pass 1 and pass 2: `CHANGES_REQUIRED`; the last `HIGH` closed by the bounded final remediation, not re-reviewed) | [`docs/guides/first-week.md`](guides/first-week.md) | Five-day programme with per-day evidence and four deeper tracks; both service-backed exercises executed live on human authorization |
 | 10 — Final validation | `NOT_STARTED` | — | — | — | Depends on all prior batches |
 
 ## 9. Per-Batch Handoff Template

@@ -42,6 +42,11 @@ Phases 1 and 2 are required for every profile, including management and function
 Phases 3 to 5 apply to anyone who runs or changes the code; a profile that does neither stops
 after phase 2.
 
+**If you are here to write code, do the five phases as a week.**
+[guides/first-week.md](guides/first-week.md) turns them into a day-by-day programme with
+exercises, expected evidence and a completion check for each day. It needs Docker and nothing
+else — no provider account, and no data beyond this repository.
+
 ### The concepts the rest of this document assumes
 
 Twelve terms carry most of the meaning in the documents above. Read this table once before

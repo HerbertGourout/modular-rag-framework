@@ -410,7 +410,7 @@ same outcome per batch.
 
 #### S5
 
-- **Location:** `docs/onboarding.md:163-166`
+- **Location:** `docs/onboarding.md:168-171`
 - **Claim:** "fifteen accepted decisions… proposed assurance levels and existing-application
   support are not implementation."
 - **Verified truth:** 17 of 18 ADRs are Accepted; assurance levels are implemented.
@@ -423,7 +423,7 @@ same outcome per batch.
 
 #### S6
 
-- **Location:** `docs/onboarding.md:232-234`, `:242-243`
+- **Location:** `docs/onboarding.md:237-239`, `:247-248`
 - **Claim:** Security readers are pointed to "the open Lot 20 provider-egress boundary";
   "classification-aware model egress" is listed as undelivered.
 - **Verified truth:** Lot 20 is implemented (S3 evidence). The same file states this correctly at
@@ -569,7 +569,7 @@ same outcome per batch.
 - `docs/architecture/_index.md:44-48`, `security.md:25`/`:84`/`:255-263`,
   `document-engine-contract.md:9-14`/`:113`, and `data-classification-policy.md:74` — Lot 20–22
   statements accurate.
-- `docs/onboarding.md:433-436` — Lot 20–22 statement accurate (but see S6).
+- `docs/onboarding.md:438-441` — Lot 20–22 statement accurate (but see S6).
 - `.claude/AGENTS.md` — eight subagent names match `.claude/agents/`.
 - `.review/*.example.md` — match the structure used in practice.
 - `ROADMAP.md`, `README.md`, `CLAUDE.md` §01/§09, `capability-matrix.md`, and `overview.md` —
