@@ -693,7 +693,7 @@ export OPENAI_API_KEY=sk-...
 pytest tests/e2e/ -v -m e2e
 ```
 
-→ **Full reference:** [docs/guides/validation.md](docs/guides/validation.md)
+→ **Full reference:** [docs/guides/validation-protocol.md](docs/guides/validation-protocol.md)
 
 ---
 

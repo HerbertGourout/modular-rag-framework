@@ -157,7 +157,7 @@ Project-level skills live in `.claude/skills/` and are exposed as slash commands
 | `/delivery-loop` | Implement, review with Codex, remediate, and validate | Automated two-pass maximum; never pushes |
 | `/check-layering` | Audit hexagonal import boundaries | `python scripts/check_layering.py` |
 | `/run-simple-qa` | Smoke-test the example pipeline | `examples/simple_qa/main.py` ingest + ask |
-| `/quick-check`, `/full-check`, `/release` | Additional validation tiers | see `docs/guides/validation.md` |
+| `/quick-check`, `/full-check`, `/release` | Additional validation tiers | see `docs/guides/validation-protocol.md` |
 
 The shared post-edit hook is configured in `.claude/settings.json` and delegates to
 `.claude/hooks/post-edit-quality.ps1`. Personal preferences belong in `CLAUDE.local.md`
@@ -206,7 +206,7 @@ explicitly named, newly introduced critical risk and a human-approved narrow
 scope. Claude Code remains the default sole writer, and Codex approval never
 replaces deterministic validation or the human delivery decision.
 
-**→ Full command reference:** [docs/guides/validation.md](docs/guides/validation.md)
+**→ Full command reference:** [docs/guides/validation-protocol.md](docs/guides/validation-protocol.md)
 **→ Validation strategies:** [.claude/settings.json (permissions)](.claude/settings.json)
 **→ Testing rules:** [.claude/rules/tests.md](.claude/rules/tests.md)
 

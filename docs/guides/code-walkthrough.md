@@ -215,7 +215,7 @@ and quality gates programmatic, and a manifest that declares them is rejected.
 ## Verify and extend
 
 - **Validate after a change**: `PATH="$PWD/.venv/bin:$PATH" ./scripts/check.sh quick` (30 s)
-  or `full` (unit + contract). Details: [docs/guides/validation.md](validation.md).
+  or `full` (unit + contract). Details: [validation-protocol.md](validation-protocol.md).
 - **Check the layer boundaries**: `python scripts/check_layering.py --strict`. The rules it
   enforces are listed in [module-model.md](../architecture/module-model.md); the script is the
   authority when prose and script disagree.
