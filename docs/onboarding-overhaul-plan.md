@@ -344,7 +344,8 @@ use without oral guidance.
 
 ### Batch 6 — Codex configuration and the complete AI delivery loop
 
-**Status:** `NOT_STARTED`
+**Status:** `COMPLETE` — see
+[`docs/guides/ai-engineering-workflow.md`](guides/ai-engineering-workflow.md)
 
 **Purpose:** Teach developers how implementation, independent review, remediation, validation,
 and human delivery decisions fit together.
@@ -508,7 +509,7 @@ validation output, or merged pull request rather than relying on a narrative cla
 | 3 — Architecture and code | `COMPLETE` | Claude Code | Codex (pass 1 and pass 2: `CHANGES_REQUIRED`, two HIGH each; closed by the bounded final remediation, not re-reviewed) | [`docs/guides/code-walkthrough.md`](guides/code-walkthrough.md), `.review/handoff.md` | Egress checkpoints added to both runtime diagrams; extension table per change type; `observability/` layering case documented |
 | 4 — Local environment | `COMPLETE` | Claude Code | Codex (pass 1: `CHANGES_REQUIRED`, three HIGH and one MEDIUM; pass 2: `CHANGES_REQUIRED`, one HIGH open plus one MEDIUM regression, both closed by the bounded final remediation, not re-reviewed) | [`docs/guides/installation.md`](guides/installation.md), `.review/handoff.md` | Clean-room checklist, per-run service/credential table, secrets handling, audit finding F3. `.env.example` is listed in the batch but is unreadable under the repository's own `deny(**/.env*)` rule; the human kept it out of scope |
 | 5 — Claude Code | `COMPLETE` | Claude Code | Codex (pass 1 and pass 2: `CHANGES_REQUIRED`; closed by the bounded final remediation, not re-reviewed) | [`docs/guides/claude-code.md`](guides/claude-code.md), `.review/handoff.md` | Nine audit findings: §3.8 B, C, D, S8, S9, P1, P2, §5.1, §5.3. Also corrected `.claude/.instructions.md`, which every session imports |
-| 6 — Codex and AI delivery | `NOT_STARTED` | — | — | — | Depends on Batch 5 |
+| 6 — Codex and AI delivery | `COMPLETE` | Claude Code | Codex (pass 1 and pass 2: `CHANGES_REQUIRED`; closed by the bounded final remediation, not re-reviewed) | [`docs/guides/ai-engineering-workflow.md`](guides/ai-engineering-workflow.md), `.review/handoff.md` | Audit finding C1 resolved across three documents; review vocabulary and a working no-checkpoint corrective-base procedure documented |
 | 7 — Recipes and validation | `NOT_STARTED` | — | — | — | Depends on Batches 3–6 |
 | 8 — Concepts | `NOT_STARTED` | — | — | — | Depends on Batches 2–3 |
 | 9 — Five-day path | `NOT_STARTED` | — | — | — | Depends on Batches 2–8 |

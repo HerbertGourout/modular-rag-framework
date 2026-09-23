@@ -138,15 +138,19 @@ actually invokable):
 Use `/qa-v1` before opening a GitHub PR. Use `/run-simple-qa` or `/release` only when Qdrant is
 available on `localhost:6333` and the required LLM API key is set.
 
-When pairing Claude Code with Codex, the preferred entrypoint is one command:
+When pairing Claude Code with Codex, the default is the bounded chat workflow in
+[ai-engineering-workflow.md](ai-engineering-workflow.md) — two messages normally, five at most —
+which also holds the copy-ready prompts. `/delivery-loop` automates the same sequence and is
+optional:
 
 ```text
 /delivery-loop <goal, acceptance criteria, and intended file scope>
 ```
 
-Claude Code remains the writer and invokes Codex non-interactively in a read-only sandbox. The
-skill performs at most two Codex passes, stops immediately at `READY_FOR_FINAL_VALIDATION`, and
-never pushes.
+Either way Claude Code remains the writer. The skill invokes Codex non-interactively in a
+read-only sandbox, performs at most two Codex passes, stops immediately at
+`READY_FOR_FINAL_VALIDATION`, and never pushes. It is unusable where workspace policy blocks the
+Codex CLI.
 
 Codex discovery does not rely only on Claude's sandboxed `PATH`:
 - The helper also detects the executable bundled by the VS Code/VS Code Insiders/Cursor

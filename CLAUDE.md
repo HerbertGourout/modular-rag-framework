@@ -167,12 +167,17 @@ When Claude Code is paired with Codex, Claude Code is the default builder and Co
 is the independent challenger. See `AGENTS.md`, `docs/guides/ai-engineering-workflow.md`,
 and `docs/guides/model-routing.md`.
 
-For normal delivery, prefer the single `/delivery-loop` skill: it performs the
-handoff, invokes Codex non-interactively, applies the first correction batch, and
-runs final validation without pushing. If pass 2 still returns
-`CHANGES_REQUIRED`, use the bounded final Claude remediation documented in
-`docs/guides/ai-engineering-workflow.md`; it does not trigger a third general
-Codex review. The detailed manual steps remain the fallback for troubleshooting.
+**The default delivery path is the bounded chat workflow** in
+`docs/guides/ai-engineering-workflow.md` — two messages normally, five at most.
+Implementation and handoff, then Codex pass 1; if it reports a blocking finding, a
+correction batch and Codex pass 2; and only if pass 2 still returns
+`CHANGES_REQUIRED`, one bounded final Claude remediation, which never triggers a
+third general Codex review. That guide holds the copy-ready prompts and is the
+authority on the sequence.
+
+`/delivery-loop`, `scripts/prepare_review.ps1` and `scripts/run_codex_review.ps1`
+remain available as optional automation of the same sequence. They are not the
+default, and they are unusable where workspace policy blocks the Codex CLI.
 
 Before the first Codex review, Claude Code must leave a complete handoff in
 `.review/handoff.md` using `.review/handoff.example.md`. The handoff records an
