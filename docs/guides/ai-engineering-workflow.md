@@ -327,6 +327,69 @@ Codex owns this file during review. It records:
 Create it from `.review/codex-review.example.md`. Claude reads it but does not
 edit it.
 
+### The vocabulary both files use
+
+**Severity** — how bad the finding is, set by Codex:
+
+| Severity | Meaning | What the writer does |
+|---|---|---|
+| `BLOCKER` | The change cannot ship as it stands | Fix it |
+| `HIGH` | A material defect in the task's own subject | Fix it |
+| `MEDIUM` | A real defect, but weigh it against the task's scope | Fix in scope, or defer with a reason |
+| `LOW` | Minor; fixing it would usually mean unrelated work | Defer unless it is a one-line fix in a file already touched |
+
+**Disposition** — what Codex proposes, one per finding: `MUST_FIX`, `FIX_IN_SCOPE`, `DEFERRED` or
+`ACCEPTED_RISK`. It is a recommendation, not a decision.
+
+**Resolution** — the outcome the writer **records** in the handoff's resolution table, with the
+change made and its evidence: `FIXED`, `DEFERRED`, `ACCEPTED_RISK` or `REJECTED`. Every pass-1
+finding needs exactly one, and rejecting a finding requires stating why it is wrong.
+
+Recording is not deciding. `ACCEPTED_RISK` is valid **only after the human has authorized that
+specific risk**; the writer records the authorization as the evidence for that row and never
+grants it on its own. The same holds for any resolution that depends on a scope expansion or one
+of the other human-approval boundaries below.
+
+**Immutable base** — the commit both sides review against, named in the handoff before pass 1 and
+never moved during the cycle. It is what makes "the diff" unambiguous.
+
+**Corrective base** — what pass 2 compares against to isolate the correction: the immutable base
+plus the pass-1 working tree. It must be **retrievable**, because pass 2 has to show which lines
+the correction changed, not merely that a file changed.
+
+- **Preferred:** an authorized local checkpoint commit before applying corrections. It may be
+  squashed before push, and `scripts/prepare_review.ps1` expects it as `-CorrectiveBase`.
+- **When no checkpoint is authorized:** take a snapshot before applying the corrections. Two
+  details matter, and both are easy to get wrong:
+
+  ```bash
+  git add -- <every task path, new files included>   # index only; the working tree is untouched
+  snapshot=$(git stash create)                       # a commit object; nothing is stashed
+  git update-ref refs/review/pass1 "$snapshot"       # anchor it so pruning cannot remove it
+  ```
+
+  Pass 2 then runs `git diff refs/review/pass1` for the exact corrective diff, and the ref is
+  deleted with `git update-ref -d refs/review/pass1` once the cycle ends.
+
+  `git stash create` snapshots the index and the tracked working tree, and it has **no
+  include-untracked option** — that exists only on `git stash push`. A file created by the task
+  is therefore absent from the snapshot unless it was staged first, which is what the `git add`
+  line is for. Staging is safe here: it changes no file on disk, and the same paths are staged at
+  commit time anyway. Stage the task's paths explicitly rather than using `-A`, so an unrelated
+  local change is not swept in.
+- **Not sufficient alone:** bare `git hash-object <file>` computes an object name without storing
+  anything — `git cat-file -e <hash>^{blob}` fails on it. Per-file hashes prove *which* files the
+  correction touched, which is useful next to one of the two techniques above, but they cannot
+  reconstruct the diff. Use `git hash-object -w` if you want the content actually stored.
+
+When the task creates new files and no checkpoint is authorized, the snapshot above is the
+minimum; without it, pass 2 cannot show what changed in those files, and its closure verdict
+rests on the resolution table alone. Say so in the handoff rather than implying a diff exists.
+
+**Causal evidence** — the reason a pass-2 finding counts as a regression: the report must show
+that the corrective diff introduced it, not merely that it exists. Pass 2 is closure-only, so a
+finding without that link belongs to a future task, not to this cycle.
+
 ## Roles and Decision Boundaries
 
 | Responsibility | Claude Chat | Codex Chat | Human |
@@ -362,13 +425,17 @@ Record the reason when a premium model is used.
 
 ## Optional Automation
 
-The repository retains `/delivery-loop`, `scripts/prepare_review.ps1`, and
-`scripts/run_codex_review.ps1` for optional future automation. They are not part
-of the current default workflow. Do not run `codex exec` or attempt device
-authentication when workspace policy blocks Codex CLI. The four-message
-automated sequence covers the two Codex passes and the first correction batch. The
-five-message chat workflow above is the supported fallback when pass 2 still
-requires final Claude remediation.
+**The bounded chat workflow above is the default** — two messages normally, five at most — and
+root `CLAUDE.md` says the same. The repository also retains `/delivery-loop`,
+`scripts/prepare_review.ps1` and `scripts/run_codex_review.ps1` as optional automation of that
+same sequence. The automation runs the same conditional stages: it stops as soon as a pass
+returns `READY_FOR_FINAL_VALIDATION`, and it covers at most the two Codex passes and the first
+correction batch. The bounded final Claude remediation, when pass 2 still requires one, stays in
+the chat workflow above.
+
+Two conditions limit the automation. It is unusable where workspace policy blocks the Codex CLI:
+do not run `codex exec` or attempt device authentication there. And it changes nothing about the
+authorities — deterministic validation and the human delivery decision remain final either way.
 
 ## Pull Request Readiness Checklist
 

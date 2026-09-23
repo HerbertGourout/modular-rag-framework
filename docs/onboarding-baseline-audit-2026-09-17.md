@@ -232,13 +232,13 @@ Members of the grouped rows:
 
 | Document | Purpose | Status |
 |---|---|---|
-| [`CLAUDE.md`](../CLAUDE.md) | Non-negotiable project rules, commands, roadmap | **Canonical** — but see §4.2 C1 |
+| [`CLAUDE.md`](../CLAUDE.md) | Non-negotiable project rules, commands, roadmap | **Canonical**; C1 resolved by Batch 6 |
 | [`.claude/.instructions.md`](../.claude/.instructions.md), [`.claude/.prompt.md`](../.claude/.prompt.md), [`.claude/project-structure.md`](../.claude/project-structure.md) | Imported by `CLAUDE.md` | **Canonical** (as imports) |
 | [`CLAUDE.local.example.md`](../CLAUDE.local.example.md) | Template for personal overrides | **Canonical** template |
 | Group 1 (below) | Path-scoped rules | **Canonical**; all eight referenced from other docs. `adapters.md` and `agents.md` keep French headings (§5.3) |
 | [`.claude/AGENTS.md`](../.claude/AGENTS.md) | Catalogue of eight specialized subagents | **Canonical** for the catalogue; the eight names match `.claude/agents/`. Filename collision with root `AGENTS.md` (§3.8 D) |
 | Group 2 (below) | Subagent definitions | **Canonical**; `orchestration-specialist.md` is **Stale** — §4.1 S8 |
-| Group 3 (below) | Nineteen slash-command workflows | **Canonical** per skill; `delivery-loop` default-path status conflicts (§4.2 C1) |
+| Group 3 (below) | Nineteen slash-command workflows | **Canonical** per skill; `delivery-loop`'s default-path status was §4.2 C1, resolved by Batch 6 |
 | [`docs/guides/claude-code.md`](guides/claude-code.md) | What is configured in this repository | **Conflicting** (§3.8 B) |
 | [`docs/guides/claude-code-complete-development-guide.md`](guides/claude-code-complete-development-guide.md) | Repository workflow with worked examples | **Conflicting** (§3.8 B); declared `START HERE` by the guide below |
 | [`docs/guides/CLAUDE-CODE-COMPLETE-GUIDE.md`](guides/CLAUDE-CODE-COMPLETE-GUIDE.md) | Governance-level hub | **Conflicting** (§3.8 B) and internally contradictory (§4.3 P2) |
@@ -267,7 +267,7 @@ Members of the grouped rows:
 |---|---|---|
 | [`AGENTS.md`](../AGENTS.md) | Codex's reviewer role and operating rules | **Canonical** for Codex |
 | [`.codex/README.md`](../.codex/README.md) | Points Codex policy to `AGENTS.md`, the workflow guide, and model routing | **Redirect** |
-| [`docs/guides/ai-engineering-workflow.md`](guides/ai-engineering-workflow.md) | Five-message Claude/Codex delivery sequence | **Canonical** — but see §4.2 C1 |
+| [`docs/guides/ai-engineering-workflow.md`](guides/ai-engineering-workflow.md) | Five-message Claude/Codex delivery sequence | **Canonical**; C1 resolved by Batch 6 |
 | [`docs/guides/model-routing.md`](guides/model-routing.md) | Provider and model-tier routing | **Canonical** |
 | [`.review/handoff.example.md`](../.review/handoff.example.md), [`.review/codex-review.example.md`](../.review/codex-review.example.md) | Review templates | **Canonical**; match the structure used in practice |
 | [`docs/guides/troubleshooting.md`](guides/troubleshooting.md) | Common first-week errors | **Canonical**; spot-checked references verified |
@@ -478,13 +478,17 @@ same outcome per batch.
 
 #### C1
 
-- **Location:** `CLAUDE.md:170-175` vs. `docs/guides/ai-engineering-workflow.md:363-371`
+- **Location:** `CLAUDE.md:170-178` vs. `docs/guides/ai-engineering-workflow.md:394-402`
 - **Contradiction:** `CLAUDE.md` says "For normal delivery, prefer the single `/delivery-loop`
   skill." The canonical workflow guide says `/delivery-loop`, `prepare_review.ps1`, and
   `run_codex_review.ps1` are retained "for optional future automation. They are not part of the
   current default workflow," and that the five-message chat workflow is the supported path. A
   newcomer following `CLAUDE.md` reaches the non-default automation first.
 - **Batch:** 6
+- **Resolved:** Batch 6, 2026-09-22 — both documents now state that the five-message chat
+  workflow is the default and that `/delivery-loop` and the two scripts are optional automation
+  of the same sequence. `claude-code.md`, which also called the skill the preferred entry point,
+  was aligned.
 
 ### 4.3 Conflicting precedence declarations
 
@@ -683,7 +687,7 @@ still exist. Later batches that rewrite a document must read it in full regardle
 | 2 — Vision and status | S1; S4; S7; S10; F2 — all resolved by Batch 2, 2026-09-20 |
 | 4 — Local environment | F3 — resolved by Batch 4, 2026-09-21 |
 | 5 — Claude Code | §3.8 B, C, D; S8; S9; P1; P2; §5.1; §5.3 — all resolved by Batch 5, 2026-09-22 |
-| 6 — Codex and AI delivery | §3.8 D; C1 |
+| 6 — Codex and AI delivery | §3.8 D (resolved by Batch 5); C1 — resolved by Batch 6, 2026-09-22 |
 | 7 — Recipes and validation | §5.2 |
 | 8 — Concepts | S2; S3 |
 
