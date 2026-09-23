@@ -19,6 +19,7 @@ break every existing link into this directory), but the tables below keep them a
 
 | You want to... | Go to |
 |---|---|
+| Work through a structured first week, with exercises and evidence | [first-week.md](first-week.md) |
 | Run the framework for the first time | [getting-started.md](getting-started.md) |
 | Install dependencies and configure the environment | [installation.md](installation.md) |
 | Add a new component (chunker, retriever, generator...) | [plugin-development.md](plugin-development.md) |

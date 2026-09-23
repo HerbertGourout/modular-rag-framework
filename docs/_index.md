@@ -24,6 +24,7 @@ authoritative, and walks through the full V1 → V5 journey in plain language.
 | Evaluate the product hypothesis and evidence needed before commercial claims | [business-case.md](business-case.md) |
 | See what's delivered vs. planned, version by version | [../ROADMAP.md](../ROADMAP.md) |
 | Track the engine-agnostic refactoring programme | [refactoring-plan.md](refactoring-plan.md) |
+| Work through a structured first week, with exercises and evidence | [guides/first-week.md](guides/first-week.md) |
 | Run the framework for the first time | [guides/getting-started.md](guides/getting-started.md) |
 | Install dependencies and configure the environment | [guides/installation.md](guides/installation.md) |
 | Understand the architecture in depth (layers, contracts, data flow) | [architecture/_index.md](architecture/_index.md) |
