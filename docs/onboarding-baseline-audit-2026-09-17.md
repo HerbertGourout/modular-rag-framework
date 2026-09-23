@@ -159,7 +159,7 @@ Every in-scope cluster is listed member by member. Where members share one purpo
 | [`README.md`](../README.md) | Project pitch, vision, status table | **Canonical** pitch |
 | [`ROADMAP.md`](../ROADMAP.md) | Checkbox-per-feature delivery state | **Canonical** status source |
 | [`CHANGELOG.md`](../CHANGELOG.md) | Dated narrative of changes | **Historical** per entry |
-| [`CONTRIBUTING.md`](../CONTRIBUTING.md) | Git workflow, PR checklist, setup, validation, component recipe | **Canonical** contribution guide — §5.2 gap |
+| [`CONTRIBUTING.md`](../CONTRIBUTING.md) | Git workflow, PR checklist, setup, validation, component recipe | **Canonical** contribution guide; §5.2 gap closed by Batch 7 |
 | [`docs/business-case.md`](business-case.md) | Product hypothesis, target users, decision gate | **Canonical** for its subject; was **Stale** — §4.1 S4, resolved by Batch 2 |
 | [`docs/glossary.md`](glossary.md) | Term definitions | **Canonical**, but **Stale** — §4.1 S2, S3 |
 | [`docs/guides/framework-overview-onboarding.md`](guides/framework-overview-onboarding.md) | Business and technical overview with role-based quick starts | Precedence declared by Batch 1 (§3.8 A); was **Stale** — §4.1 S1 and S7, both resolved by Batch 2 |
@@ -592,9 +592,13 @@ mitigation, the `git diff` check before committing, and the hook-description res
 
 ### 5.2 Branch-naming table omits an in-use prefix
 
-`CONTRIBUTING.md:30-36` lists `feature/`, `fix/`, `docs/`, `refactor/`, `test/`. Recently merged
-configuration changes used `chore/`, which `CONTRIBUTING.md:80` already allows as a commit type
+`CONTRIBUTING.md:30-38` lists `feature/`, `fix/`, `docs/`, `refactor/`, `test/`. Recently merged
+configuration changes used `chore/`, which `CONTRIBUTING.md:82` already allows as a commit type
 but not as a branch prefix. **Batch 7.**
+
+**Resolved:** Batch 7, 2026-09-23 — the branch table gains `chore/` and `ci/`, and the commit-type
+list gains `ci`, which merged history used five times without documenting it. Both lists now say
+they describe what the repository actually uses.
 
 ### 5.3 Untranslated rule files
 
@@ -688,7 +692,7 @@ still exist. Later batches that rewrite a document must read it in full regardle
 | 4 — Local environment | F3 — resolved by Batch 4, 2026-09-21 |
 | 5 — Claude Code | §3.8 B, C, D; S8; S9; P1; P2; §5.1; §5.3 — all resolved by Batch 5, 2026-09-22 |
 | 6 — Codex and AI delivery | §3.8 D (resolved by Batch 5); C1 — resolved by Batch 6, 2026-09-22 |
-| 7 — Recipes and validation | §5.2 |
+| 7 — Recipes and validation | §5.2 — resolved by Batch 7, 2026-09-23 |
 | 8 — Concepts | S2; S3 |
 
 ---

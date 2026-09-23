@@ -34,6 +34,8 @@ All branches must start from `main` and follow this naming pattern:
 | `docs/...` | `docs/architecture-guide` | Documentation only (no code) |
 | `refactor/...` | `refactor/security-module` | Code restructuring, no new features |
 | `test/...` | `test/add-integration-coverage` | Test additions only |
+| `chore/...` | `chore/dependency-lock-refresh` | Tooling, configuration, dependencies — no behaviour change |
+| `ci/...` | `ci/grype-scan-fix` | CI workflow changes only |
 
 **Examples:**
 ```bash
@@ -77,7 +79,11 @@ Follow conventional commits (simplified):
 Fixes #<issue> (if applicable)
 ```
 
-**Types**: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
+**Types**: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `ci`
+
+Use the branch prefix that matches the commit type: `feature/` for `feat`, and the same word for
+the others. This list and the table above describe what the repository actually uses — `chore`
+and `ci` were added in 2026-09 after both appeared in merged history without being documented.
 
 **Examples:**
 ```
@@ -306,6 +312,44 @@ pytest tests/e2e             # full pipeline; always needs Qdrant, plus PostgreS
 Claude Code users can run `/qa-v1` for the local V1 gate.
 Codex users should follow `AGENTS.md` and default to independent review unless
 asked to implement.
+
+---
+
+## Recipes by change type
+
+Each row is one route from task to delivery decision. **Where** the code goes is in
+[code-walkthrough.md](docs/guides/code-walkthrough.md), "Level 5 — Where to put a change"; this
+table says what the change requires before it can ship.
+
+| Change type | Before you start | Files it touches | Mandatory validation | Documentation impact | Review | Done when |
+|---|---|---|---|---|---|---|
+| Bug fix | A failing test that reproduces it, written first | The defective file and its mirrored test under `tests/unit/` | Targeted test, then `./scripts/check.sh full` | `CHANGELOG.md` under `[Unreleased]`; a guide only if it documented the wrong behaviour | Codex if risky (routing matrix) | The regression test fails without the fix and passes with it |
+| New domain component | The Protocol already covers your interface | Level 5, row "A domain component" | `check.sh full`, including the role's conformance test | `CHANGELOG.md`; the capability matrix when it adds a capability | Codex | Registered in `app/default_factories.py`, selectable from a manifest, and listed in the role's conformance test |
+| New adapter | The external dependency is in an existing extras group, or adding it is authorized | Level 5, row "An adapter" | `check.sh full`; integration tests when a real service is involved | `CHANGELOG.md`; `installation.md` if it needs a new extras group | Codex | In the matching conformance test, imports lazy, layering green, **and reachable**: registry plus manifest, or the documented selector for the engine and identity exceptions |
+| Contract change | **An accepted ADR** — `CLAUDE.md` §07 requires one for any contract modification | The contract file, every implementation, `tests/contract/` | `check.sh full` plus every conformance test for that Protocol | The ADR itself, `adr/_index.md`, and any guide that describes the contract | Codex, premium tier | Every implementation still satisfies the Protocol and its tests |
+| Manifest field | The field is consumed somewhere, not just declared | `contracts/manifests.py`, its consumer, `app/config_resolution.py` | `check.sh full`; add dry-run coverage in `validate_capabilities()` | `manifests/_index.md` or the preset's own comments | Codex | An unknown value is rejected before `wire()`, not inside it |
+| New ADR | The decision is real and the alternatives were weighed | `docs/adr/NNNN-*.md` and `docs/adr/_index.md` | `python scripts/check_docs.py` | The index entry, and any document the decision contradicts | Codex | Status, date and index entry are set; superseded ADRs say so |
+| Documentation only | — | The documents named by the task | `python scripts/check_docs.py` and `git diff --check` | This *is* the documentation impact; check whether a sibling document repeats the claim | Optional for README, changelog and guides (routing matrix) | The style guide's fidelity rules hold: no fact changed unless the task named it |
+| Hotfix | A named production or CI breakage | The smallest set that fixes it | The narrowest check that proves the fix, plus `check.sh quick` | `CHANGELOG.md`; the rest follows in the catch-up change | Can be shortened, but the human must say so explicitly | The fix is minimal, and the full validation runs in the follow-up |
+
+"Level 5" is [code-walkthrough.md](docs/guides/code-walkthrough.md)'s table of implementation,
+wiring and test locations per extension type.
+
+Three rules apply across the rows.
+
+**Review follows risk, not habit.** The column above reflects
+[model-routing.md](docs/guides/model-routing.md)'s matrix, which is the authority: README,
+changelog and developer-guide updates may skip independent review, a focused bug uses Codex when
+it is risky, and contract or orchestration changes require it at premium tier. When review is
+required — or when you ask for it anyway — the procedure is the two-pass sequence in
+[ai-engineering-workflow.md](docs/guides/ai-engineering-workflow.md).
+
+**No documentation change is also an answer**, but a checked one: search for the claim you would
+have had to update (`grep` the guides for the behaviour's name) and say in the pull request that
+nothing documented it.
+
+**Validation you could not run is recorded as unavailable**, with its consequence — see
+[validation-protocol.md](docs/guides/validation-protocol.md), "Failed, skipped, unavailable".
 
 ---
 
