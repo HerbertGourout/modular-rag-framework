@@ -161,7 +161,7 @@ Every in-scope cluster is listed member by member. Where members share one purpo
 | [`CHANGELOG.md`](../CHANGELOG.md) | Dated narrative of changes | **Historical** per entry |
 | [`CONTRIBUTING.md`](../CONTRIBUTING.md) | Git workflow, PR checklist, setup, validation, component recipe | **Canonical** contribution guide; §5.2 gap closed by Batch 7 |
 | [`docs/business-case.md`](business-case.md) | Product hypothesis, target users, decision gate | **Canonical** for its subject; was **Stale** — §4.1 S4, resolved by Batch 2 |
-| [`docs/glossary.md`](glossary.md) | Term definitions | **Canonical**, but **Stale** — §4.1 S2, S3 |
+| [`docs/glossary.md`](glossary.md) | Term definitions | **Canonical**; was **Stale** — §4.1 S2 and S3, both resolved by Batch 8 |
 | [`docs/guides/framework-overview-onboarding.md`](guides/framework-overview-onboarding.md) | Business and technical overview with role-based quick starts | Precedence declared by Batch 1 (§3.8 A); was **Stale** — §4.1 S1 and S7, both resolved by Batch 2 |
 | [`docs/documentation-alignment-audit-2026-08-12.md`](documentation-alignment-audit-2026-08-12.md) | Prior documentation audit | **Historical**, superseded by this document |
 | [`docs/onboarding-overhaul-plan.md`](onboarding-overhaul-plan.md) | The batch plan this audit executes | **Canonical** process document |
@@ -370,15 +370,19 @@ same outcome per batch.
 
 #### S2
 
-- **Location:** `docs/glossary.md:15-18`
+- **Location:** `docs/glossary.md:278-286`
 - **Claim:** "Assurance level (proposed)… These levels are not implemented today."
 - **Verified truth:** Same evidence as S1.
 - **Found by:** pass 1
 - **Batch:** 8
+- **Resolved:** Batch 8, 2026-09-23 — the entry is now "Assurance level" in the glossary's
+  assurance section: the contract is implemented (`contracts/assurance.py`), both shipped engine
+  adapters compute a report, and `achieved_level` is stated as computed from evidence rather than
+  self-declared.
 
 #### S3
 
-- **Location:** `docs/glossary.md:156-160`
+- **Location:** `docs/glossary.md:248-258`
 - **Claim:** "Lot 20 plans classification-aware, deny-by-default checks… it is not implemented
   today."
 - **Verified truth:** Lot 20 is implemented: `orchestration/registry.py:42`
@@ -387,6 +391,11 @@ same outcome per batch.
   `langgraph-rag.yaml:95`).
 - **Found by:** pass 1
 - **Batch:** 8
+- **Resolved:** Batch 8, 2026-09-23 — the "Provider egress" entry now states that the
+  classification-aware fail-closed check is implemented, names the contract and its reference
+  implementation, records that all three runnable presets configure it, and keeps the two true
+  caveats: post-generation redaction does not protect this boundary, and a pipeline that
+  configures no egress policy is not covered.
 
 #### S4
 
@@ -401,7 +410,7 @@ same outcome per batch.
 
 #### S5
 
-- **Location:** `docs/onboarding.md:134-135`
+- **Location:** `docs/onboarding.md:163-166`
 - **Claim:** "fifteen accepted decisions… proposed assurance levels and existing-application
   support are not implementation."
 - **Verified truth:** 17 of 18 ADRs are Accepted; assurance levels are implemented.
@@ -414,7 +423,7 @@ same outcome per batch.
 
 #### S6
 
-- **Location:** `docs/onboarding.md:203-205`, `:213-214`
+- **Location:** `docs/onboarding.md:232-234`, `:242-243`
 - **Claim:** Security readers are pointed to "the open Lot 20 provider-egress boundary";
   "classification-aware model egress" is listed as undelivered.
 - **Verified truth:** Lot 20 is implemented (S3 evidence). The same file states this correctly at
@@ -560,7 +569,7 @@ same outcome per batch.
 - `docs/architecture/_index.md:44-48`, `security.md:25`/`:84`/`:255-263`,
   `document-engine-contract.md:9-14`/`:113`, and `data-classification-policy.md:74` — Lot 20–22
   statements accurate.
-- `docs/onboarding.md:388-391` — Lot 20–22 statement accurate (but see S6).
+- `docs/onboarding.md:433-436` — Lot 20–22 statement accurate (but see S6).
 - `.claude/AGENTS.md` — eight subagent names match `.claude/agents/`.
 - `.review/*.example.md` — match the structure used in practice.
 - `ROADMAP.md`, `README.md`, `CLAUDE.md` §01/§09, `capability-matrix.md`, and `overview.md` —
