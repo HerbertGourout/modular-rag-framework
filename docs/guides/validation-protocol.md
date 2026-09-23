@@ -182,6 +182,22 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\check.ps1 all
 | **Contract** | `pytest tests/contract/ -v` | Protocol conformance | ~1s | Failed tests | pytest |
 | **Integration** | `pytest tests/integration/ -m integration -v` | Vector and durable-adapter integration | ~1-2m | Failed tests | Qdrant + PostgreSQL for the full directory |
 | **E2E** | `pytest tests/e2e/ -m e2e -v` | Full pipeline | ~2-5m | Failed tests | Qdrant always; PostgreSQL + LLM key only for the scenarios that need them (see Tier 4 above) |
+| **Targeted** | `pytest <path>::<test> -v` | The one behaviour you changed | seconds | Failed test | Whatever that test needs |
+| **Benchmark** | `python scripts/run_benchmark.py --enforce` | Offline golden set against `eval/reports/baseline.json` | ~1m | A metric past its threshold | Qdrant; **no LLM key** (deterministic manifest) |
+| **Security** | `/validate-security`, or the checklist in `.claude/skills/validate-security/SKILL.md` | Secrets, cross-domain imports, direct wiring, lazy imports, PII patterns | manual | Judgment — no CI job covers this | Nothing |
+| **Release** | `./scripts/check.sh all`, then the checklist in `.claude/skills/release/SKILL.md` | Quick + full + integration + e2e, then branch state, CHANGELOG, version bump and ADR checks | ~10m | Any tier's failure, or a missing release-hygiene item | Qdrant + PostgreSQL + an LLM key |
+
+**The release tier does not run everything above it.** `check.sh all` chains quick, full,
+integration and e2e (`scripts/check.sh:289-298`), and the release skill adds release hygiene
+only. Neither invokes the benchmark gate nor the security checklist, so before tagging:
+
+- run `python scripts/run_benchmark.py --enforce` yourself — CI's `benchmark-gate` blocks on it
+  per pull request, but the release route does not re-run it;
+- run the security checklist when the release contains a change to `security/`, a governance
+  component, an egress or classification path, identity handling, or a dependency.
+
+Two of those rows have no CI equivalent. The security checklist is manual by design, and the
+release tier is a pre-tag ritual rather than a per-PR gate.
 
 ---
 
@@ -198,9 +214,9 @@ With the versioned hooks installed, `git push` additionally runs the documentati
 contacting the remote. This fast local gate complements `check.sh full`; it does not replace the
 unit, contract, layering, or task-specific validation required before delivery.
 
-### CI/CD: `.github/workflows/ci.yml` — the real, current 10-job pipeline
+### CI/CD: `.github/workflows/ci.yml` — the real, current 11-job pipeline
 
-All 10 jobs below are wired into the real workflow today (not illustrative). Corrected here —
+All 11 jobs below are wired into the real workflow today (not illustrative). Corrected here —
 Batch 10 (an external plan; not this file's own Lot sequence) added `test-integration`,
 `e2e-deterministic`, and `compose-smoke`; an earlier version of this document said `integration`/
 `e2e` were not wired into CI at all.
@@ -212,6 +228,7 @@ Batch 10 (an external plan; not this file's own Lot sequence) added `test-integr
 | `test-contract` | `pytest tests/contract/` | — |
 | `test-integration` | `pytest tests/integration/ -m integration` against real `qdrant`/`postgres` GitHub Actions `services:` containers | — |
 | `e2e-deterministic` | `pytest tests/e2e/test_secure_preset_e2e.py -m e2e` — the governance/tenant-isolation scenario, deterministic embedder/generator, no LLM key needed | — |
+| `benchmark-gate` | `python scripts/run_benchmark.py --enforce` — offline golden set against `eval/reports/baseline.json`, **blocking** on a regression past threshold; real `qdrant`, deterministic manifest, no LLM key | — |
 | `compose-smoke` | `scripts/smoke_test_compose.py` — brings up the full `compose.yaml` stack (api+qdrant+postgres+migrate) and proves real ingestion + `/ready` per-dependency roles, not just `/health` | `lint`, `test-unit`, `test-contract` |
 | `coverage` | Both suites with `--cov`, uploads `coverage.xml` | `test-unit`, `test-contract` |
 | `build-and-smoke-test` | Builds a wheel, installs it into a fresh venv, runs `mrag version` | `lint`, `test-unit`, `test-contract` |
@@ -250,8 +267,12 @@ not executed. Do not treat this criterion as satisfied until a repo admin has ac
 - ✅ Local `full` ↔ CI `lint` + `test-unit` + `test-contract` (same commands)
 - ✅ Local `integration` ↔ CI `test-integration` (same `pytest tests/integration/ -m integration`
   command; CI provisions Qdrant/PostgreSQL via `services:`, local dev provisions them itself)
-- ✅ Local `e2e` (deterministic scenario only) ↔ CI `e2e-deterministic`; the LLM-backed scenario
-  runs only in `nightly.yml`, never in the local `check.sh e2e` ↔ CI parity claim above
+- ⚠️ Local `e2e` runs the **whole** `tests/e2e` directory and requires Qdrant, PostgreSQL *and*
+  an LLM key up front, so it is broader than CI `e2e-deterministic`, which runs only the
+  deterministic governance scenario. The LLM-backed scenario reaches CI solely through
+  `nightly.yml`
+- ⚠️ Local `benchmark` has no `check.sh` tier: run
+  `python scripts/run_benchmark.py --enforce` yourself to reproduce CI's `benchmark-gate`
 - ✅ Same pytest markers: `unit`, `contract`, `integration`, `e2e`
 
 ---
@@ -308,6 +329,30 @@ $ ./scripts/check.sh integration
 CLI commands (`mrag ask`/`mrag ingest`) have their own typed exit codes since Lot 16a: `2`
 configuration error, `3` security/policy denial, `4` other framework error, `1` unexpected —
 see `src/modular_rag/cli/__init__.py`.
+
+### Failed, skipped, unavailable — three different outcomes
+
+A green exit code does not mean every check ran. Distinguish the three, and say which one applies
+in the handoff, because they carry different risk:
+
+| Outcome | What happened | Exit code | What to record |
+|---|---|---|---|
+| **Failed** | The check ran and reported a defect | `1` | Fix it, or state explicitly why the failure is accepted |
+| **Skipped** | The check ran but declined part of its work, usually a missing service | `0` | Which part did not run, and what it would have covered |
+| **Unavailable** | The check could not run at all: no service, no credential, no quota, no network | not run | Why, and the release consequence of not having it |
+
+Two traps follow from that table.
+
+**A skip-heavy run still exits 0.** `check.sh integration` prints "Qdrant not available … skipping
+integration tests" and returns success, because Qdrant is optional for local development. The
+e2e tier deliberately does the opposite: it checks all three prerequisites up front and fails
+fast, so a run where every scenario was silently skipped cannot be mistaken for a passing
+governance check.
+
+**Unavailable is not a pass.** A handoff that omits an unavailable check implies it succeeded.
+Record it with its consequence — for example, "CI documentation job: unavailable, Actions quota
+exhausted; the local `check_docs.py` run is the same check" versus "integration tests:
+unavailable, no PostgreSQL here; durable audit paths are unverified in this change".
 
 ---
 
