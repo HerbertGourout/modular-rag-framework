@@ -28,10 +28,13 @@ three current elements and one partially implemented direction:
     `openai-embeddings`).
   - **Lot 21 — implemented** (ADR-0017, Accepted): the L0/L1/L2 assurance contract
     (`contracts/assurance.py`) and a computed conformance report on both shipped adapters.
-  - **Lot 22 — in progress, contract only** (ADR-0018, Accepted): `contracts/application.py`
-    defines the existing-application boundary. **No existing-application adapter or pilot exists**:
-    there is no `adapters/applications/`, and no manifest can select one. Wrapping an existing
-    application is not a current capability — never describe it as operational.
+  - **Lot 22 — in progress, contract + demo-pilot adapter** (ADR-0018, Accepted):
+    `contracts/application.py` defines the existing-application boundary, and
+    `adapters/applications/existing_graph/` (`engine.adapter: existing-graph`) wraps a synthetic
+    standalone LangGraph app (`examples/existing_graph_app/`) via one explicit branch in
+    `app/bootstrap.py`. **No real client application has been wrapped and no comparative pilot
+    exists**; the human decision gate is open. Wrapping an arbitrary existing application is not
+    a current capability — never describe it as operational.
 
 The historical "V1 Core RAG → V2 Agentic → V3 Graph Memory → V4 Governance → V5 Multimodal"
 progression in block 09 still organizes the detailed roadmap, but per
@@ -42,7 +45,7 @@ no longer map to "built natively in that version" — see block 09 for the curre
 split, which is reconciled with the ADRs, not an interim marker awaiting a future rewrite.
 
 **Non-negotiable priority**: preserve the native end-to-end reference path and existing public
-contracts. The remaining Lot 22 work (behavioural fixture, pilot adapter, comparative pilot) must
+contracts. The remaining Lot 22 work (real-application pilot, comparative pilot) must
 build on the shipped egress and assurance contracts, not weaken them. New graph, governance, or
 multimodal work must not break `examples/simple_qa/`, unit tests,
 contract tests, or the layering audit.
@@ -281,7 +284,7 @@ A change to a contract (`contracts/`) requires updating the matching `tests/cont
 >
 > **ADR-0015 is Accepted and partly implemented:** Lot 20 (provider egress, ADR-0016) and Lot 21
 > (L0/L1/L2 assurance contract and conformance report, ADR-0017) are implemented. Lot 22 has
-> shipped only its contract (`contracts/application.py`, ADR-0018); the existing-application
+> shipped its contract (`contracts/application.py`, ADR-0018) and a demo-pilot adapter over a synthetic app; the existing-application
 > adapter, its behavioural fixture and the comparative pilot are not built. Describe those three
 > as planned until they are implemented, and never infer from the contract that an existing
 > application can already be wrapped.
@@ -493,7 +496,7 @@ V3 — V3.0 (delegated) → V3.1 → V3.2 (native reporting/drift-detection port
 V4 — V4.0 → V4.1 (complete V4 before V5)
 V5 — V5.0 (delegated — see above)
 Assurance — Lot 20 egress (implemented) → Lot 21 assurance contract (implemented) → Lot 22
-contract (implemented) → Lot 22 adapter and pilot (not started)
+contract (implemented) → Lot 22 demo-pilot adapter (implemented) → real pilot and comparison (not started)
 ```
 
 Why sequences matter:
@@ -539,7 +542,7 @@ checks; native governance, audit, feedback/drift, and offline evaluation have sp
 gaps listed in `ROADMAP.md`. Multi-agent orchestration (V2.1), GraphRAG traversal (V3.0), fine-tuning
 execution (V3.2), and multimodal execution (V5.0) are delegated to a selected external engine
 per ADR-0005. ADR-0015's assurance contract and provider-egress control are implemented (Lots
-20–21); wrapping an existing external application is not — only its contract exists (Lot 22).
+20–21); wrapping an existing external application is not — only its contract and a synthetic demo-pilot adapter exist (Lot 22).
 
 **"What about benchmarks?"**
 → The offline golden-set benchmark and CI quality gate already ship. Production calibration,

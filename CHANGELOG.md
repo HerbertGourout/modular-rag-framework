@@ -5,6 +5,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added — Lot 22 adapter harness registration and author guide
+- Registered the real `existing-graph` adapter in the shared engine conformance harness.
+- Fixed: a lost `RUN_SUCCEEDED` audit event now raises `StorageError` instead of leaking the raw
+  exception (found by the harness).
+- Added `docs/guides/existing-application-adapters.md`; updated ROADMAP, CLAUDE.md, capability
+  matrix and the Lot 22 doc. Still demo pilot only: no real client pilot, no comparative
+  measurement, no generic adapter registry.
+
 ### Added — Lot 22 demo-pilot adapter and startup profile gate (ADR-0018 §13–§14)
 
 - `adapters/applications/existing_graph/` (`engine.adapter: existing-graph`) wraps the standalone

@@ -14,7 +14,7 @@
 > **[ADR-0015](docs/adr/0015-portable-assurance-and-external-application-boundary.md) is
 > Accepted.** It establishes the next product direction: explicit L0/L1/L2 assurance
 > levels and support for wrapping an existing external application without rebuilding its graph.
-> As of 2026-09-17, Lots 20 and 21 are implemented and Lot 22 has shipped only its contract.
+> As of 2026-09-17, Lots 20 and 21 are implemented and Lot 22 has shipped its contract; a demo-pilot adapter followed afterwards (see the capability matrix).
 > Everything still labelled planned or in progress below — notably wrapping an existing
 > application — must not be presented as a shipped commitment.
 
@@ -489,7 +489,7 @@ controls, normalized evidence, explicit capability gaps, and shared conformance 
 | Tenant/policy/audit/review | Broadest on native; partial on LangGraph | Stated per adapter by the implemented assurance contract (Lot 21, [ADR-0017](docs/adr/0017-engine-independent-assurance-contract.md)) instead of claiming uniformity. |
 | Multi-agent and GraphRAG | Not provided by current fixed adapter | Delegate to external applications/engines. |
 | Data classification and provider egress | Lot 20 implemented, mandatory for known remote providers (`governance.egress_policy`) | All three shipped presets now configure it; [ADR-0016](docs/adr/0016-provider-egress-control.md) for the outbound-data boundary **Accepted 2026-09-09**. |
-| Existing-application wrapping | **Not operational** — contract only (`contracts/application.py`); no adapter, and no manifest can select one | Lot 22 in progress ([ADR-0018](docs/adr/0018-existing-application-adapter-boundary.md)): a test-only behavioural fixture (`tests/contract/fakes/foreign_application.py`) exists; the first real adapter, pilot and comparative pilot remain to be built and measured. |
+| Existing-application wrapping | **Demo-pilot only** — contract (`contracts/application.py`) plus a synthetic-app adapter selectable as `engine.adapter: existing-graph`; no real application wrapped | Lot 22 in progress ([ADR-0018](docs/adr/0018-existing-application-adapter-boundary.md)): a test-only behavioural fixture (`tests/contract/fakes/foreign_application.py`) exists; a demo-pilot adapter (`adapters/applications/existing_graph/`) over a synthetic app now ships; the real-application pilot and comparative pilot remain to be built and measured. |
 | Multilingual/multimodal | Not built | Focus owned work on quality, provenance, citations, classification, and policy evidence. |
 
 The product thesis remains subject to measured pilots. Shipped controls can support a compliant
@@ -508,4 +508,4 @@ deployment, but the framework does not provide turnkey regulatory certification.
 - **ADR-0015**: Portable assurance and external-application boundary (accepted 2026-09-02)
 - **ADR-0016**: Provider data-egress control boundary (accepted 2026-09-09; Lot 20)
 - **ADR-0017**: Engine-independent assurance contract and conformance report (accepted 2026-09-10; Lot 21)
-- **ADR-0018**: Existing-application adapter boundary (accepted 2026-09-16; Lot 22, contract only)
+- **ADR-0018**: Existing-application adapter boundary (accepted 2026-09-16; Lot 22, contract + demo-pilot adapter)

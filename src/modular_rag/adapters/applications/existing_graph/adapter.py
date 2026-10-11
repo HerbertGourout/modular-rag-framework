@@ -136,6 +136,10 @@ class _Denied(Exception):
     """Raised inside a hook to stop the application."""
 
 
+class _AuditPersistFailed(Exception):
+    """The success-path audit events could not all be persisted."""
+
+
 # Bounded per-request evidence, same rationale as the other engines' stores.
 _EVIDENCE_CAPACITY = 32
 
@@ -293,12 +297,15 @@ class ExistingGraphApplicationAdapter:
         try:
             outcome = body()
             pending.append((AuditEventType.RUN_SUCCEEDED, {}))
-            self._persist(context, tenant, pending)
+            try:
+                self._persist(context, tenant, pending)
+            except Exception as persist_exc:
+                raise _AuditPersistFailed from persist_exc
         except Exception as exc:
             self._provenance.pop(request_id, None)
             failed = [e for e in pending if e[0] is not AuditEventType.RUN_SUCCEEDED]
             failed.append((AuditEventType.RUN_FAILED, {}))
-            lost = False
+            lost = isinstance(exc, _AuditPersistFailed)
             for event_type, payload in failed:
                 try:
                     self._record(context, tenant, event_type, payload)

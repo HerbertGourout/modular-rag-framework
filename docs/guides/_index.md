@@ -23,6 +23,7 @@ break every existing link into this directory), but the tables below keep them a
 | Run the framework for the first time | [getting-started.md](getting-started.md) |
 | Install dependencies and configure the environment | [installation.md](installation.md) |
 | Add a new component (chunker, retriever, generator...) | [plugin-development.md](plugin-development.md) |
+| Wrap an existing application behind the engine port | [existing-application-adapters.md](existing-application-adapters.md) |
 | Deploy to production (container, manifest, hardening) | [deployment.md](deployment.md) |
 | Back up, restore, or roll back a deployment | [backup-restore.md](backup-restore.md) |
 | Read or wire up trace telemetry, live spans or operational metrics | [observability.md](observability.md) |

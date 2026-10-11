@@ -9,10 +9,12 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import pytest
+from examples.existing_graph_app.app import ExistingGraphApp
 
+from modular_rag.adapters.applications.existing_graph import ExistingGraphApplicationAdapter
 from modular_rag.adapters.llms.langgraph_engine import LangGraphEngineAdapter
 from modular_rag.app.container import Container
 from modular_rag.contracts.application import ControlPointSupport, required_audit_events
@@ -41,6 +43,7 @@ from modular_rag.core.errors import (
     EgressDeniedError,
     EngineCancelledError,
     EngineCapabilityError,
+    PolicyViolationError,
     SecurityError,
     StorageError,
 )
@@ -1101,7 +1104,240 @@ def _foreign_fixture(name: str, make: AdapterFactory) -> _EngineFixture:
     )
 
 
+class _RecordingApp(ExistingGraphApp):
+    """The demo application, recording what reached it."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.received_tenants: list[str] = []
+
+    def invoke(self, text, tenant, hooks):  # type: ignore[no-untyped-def]
+        self.received_tenants.append(tenant)
+        return super().invoke(text, tenant, hooks)
+
+
+class _FabricatingExistingGraphAdapter(ExistingGraphApplicationAdapter):
+    """Overrides only the citation seam so the adapter's own provenance check runs unmodified."""
+
+    @staticmethod
+    def _citations(retrieved):  # type: ignore[no-untyped-def]
+        return [
+            Citation(
+                chunk_id=hit.chunk.id,
+                source="fabricated.pdf",
+                passage="text that was never retrieved",
+                score=hit.score,
+            )
+            for hit in retrieved
+        ]
+
+
+class _EgSwitch:
+    def __init__(self, allow: bool = True) -> None:
+        self.allow = allow
+
+    def check(self, classification, provider, operation):  # type: ignore[no-untyped-def]
+        from modular_rag.contracts.egress import EgressDecision
+
+        return EgressDecision(
+            allowed=self.allow,
+            reason="probe",
+            classification=classification,
+            provider=provider,
+            operation=operation,
+        )
+
+
+class _GuardSwitch:
+    def __init__(self, allow: bool = True) -> None:
+        self.allow = allow
+        self.queries = 0
+
+    def check_query(self, query):  # type: ignore[no-untyped-def]
+        self.queries += 1
+        return GuardResult(allowed=self.allow, reason="probe")
+
+    def check_answer(self, answer):  # type: ignore[no-untyped-def]
+        return GuardResult(allowed=True, reason="")
+
+    def name(self) -> str:
+        return "probe-guard"
+
+
+class _LossyAudit:
+    def __init__(self, fail_on: frozenset[AuditEventType] = frozenset()) -> None:
+        self.events: list[AuditEventType] = []
+        self.fail_on = fail_on
+
+    def record(self, event):  # type: ignore[no-untyped-def]
+        if event.event_type in self.fail_on:
+            raise RuntimeError("audit write failed")
+        self.events.append(event.event_type)
+
+    async def arecord(self, event):  # type: ignore[no-untyped-def]
+        self.record(event)
+
+    def name(self) -> str:
+        return "lossy-audit"
+
+
+class _Components:
+    def __init__(self, *, egress: object, guard: object, audit: _LossyAudit) -> None:
+        from modular_rag.security.policies.tenant_isolation import TenantIsolationPolicy
+
+        self.guard = guard
+        self.tenant_policy = TenantIsolationPolicy()
+        self.redactor = None
+        self.egress_policy = egress
+        self.audit_sink = audit
+
+
+def _existing_graph_fixture() -> _EngineFixture:
+    """Registers the shipped existing-graph adapter in the shared harness (ADR-0018 §9/§13):
+    the same status-aware probes that validate the foreign fixture validate the real adapter."""
+
+    def make(
+        *,
+        egress: _EgSwitch | None = None,
+        guard: _GuardSwitch | None = None,
+        audit: _LossyAudit | None = None,
+        tenant_aware: bool = True,
+        adapter_cls: type[ExistingGraphApplicationAdapter] = ExistingGraphApplicationAdapter,
+    ) -> tuple[ExistingGraphApplicationAdapter, _RecordingApp, _Components]:
+        app = _RecordingApp(tenant_aware=tenant_aware)
+        parts = _Components(
+            egress=egress or _EgSwitch(),
+            guard=guard or _GuardSwitch(),
+            audit=audit or _LossyAudit(),
+        )
+        return adapter_cls(app, parts, egress_provider="probe"), app, parts
+
+    def ctx(tenant: str | None = "tenant-a", request_id: str = "r") -> ExecutionContext:
+        return ExecutionContext(tenant_id=tenant, correlation_id="c", request_id=request_id)
+
+    def req(tenant: str | None = None) -> EngineRequest:
+        return EngineRequest(query=Query(text="onboarding policy", tenant_id=tenant))
+
+    def served(
+        adapter: ExistingGraphApplicationAdapter,
+        *,
+        query_tenant: str | None = None,
+        context_tenant: str | None = "tenant-a",
+    ) -> bool:
+        try:
+            adapter.run(req(query_tenant), ctx(context_tenant))
+        except (PolicyViolationError, SecurityError, StorageError):
+            return False
+        return True
+
+    engine, _, _ = make()
+    context = ctx(request_id="existing-graph-served")
+    engine.run(req(), context)
+
+    def identity_observed() -> _ProbeResult:
+        adapter, app, _ = make()
+        served(adapter)
+        return _ProbeResult(
+            app.received_tenants == ["tenant-a"], "the app did not receive the tenant"
+        )
+
+    def identity_verified() -> _ProbeResult:
+        adapter, app, _ = make()
+        served(adapter, query_tenant="tenant-b")
+        return _ProbeResult(
+            app.received_tenants == ["tenant-a"], "a query tenant replaced the verified one"
+        )
+
+    def identity_enforced() -> _ProbeResult:
+        adapter, app, _ = make()
+        refused = not served(adapter, context_tenant=None)
+        blind, _, _ = make(tenant_aware=False)
+        return _ProbeResult(
+            refused and app.received_tenants == [] and not served(blind),
+            "a missing tenant reached the app, or tenant-blind content was not withheld",
+        )
+
+    def provenance_observed() -> _ProbeResult:
+        adapter, _, _ = make()
+        return _ProbeResult(bool(adapter.run(req(), ctx()).citations), "no citations returned")
+
+    def provenance_verified() -> _ProbeResult:
+        liar, _, _ = make(adapter_cls=_FabricatingExistingGraphAdapter)
+        c = ctx(request_id="probe-fabricated")
+        liar.run(req(), c)
+        status = liar.conformance_report(c).evidence_for(EvidenceKind.RETRIEVAL_PROVENANCE).status
+        return _ProbeResult(
+            evidence_status_rank(status) < evidence_status_rank(EvidenceStatus.VERIFIED),
+            f"a fabricated passage was still reported as {status.value}",
+        )
+
+    def egress_observed() -> _ProbeResult:
+        adapter, _, parts = make()
+        served(adapter)
+        return _ProbeResult(
+            AuditEventType.EGRESS_DECISION in parts.audit_sink.events,
+            "no egress decision was recorded",
+        )
+
+    def egress_enforced() -> _ProbeResult:
+        adapter, _, _ = make(egress=_EgSwitch(allow=False))
+        return _ProbeResult(not served(adapter), "a request was served despite a denied egress")
+
+    def policy_observed() -> _ProbeResult:
+        guard = _GuardSwitch()
+        adapter, _, _ = make(guard=guard)
+        served(adapter)
+        return _ProbeResult(guard.queries == 1, "the guard never saw the query")
+
+    def policy_enforced() -> _ProbeResult:
+        adapter, app, _ = make(guard=_GuardSwitch(allow=False))
+        return _ProbeResult(
+            not served(adapter) and app.received_tenants == [],
+            "a denied query reached the application",
+        )
+
+    def audit_observed() -> _ProbeResult:
+        adapter, _, parts = make()
+        served(adapter)
+        needed = {AuditEventType.QUERY_RECEIVED, AuditEventType.RUN_SUCCEEDED}
+        return _ProbeResult(
+            needed <= set(parts.audit_sink.events),
+            "a served request left an incomplete audit record",
+        )
+
+    def audit_enforced() -> _ProbeResult:
+        for event in (AuditEventType.QUERY_RECEIVED, AuditEventType.RUN_SUCCEEDED):
+            adapter, _, _ = make(audit=_LossyAudit(frozenset({event})))
+            if served(adapter):
+                return _ProbeResult(False, f"a lost {event.value} event still released the result")
+        return _ProbeResult(True, "")
+
+    return _EngineFixture(
+        name="existing-graph",
+        engine=engine,
+        context=context,
+        probes={
+            EvidenceKind.IDENTITY_TENANT: _StatusProbe(
+                observed=identity_observed, verified=identity_verified, enforced=identity_enforced
+            ),
+            EvidenceKind.RETRIEVAL_PROVENANCE: _StatusProbe(
+                observed=provenance_observed, verified=provenance_verified
+            ),
+            EvidenceKind.EGRESS_DECISION: _StatusProbe(
+                observed=egress_observed, enforced=egress_enforced
+            ),
+            EvidenceKind.POLICY_DECISION: _StatusProbe(
+                observed=policy_observed, enforced=policy_enforced
+            ),
+            EvidenceKind.AUDIT_COMPLETION: _StatusProbe(
+                observed=audit_observed, enforced=audit_enforced
+            ),
+        },
+    )
+
+
 _FIXTURE_FACTORIES: dict[str, Callable[[], _EngineFixture]] = {
+    "existing-graph": _existing_graph_fixture,
     "fake": _fake_fixture,
     "native": _native_fixture,
     "langgraph": _langgraph_fixture,

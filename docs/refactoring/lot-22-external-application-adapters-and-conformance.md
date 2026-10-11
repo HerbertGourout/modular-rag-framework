@@ -1,8 +1,10 @@
 # Lot 22 — Existing-Application Adapters and Cross-Engine Conformance
 
 **Status:** IN PROGRESS — contract layer shipped (`contracts/application.py`,
-ADR-0018-conformant: `ApplicationProfileProvider`, `ControlPoint`, `required_audit_events()`);
-no adapter under `adapters/applications/` exists yet.
+ADR-0018-conformant: `ApplicationProfileProvider`, `ControlPoint`, `required_audit_events()`),
+plus a demo-pilot adapter (`adapters/applications/existing_graph/`) over a synthetic app. It is
+registered in the shared conformance harness. The real-application pilot, comparative
+measurement and the human decision gate remain open.
 
 **Priority:** P1 after the assurance contract
 
