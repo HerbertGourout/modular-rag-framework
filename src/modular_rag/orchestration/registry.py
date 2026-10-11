@@ -373,6 +373,25 @@ def runtime_manifest_errors(manifest: PipelineManifest) -> list[str]:
                 f"engine.adapter={EXISTING_GRAPH_ADAPTER!r}"
             )
         governance = manifest.governance
+        egress_cfg = governance.egress_policy if governance else None
+        provider = str(
+            manifest.engine.config.get("egress_provider", manifest.generator.type)
+            if manifest.engine
+            else manifest.generator.type
+        )
+        # The wrapped application reaches a model through its own path, so an egress policy
+        # covering the declared provider is mandatory, not only for known remote types.
+        if egress_cfg is None:
+            errors.append(
+                f"governance.egress_policy is required for engine.adapter="
+                f"{EXISTING_GRAPH_ADAPTER!r}: the wrapped application's model path must be "
+                "governed (ADR-0016)."
+            )
+        elif provider not in egress_cfg.config.get("providers", {}):
+            errors.append(
+                f"governance.egress_policy has no providers[{provider!r}] entry for the "
+                f"wrapped application's egress provider."
+            )
         for path, value in {
             "governance.policy_engine": governance.policy_engine if governance else None,
             "governance.review_queue": governance.review_queue if governance else None,

@@ -5,8 +5,10 @@ import asyncio
 from pathlib import Path
 
 import pytest
+from examples.existing_graph_app.app import ExistingGraphApp
 
-from modular_rag.app.bootstrap import load_engine
+from modular_rag.adapters.applications.existing_graph import ExistingGraphApplicationAdapter
+from modular_rag.app.bootstrap import load_engine, load_manifest
 from modular_rag.contracts.assurance import EvidenceKind, EvidenceStatus
 from modular_rag.contracts.engine import EngineRequest, ExecutionContext
 from modular_rag.core.errors import (
@@ -15,6 +17,7 @@ from modular_rag.core.errors import (
     PolicyViolationError,
 )
 from modular_rag.core.models.query import Query
+from modular_rag.orchestration.registry import runtime_manifest_errors
 
 PRESET = "manifests/presets/existing-graph-app.yaml"
 
@@ -80,3 +83,67 @@ def test_conformance_report_never_claims_unsupported_evidence() -> None:
     by_kind = {e.kind: e.status for e in report.evidence}
 
     assert by_kind[EvidenceKind.USAGE_COST] is EvidenceStatus.UNSUPPORTED
+
+
+_RESTRICTED_DOC = (
+    {
+        "id": "r1",
+        "tenant_id": "tenant-a",
+        "text": "restricted payroll",
+        "source": "kb://r",
+        "classification": "restricted",
+    },
+)
+
+
+class _Container:
+    def __init__(self, egress_policy: object | None) -> None:
+        from modular_rag.security.policies.tenant_isolation import TenantIsolationPolicy
+
+        self.guard = None
+        self.tenant_policy = TenantIsolationPolicy()
+        self.redactor = None
+        self.egress_policy = egress_policy
+        self.audit_sink = None
+
+
+def _adapter(egress_policy: object | None, corpus=_RESTRICTED_DOC):  # type: ignore[no-untyped-def]
+    return ExistingGraphApplicationAdapter(
+        ExistingGraphApp(corpus), _Container(egress_policy), egress_provider="remote"
+    )
+
+
+def test_restricted_document_never_reaches_a_public_only_remote_provider() -> None:
+    from modular_rag.security.policies.egress_policy import ManifestEgressPolicy
+
+    policy = ManifestEgressPolicy(
+        providers={"remote": {"local": False, "max_classification": "public"}},
+        default_classification="public",
+    )
+
+    with pytest.raises(PolicyViolationError):
+        _adapter(policy).run(_request(), _ctx())
+
+
+def test_unrecognised_classification_label_fails_closed() -> None:
+    corpus = ({**_RESTRICTED_DOC[0], "classification": "top-secret"},)
+
+    with pytest.raises(PolicyViolationError):
+        _adapter(None, corpus).run(_request(), _ctx())
+
+
+def test_model_path_is_denied_when_no_egress_policy_is_wired() -> None:
+    with pytest.raises(PolicyViolationError):
+        _adapter(None, corpus=ExistingGraphApp().__dict__["_corpus"]).run(_request(), _ctx())
+
+
+def test_manifest_without_egress_policy_is_rejected_at_startup(tmp_path: Path) -> None:
+    text = Path(PRESET).read_text(encoding="utf-8")
+    start = text.index("  egress_policy:")
+    end = text.index("assurance:")
+    path = tmp_path / "m.yaml"
+    path.write_text(text[:start] + text[end:], encoding="utf-8")
+
+    errors = runtime_manifest_errors(load_manifest(path))
+
+    assert any("egress_policy is required" in e for e in errors)

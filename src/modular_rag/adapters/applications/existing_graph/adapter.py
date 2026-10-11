@@ -59,7 +59,11 @@ from modular_rag.contracts.engine import (
     ExecutionContext,
 )
 from modular_rag.contracts.security import Redactor, SecurityGuard, TenantPolicy
-from modular_rag.core.enums import RetrievalMethod
+from modular_rag.core.enums import (
+    DataClassification,
+    RetrievalMethod,
+    combined_classification,
+)
 from modular_rag.core.errors import (
     EngineCapabilityError,
     PolicyViolationError,
@@ -244,7 +248,10 @@ class ExistingGraphApplicationAdapter:
                 out = self._app.invoke(query.text, admitted, self._hooks(admitted, pending))
             except _Denied as exc:
                 raise PolicyViolationError("denied by a framework control") from exc
-            retrieved = [self._as_retrieved(doc) for doc in out["documents"]]
+            try:
+                retrieved = [self._as_retrieved(doc) for doc in out["documents"]]
+            except ValueError as exc:
+                raise PolicyViolationError("unrecognised document classification") from exc
             self._admit_result(admitted, retrieved, pending)
             text = self._admit_answer(query.id, out["text"], pending)
             if self._app.model_paths:
@@ -366,11 +373,18 @@ class ExistingGraphApplicationAdapter:
     def _hooks(
         self, tenant: str, pending: list[tuple[AuditEventType, dict[str, Any]]]
     ) -> dict[str, Callable[..., None]]:
+        classifications: list[DataClassification | None] = []
+
         def retrieval(documents: list[dict[str, Any]]) -> None:
             pending.append((AuditEventType.RETRIEVAL_PERFORMED, {}))
-            retrieved = [self._as_retrieved(doc) for doc in documents]
+            try:
+                retrieved = [self._as_retrieved(doc) for doc in documents]
+            except ValueError:
+                # An unrecognised classification label cannot be ranked: fail closed.
+                raise _Denied from None
             if not self._tenant_scoped(tenant, retrieved):
                 raise _Denied
+            classifications.extend(hit.chunk.classification for hit in retrieved)
 
         def model_call(_path: str) -> None:
             policy = self._c.egress_policy
@@ -379,17 +393,19 @@ class ExistingGraphApplicationAdapter:
                     (
                         AuditEventType.EGRESS_DECISION,
                         {
-                            "egress_decision": "allowed",
+                            "egress_decision": "denied",
                             "egress_reason": "no egress policy configured",
                             "egress_provider": self._egress_provider,
                             "egress_operation": EgressOperation.GENERATE.value,
                         },
                     )
                 )
-                return
+                raise _Denied
             try:
                 decision = policy.check(
-                    classification=None,
+                    classification=combined_classification(classifications)
+                    if classifications
+                    else None,
                     provider=self._egress_provider,
                     operation=EgressOperation.GENERATE,
                 )
@@ -462,6 +478,11 @@ class ExistingGraphApplicationAdapter:
                 doc_id=str(doc["id"]),
                 content=str(doc["text"]),
                 tenant_id=doc.get("tenant_id"),
+                classification=(
+                    DataClassification(doc["classification"])
+                    if doc.get("classification") is not None
+                    else None
+                ),
                 metadata={"source": str(doc["source"])},
             ),
             score=1.0,
