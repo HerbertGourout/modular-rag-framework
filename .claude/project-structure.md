@@ -31,8 +31,9 @@ does not currently implement planning, tool use, query decomposition or collabor
 those behaviours remain delegated targets under ADR-0005.
 
 It does not wrap an existing LangChain/LangGraph application — that boundary (ADR-0015, ADR-0018)
-is Lot 22: its contract (`contracts/application.py`) is implemented, but no adapter
-(`adapters/applications/`) exists yet. Lot 20 (classification-aware provider-egress control,
+is Lot 22: its contract (`contracts/application.py`) is implemented, and a demo-pilot adapter
+(`adapters/applications/existing_graph/`, synthetic app in `examples/existing_graph_app/`) exists,
+but no real client application has been wrapped. Lot 20 (classification-aware provider-egress control,
 ADR-0016) and Lot 21 (engine-independent assurance contract, `conformance_report()`, ADR-0017)
 are both COMPLETE and active today.
 
