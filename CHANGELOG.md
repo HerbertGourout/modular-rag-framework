@@ -5,6 +5,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added — Lot 22 behavioural reference fixture and probes (ADR-0018 §9–§13)
+
+- `tests/contract/fakes/foreign_application.py`, `foreign_probes.py` and
+  `tests/contract/test_application_behaviour.py` (new): a synthetic foreign application plus an
+  adapter fixture, with behavioural probes per ENFORCED control point (egress paths, two-tenant
+  isolation for `run()` and `astream()`, audit coverage, lost terminal audit event, closed world).
+- The fixture is registered in the shared status-aware harness of
+  `tests/contract/test_engine_conformance.py` with negative controls.
+- **Not delivered**: test-only; no `adapters/applications/` package, no selectable manifest
+  adapter, no pilot.
+
 ### Added — Lot 22 contract layer: existing-application adapter boundary (ADR-0018, 2026-09-17)
 
 - `contracts/application.py` (new): `ApplicationProfileProvider`, `ControlPoint`,

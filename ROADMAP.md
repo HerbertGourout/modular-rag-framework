@@ -46,7 +46,7 @@ Next assurance programme
 ├─ Lot 20: Classification + fail-closed provider egress — implemented, mandatory for known remote providers
 ├─ Lot 21: Engine-independent assurance contract and conformance report — COMPLETE (ADR-0017)
 └─ Lot 22: Existing-application adapters and cross-engine conformance — IN PROGRESS
-           (contract shipped; behavioural fixture, adapters and pilot not started)
+           (contract and test-only behavioural fixture shipped; adapters and pilot not started)
 ```
 
 ---
@@ -489,7 +489,7 @@ controls, normalized evidence, explicit capability gaps, and shared conformance 
 | Tenant/policy/audit/review | Broadest on native; partial on LangGraph | Stated per adapter by the implemented assurance contract (Lot 21, [ADR-0017](docs/adr/0017-engine-independent-assurance-contract.md)) instead of claiming uniformity. |
 | Multi-agent and GraphRAG | Not provided by current fixed adapter | Delegate to external applications/engines. |
 | Data classification and provider egress | Lot 20 implemented, mandatory for known remote providers (`governance.egress_policy`) | All three shipped presets now configure it; [ADR-0016](docs/adr/0016-provider-egress-control.md) for the outbound-data boundary **Accepted 2026-09-09**. |
-| Existing-application wrapping | **Not operational** — contract only (`contracts/application.py`); no adapter, and no manifest can select one | Lot 22 in progress ([ADR-0018](docs/adr/0018-existing-application-adapter-boundary.md)): behavioural fixture, pilot adapter and comparative pilot remain to be built and measured. |
+| Existing-application wrapping | **Not operational** — contract only (`contracts/application.py`); no adapter, and no manifest can select one | Lot 22 in progress ([ADR-0018](docs/adr/0018-existing-application-adapter-boundary.md)): a test-only behavioural fixture (`tests/contract/fakes/foreign_application.py`) exists; the first real adapter, pilot and comparative pilot remain to be built and measured. |
 | Multilingual/multimodal | Not built | Focus owned work on quality, provenance, citations, classification, and policy evidence. |
 
 The product thesis remains subject to measured pilots. Shipped controls can support a compliant
