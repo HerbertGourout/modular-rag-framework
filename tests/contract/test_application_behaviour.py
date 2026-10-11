@@ -15,6 +15,7 @@ a gate that never fails has not been shown to gate anything.
 """
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 from collections.abc import Callable
 from typing import NamedTuple
@@ -42,9 +43,8 @@ from modular_rag.contracts.engine import (
     DocumentEngine,
     EngineCapability,
     EngineRequest,
-    ExecutionContext,
 )
-from modular_rag.core.errors import EngineCapabilityError, PolicyViolationError
+from modular_rag.core.errors import EngineCapabilityError, PolicyViolationError, StorageError
 from modular_rag.core.models.query import Query
 from tests.contract.fakes.foreign_application import (
     APP_CLAIMED_TENANT,
@@ -52,69 +52,30 @@ from tests.contract.fakes.foreign_application import (
     TENANT_B,
     AuditLog,
     Controls,
-    ForeignApp,
     ForeignApplicationAdapter,
+    adapter_factory,
+    governed_factory,
+    opaque_factory,
+    partial_factory,
+)
+from tests.contract.fakes.foreign_probes import (
+    context as _context,
+)
+from tests.contract.fakes.foreign_probes import (
+    is_denied,
+    lost_terminal_event_is_surfaced,
+    open_result,
+    serves,
+    stream_texts,
+)
+from tests.contract.fakes.foreign_probes import (
+    request as _request,
 )
 
 Make = Callable[..., ForeignApplicationAdapter]
-
-_ALL_HOOKS_BLOCKING = {
-    ControlPoint.RETRIEVAL_RESULT: True,
-    ControlPoint.PRE_MODEL_EGRESS: True,
-    ControlPoint.TOOL_INVOCATION: True,
-    ControlPoint.STREAM_CHUNK: True,
-}
-
-
-def _context(tenant: str | None = TENANT_A, request_id: str = "req-1") -> ExecutionContext:
-    return ExecutionContext(tenant_id=tenant, correlation_id="corr-1", request_id=request_id)
-
-
-def _request(text: str = "what is the policy?") -> EngineRequest:
-    return EngineRequest(query=Query(text=text))
-
-
-def _factory(
-    *, review: bool = False, **app_kwargs: object
-) -> Make:
-    def make(*, controls: Controls | None = None, audit: AuditLog | None = None):
-        return ForeignApplicationAdapter(
-            ForeignApp(**app_kwargs),  # type: ignore[arg-type]
-            controls=controls,
-            audit=audit,
-            review_sink=(lambda _request_id: None) if review else None,
-        )
-
-    return make
-
-
-def _governed(**overrides: object) -> Make:
-    kwargs: dict[str, object] = {
-        "hook_surface": dict(_ALL_HOOKS_BLOCKING),
-        "model_paths": {"completion": True, "rerank": True},
-        "tools": ("search",),
-        "streams": True,
-    }
-    kwargs.update(overrides)
-    return _factory(review=True, **kwargs)
-
-
-def _partial() -> Make:
-    """Hooks exist but cannot block, and one model call bypasses them."""
-    return _factory(
-        hook_surface={
-            ControlPoint.RETRIEVAL_RESULT: False,
-            ControlPoint.PRE_MODEL_EGRESS: False,
-            ControlPoint.TOOL_INVOCATION: False,
-        },
-        model_paths={"completion": True, "fallback": False},
-        tools=("search",),
-    )
-
-
-def _opaque() -> Make:
-    """The realistic floor: the adapter owns the call and nothing else."""
-    return _factory(model_paths={"completion": False})
+_governed = governed_factory
+_partial = partial_factory
+_opaque = opaque_factory
 
 
 class _Overclaiming(ForeignApplicationAdapter):
@@ -150,23 +111,21 @@ class _Overclaiming(ForeignApplicationAdapter):
 
 
 def _overclaiming() -> Make:
-    def make(*, controls: Controls | None = None, audit: AuditLog | None = None):
-        return _Overclaiming(
-            ForeignApp(
-                hook_surface={
-                    ControlPoint.RETRIEVAL_RESULT: False,
-                    ControlPoint.PRE_MODEL_EGRESS: False,
-                    ControlPoint.TOOL_INVOCATION: False,
-                    ControlPoint.STREAM_CHUNK: False,
-                },
-                model_paths={"completion": True},
-                tools=("search",),
-                streams=True,
-            ),
-            controls=controls,
-            audit=audit,
-            review_sink=lambda _request_id: None,
-        )
+    base = adapter_factory(
+        review=True,
+        hook_surface={
+            ControlPoint.RETRIEVAL_RESULT: False,
+            ControlPoint.PRE_MODEL_EGRESS: False,
+            ControlPoint.TOOL_INVOCATION: False,
+            ControlPoint.STREAM_CHUNK: False,
+        },
+        model_paths={"completion": True},
+        tools=("search",),
+        streams=True,
+    )
+
+    def make(**kwargs: object) -> ForeignApplicationAdapter:
+        return base(adapter_cls=_Overclaiming, **kwargs)
 
     return make
 
@@ -187,38 +146,13 @@ HONEST_FIXTURES: dict[str, _Fixture] = {
 
 
 def _open_result(**overrides: object) -> Controls:
-    """Controls that let a result through, so a probe isolates one effect. A
-    tenant-blind application would otherwise be (correctly) withheld, which is
-    the two-tenant probe's subject, not this one's."""
-    return Controls(admit_result=lambda *_: True, **overrides)  # type: ignore[arg-type]
+    return open_result(**overrides)
 
 
-def _serves(adapter: ForeignApplicationAdapter, tenant: str = TENANT_A) -> bool:
-    try:
-        adapter.run(_request(), _context(tenant))
-    except Exception:
-        return False
-    return True
-
-
-def _is_denied(adapter: ForeignApplicationAdapter, tenant: str = TENANT_A) -> bool:
-    try:
-        adapter.run(_request(), _context(tenant))
-    except PolicyViolationError:
-        return True
-    except Exception:
-        return False
-    return False
-
-
-async def _stream_texts(adapter: ForeignApplicationAdapter) -> list[str] | None:
-    """The fragments a caller received, or `None` when the stream was refused."""
-    try:
-        return [
-            step.metadata["text"] async for step in adapter.astream(_request(), _context())
-        ]
-    except PolicyViolationError:
-        return None
+_serves = serves
+_is_denied = is_denied
+_stream_texts = stream_texts
+_lost_terminal_event_is_surfaced = lost_terminal_event_is_surfaced
 
 
 def _probe_request_admission(make: Make) -> bool:
@@ -270,16 +204,32 @@ def _probe_egress_path(make: Make, path: EgressPath) -> bool:
     return ("egress", path.name) in adapter.controls.calls and path.name in adapter.app.provider_calls
 
 
-def _probe_two_tenants(make: Make) -> bool:
+def _two_tenant_leak_free(make: Make, controls: Controls | None = None) -> bool:
     """Tenant A's verified context must never yield tenant B's content; at
-    ENFORCED the framework withholds the result rather than recording a leak."""
-    adapter = make()
-    try:
-        result = adapter.run(_request(), _context(TENANT_A))
-    except PolicyViolationError:
-        return True
-    leaked = TENANT_B in result.text or any(TENANT_B in c.passage for c in result.citations)
-    return not leaked
+    ENFORCED the framework withholds the result rather than recording a leak.
+
+    Run over both a tenant-aware and a tenant-blind application: the first
+    proves nothing about the framework's own control, the second is the case
+    where only that control stands between tenant B and tenant A."""
+    for tenant_aware in (True, False):
+        adapter = make(controls=controls, tenant_aware=tenant_aware)
+        try:
+            result = adapter.run(_request(), _context(TENANT_A))
+        except PolicyViolationError:
+            continue
+        if TENANT_B in result.text or any(TENANT_B in c.passage for c in result.citations):
+            return False
+    return True
+
+
+async def _two_tenant_stream_leak_free(make: Make, controls: Controls | None = None) -> bool:
+    """The streaming path is not allowed to be the way around isolation."""
+    for tenant_aware in (True, False):
+        adapter = make(controls=controls, tenant_aware=tenant_aware)
+        fragments = await _stream_texts(adapter)
+        if fragments is not None and any(TENANT_B in text for text in fragments):
+            return False
+    return True
 
 
 def _probe_audit(make: Make, profile: ApplicationProfile) -> list[str]:
@@ -297,7 +247,10 @@ def _probe_audit(make: Make, profile: ApplicationProfile) -> list[str]:
     _is_denied(make(controls=_open_result(admit_request=lambda *_: False), audit=failed_log))
     if AuditEventType.RUN_FAILED not in failed_log.events:
         failures.append("audit:failed-run-unrecorded")
+    if not _lost_terminal_event_is_surfaced(make):
+        failures.append("audit:lost-run-failed-is-silent")
     return failures
+
 
 
 def _probe_closed_world(make: Make, profile: ApplicationProfile) -> bool:
@@ -339,7 +292,9 @@ def collect_profile_failures(make: Make) -> list[str]:
     if evidence_status_rank(ceiling[EvidenceKind.IDENTITY_TENANT]) > evidence_status_rank(
         EvidenceStatus.OBSERVED
     ):
-        check("identity:two-tenants", _probe_two_tenants(make))
+        check("identity:two-tenants", _two_tenant_leak_free(make))
+        if EngineCapability.STREAMING in make().capabilities:
+            check("identity:two-tenants-stream", asyncio.run(_two_tenant_stream_leak_free(make)))
     if evidence_status_rank(ceiling[EvidenceKind.AUDIT_COMPLETION]) > evidence_status_rank(
         EvidenceStatus.OBSERVED
     ):
@@ -440,6 +395,61 @@ async def test_streaming_is_refused_when_the_application_does_not_stream() -> No
     assert EngineCapability.STREAMING not in adapter.capabilities
     with pytest.raises(EngineCapabilityError):
         await _stream_texts(adapter)
+
+
+async def test_a_tenant_blind_stream_is_withheld_not_delivered() -> None:
+    """Codex pass 1 HIGH-001: streaming used to skip result admission."""
+    adapter = _governed()(tenant_aware=False)
+    assert await _stream_texts(adapter) is None
+
+
+def test_the_two_tenant_probes_fail_when_result_admission_lets_a_leak_through() -> None:
+    """Negative control: with the framework's own control removed, a
+    tenant-blind application leaks, and both probes must say so."""
+    make = _governed()
+    assert _two_tenant_leak_free(make, controls=_open_result()) is False
+    assert asyncio.run(_two_tenant_stream_leak_free(make, controls=_open_result())) is False
+
+
+def test_a_lost_terminal_audit_event_is_surfaced_and_not_reported_as_enforced() -> None:
+    """Codex pass 1 HIGH-003."""
+    make = _governed()
+    assert _lost_terminal_event_is_surfaced(make)
+    adapter = make(
+        controls=_open_result(admit_request=lambda *_: False),
+        audit=AuditLog(fail_on=frozenset({AuditEventType.RUN_FAILED})),
+    )
+    with pytest.raises(StorageError):
+        adapter.run(_request(), _context())
+    audit = adapter.conformance_report(_context()).evidence_for(EvidenceKind.AUDIT_COMPLETION)
+    assert audit.status is EvidenceStatus.UNSUPPORTED
+
+
+def test_an_adapter_that_swallows_the_lost_terminal_event_is_caught() -> None:
+    class _Silent(ForeignApplicationAdapter):
+        def _guarded(self, context, pending, body):  # type: ignore[no-untyped-def]
+            try:
+                return super()._guarded(context, pending, body)
+            except StorageError as exc:
+                raise exc.__cause__ from None  # type: ignore[misc]
+
+    def make(**kwargs: object) -> ForeignApplicationAdapter:
+        return _governed()(adapter_cls=_Silent, **kwargs)
+
+    assert not _lost_terminal_event_is_surfaced(make)
+
+
+@pytest.mark.parametrize("name", sorted(HONEST_FIXTURES))
+def test_tool_use_is_declared_exactly_when_the_application_has_tools(name: str) -> None:
+    adapter = HONEST_FIXTURES[name].make()
+    assert (EngineCapability.TOOL_USE in adapter.capabilities) is bool(adapter.app.tools)
+
+
+def test_no_usage_or_cost_is_claimed_the_application_never_reported() -> None:
+    adapter = _governed()()
+    adapter.run(_request(), _context())
+    usage = adapter.conformance_report(_context()).evidence_for(EvidenceKind.USAGE_COST)
+    assert usage.status is EvidenceStatus.UNSUPPORTED
 
 
 def test_a_hook_the_application_ignores_lowers_the_ceiling_before_deployment() -> None:

@@ -51,7 +51,7 @@ from modular_rag.contracts.engine import (
     ExecutionContext,
 )
 from modular_rag.core.enums import RetrievalMethod
-from modular_rag.core.errors import EngineCapabilityError, PolicyViolationError
+from modular_rag.core.errors import EngineCapabilityError, PolicyViolationError, StorageError
 from modular_rag.core.models.answer import Citation
 from modular_rag.core.models.chunk import Chunk
 from modular_rag.core.models.retrieved import RetrievedChunk
@@ -148,11 +148,11 @@ class ForeignApp:
 
     def stream(
         self, text: str, tenant: str, hooks: dict[ControlPoint, Callable[..., None]]
-    ) -> Iterator[str]:
+    ) -> Iterator[Doc]:
         docs = self._begin(tenant, hooks)
         for doc in docs:
             self._fire(ControlPoint.STREAM_CHUNK, hooks, doc.text)
-            yield doc.text
+            yield doc
 
     def _begin(self, tenant: str, hooks: dict[ControlPoint, Callable[..., None]]) -> list[Doc]:
         self.invocations += 1
@@ -230,10 +230,19 @@ class ForeignApplicationAdapter:
         self.audit = audit if audit is not None else AuditLog()
         self._review_sink = review_sink
         self._provenance: dict[str, EvidenceStatus] = {}
+        # True only when every event of the request's run was persisted, the
+        # terminal one included; a report must never claim audit enforcement
+        # on top of a lost event.
+        self._audit_complete: dict[str, bool] = {}
 
     @property
     def capabilities(self) -> frozenset[EngineCapability]:
-        return frozenset({EngineCapability.STREAMING}) if self.app.streams else frozenset()
+        capabilities: set[EngineCapability] = set()
+        if self.app.streams:
+            capabilities.add(EngineCapability.STREAMING)
+        if self.app.tools:
+            capabilities.add(EngineCapability.TOOL_USE)
+        return frozenset(capabilities)
 
     def name(self) -> str:
         return "foreign-fixture"
@@ -345,24 +354,34 @@ class ForeignApplicationAdapter:
         self, context: ExecutionContext, pending: list[AuditEventType], body: Callable[[], Any]
     ) -> Any:
         """Owns audit completion: a result is released only after every event
-        was persisted, and a failed run is audited best-effort."""
+        was persisted. A failed run is audited too; if its terminal event
+        cannot be persisted the caller gets `StorageError`, never a quiet
+        loss, and the request is not reported as audit-complete."""
+        request_id = context.request_id
         pending.insert(0, AuditEventType.QUERY_RECEIVED)
-        self._provenance.pop(context.request_id, None)
+        self._provenance.pop(request_id, None)
+        self._audit_complete.pop(request_id, None)
         try:
             outcome = body()
             pending.append(AuditEventType.RUN_SUCCEEDED)
             self._flush(pending)
-            return outcome
-        except Exception:
-            self._provenance.pop(context.request_id, None)
-            failed = [e for e in pending if e is not AuditEventType.RUN_SUCCEEDED]
-            failed.append(AuditEventType.RUN_FAILED)
-            for event in failed:
+        except Exception as exc:
+            self._provenance.pop(request_id, None)
+            lost = False
+            for event in [
+                *(e for e in pending if e is not AuditEventType.RUN_SUCCEEDED),
+                AuditEventType.RUN_FAILED,
+            ]:
                 try:
                     self.audit.record(event)
                 except Exception:
-                    continue
+                    lost = True
+            self._audit_complete[request_id] = not lost
+            if lost:
+                raise StorageError("run audit could not be fully persisted") from exc
             raise
+        self._audit_complete[request_id] = True
+        return outcome
 
     def run(self, request: EngineRequest, context: ExecutionContext) -> EngineResult:
         pending: list[AuditEventType] = []
@@ -383,15 +402,7 @@ class ForeignApplicationAdapter:
             if self._review_sink is not None:
                 self._review_sink(context.request_id)
             retrieved = [self._as_retrieved(doc) for doc in out.docs]
-            citations = [
-                Citation(
-                    chunk_id=hit.chunk.id,
-                    source=hit.chunk.metadata["source"],
-                    passage=hit.chunk.content,
-                    score=hit.score,
-                )
-                for hit in retrieved
-            ]
+            citations = self.build_citations(retrieved)
             self._provenance[context.request_id] = classify_provenance(citations, retrieved)
             return EngineResult(
                 text=out.text,
@@ -415,17 +426,44 @@ class ForeignApplicationAdapter:
 
         def body() -> None:
             tenant = self._admit(request, context, pending)
+            docs: list[Doc] = []
             try:
-                for text in self.app.stream(request.query.text, tenant, self._hooks(tenant, pending)):
-                    emitted.append(EngineStep("chunk", metadata={"text": text}))
+                for doc in self.app.stream(
+                    request.query.text, tenant, self._hooks(tenant, pending)
+                ):
+                    docs.append(doc)
+                    emitted.append(EngineStep("chunk", metadata={"text": doc.text}))
             except Denied as exc:
                 raise PolicyViolationError("stream fragment denied") from exc
+            # Same result admission as run(): a stream must not be the path
+            # around tenant isolation.
+            allowed = self._ask(
+                "result", tenant, lambda: self.controls.admit_result(tenant, docs)
+            )
+            pending.append(AuditEventType.GUARD_DECISION)
+            if not allowed:
+                raise PolicyViolationError("stream withheld at result admission")
 
-        # Fragments are only handed to the caller once the run's audit is
-        # complete; the denied chunk and everything after it never appears.
+        # Fragments are handed to the caller only once admission and the run's
+        # audit are complete; a denied chunk, and everything buffered before
+        # it, never appears.
         self._guarded(context, pending, body)
         for step in emitted:
             yield step
+
+    def build_citations(self, retrieved: list[RetrievedChunk]) -> list[Citation]:
+        """The citation-producing seam, split out so a test double can lie
+        here while `classify_provenance()` underneath stays the framework's
+        own check."""
+        return [
+            Citation(
+                chunk_id=hit.chunk.id,
+                source=hit.chunk.metadata["source"],
+                passage=hit.chunk.content,
+                score=hit.score,
+            )
+            for hit in retrieved
+        ]
 
     @staticmethod
     def _as_retrieved(doc: Doc) -> RetrievedChunk:
@@ -455,8 +493,13 @@ class ForeignApplicationAdapter:
             ),
             EvidenceKind.EGRESS_DECISION: EvidenceStatus.ENFORCED,
             EvidenceKind.POLICY_DECISION: EvidenceStatus.ENFORCED,
-            EvidenceKind.AUDIT_COMPLETION: EvidenceStatus.ENFORCED,
-            EvidenceKind.USAGE_COST: EvidenceStatus.OBSERVED,
+            EvidenceKind.AUDIT_COMPLETION: (
+                EvidenceStatus.ENFORCED
+                if self._audit_complete.get(context.request_id)
+                else EvidenceStatus.UNSUPPORTED
+            ),
+            # The application reports no usage or cost, so none is claimed.
+            EvidenceKind.USAGE_COST: EvidenceStatus.UNSUPPORTED,
             EvidenceKind.FEEDBACK_REVIEW_ROUTING: (
                 EvidenceStatus.ENFORCED
                 if self._review_sink is not None
@@ -477,3 +520,66 @@ class ForeignApplicationAdapter:
         return ConformanceReport(
             adapter_name=self.name(), adapter_version=self.engine_version(), evidence=evidence
         )
+
+
+AdapterFactory = Callable[..., ForeignApplicationAdapter]
+
+ALL_HOOKS_BLOCKING: dict[ControlPoint, bool] = {
+    ControlPoint.RETRIEVAL_RESULT: True,
+    ControlPoint.PRE_MODEL_EGRESS: True,
+    ControlPoint.TOOL_INVOCATION: True,
+    ControlPoint.STREAM_CHUNK: True,
+}
+
+
+def adapter_factory(*, review: bool = False, **app_kwargs: Any) -> AdapterFactory:
+    """A factory a probe can call repeatedly for a fresh application, with its
+    own controls, audit sink, review sink, adapter class or application
+    overrides."""
+
+    def make(
+        *,
+        controls: Controls | None = None,
+        audit: AuditLog | None = None,
+        review_sink: Callable[[str], None] | None = None,
+        adapter_cls: type[ForeignApplicationAdapter] = ForeignApplicationAdapter,
+        **app_overrides: Any,
+    ) -> ForeignApplicationAdapter:
+        sink = review_sink if review_sink is not None else ((lambda _id: None) if review else None)
+        return adapter_cls(
+            ForeignApp(**{**app_kwargs, **app_overrides}),
+            controls=controls,
+            audit=audit,
+            review_sink=sink,
+        )
+
+    return make
+
+
+def governed_factory(**overrides: Any) -> AdapterFactory:
+    kwargs: dict[str, Any] = {
+        "hook_surface": dict(ALL_HOOKS_BLOCKING),
+        "model_paths": {"completion": True, "rerank": True},
+        "tools": ("search",),
+        "streams": True,
+    }
+    kwargs.update(overrides)
+    return adapter_factory(review=True, **kwargs)
+
+
+def partial_factory() -> AdapterFactory:
+    """Hooks exist but cannot block, and one model call bypasses them."""
+    return adapter_factory(
+        hook_surface={
+            ControlPoint.RETRIEVAL_RESULT: False,
+            ControlPoint.PRE_MODEL_EGRESS: False,
+            ControlPoint.TOOL_INVOCATION: False,
+        },
+        model_paths={"completion": True, "fallback": False},
+        tools=("search",),
+    )
+
+
+def opaque_factory() -> AdapterFactory:
+    """The realistic floor: the adapter owns the call and nothing else."""
+    return adapter_factory(model_paths={"completion": False})

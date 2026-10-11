@@ -15,6 +15,7 @@ import pytest
 
 from modular_rag.adapters.llms.langgraph_engine import LangGraphEngineAdapter
 from modular_rag.app.container import Container
+from modular_rag.contracts.application import ControlPointSupport, required_audit_events
 from modular_rag.contracts.assurance import (
     AssuranceLevel,
     ConformanceReport,
@@ -23,6 +24,7 @@ from modular_rag.contracts.assurance import (
     EvidenceStatus,
     evidence_status_rank,
 )
+from modular_rag.contracts.audit import AuditEventType
 from modular_rag.contracts.egress import EgressDecision
 from modular_rag.contracts.engine import (
     CancellationToken,
@@ -40,6 +42,7 @@ from modular_rag.core.errors import (
     EngineCancelledError,
     EngineCapabilityError,
     SecurityError,
+    StorageError,
 )
 from modular_rag.core.models.answer import Answer, Citation
 from modular_rag.core.models.chunk import Chunk
@@ -49,6 +52,30 @@ from modular_rag.generation.citations.builder import build_citations
 from modular_rag.orchestration.engine import RAGEngine
 from modular_rag.orchestration.native_engine import NativeEngineAdapter
 from tests.contract.fakes.document_engine import FakeDocumentEngine
+from tests.contract.fakes.foreign_application import (
+    TENANT_A,
+    TENANT_B,
+    AdapterFactory,
+    AuditLog,
+    Controls,
+    ForeignApplicationAdapter,
+    governed_factory,
+    opaque_factory,
+    partial_factory,
+)
+from tests.contract.fakes.foreign_probes import (
+    context as foreign_context,
+)
+from tests.contract.fakes.foreign_probes import (
+    is_denied,
+    lost_terminal_event_is_surfaced,
+    open_result,
+    serves,
+    stream_texts,
+)
+from tests.contract.fakes.foreign_probes import (
+    request as foreign_request,
+)
 
 
 def _context(**overrides: object) -> ExecutionContext:
@@ -888,10 +915,182 @@ def _fake_fixture() -> _EngineFixture:
     )
 
 
+class _FabricatingForeignAdapter(ForeignApplicationAdapter):
+    """Cites a genuinely retrieved chunk id with a passage that was never
+    retrieved, overriding only the citation seam so the adapter's own
+    `classify_provenance()` runs unmodified underneath it."""
+
+    def build_citations(self, retrieved: list[RetrievedChunk]) -> list[Citation]:
+        return [
+            Citation(
+                chunk_id=hit.chunk.id,
+                source="fabricated.pdf",
+                passage="text that was never retrieved",
+                score=hit.score,
+            )
+            for hit in retrieved
+        ]
+
+
+def _foreign_fixture(name: str, make: AdapterFactory) -> _EngineFixture:
+    """Registers an existing-application adapter in the shared status-aware
+    harness (ADR-0018 §9: extend this mechanism, never duplicate it). A probe
+    is defined for every evidence kind the adapter can claim, at every rung it
+    can claim it, so the harness rejects a report entry nothing demonstrates."""
+    engine = make()
+    context = foreign_context(request_id=f"{name}-served")
+    engine.run(foreign_request(), context)
+    profile = engine.application_profile
+    served_floor = required_audit_events(profile.bindings, profile.egress_paths) - {
+        AuditEventType.RUN_FAILED
+    }
+    paths = [p for p in profile.egress_paths if p.support is not ControlPointSupport.UNAVAILABLE]
+
+    def identity_observed() -> _ProbeResult:
+        adapter = make(controls=open_result())
+        serves(adapter)
+        return _ProbeResult(
+            adapter.app.received_tenants == [TENANT_A],
+            "the application did not receive the verified tenant",
+        )
+
+    def identity_verified() -> _ProbeResult:
+        adapter = make(controls=open_result())
+        adapter.run(foreign_request(tenant_id=TENANT_B), foreign_context(TENANT_A))
+        return _ProbeResult(
+            adapter.app.received_tenants == [TENANT_A],
+            "a tenant carried by the query replaced the verified one",
+        )
+
+    def identity_enforced() -> _ProbeResult:
+        missing = make()
+        refused = is_denied(missing, tenant=None)  # type: ignore[arg-type]
+        blind = make(tenant_aware=False)
+        return _ProbeResult(
+            refused and missing.app.invocations == 0 and is_denied(blind),
+            "a missing tenant reached the application, or tenant-blind content was not withheld",
+        )
+
+    def provenance_observed() -> _ProbeResult:
+        return _ProbeResult(
+            bool(make().run(foreign_request(), foreign_context()).citations),
+            "the completed run returned no citations at all",
+        )
+
+    def provenance_verified() -> _ProbeResult:
+        liar = make(adapter_cls=_FabricatingForeignAdapter)
+        ctx = foreign_context(request_id="probe-fabricated")
+        liar.run(foreign_request(), ctx)
+        status = liar.conformance_report(ctx).evidence_for(EvidenceKind.RETRIEVAL_PROVENANCE).status
+        return _ProbeResult(
+            evidence_status_rank(status) < evidence_status_rank(EvidenceStatus.VERIFIED),
+            f"a fabricated passage was still reported as {status.value}",
+        )
+
+    def egress_observed() -> _ProbeResult:
+        adapter = make(controls=open_result())
+        serves(adapter)
+        seen = all(("egress", p.name) in adapter.controls.calls for p in paths)
+        return _ProbeResult(bool(paths) and seen, "a declared egress path was never consulted")
+
+    def egress_enforced() -> _ProbeResult:
+        for path in paths:
+            adapter = make(controls=open_result(admit_egress=lambda _t, n, p=path.name: n != p))
+            if not is_denied(adapter) or path.name in adapter.app.provider_calls:
+                return _ProbeResult(False, f"path {path.name!r} was reached despite a denial")
+        return _ProbeResult(bool(paths), "no egress path to deny")
+
+    def policy_observed() -> _ProbeResult:
+        adapter = make()
+        serves(adapter)
+        return _ProbeResult(
+            ("request", TENANT_A) in adapter.controls.calls, "request admission was never consulted"
+        )
+
+    def policy_enforced() -> _ProbeResult:
+        denied = make(controls=open_result(admit_request=lambda *_: False))
+        withheld = make(controls=Controls(admit_result=lambda *_: False))
+        return _ProbeResult(
+            is_denied(denied) and denied.app.invocations == 0 and is_denied(withheld),
+            "a denied request reached the application or a denied result was released",
+        )
+
+    def audit_observed() -> _ProbeResult:
+        log = AuditLog()
+        serves(make(controls=open_result(), audit=log))
+        return _ProbeResult(
+            {AuditEventType.QUERY_RECEIVED, AuditEventType.RUN_SUCCEEDED} <= set(log.events),
+            "a served request left no audit record",
+        )
+
+    def audit_enforced() -> _ProbeResult:
+        for event in sorted(served_floor):
+            adapter = make(controls=open_result(), audit=AuditLog(fail_on=frozenset({event})))
+            if serves(adapter):
+                return _ProbeResult(False, f"a lost {event.value} event still released the result")
+        return _ProbeResult(
+            lost_terminal_event_is_surfaced(make),
+            "a lost terminal RUN_FAILED event was neither surfaced nor withheld from the report",
+        )
+
+    def review_observed() -> _ProbeResult:
+        seen: list[str] = []
+        serves(make(controls=open_result(), review_sink=seen.append))
+        return _ProbeResult(seen == ["req-1"], "the review sink was never given the request")
+
+    def review_enforced() -> _ProbeResult:
+        def unavailable(_request_id: str) -> None:
+            raise RuntimeError("review queue unavailable")
+
+        return _ProbeResult(
+            not serves(make(controls=open_result(), review_sink=unavailable)),
+            "a request was released although the review queue rejected it",
+        )
+
+    def streaming_enforced() -> _ProbeResult:
+        adapter = make(controls=open_result(admit_chunk=lambda *_: False))
+        return _ProbeResult(
+            asyncio.run(stream_texts(adapter)) is None,
+            "a fragment was emitted despite a denying chunk control",
+        )
+
+    return _EngineFixture(
+        name=name,
+        engine=engine,
+        context=context,
+        probes={
+            EvidenceKind.IDENTITY_TENANT: _StatusProbe(
+                observed=identity_observed,
+                verified=identity_verified,
+                enforced=identity_enforced,
+            ),
+            EvidenceKind.RETRIEVAL_PROVENANCE: _StatusProbe(
+                observed=provenance_observed, verified=provenance_verified
+            ),
+            EvidenceKind.EGRESS_DECISION: _StatusProbe(
+                observed=egress_observed, enforced=egress_enforced
+            ),
+            EvidenceKind.POLICY_DECISION: _StatusProbe(
+                observed=policy_observed, enforced=policy_enforced
+            ),
+            EvidenceKind.AUDIT_COMPLETION: _StatusProbe(
+                observed=audit_observed, enforced=audit_enforced
+            ),
+            EvidenceKind.FEEDBACK_REVIEW_ROUTING: _StatusProbe(
+                observed=review_observed, enforced=review_enforced
+            ),
+            EvidenceKind.STREAMING_PREVALIDATION: _StatusProbe(enforced=streaming_enforced),
+        },
+    )
+
+
 _FIXTURE_FACTORIES: dict[str, Callable[[], _EngineFixture]] = {
     "fake": _fake_fixture,
     "native": _native_fixture,
     "langgraph": _langgraph_fixture,
+    "foreign-governed": lambda: _foreign_fixture("foreign-governed", governed_factory()),
+    "foreign-partial": lambda: _foreign_fixture("foreign-partial", partial_factory()),
+    "foreign-opaque": lambda: _foreign_fixture("foreign-opaque", opaque_factory()),
 }
 
 
@@ -951,6 +1150,62 @@ def test_the_suite_has_a_real_honestly_unsupported_capability_to_exercise() -> N
     is exercised rather than assumed."""
     assert EngineCapability.STREAMING not in _make_native().capabilities
     assert EngineCapability.STREAMING in _make_langgraph().capabilities
+
+
+class _UsageClaimingForeignAdapter(ForeignApplicationAdapter):
+    """Claims `USAGE_COST: OBSERVED` although the application never reports
+    usage — the unproved claim Codex pass 1 HIGH-002 found in the fixture."""
+
+    def conformance_report(self, context: ExecutionContext) -> ConformanceReport:
+        honest = super().conformance_report(context)
+        evidence = tuple(
+            EvidenceEntry(entry.kind, EvidenceStatus.OBSERVED)
+            if entry.kind is EvidenceKind.USAGE_COST
+            else entry
+            for entry in honest.evidence
+        )
+        return ConformanceReport(
+            adapter_name=honest.adapter_name,
+            adapter_version=honest.adapter_version,
+            evidence=evidence,
+        )
+
+
+class _SilentAuditLossForeignAdapter(ForeignApplicationAdapter):
+    """Swallows the error raised when a failed run's terminal audit event is
+    lost, so the caller sees only the original failure."""
+
+    def _guarded(self, context, pending, body):  # type: ignore[no-untyped-def]
+        try:
+            return super()._guarded(context, pending, body)
+        except StorageError as exc:
+            raise exc.__cause__ from None  # type: ignore[misc]
+
+
+def _foreign_fixture_around(adapter_cls: type[ForeignApplicationAdapter]) -> _EngineFixture:
+    base = governed_factory()
+
+    def make(**kwargs: object) -> ForeignApplicationAdapter:
+        kwargs.setdefault("adapter_cls", adapter_cls)  # a probe may substitute its own
+        return base(**kwargs)
+
+    return _foreign_fixture("foreign-negative-control", make)
+
+
+def test_the_shared_harness_rejects_a_foreign_adapter_claiming_unproved_usage() -> None:
+    failures = collect_claim_failures(_foreign_fixture_around(_UsageClaimingForeignAdapter))
+    assert any("usage_cost=observed" in f and "no behavioural probe" in f for f in failures)
+
+
+def test_the_shared_harness_rejects_a_foreign_adapter_that_loses_the_terminal_audit_silently() -> (
+    None
+):
+    failures = collect_claim_failures(_foreign_fixture_around(_SilentAuditLossForeignAdapter))
+    assert any("audit_completion=enforced" in f for f in failures)
+
+
+def test_the_shared_harness_accepts_the_honest_foreign_governed_adapter() -> None:
+    assert collect_claim_failures(_foreign_fixture_around(ForeignApplicationAdapter)) == []
 
 
 # --- the negative input: a deliberately overclaiming engine ------------------
