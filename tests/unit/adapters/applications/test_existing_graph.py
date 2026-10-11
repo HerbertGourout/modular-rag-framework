@@ -147,3 +147,18 @@ def test_manifest_without_egress_policy_is_rejected_at_startup(tmp_path: Path) -
     errors = runtime_manifest_errors(load_manifest(path))
 
     assert any("egress_policy is required" in e for e in errors)
+
+def test_restricted_plus_unclassified_context_is_denied_for_a_public_only_provider() -> None:
+    from modular_rag.security.policies.egress_policy import ManifestEgressPolicy
+
+    corpus = (
+        *_RESTRICTED_DOC,
+        {"id": "u1", "tenant_id": "tenant-a", "text": "unclassified note", "source": "kb://u"},
+    )
+    policy = ManifestEgressPolicy(
+        providers={"remote": {"local": False, "max_classification": "public"}},
+        default_classification="public",
+    )
+
+    with pytest.raises(PolicyViolationError):
+        _adapter(policy, corpus).run(_request(), _ctx())

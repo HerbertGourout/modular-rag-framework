@@ -62,7 +62,6 @@ from modular_rag.contracts.security import Redactor, SecurityGuard, TenantPolicy
 from modular_rag.core.enums import (
     DataClassification,
     RetrievalMethod,
-    combined_classification,
 )
 from modular_rag.core.errors import (
     EngineCapabilityError,
@@ -401,15 +400,20 @@ class ExistingGraphApplicationAdapter:
                     )
                 )
                 raise _Denied
+            # Each distinct level is checked on its own: combined_classification() returns None
+            # when any document is unclassified, which would hide a classified sibling.
+            allowed, reason = True, "allowed"
             try:
-                decision = policy.check(
-                    classification=combined_classification(classifications)
-                    if classifications
-                    else None,
-                    provider=self._egress_provider,
-                    operation=EgressOperation.GENERATE,
-                )
-                allowed, reason = decision.allowed, decision.reason
+                for level in set(classifications) or {None}:
+                    decision = policy.check(
+                        classification=level,
+                        provider=self._egress_provider,
+                        operation=EgressOperation.GENERATE,
+                    )
+                    if not decision.allowed:
+                        allowed, reason = False, decision.reason
+                        break
+                    reason = decision.reason
             except Exception:
                 allowed, reason = False, "egress policy could not decide"
             pending.append(
