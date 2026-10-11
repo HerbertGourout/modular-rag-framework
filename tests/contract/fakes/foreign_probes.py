@@ -63,6 +63,22 @@ async def stream_texts(adapter: ForeignApplicationAdapter) -> list[str] | None:
         return None
 
 
+def stream_serves(adapter: ForeignApplicationAdapter) -> bool:
+    """True only when the whole stream was delivered; any failure, whatever
+    its type, means nothing was released."""
+    import asyncio
+
+    async def drain() -> None:
+        async for _step in adapter.astream(request(), context()):
+            pass
+
+    try:
+        asyncio.run(drain())
+    except Exception:
+        return False
+    return True
+
+
 def lost_terminal_event_is_surfaced(make: Any) -> bool:
     """A failed run whose `RUN_FAILED` cannot be persisted must say so to the
     caller and must not be reported as audit-complete."""

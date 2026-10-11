@@ -71,6 +71,7 @@ from tests.contract.fakes.foreign_probes import (
     lost_terminal_event_is_surfaced,
     open_result,
     serves,
+    stream_serves,
     stream_texts,
 )
 from tests.contract.fakes.foreign_probes import (
@@ -1015,19 +1016,26 @@ def _foreign_fixture(name: str, make: AdapterFactory) -> _EngineFixture:
             "a denied request reached the application or a denied result was released",
         )
 
+    streams = EngineCapability.STREAMING in engine.capabilities
+
     def audit_observed() -> _ProbeResult:
         log = AuditLog()
         serves(make(controls=open_result(), audit=log))
-        return _ProbeResult(
-            {AuditEventType.QUERY_RECEIVED, AuditEventType.RUN_SUCCEEDED} <= set(log.events),
-            "a served request left no audit record",
-        )
+        basic = {AuditEventType.QUERY_RECEIVED, AuditEventType.RUN_SUCCEEDED} <= set(log.events)
+        if streams:
+            stream_log = AuditLog()
+            stream_serves(make(controls=open_result(), audit=stream_log))
+            # A streamed request owes the same derived floor as a plain one.
+            basic = basic and served_floor <= set(stream_log.events)
+        return _ProbeResult(basic, "a served request left an incomplete audit record")
 
     def audit_enforced() -> _ProbeResult:
         for event in sorted(served_floor):
-            adapter = make(controls=open_result(), audit=AuditLog(fail_on=frozenset({event})))
-            if serves(adapter):
+            lossy = AuditLog(fail_on=frozenset({event}))
+            if serves(make(controls=open_result(), audit=lossy)):
                 return _ProbeResult(False, f"a lost {event.value} event still released the result")
+            if streams and stream_serves(make(controls=open_result(), audit=lossy)):
+                return _ProbeResult(False, f"a lost {event.value} event still released the stream")
         return _ProbeResult(
             lost_terminal_event_is_surfaced(make),
             "a lost terminal RUN_FAILED event was neither surfaced nor withheld from the report",
@@ -1036,15 +1044,24 @@ def _foreign_fixture(name: str, make: AdapterFactory) -> _EngineFixture:
     def review_observed() -> _ProbeResult:
         seen: list[str] = []
         serves(make(controls=open_result(), review_sink=seen.append))
-        return _ProbeResult(seen == ["req-1"], "the review sink was never given the request")
+        ok = seen == ["req-1"]
+        if streams:
+            streamed: list[str] = []
+            stream_serves(make(controls=open_result(), review_sink=streamed.append))
+            ok = ok and streamed == ["req-1"]
+        return _ProbeResult(ok, "the review sink was never given the request")
 
     def review_enforced() -> _ProbeResult:
         def unavailable(_request_id: str) -> None:
             raise RuntimeError("review queue unavailable")
 
+        blocked = not serves(make(controls=open_result(), review_sink=unavailable))
+        if streams:
+            blocked = blocked and not stream_serves(
+                make(controls=open_result(), review_sink=unavailable)
+            )
         return _ProbeResult(
-            not serves(make(controls=open_result(), review_sink=unavailable)),
-            "a request was released although the review queue rejected it",
+            blocked, "a request was released although the review queue rejected it"
         )
 
     def streaming_enforced() -> _ProbeResult:
@@ -1182,6 +1199,26 @@ class _SilentAuditLossForeignAdapter(ForeignApplicationAdapter):
             raise exc.__cause__ from None  # type: ignore[misc]
 
 
+class _StreamSkipsReleaseForeignAdapter(ForeignApplicationAdapter):
+    """Honest on `run()`, but a successful stream skips the generation audit
+    event and review routing — Codex pass 2 HIGH-002, kept as a regression
+    control so the shared probes must exercise the stream path."""
+
+    _streaming = False
+
+    def _release(self, context, pending):  # type: ignore[no-untyped-def]
+        if not self._streaming:
+            super()._release(context, pending)
+
+    async def astream(self, request, context):  # type: ignore[no-untyped-def]
+        self._streaming = True
+        try:
+            async for step in super().astream(request, context):
+                yield step
+        finally:
+            self._streaming = False
+
+
 def _foreign_fixture_around(adapter_cls: type[ForeignApplicationAdapter]) -> _EngineFixture:
     base = governed_factory()
 
@@ -1202,6 +1239,12 @@ def test_the_shared_harness_rejects_a_foreign_adapter_that_loses_the_terminal_au
 ):
     failures = collect_claim_failures(_foreign_fixture_around(_SilentAuditLossForeignAdapter))
     assert any("audit_completion=enforced" in f for f in failures)
+
+
+def test_the_shared_harness_rejects_a_foreign_adapter_whose_stream_skips_audit_and_review() -> None:
+    failures = collect_claim_failures(_foreign_fixture_around(_StreamSkipsReleaseForeignAdapter))
+    assert any("audit_completion=enforced" in f for f in failures)
+    assert any("feedback_review_routing=enforced" in f for f in failures)
 
 
 def test_the_shared_harness_accepts_the_honest_foreign_governed_adapter() -> None:

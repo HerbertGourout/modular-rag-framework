@@ -397,10 +397,7 @@ class ForeignApplicationAdapter:
             pending.append(AuditEventType.GUARD_DECISION)
             if not allowed:
                 raise PolicyViolationError("result withheld at admission")
-            if self.app.model_paths:
-                pending.append(AuditEventType.GENERATION_PERFORMED)
-            if self._review_sink is not None:
-                self._review_sink(context.request_id)
+            self._release(context, pending)
             retrieved = [self._as_retrieved(doc) for doc in out.docs]
             citations = self.build_citations(retrieved)
             self._provenance[context.request_id] = classify_provenance(citations, retrieved)
@@ -443,6 +440,7 @@ class ForeignApplicationAdapter:
             pending.append(AuditEventType.GUARD_DECISION)
             if not allowed:
                 raise PolicyViolationError("stream withheld at result admission")
+            self._release(context, pending)
 
         # Fragments are handed to the caller only once admission and the run's
         # audit are complete; a denied chunk, and everything buffered before
@@ -450,6 +448,15 @@ class ForeignApplicationAdapter:
         self._guarded(context, pending, body)
         for step in emitted:
             yield step
+
+    def _release(self, context: ExecutionContext, pending: list[AuditEventType]) -> None:
+        """What every served request owes once its result is admitted, on the
+        run and the stream path alike: the generation audit event, and review
+        routing that must succeed before anything is released."""
+        if self.app.model_paths:
+            pending.append(AuditEventType.GENERATION_PERFORMED)
+        if self._review_sink is not None:
+            self._review_sink(context.request_id)
 
     def build_citations(self, retrieved: list[RetrievedChunk]) -> list[Citation]:
         """The citation-producing seam, split out so a test double can lie

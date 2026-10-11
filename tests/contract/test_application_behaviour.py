@@ -66,6 +66,7 @@ from tests.contract.fakes.foreign_probes import (
     lost_terminal_event_is_surfaced,
     open_result,
     serves,
+    stream_serves,
     stream_texts,
 )
 from tests.contract.fakes.foreign_probes import (
@@ -249,6 +250,11 @@ def _probe_audit(make: Make, profile: ApplicationProfile) -> list[str]:
         failures.append("audit:failed-run-unrecorded")
     if not _lost_terminal_event_is_surfaced(make):
         failures.append("audit:lost-run-failed-is-silent")
+    if EngineCapability.STREAMING in make().capabilities:
+        stream_log = AuditLog()
+        streamed = stream_serves(make(controls=_open_result(), audit=stream_log))
+        if not streamed or not served_floor <= set(stream_log.events):
+            failures.append("audit:stream-coverage")
     return failures
 
 
