@@ -1,0 +1,61 @@
+# Status: RUNNABLE (demo pilot) - Lot 22 (ADR-0018). Wraps the standalone LangGraph application in
+# examples/existing_graph_app/ behind the framework's governance. The application is synthetic:
+# this preset is NOT the real-application pilot required by Lot 22's acceptance evidence.
+# The chunker/embedder/indexer/retriever/generator below are required by the manifest schema and
+# feed the framework's own egress and audit wiring; the wrapped application brings its own.
+version: "2.0"
+id: existing-graph-app
+description: "Existing LangGraph application behind the existing-graph adapter."
+tenant: default
+environment: dev
+
+chunker:
+  type: fixed
+  config:
+    chunk_size: 512
+
+embedder:
+  type: deterministic
+  config: {}
+
+indexer:
+  type: qdrant
+  config:
+    collection: existing_graph_documents
+    url: "http://localhost:6333"
+
+retriever:
+  type: vector
+  config: {}
+
+generator:
+  type: deterministic
+  config: {}
+
+security:
+  type: basic
+  config:
+    max_query_length: 4000
+
+governance:
+  tenant_enforcement: true
+  tenant_policy:
+    type: tenant-isolation
+    config: {}
+  audit_sink:
+    type: in-memory
+    config: {}
+  egress_policy:
+    type: manifest
+    config:
+      providers:
+        deterministic: {local: true}
+
+assurance:
+  min_level: l1
+
+engine:
+  adapter: existing-graph
+  config:
+    application: "examples.existing_graph_app.app:build_app"
+    egress_provider: deterministic

@@ -12,6 +12,7 @@ from modular_rag.contracts.assurance import (
     EvidenceStatus,
     assurance_level_rank,
     compute_achieved_level,
+    evidence_status_rank,
 )
 from modular_rag.contracts.audit import AuditSink
 from modular_rag.contracts.egress import EgressPolicy
@@ -41,6 +42,9 @@ _Factory = Callable[[ComponentConfig], Any]
 # engine.adapter check below).
 _KNOWN_REMOTE_PROVIDER_TYPES = frozenset({"openai", "anthropic", "openai-embeddings"})
 
+# Lot 22 (ADR-0018 §14): the single explicit existing-application adapter name, selected by one
+# branch in the composition root. A general engine-adapter registry is out of scope.
+EXISTING_GRAPH_ADAPTER = "existing-graph"
 
 def _capability_evidence(
     *,
@@ -76,6 +80,9 @@ def _capability_evidence(
     declare `assurance.min_level: X` before serving traffic?"
     """
     is_langgraph = adapter == "langgraph"
+    # An existing-application adapter (Lot 22) records audit events itself but has no review
+    # queue, usage/cost source or streaming path, so those stay UNSUPPORTED like LangGraph's.
+    is_application = adapter == EXISTING_GRAPH_ADAPTER
     # LangGraph never reaches RAGEngine's audit emission, human-review
     # queueing, or generation token/cost metrics; governance.audit_sink,
     # review_queue and feedback_sink are themselves rejected for this adapter
@@ -93,7 +100,7 @@ def _capability_evidence(
         EvidenceEntry(
             EvidenceKind.POLICY_DECISION,
             EvidenceStatus.ENFORCED
-            if (guard_usable or (policy_engine_usable and not is_langgraph))
+            if (guard_usable or (policy_engine_usable and not (is_langgraph or is_application)))
             else EvidenceStatus.UNSUPPORTED,
         ),
         EvidenceEntry(
@@ -105,13 +112,13 @@ def _capability_evidence(
         EvidenceEntry(
             EvidenceKind.USAGE_COST,
             EvidenceStatus.OBSERVED
-            if (meter_usable and not is_langgraph)
+            if (meter_usable and not (is_langgraph or is_application))
             else EvidenceStatus.UNSUPPORTED,
         ),
         EvidenceEntry(
             EvidenceKind.FEEDBACK_REVIEW_ROUTING,
             EvidenceStatus.ENFORCED
-            if (review_queue_usable and not is_langgraph)
+            if (review_queue_usable and not (is_langgraph or is_application))
             else EvidenceStatus.UNSUPPORTED,
         ),
         EvidenceEntry(
@@ -199,6 +206,39 @@ def _wired_capability_evidence(container: Container, adapter: str) -> tuple[Evid
         review_queue_usable=isinstance(container.review_queue, ReviewQueue),
         meter_usable=isinstance(container.meter, Meter),
     )
+
+
+def application_assurance_error(
+    container: Container,
+    adapter: str,
+    ceiling: dict[EvidenceKind, EvidenceStatus],
+    minimum: AssuranceLevel | None,
+) -> str | None:
+    """The ADR-0018 §14 profile gate: cap what `wire()` computed by the wrapped
+    application's evidence ceiling and report why `minimum` is then out of reach.
+
+    Runs in the composition root once the adapter instance — and so its profile —
+    exists. A ceiling check only: it proves the integration surface could support
+    the level, never that any control enforces anything (that is the behavioural
+    probes' job, ADR-0018 §9).
+    """
+    if minimum is None:
+        return None
+    capped = tuple(
+        EvidenceEntry(
+            entry.kind,
+            min(entry.status, ceiling[entry.kind], key=evidence_status_rank),
+        )
+        for entry in _wired_capability_evidence(container, adapter)
+    )
+    achievable = compute_achieved_level(capped)
+    if assurance_level_rank(achievable) < assurance_level_rank(minimum):
+        return (
+            "Invalid runtime manifest: "
+            + _assurance_level_error(achievable, minimum, adapter, constructed=True)
+            + " The wrapped application's own control points cap this level."
+        )
+    return None
 
 
 def _assurance_level_error(
@@ -320,10 +360,29 @@ def runtime_manifest_errors(manifest: PipelineManifest) -> list[str]:
             )
 
     adapter = manifest.engine.adapter if manifest.engine else "native"
-    if adapter not in {"native", "langgraph"}:
+    if adapter not in {"native", "langgraph", EXISTING_GRAPH_ADAPTER}:
         errors.append(
-            f"Unknown engine.adapter {adapter!r}. Expected 'native' or 'langgraph'."
+            f"Unknown engine.adapter {adapter!r}. Expected 'native', 'langgraph' or "
+            f"{EXISTING_GRAPH_ADAPTER!r}."
         )
+    if adapter == EXISTING_GRAPH_ADAPTER:
+        application = manifest.engine.config.get("application") if manifest.engine else None
+        if not isinstance(application, str) or ":" not in application:
+            errors.append(
+                f"engine.config.application must be a 'module:callable' path for "
+                f"engine.adapter={EXISTING_GRAPH_ADAPTER!r}"
+            )
+        governance = manifest.governance
+        for path, value in {
+            "governance.policy_engine": governance.policy_engine if governance else None,
+            "governance.review_queue": governance.review_queue if governance else None,
+            "governance.feedback_sink": governance.feedback_sink if governance else None,
+        }.items():
+            if value is not None:
+                errors.append(
+                    f"{path} is not consumed by engine.adapter={EXISTING_GRAPH_ADAPTER!r}; "
+                    "remove it or select the native engine"
+                )
     if adapter == "langgraph":
         governance = manifest.governance
         unsupported = {

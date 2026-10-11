@@ -5,6 +5,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added — Lot 22 demo-pilot adapter and startup profile gate (ADR-0018 §13–§14)
+
+- `adapters/applications/existing_graph/` (`engine.adapter: existing-graph`) wraps the standalone
+  LangGraph app in `examples/existing_graph_app/` behind the framework's guard, tenant isolation,
+  egress policy and audit; preset `manifests/presets/existing-graph-app.yaml`.
+- `app/bootstrap.py` has one explicit branch (no generic adapter registry) that imports the
+  application from an allow-listed `module:callable` (`examples.` plus
+  `MRAG_APPLICATION_MODULE_PREFIXES`) and refuses startup when `assurance.min_level` exceeds the
+  profile-capped evidence (`registry.application_assurance_error`).
+- **Not delivered**: the pilot is synthetic, so Lot 22's real-application acceptance evidence, the
+  comparative pilot and the human decision gate remain open.
+
 ### Added — Lot 22 behavioural reference fixture and probes (ADR-0018 §9–§13)
 
 - `tests/contract/fakes/foreign_application.py`, `foreign_probes.py` and
